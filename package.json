@@ -1,0 +1,11 @@
+{
+  "name": "terra",
+  "version": "1.0.0",
+  "description": "Interactive WebGL Earth dashboard with live geophysical data",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "start": "node serve.mjs"
+  }
+}

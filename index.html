@@ -1,0 +1,2907 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Terra — Live global geophysical overview</title>
+<!-- Iconen expliciet, niet op conventie: onder een subpad (Pages) wordt /favicon.ico
+     anders niet gevonden. De 2048px favicon.png werd nergens gebruikt en gaat niet mee. -->
+<link rel="icon" href="./assets/icon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="./assets/icon-180.png">
+<!-- Import map: ÉÉN gedeelde three-instance, alles gepind (geen CDN-"latest"-drift meer).
+     three@0.184.0 is de bewezen-werkende versie. globe.gl laadt via ?external=three →
+     hergebruikt ONZE three i.p.v. een eigen kopie te bundelen ("multiple instances"-fix).
+     Eerdere bug: globe.gl (jsdelivr, ongepind) + three (esm.sh, ongepind=0.185) liepen uit
+     de pas → `determinantAffine is not a function` bij obj.lookAt → indicatoren verdwenen. -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://esm.sh/three@0.184.0",
+    "three/": "https://esm.sh/three@0.184.0/",
+    "globe.gl": "https://esm.sh/globe.gl@2.46.1?external=three",
+    "gsap": "https://esm.sh/gsap@3.15.0"
+  }
+}
+</script>
+<!-- Geen sleutelbestand meer. De WAQI-token leeft achter /api/waqi aan de serverkant;
+     de relay-URL is een gewone instelling in js/config.js. -->
+<link rel="stylesheet" href="./css/app.css">
+</head>
+<body>
+  <div id="globe"></div>
+
+  <!-- De modus-wissel staat sinds sessie 9 als zwevend eiland midden bovenaan, los van
+       de masthead. Het is de enige knop die de héle weergave omgooit; tussen wordmark
+       en klok las hij als een van de vele bedieningselementen.
+       Sinds 2026-07-31 een segmented toggle: béide weergaven staan er altijd, met de
+       actieve ingedrukt. Als losse knop met één label was niet te zien dát er een
+       tweede weergave bestond — je moest erop klikken om erachter te komen. -->
+  <div class="mode-switch" id="mode-switch" role="group" aria-label="Globe view">
+    <button class="mode-opt active" data-mode="realistic" aria-pressed="true">
+      <span class="mode-icon">◐</span><span class="mode-text">Realistic</span>
+    </button>
+    <button class="mode-opt" data-mode="expert" aria-pressed="false">
+      <span class="mode-icon">▦</span><span class="mode-text">Expert</span>
+    </button>
+  </div>
+
+  <div class="masthead">
+    <!-- Wordmark en klok op één regel, de ondertitel eronder. De klok hoort bij de
+         identiteit ("dit is Terra, en dit is hoe laat het nu is"), niet bij de
+         bedieningselementen rechts. -->
+    <div class="brand">
+      <div class="brand-row">
+        <span class="wordmark">TERRA<span class="dot">.</span></span>
+      </div>
+      <span class="tagline">live global geophysical overview</span>
+      <span class="clock" id="clock"></span>
+    </div>
+    <button class="notif-btn" id="notif-btn" title="Notifications">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+      <span class="notif-badge" id="notif-badge" hidden>0</span>
+    </button>
+  </div>
+
+  <div class="notif-panel" id="notif-panel">
+    <div class="notif-head"><span>Notifications</span><button id="notif-clear">clear</button></div>
+    <div class="notif-list" id="notif-list"><div class="notif-empty">No notifications yet</div></div>
+  </div>
+
+  <button class="panel-open" id="panel-open" title="Show layers & filters">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+    <span>Layers &amp; filters</span>
+  </button>
+
+  <div class="panel">
+    <!-- Vaste kop (sessie 9): tabs en inklappijl blijven altijd staan, de inhoud
+         scrolt eronder door. Zonder dit moest je op een klein scherm eerst terug
+         omhoog scrollen om van tab te kunnen wisselen. De voetregel is bewust NIET
+         vastgezet: die ruimte hebben de filters harder nodig. -->
+    <div class="panel-head">
+      <div class="tabs" role="tablist">
+        <button class="tab active" data-tab="lagen">Layers</button>
+        <button class="tab" data-tab="aarde">Earth</button>
+        <button class="tab" data-tab="instellingen" title="Settings" aria-label="Settings">⚙</button>
+      </div>
+      <button class="panel-collapse" id="panel-collapse" title="Collapse panel" aria-label="Collapse panel">‹</button>
+    </div>
+
+    <div class="panel-body">
+
+    <!-- ====================== LAGEN ====================== -->
+    <div class="tabpanel show" data-panel="lagen">
+      <h2>Layers</h2>
+      <div class="layer expandable" data-layer="quake">
+        <span class="swatch sw-quake"></span>
+        <span class="name">Earthquakes</span>
+        <button class="row-expand" data-expand="quake" title="Show filters" aria-label="Show filters">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <span class="count" id="count-quake">—</span>
+      </div>
+      <div class="layer-detail" data-detail="quake">
+        <h3>Magnitude</h3>
+        <div class="presets" id="mag-presets">
+          <button class="preset" data-mag="-10">All</button>
+          <button class="preset active" data-mag="2">M2+</button>
+          <button class="preset" data-mag="3">M3+</button>
+          <button class="preset" data-mag="4">M4+</button>
+          <button class="preset" data-mag="5">M5+</button>
+        </div>
+        <!-- Het tijdvenster stond tot sessie 9 als losse sectie onder alle lagen, wat
+             suggereerde dat het app-breed gold. Dat is niet zo: USGS levert
+             momentgebeurtenissen, EONET gebeurtenissen mét duur. Een venster van een uur
+             over een vulkaan die al drie maanden uitbarst is betekenisloos. Daarom hoort
+             het filter bij de laag waarvoor het werkt. -->
+        <h3>Time window</h3>
+        <div class="presets" id="presets">
+          <button class="preset" data-win="hour">Hour</button>
+          <button class="preset active" data-win="day">Day</button>
+          <button class="preset" data-win="week">Week</button>
+        </div>
+        <div class="slider-wrap">
+          <input type="range" id="slider" min="0" max="100" value="100" />
+          <div class="slider-label">
+            <span>older</span>
+            <span id="slider-val">full window</span>
+          </div>
+        </div>
+        <h3>Depth</h3>
+        <div class="depth-scale"></div>
+        <div class="depth-label"><span>shallow</span><span>deep</span></div>
+      </div>
+
+      <div class="layer" data-layer="volcano">
+        <span class="swatch sw-volcano"></span>
+        <span class="name">Volcanoes</span>
+        <span class="count" id="count-volcano">—</span>
+      </div>
+      <div class="layer" data-layer="wildfire">
+        <span class="swatch sw-wildfire"></span>
+        <span class="name">Wildfires</span>
+        <span class="count" id="count-wildfire">—</span>
+      </div>
+      <div class="layer" data-layer="lightning">
+        <span class="swatch sw-lightning"></span>
+        <span class="name">Lightning</span>
+        <span class="count" id="count-lightning">—</span>
+      </div>
+      <div class="layer" data-layer="storm">
+        <span class="swatch sw-storm"></span>
+        <span class="name">Storms</span>
+        <span class="count" id="count-storm">—</span>
+      </div>
+      <div class="layer" data-layer="ice">
+        <span class="swatch sw-ice"></span>
+        <span class="name">Sea ice</span>
+        <span class="count" id="count-ice">—</span>
+      </div>
+      <div class="layer off" data-layer="aqi">
+        <span class="swatch sw-aqi"></span>
+        <span class="name">Air quality</span>
+        <button class="aqi-refresh" id="aqi-refresh" title="Reload stations in view (max 600)" aria-label="Reload stations in view">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        </button>
+        <span class="count" id="count-aqi">—</span>
+      </div>
+
+    </div>
+
+    <!-- ====================== AARDE ====================== -->
+    <div class="tabpanel" data-panel="aarde">
+      <!-- Overlays staan BUITEN #earth-layers: dat blok verbergt zich in de
+           deskundig-modus, terwijl deze overlays juist in béíde modi werken. -->
+      <h2>Overlays</h2>
+      <div class="elayer" data-overlay="plates"><span class="edot"></span>Tectonic plates<span class="estat" id="es-plates">off</span></div>
+      <div class="elayer" data-overlay="borders"><span class="edot"></span>Country borders<span class="estat" id="es-borders">off</span></div>
+      <div class="elayer" data-overlay="names"><span class="edot"></span>Country names<span class="estat" id="es-names">off</span></div>
+      <div class="divider"></div>
+
+      <div class="earth-layers" id="earth-layers">
+        <h2>Earth layers</h2>
+        <div class="elayer" data-tex="day"><span class="edot"></span>Day texture<span class="estat" id="es-day">—</span></div>
+        <div class="elayer" data-tex="night"><span class="edot"></span>Night lights<span class="estat" id="es-night">—</span></div>
+        <div class="elayer" data-tex="clouds"><span class="edot"></span>Clouds<span class="estat" id="es-clouds">—</span></div>
+        <div class="elayer" data-tex="specular"><span class="edot"></span>Water reflection<span class="estat" id="es-specular">—</span></div>
+        <div class="elayer" data-tex="normal"><span class="edot"></span>Relief (normal map)<span class="estat" id="es-normal">—</span></div>
+        <div class="elayer on" id="wave-toggle"><span class="edot"></span>Wave animation<span class="estat" id="es-wave">on</span></div>
+        <div class="elayer" id="wire-toggle"><span class="edot"></span>Earth wireframe<span class="estat" id="es-wire">off</span></div>
+        <div class="elayer" id="fog-toggle"><span class="edot"></span>Fog<span class="estat" id="es-fog">off</span></div>
+        <div class="night-slider">
+          <div class="ns-label">
+            <span>Night side</span>
+            <span id="ns-val">12%</span>
+          </div>
+          <input type="range" id="night-slider" min="0" max="60" value="12" />
+        </div>
+
+        <div class="divider"></div>
+        <h2>Texture quality</h2>
+        <div class="texq" id="texq">
+          <button class="texq-opt" data-q="2k">
+            <span class="texq-name">Standard</span>
+            <span class="texq-meta">2K · ~2.4 MB</span>
+          </button>
+          <button class="texq-opt" data-q="8k">
+            <span class="texq-name">High resolution</span>
+            <span class="texq-meta">8K · ~29 MB</span>
+          </button>
+        </div>
+        <div class="texq-note" id="texq-note">8K is sharper up close, but downloads about 29 MB extra.</div>
+      </div>
+      <div class="aarde-empty" id="aarde-empty">The Earth layers only apply in <b>Realistic</b> mode. Switch mode at the top to control textures, fog and wireframe.</div>
+    </div>
+
+    <!-- ====================== INSTELLINGEN ====================== -->
+    <div class="tabpanel" data-panel="instellingen">
+      <h2>Preferences</h2>
+      <div class="elayer on" id="sound-toggle"><span class="edot"></span>Notification sound<span class="estat" id="es-sound">on</span></div>
+      <div class="elayer on" id="label-toggle"><span class="edot"></span>Quake labels<span class="estat" id="es-label">on</span></div>
+      <div class="elayer on" id="rotate-toggle"><span class="edot"></span>Auto-rotate<span class="estat" id="es-rotate">on</span></div>
+
+      <div class="divider"></div>
+      <h2>Connections</h2>
+      <div class="health" id="health-list"></div>
+      <button class="health-test" id="health-test">Test now</button>
+
+      <!-- Credits. Bewust ingeklapt en onderaan: verplichte attributie (CC BY 4.0
+           voor de texturen, ODC-BY voor de plaatgrenzen, WAQI's eigen voorwaarden)
+           hoort zichtbaar te zijn, maar niet in de weg te zitten. Volledige
+           verantwoording staat in ATTRIBUTION.md. -->
+      <details class="credits">
+        <summary>Sources &amp; licenses</summary>
+        <dl>
+          <dt>Textures</dt>
+          <dd><a href="https://www.solarsystemscope.com/textures/" target="_blank" rel="noopener">Solar System Scope</a> · CC BY 4.0</dd>
+
+          <dt>Plate boundaries</dt>
+          <dd>PB2002, Bird (2003) via <a href="https://github.com/fraxen/tectonicplates" target="_blank" rel="noopener">Ahlenius / Nordpil</a> · ODC-BY 1.0</dd>
+
+          <dt>Country borders</dt>
+          <dd><a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener">Natural Earth</a> · public domain</dd>
+
+          <dt>Live data</dt>
+          <dd><a href="https://earthquake.usgs.gov" target="_blank" rel="noopener">USGS</a> · <a href="https://eonet.gsfc.nasa.gov" target="_blank" rel="noopener">NASA EONET</a> · <a href="https://aqicn.org" target="_blank" rel="noopener">World Air Quality Index Project</a> and the measuring authority per station · <a href="https://www.blitzortung.org" target="_blank" rel="noopener">Blitzortung.org</a>. The last two: non-commercial use only</dd>
+
+          <dt>Built with</dt>
+          <dd><a href="https://threejs.org/" target="_blank" rel="noopener">three.js</a>, <a href="https://github.com/vasturiano/globe.gl" target="_blank" rel="noopener">globe.gl</a> · MIT · <a href="https://gsap.com/" target="_blank" rel="noopener">GSAP</a></dd>
+        </dl>
+      </details>
+    </div>
+
+    <div class="footnote">
+      <span class="live"></span><span id="status">connecting…</span><br>
+      Sources:
+      <a href="https://earthquake.usgs.gov" target="_blank" rel="noopener">USGS</a> ·
+      <a href="https://eonet.gsfc.nasa.gov" target="_blank" rel="noopener">NASA EONET</a> ·
+      <a href="https://aqicn.org" target="_blank" rel="noopener">WAQI</a> ·
+      <a href="https://www.blitzortung.org" target="_blank" rel="noopener">Blitzortung</a>
+    </div>
+
+    </div><!-- /.panel-body -->
+  </div>
+
+  <div class="readout" id="readout">
+    <button class="readout-close" id="r-close" title="Close" aria-label="Close detail panel">×</button>
+    <div class="kicker" id="r-kicker">EVENT</div>
+    <div class="headline" id="r-headline"></div>
+    <div class="row"><span class="k">Type</span><span class="v" id="r-type"></span></div>
+    <div class="row"><span class="k">Value</span><span class="v" id="r-value"></span></div>
+    <div class="row"><span class="k">Time</span><span class="v" id="r-time"></span></div>
+    <div class="row"><span class="k">Source</span><span class="v"><a id="r-source" target="_blank" rel="noopener"></a></span></div>
+    <a class="more-link" id="r-link" target="_blank" rel="noopener" hidden></a>
+  </div>
+
+  <div class="boot" id="boot">
+    <div class="ring"></div>
+    <div class="msg">building the earth</div>
+  </div>
+
+<script type="module">
+// Alle specifiers gaan via de import map in <head> → ÉÉN gedeelde, gepinde three.
+// globe.gl, three en de post-processing-passes gebruiken nu gegarandeerd dezelfde
+// three-instance (0.184.0). Geen "multiple instances" en geen versie-skew meer.
+import Globe from 'globe.gl';
+import * as THREE from 'three';
+// Bloom-postprocessing + kleurgrading-pass (zelfde three via 'three/' import-map-prefix).
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+// GSAP voor soepele UI/element-animaties (markers, meldingen, dialogen)
+import { gsap } from 'gsap';
+// Config & constanten (Stap 0 refactor): kleuren, bronnen, AQI-banden,
+// PARAMS, WINDOW_MS, TEXTURE_SETS, MODE_*. Pure data — gedeelde objectreferenties.
+import {
+  COLORS, SOURCE_URLS, DETAIL_LINK_LABELS,
+  AQI_BANDS, aqiBand, aqiHex,
+  PARAMS, WINDOW_MS, MODE_LABELS, MODE_ICONS, EXPERT_LAYER_SCALE,
+  TEXTURE_SETS, DEFAULT_QUALITY, assetsFor, textureSetSize, RELAY_URL, REPO_URL
+} from './js/config.js';
+// GLSL shader-bronnen (Stap 0 refactor).
+import {
+  SHOCK_VERT, SHOCK_FRAG,
+  dayNightShader, CLOUD_VERT, CLOUD_FRAG, FOG_VERT, FOG_FRAG
+} from './js/shaders.js';
+// Deskundig (schematische) weergavemodus (Fase 1).
+import { enterExpertMode, exitExpertMode } from './js/modes/expert.js';
+// Schematische datalaag-symbolen voor de deskundig-modus (Fase 2).
+import { buildExpertGlyph } from './js/symbols-expert.js';
+// Globe komt nu uit de ESM-import bovenaan (globe.gl via de import map, ?external=three).
+
+/* ============================================================
+   TERRA — modulaire geo-event globe
+   ------------------------------------------------------------
+   Architectuur:
+   - Elke bron is een "adapter" met fetch() + normalize().
+   - normalize() levert altijd hetzelfde interne contract:
+       { id, layer, lat, lng, value, label, time, source, raw }
+   - De renderer kent alleen dat contract, niet de bronnen.
+     Nieuwe data toevoegen = nieuwe adapter registreren.
+   ============================================================ */
+
+// Bezoekers die in hun systeem hebben aangegeven minder beweging te willen, krijgen
+// geen intro-animatie en geen draaiende globe (sessie 9). Bewust bovenaan gedeclareerd:
+// verderop wordt hij gebruikt vóór de plek waar hij anders zou staan, en een const die
+// pas later in het bestand staat zit in de temporal dead zone. De datalaag-animaties
+// (puls, shockwave) blijven wél draaien: die zijn geen versiering maar de weergave van
+// de gebeurtenis zelf.
+const REDUCED_MOTION = window.matchMedia
+  ? window.matchMedia('(prefers-reduced-motion: reduce)').matches : false;
+
+// COLORS, SOURCE_URLS, DETAIL_LINK_LABELS, AQI_BANDS, aqiBand/aqiHex
+// → verplaatst naar ./js/config.js (Stap 0).
+
+// ---- Per-dataset visuele identiteit ---------------------------
+
+// Aardbeving-diepte → kleurramp (ondiep = heet, diep = koel), zoals seismische
+// dashboards. Staven én shockwave-ringen delen deze schaal. Diepte in km.
+const DEPTH_STOPS = [
+  [0,   [255, 232, 90]],   // ondiep: heet geel
+  [35,  [255, 120, 45]],   // oranje
+  [70,  [255, 50, 90]],    // rood-magenta
+  [150, [165, 70, 235]],   // paars
+  [300, [95, 95, 250]],    // blauw-paars
+  [700, [75, 205, 255]]    // diep: ijsblauw
+];
+function depthRGB(depth) {
+  const z = (depth == null || isNaN(depth)) ? 0 : Math.max(0, depth);
+  const s = DEPTH_STOPS;
+  if (z <= s[0][0]) return s[0][1];
+  for (let i = 1; i < s.length; i++) {
+    if (z <= s[i][0]) {
+      const z0 = s[i-1][0], c0 = s[i-1][1], z1 = s[i][0], c1 = s[i][1];
+      const f = (z - z0) / (z1 - z0);
+      return [0,1,2].map(k => Math.round(c0[k] + (c1[k] - c0[k]) * f));
+    }
+  }
+  return s[s.length - 1][1];
+}
+function depthHex(depth) {
+  return '#' + depthRGB(depth).map(v => v.toString(16).padStart(2, '0')).join('');
+}
+function depthRgba(depth, a) {
+  const [r,g,b] = depthRGB(depth);
+  return 'rgba(' + r + ',' + g + ',' + b + ',' + a.toFixed(3) + ')';
+}
+
+// --- bouwstenen voor de aardbeving-staaf ---
+
+// Shockwave-ring: zachte radiale gloed die naar buiten uitdijt en vervaagt
+// (ShaderMaterial). Meerdere ringen tegelijk → dikke, levende band.
+// Shockwave-shader (SHOCK_VERT/SHOCK_FRAG) → ./js/shaders.js (Stap 0).
+// Shockwave-straal volgt de magnitude binnen [shockMinR, shockMaxR], lineair
+// over het magnitude-bereik [shockMagLo, shockMagHi]. Zo krijgen lichtere
+// bevingen een kleinere omtrek dan zware.
+function buildShockwave(depth, mag, seed) {
+  const f = Math.max(0, Math.min(1, (mag - PARAMS.shockMagLo) / Math.max(0.1, PARAMS.shockMagHi - PARAMS.shockMagLo)));
+  const maxR = PARAMS.shockMinR + f * (PARAMS.shockMaxR - PARAMS.shockMinR);
+  const [r,g,b] = depthRGB(depth);
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      time:    { value: 0 },
+      color:   { value: new THREE.Color(r/255, g/255, b/255) },
+      speed:   { value: PARAMS.shockSpeed },
+      seed:    { value: ((seed % 1) + 1) % 1 },
+      opacity:   { value: PARAMS.shockOpacity },
+      edge:      { value: PARAMS.shockEdge },
+      thickness: { value: PARAMS.shockThickness }
+    },
+    vertexShader: SHOCK_VERT, fragmentShader: SHOCK_FRAG,
+    transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide
+  });
+  const mesh = new THREE.Mesh(new THREE.CircleGeometry(maxR, 48), mat);
+  mesh.position.z = PARAMS.shockLift;
+  return { mesh, mat };
+}
+
+// Zachte radiale gloed-textuur (wit, kleurbaar via SpriteMaterial.color) voor
+// subtiele gloed-markers zoals de bosbranden.
+function makeGlowTexture() {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const ctx = c.getContext('2d');
+  const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+  g.addColorStop(0.0, 'rgba(255,255,255,1)');
+  g.addColorStop(0.25, 'rgba(255,255,255,0.55)');
+  g.addColorStop(0.6, 'rgba(255,255,255,0.15)');
+  g.addColorStop(1.0, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, 64, 64);
+  return new THREE.CanvasTexture(c);
+}
+const glowTex = makeGlowTexture();
+
+// Aardbeving-indicator: hoge gloeiende magnitude-staaf (hoogte ∝ magnitude²,
+// sterk contrast tussen klein en groot), kleur ∝ diepte met verticale gradiënt
+// + stromende energie-textuur, en een shockwave-ring voor de zwaardere bevingen.
+function buildQuakeObject(d) {
+  const T = THREE;
+  const mag = d.value || 1.5;
+  const col = depthHex(d.depth);
+  const h = PARAMS.beamBase + mag * mag * PARAMS.beamMultiplier; // basislengte + magnitude²-toeslag
+  const rCore = Math.max(0.4, mag * PARAMS.beamRadius);
+  const group = new T.Group();
+
+  // brede gloed-kolom (additief, transparant) — eenvoudige rechte cilinder
+  const glow = new T.Mesh(
+    new T.CylinderGeometry(rCore * 2.0, rCore * 2.0, h, 16, 1, true),
+    new T.MeshBasicMaterial({ color: col, transparent: true, opacity: PARAMS.glowOpacity, blending: T.AdditiveBlending, depthWrite: false })
+  );
+  glow.geometry.rotateX(Math.PI / 2); glow.geometry.translate(0, 0, h / 2);
+  group.add(glow);
+
+  // heldere kern-kolom — solide diepte-kleur
+  const core = new T.Mesh(
+    new T.CylinderGeometry(rCore, rCore, h, 16),
+    new T.MeshBasicMaterial({ color: col, transparent: true, opacity: PARAMS.coreOpacity, blending: T.AdditiveBlending, depthWrite: false })
+  );
+  core.geometry.rotateX(Math.PI / 2); core.geometry.translate(0, 0, h / 2);
+  group.add(core);
+
+  // shockwave-ring voor elke beving (grootte ∝ magnitude)
+  const sw = buildShockwave(d.depth, mag, (d.lat + d.lng) * 0.01);
+  sw.mesh.userData.noPick = true; // de grote ring-schijf niet klikbaar maken
+  group.add(sw.mesh);
+
+  const parts = { beamGlow: glow, core, shock: sw.mat, shockMesh: sw.mesh };
+  group.userData = { parts, phase: d.lat * 0.7 + d.lng * 1.3, d };
+  glyphList.push(group);
+  animateIn(group);
+  return group;
+}
+
+// GSAP: marker soepel in beeld schalen bij verschijnen (nieuwe events poppen in)
+function animateIn(group) {
+  // pop-in via userData.appear (0→1); de uiteindelijke schaal = appear × schermvaste
+  // schaal, en wordt elke frame gezet in animateShader (zie aldaar). Zo botst de
+  // pop-in niet met de schermvaste icoonschaling.
+  group.userData.appear = 0.001;
+  gsap.to(group.userData, { appear: 1, duration: 0.6, ease: 'back.out(1.6)', delay: Math.random() * 0.25 });
+}
+
+// 3D-glyph per EONET-laag — elk een eigen indicator, opgebouwd als THREE-object
+// in de customLayer. MeshBasicMaterial = onverlicht → consistente neon-look,
+// los van dag/nacht. De buitenste group wordt radiaal georiënteerd (lookAt),
+// de inner-group animeren we per frame (spin / puls / flikker).
+function buildGlyphObject(d) {
+  // Deskundig modus: schematische vakgebied-symbolen (Fase 2). Bookkeeping
+  // (glyphList/userData/animateIn) blijft hier; de bouw zit in symbols-expert.js.
+  if (globeMode === 'expert') {
+    const r = buildExpertGlyph(d, { THREE, depthHex });
+    r.group.userData = { inner: r.inner, parts: r.parts, phase: d.lat * 0.7 + d.lng * 1.3, d };
+    glyphList.push(r.group);
+    if (!r.parts.noAnim) animateIn(r.group);
+    return r.group;
+  }
+  if (d.layer === 'quake') return buildQuakeObject(d);
+  const T = THREE;
+  const color = COLORS[d.layer];
+  const group = new T.Group();
+  const inner = new T.Group();
+  group.add(inner);
+  const parts = {};
+
+  if (d.layer === 'volcano') {
+    // 4-zijdige pyramide-piek (solide additief, zoals de bevingsstaven) die
+    // radiaal naar buiten wijst, plus een warme voet-gloed (zoals de bosbranden).
+    const ch = PARAMS.volcanoHeight, cr = PARAMS.volcanoRadius;
+    const pyr = new T.Mesh(
+      new T.ConeGeometry(cr, ch, 4),
+      new T.MeshBasicMaterial({ color, transparent: true, opacity: PARAMS.volcanoOpacity, blending: T.AdditiveBlending, depthWrite: false })
+    );
+    pyr.geometry.rotateX(Math.PI / 2); // as +Y → +Z (radiaal naar buiten)
+    pyr.position.z = ch / 2;            // basis op het oppervlak, punt naar buiten
+    inner.add(pyr);
+    const glow = new T.Sprite(new T.SpriteMaterial({
+      map: glowTex, color, transparent: true, blending: T.AdditiveBlending,
+      depthWrite: false, opacity: PARAMS.volcanoOpacity * 0.6
+    }));
+    glow.scale.set(PARAMS.volcanoGlow, PARAMS.volcanoGlow, 1);
+    inner.add(glow);
+    parts.cone = pyr; parts.volGlow = glow;
+  } else if (d.layer === 'storm') {
+    // twee in elkaar grijpende spiraal-armen (cycloon), gloeiend, die ronddraaien
+    const mat = new T.MeshBasicMaterial({ color, transparent: true, blending: T.AdditiveBlending, depthWrite: false, opacity: PARAMS.stormOpacity });
+    const steps = 48;
+    for (let arm = 0; arm < 2; arm++) {
+      const pts = [];
+      for (let i = 0; i <= steps; i++) {
+        const tt = i / steps;
+        const theta = tt * PARAMS.stormTurns * Math.PI * 2 + arm * Math.PI; // 2e arm 180° verschoven
+        const r = PARAMS.stormSize * Math.pow(tt, 0.82);                    // strakker naar het hart
+        pts.push(new T.Vector3(Math.cos(theta) * r, Math.sin(theta) * r, 0));
+      }
+      const curve = new T.CatmullRomCurve3(pts);
+      inner.add(new T.Mesh(new T.TubeGeometry(curve, steps, PARAMS.stormThickness, 6, false), mat));
+    }
+    parts.spin = inner; parts.spinSpeed = PARAMS.stormSpinSpeed; parts.stormMat = mat;
+  } else if (d.layer === 'ice') {
+    // platte zeshoekige ijskristal-plaat (tangentieel = drijvend op het oppervlak)
+    // + koele gloed-halo. Wireframe-zeshoek met spaken = sneeuwvlok/kristal-look.
+    const glow = new T.Sprite(new T.SpriteMaterial({
+      map: glowTex, color, transparent: true, blending: T.AdditiveBlending,
+      depthWrite: false, opacity: PARAMS.iceOpacity * 0.45
+    }));
+    glow.scale.set(PARAMS.iceGlow, PARAMS.iceGlow, 1);
+    inner.add(glow);
+    const hexMat = new T.MeshBasicMaterial({ color, wireframe: true, transparent: true, blending: T.AdditiveBlending, depthWrite: false, opacity: PARAMS.iceOpacity });
+    const hex = new T.Mesh(new T.CircleGeometry(PARAMS.iceSize, 6), hexMat); // 6-zijdig = zeshoek met spaken
+    inner.add(hex);
+    parts.spin = inner; parts.spinSpeed = PARAMS.iceSpinSpeed; parts.iceGlow = glow; parts.iceMat = hexMat;
+  } else if (d.layer === 'aqi') {
+    // luchtkwaliteit-station: een zachte, band-gekleurde gloed-bubbel rond het station
+    // (groter + roder = slechtere lucht) + een klein helder kernpunt. Camera-gerichte
+    // sprites → consistente ronde gloed onder elke kijkhoek, geen rand-artefact.
+    const aqiCol = new T.Color(aqiHex(d.value));
+    const sev = Math.max(0, Math.min(1, (d.value || 0) / 300)); // 0..1 over AQI 0–300
+    const radius = PARAMS.aqiHaloRadius + sev * PARAMS.aqiHaloMax;
+    const halo = new T.Sprite(new T.SpriteMaterial({
+      map: glowTex, color: aqiCol, transparent: true,
+      blending: T.AdditiveBlending, depthWrite: false, opacity: PARAMS.aqiHaloOpacity
+    }));
+    halo.scale.set(radius, radius, 1);
+    halo.position.z = PARAMS.aqiLift;
+    inner.add(halo);
+    const core = new T.Sprite(new T.SpriteMaterial({
+      map: glowTex, color: aqiCol, transparent: true,
+      blending: T.AdditiveBlending, depthWrite: false, opacity: PARAMS.aqiCoreOpacity
+    }));
+    core.scale.set(PARAMS.aqiCoreSize, PARAMS.aqiCoreSize, 1);
+    core.position.z = PARAMS.aqiLift + 0.1;
+    inner.add(core);
+    parts.aqiHalo = halo; parts.aqiBaseOp = PARAMS.aqiHaloOpacity;
+    parts.aqiCore = core; parts.aqiCoreBase = PARAMS.aqiCoreOpacity;
+  } else if (d.layer === 'lightning') {
+    // blikseminslag: korte witte flits-gloed (à la bosbrand, maar wit). Geen pop-in;
+    // de helderheid wordt per frame op leeftijd geregeld (zie animateShader) zodat
+    // her-binnenkomst bij elke poll niet opnieuw laat flitsen.
+    const spr = new T.Sprite(new T.SpriteMaterial({
+      map: glowTex, color: new T.Color(COLORS.lightning), transparent: true,
+      blending: T.AdditiveBlending, depthWrite: false, opacity: 0 // leeftijd-envelope zet 'm meteen
+    }));
+    spr.scale.set(PARAMS.lightningSize, PARAMS.lightningSize, 1);
+    inner.add(spr);
+    parts.lightning = spr; parts.noAnim = true;
+  } else { // wildfire — subtiele, zacht flikkerende rode gloed (sprite)
+    const spr = new T.Sprite(new T.SpriteMaterial({
+      map: glowTex, color, transparent: true, blending: T.AdditiveBlending,
+      depthWrite: false, opacity: PARAMS.wildfireOpacity
+    }));
+    spr.scale.set(PARAMS.wildfireSize, PARAMS.wildfireSize, 1);
+    inner.add(spr);
+    parts.glow = spr;
+  }
+
+  group.userData = { inner, parts, phase: d.lat * 0.7 + d.lng * 1.3, d };
+  glyphList.push(group);
+  if (!parts.noAnim) animateIn(group);
+  return group;
+}
+
+// ---- Adapters -------------------------------------------------
+
+// Actief WAQI-zoekgebied (lat1,lng1,lat2,lng2). Start als hele wereld; de
+// refresh-knop in het lagenpaneel zet dit op het huidige kijkgebied.
+let aqiBounds = '-90,-180,90,180';
+
+// Relay (los Node-proces, relay/relay.mjs) voor WebSocket-bronnen die de browser
+// niet direct mag bereiken (bliksem). 'localhost' werkt alleen als de pagina lokaal
+// draait; op een publieke server wijst localhost naar het apparaat van de bezoeker →
+// 'lokaal netwerk'-prompt + werkt niet op mobiel.
+// Daarom: lokaal → localhost-relay; elders → RELAY_URL uit js/config.js, of uit.
+// De relay-URL is geen geheim maar een instelling, en verhuisde daarom op 2026-07-31
+// van keys.js naar config.js. keys.js bestaat sindsdien niet meer.
+const IS_LOCAL = ['localhost', '127.0.0.1', ''].includes(location.hostname);
+const RELAY_BASE = RELAY_URL || (IS_LOCAL ? 'http://localhost:8772' : '');
+
+// Harde timeout per bron-fetch. Zonder deze grens kan één hangende verbinding een
+// adapter onbeperkt bezet houden (en daarmee het laadscherm laten staan).
+const ADAPTER_TIMEOUT_MS = 15_000;
+
+// Bouwt één EONET-adapter per categorie. Ze delen `healthId: 'eonet'`, zodat het
+// verbindingspaneel één regel "NASA EONET" houdt in plaats van vier.
+function eonetAdapters(spec) {
+  const out = {};
+  for (const [layer, { category, days }] of Object.entries(spec)) {
+    out['eonet_' + layer] = {
+      healthId: 'eonet',
+      layers: [layer],
+      url: 'https://eonet.gsfc.nasa.gov/api/v3/events?status=open&category=' + category +
+           (days ? '&days=' + days : ''),
+      interval: 600_000, // 10 min volstaat ruim; alerts veranderen traag
+      normalize(json) {
+        const out = [];
+        for (const ev of (json.events || [])) {
+          // pak de meest recente geometrie van het event
+          const geos = ev.geometry || [];
+          const g = geos[geos.length - 1];
+          if (!g || g.type !== 'Point') continue; // polygonen later
+          const [lng, lat] = g.coordinates;
+          out.push({
+            id: ev.id,
+            layer,
+            lat, lng,
+            value: layer === 'storm' ? 1 : null,
+            label: ev.title,
+            time: new Date(g.date).getTime(),
+            source: 'NASA EONET',
+            url: (ev.sources && ev.sources[0] && ev.sources[0].url) || null // externe bron-melding
+          });
+        }
+        return out;
+      }
+    };
+  }
+  return out;
+}
+
+const Adapters = {
+  // USGS — aardbevingen. Feed-keuze volgt het actieve tijdvenster:
+  // 'hour' → all_hour, 'day' → all_day, 'week' → all_week.
+  usgs: {
+    layers: ['quake'],
+    // USGS ververst per minuut en publiceert deze feeds juist om gepold te worden
+    // (statische bestanden achter een CDN). 60 s houdt de globe levendig; de
+    // beleefdheid zit in de tabblad-pauze in pull(), niet in een traag interval.
+    interval: 60_000,
+    feeds: {
+      hour: 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson',
+      day:  'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson',
+      week: 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson'
+    },
+    get url() { return this.feeds[timeWindow] || this.feeds.day; },
+    normalize(json) {
+      return (json.features || []).map(f => {
+        const [lng, lat, depth] = f.geometry.coordinates;
+        return {
+          id: f.id,
+          layer: 'quake',
+          lat, lng, depth,
+          value: f.properties.mag,
+          label: f.properties.place || 'Unknown location',
+          time: f.properties.time,
+          source: 'USGS',
+          url: f.properties.url // directe link naar de USGS-eventpagina
+        };
+      });
+    }
+  },
+
+  // NASA EONET — open natural events, ÉÉN AANROEP PER CATEGORIE.
+  // ---------------------------------------------------------------------------
+  // Niet terugdraaien naar één gedeelde aanroep met `days=30`. EONET's `days=`
+  // telt niet hoe oud een gebeurtenis is, maar wanneer er voor het laatst een
+  // meetpunt aan is toegevoegd. Vulkanen krijgen alleen bij een noemenswaardige
+  // melding een meetpunt, dus met days=30 vielen ze állemaal buiten de zeef
+  // (gemeten 2026-07-30: 0 vulkanen, terwijl er 32 open stonden). Bosbranden zijn
+  // precies andersom: zónder venster levert EONET er ~6900. Eén venster kan hier
+  // dus per definitie niet voor alle categorieën kloppen.
+  ...eonetAdapters({
+    volcano:  { category: 'volcanoes',    days: 0  },  // 0 = geen venster
+    storm:    { category: 'severeStorms', days: 30 },
+    ice:      { category: 'seaLakeIce',   days: 30 },
+    wildfire: { category: 'wildfires',    days: 10 }
+  }),
+
+  // WAQI / aqicn.org — luchtkwaliteit (AQI). Aparte, in-/uitschakelbare laag.
+  // Het map/bounds-endpoint geeft álle stations binnen een bounding box terug;
+  // met de wereld-box (-90,-180,90,180) krijgen we een mondiale momentopname.
+  //
+  // SINDS 2026-07-31 loopt dit via `/api/waqi` en niet meer rechtstreeks naar
+  // api.waqi.info. De sleutel zit daarmee aan de serverkant: lokaal in `.env.local`
+  // via `.claude/serve.mjs`, straks op Vercel als environment variable (beslissing 5).
+  // Op GitHub Pages bestaat die route niet en geeft hij een 404; dat is geen storing
+  // maar het signaal dat deze laag een eigen achterkant nodig heeft.
+  waqi: {
+    layers: ['aqi'],
+    interval: 300_000, // 5 min — AQI-stations updaten traag (uurlijks)
+    // Een leeg WAQI-antwoord betekent vrijwel altijd een hapering of een
+    // bounds-/quotaprobleem, niet "er zijn geen meetstations". Vorige data
+    // daarom vasthouden. (De andere bronnen accepteren leeg juist als waarheid.)
+    keepOnEmpty: true,
+    // Zonder achterkant is deze laag onbeschikbaar in plaats van kapot: geen
+    // "verbinding beperkt" over de hele app. Zie het adapter-contract in pull().
+    optional: true,
+    offlineNote: 'no key configured',
+    // Eerste-build cap: WAQI levert wereldwijd duizenden stations; we tonen de
+    // zwaarst vervuilde N voor een leesbaar overzicht én voor de performance.
+    // Volledige dekking/optimalisatie is een vervolgstap.
+    maxStations: 600,
+    get url() {
+      return '/api/waqi?bounds=' + encodeURIComponent(aqiBounds);
+    },
+    normalize(json) {
+      if (!json || json.status !== 'ok' || !Array.isArray(json.data)) return [];
+      const rows = json.data
+        .map(s => {
+          const aqi = Number(s.aqi);            // WAQI geeft aqi als string; '-' bij geen data
+          if (!isFinite(aqi)) return null;
+          return {
+            id: 'aqi-' + s.uid,
+            layer: 'aqi',
+            lat: s.lat, lng: s.lon,
+            value: aqi,
+            label: (s.station && s.station.name) || 'AQI station',
+            // Geen meettijd bekend? Dan ook geen tijd verzinnen. Tot 2026-07-31 stond
+            // hier `Date.now()`, waardoor het detailvenster het OPHAALmoment toonde
+            // alsof het de meting was, en elk station bovendien altijd binnen het
+            // 15-minutenvenster van de meldingen viel.
+            time: (s.station && s.station.time) ? new Date(s.station.time).getTime() : null,
+            source: 'WAQI'
+            // Geen station-specifieke link: de @uid-permalink resolvet niet betrouwbaar (404),
+            // en de werkende city-slug-url zit alleen in de per-station feed (en is daar zelf
+            // inconsistent). In de readout tonen we daarom alleen de WAQI-bron-homepage.
+          };
+        })
+        .filter(Boolean)
+        .sort((a, b) => b.value - a.value); // zwaarst vervuild eerst
+      if (rows.length > this.maxStations) {
+        console.info('[WAQI] received ' + rows.length + ' stations → capped at ' + this.maxStations + ' (most polluted first).');
+        return rows.slice(0, this.maxStations);
+      }
+      return rows;
+    }
+  },
+
+  // Bliksem — via de lokale relay (Blitzortung WebSocket, server-side gedecodeerd).
+  // 'optional': vereist een draaiende relay; als die er niet is, slaan we de laag
+  // stilletjes over (geen storing op de globale statusindicator).
+  lightning: {
+    layers: ['lightning'],
+    url: RELAY_BASE ? RELAY_BASE + '/lightning' : '', // leeg = relay niet geconfigureerd → laag uit
+    interval: 2500, // hoogfrequent; de relay houdt een rollende buffer bij
+    optional: true,
+    offlineNote: 'relay unreachable',
+    normalize(json) {
+      return (json.strikes || []).map(s => ({
+        id: s.id,
+        layer: 'lightning',
+        lat: s.lat, lng: s.lon,
+        value: null,
+        label: 'Lightning strike',
+        time: s.time,
+        source: 'Blitzortung'
+        // geen event-specifieke link beschikbaar bij Blitzortung
+      }));
+    },
+    // De relay staat er, maar zegt zelf of hij verbinding heeft met Blitzortung.
+    // "Relay bereikbaar" en "bron levert data" zijn hier twee verschillende dingen.
+    health(json) {
+      return json.connected
+        ? { state: 'live' }
+        : { state: 'warn', note: 'relay ok · source offline' };
+    },
+    // Bliksem is de enige bron die zijn eigen geschiedenis bijhoudt. De relay-buffer
+    // is korter dan onze `lightningLifeMs`, dus we bewaren strikes lokaal tot ze echt
+    // verlopen zijn. Even belangrijk: bestaande objecten worden hergebruikt in plaats
+    // van vervangen, want globe.gl vergelijkt op objectidentiteit en zou anders elke
+    // 2,5 seconde de hele set opnieuw opbouwen.
+    merge(prev, fresh) {
+      const nu = Date.now();
+      const cut = nu - PARAMS.lightningLifeMs;
+      const bestaand = prev.filter(d => d.layer === 'lightning');
+      const bekend = new Set(bestaand.map(d => d.id));
+      const behouden = bestaand.filter(d => d.appear >= cut);  // leeftijd telt vanaf het verschijnen
+      const nieuw = fresh.filter(d => !bekend.has(d.id));
+      nieuw.forEach(d => { d.appear = nu; });
+      return prev.filter(d => d.layer !== 'lightning').concat(behouden, nieuw);
+    }
+  }
+};
+
+// Lagen die nooit een toastmelding geven. Deze lagen komen ook niet in `seenIds`
+// terecht, want die verzameling bestaat uitsluitend om toasts te ontdubbelen en zou
+// anders onbeperkt groeien.
+//
+//   lightning — tientallen inslagen per poll; een melding per stuk maakt de hoek van
+//               het scherm onbruikbaar.
+//   aqi       — een meetstation is geen GEBEURTENIS maar een doorlopende meting.
+//               "Nieuwe luchtkwaliteitsmeting" is geen nieuws, en sinds de stations
+//               met de camera meelopen (blok I) levert elk nieuw kijkgebied honderden
+//               onbekende station-id's op. Gemeten op 2026-07-31: vier toasts en een
+//               badge van vier na één enkele lading, en dat bij elke camerabeweging.
+//               Wat hier ooit wél nieuws kan zijn is een station dat van band wisselt
+//               (goed → ongezond). Dat is een andere functie dan "ik zie je voor het
+//               eerst" en vraagt een vergelijking met de vorige meetwaarde.
+const NO_TOAST_LAYERS = new Set(['lightning', 'aqi']);
+
+// Geef elke adapter zijn sleutel als id (voor de verbindingsstatus).
+Object.entries(Adapters).forEach(([id, a]) => { a.id = id; });
+
+// ---- Verbindingsstatus (health) ------------------------------
+const HEALTH_SOURCES = [
+  { id:'usgs',      label:'USGS',              sub:'Earthquakes' },
+  { id:'eonet',     label:'NASA EONET',        sub:'Volcano · fire · storm · sea ice' },
+  { id:'waqi',      label:'WAQI',              sub:'Air quality' },
+  { id:'lightning', label:'Blitzortung relay', sub:'Lightning (local relay)' }
+];
+const HEALTH_LABELS = { live:'live', offline:'offline', warn:'limited', pending:'—' };
+const sourceHealth = {};
+function setHealth(id, state, note) {
+  sourceHealth[id] = { state, note: note || '', time: Date.now() };
+  renderHealth();
+}
+function renderHealth() {
+  const el = document.getElementById('health-list');
+  if (!el) return;
+  el.innerHTML = HEALTH_SOURCES.map(s => {
+    const h = sourceHealth[s.id] || {};
+    const st = h.state || 'pending';
+    return '<div class="hrow">' +
+        '<span class="hdot ' + st + '"></span>' +
+        '<div class="hmeta"><b>' + s.label + '</b><span>' + (h.note || s.sub) + '</span></div>' +
+        '<span class="hstat ' + st + '">' + (HEALTH_LABELS[st] || st) + '</span>' +
+      '</div>';
+  }).join('');
+}
+
+// ---- State ----------------------------------------------------
+
+let store = [];                    // alle genormaliseerde events
+const active = { quake:true, volcano:true, storm:true, ice:true, wildfire:true, aqi:false, lightning:true };
+
+// Lagen waarop het tijdvenster (preset + slider) van toepassing is. Alleen de
+// aardbevingsstroom is een echte tijdreeks van mómentgebeurtenissen. EONET-lagen
+// zijn lopende "open" events met een dúúr (een vulkaan loopt maanden); een kort
+// venster zou die ten onrechte verbergen. Zie PLAN-terra-publicatie.md.
+const TIME_FILTERED = new Set(['quake']);
+
+// referenties naar de actieve 3D-glyph-objecten (voor per-frame animatie)
+let glyphList = [];
+let hovered = null;        // het 3D-object onder de muis (raycaster-highlight)
+let labelsOn = true;       // leader-line labels voor de zwaarste bevingen tonen
+let labelQuakes = [];      // de top-N bevingen die momenteel een label hebben
+
+// toast-meldingen voor nieuwe real-time entries
+const seenIds = new Set(); // reeds geziene event-id's
+let initialLoadDone = false;
+let soundOn = true;        // meldingsgeluid aan/uit
+let audioCtx = null;
+
+// PARAMS → verplaatst naar ./js/config.js (Stap 0). Blijft een gedeelde
+// objectreferentie, dus de tuning-GUI muteert 'm ongewijzigd.
+
+let timeWindow = 'day';            // 'hour' | 'day' | 'week' — stuurt feed-keuze
+let magFilter = 2;                 // minimale aardbeving-magnitude (M2+/M3+/M4+/M5+)
+let sliderFrac = 1;                // 0..1 — toont events tot dit deel van het venster (1 = alles)
+let globeMode = 'realistic';       // 'realistic' | 'expert'
+
+// WINDOW_MS, ASSETS, MODE_CYCLE/LABELS/ICONS → verplaatst naar ./js/config.js (Stap 0).
+
+// Land/kustlijn-geometrie voor de deskundig-modus (Natural Earth 110m, lokaal).
+// Eénmalig geladen; de expert-modus tekent deze als vlakke land-polygons +
+// harde kustlijn-stroke. Leeg tot de fetch klaar is (expert toont dan kale bol).
+let landFeatures = [];
+fetch('./assets/geo/ne_110m_land.geojson')
+  .then(r => r.json())
+  .then(geo => {
+    landFeatures = geo.features || [];
+    if (globeMode === 'expert') applyGlobeMode(); // her-teken als we al in expert staan
+  })
+  .catch(err => console.warn('[expert] could not load country GeoJSON:', err));
+
+// ---- Geografische overlays (platen, landgrenzen) --------------
+// Lijn-overlays via globe.gl's pathsData. Die laag staat los van het globe-materiaal
+// en werkt daarom in béíde weergavemodi. Er is één gedeelde paths-laag, dus alle
+// actieve overlays worden samengevoegd tot één array.
+//
+// Bewust LAZY: samen zijn de bestanden bijna een megabyte, en de meeste bezoekers
+// zetten deze overlays nooit aan. Pas ophalen bij de eerste keer aanzetten.
+const OVERLAY_SOURCES = {
+  plates:  './assets/geo/PB2002_boundaries.json',
+  borders: './assets/geo/ne_110m_admin_0_countries.geojson',
+  names:   './assets/geo/ne_110m_admin_0_countries.geojson' // zelfde bestand als borders
+};
+const overlayOn = { plates: false, borders: false, names: false };
+const overlayPaths = { plates: null, borders: null };   // lijn-overlays
+let countryLabels = null;                                // punt-overlay (landnamen)
+const overlayLoading = {};
+// Landgrenzen en landnamen delen één bestand; deze cache voorkomt een tweede fetch.
+const geoCache = {};
+async function fetchGeo(url) {
+  if (geoCache[url]) return geoCache[url];
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(res.status);
+  geoCache[url] = await res.json();
+  return geoCache[url];
+}
+
+// Trek alle LineStrings uit een GeoJSON-feature. Grenzen zitten vaak in Polygons /
+// MultiPolygons; daarvan gebruiken we de ringen als lijnen.
+function featureToLines(f) {
+  const g = f.geometry;
+  if (!g) return [];
+  const t = g.type, c = g.coordinates;
+  if (t === 'LineString') return [c];
+  if (t === 'MultiLineString') return c;
+  if (t === 'Polygon') return c;
+  if (t === 'MultiPolygon') return c.flat();
+  return [];
+}
+
+// Bouwt de lijnen ÉN hun casings één keer, als stabiele objecten. Dat is essentieel:
+// globe.gl vergelijkt paths op objectidentiteit. Bouwden we de casings bij elke
+// render opnieuw, dan sloopte en herbouwde globe.gl bij élke toggle ook de lagen die
+// helemaal niet veranderd waren — precies de bug waarbij het aanzetten van de
+// landgrenzen de plaatgrenzen liet verdwijnen.
+function buildOverlayPaths(kind, geo) {
+  const lines = [];
+  for (const f of (geo.features || [])) {
+    // PB2002 markeert alleen subductie expliciet; de rest heeft een leeg Type-veld.
+    const sub = kind === 'plates' && (f.properties || {}).Type === 'subduction';
+    const label = kind === 'plates'
+      ? ((f.properties || {}).Name || 'plaatgrens')
+      : ((f.properties || {}).NAME || (f.properties || {}).name || '');
+    for (const coords of featureToLines(f)) {
+      if (coords && coords.length > 1) lines.push({ kind, sub, label, coords });
+    }
+  }
+  return { lines, casings: lines.map(p => ({ ...p, casing: true })) };
+}
+
+function overlayColor(p) {
+  if (p.casing) return PARAMS.overlayCasingColor;
+  const expert = globeMode === 'expert';
+  let a = expert ? PARAMS.overlayOpacityExpert : PARAMS.overlayOpacityRealistic;
+  const hex = p.kind === 'borders' ? PARAMS.borderColor
+            : p.sub ? PARAMS.plateSubductionColor : PARAMS.plateOtherColor;
+  if (p.kind === 'borders') a *= PARAMS.borderOpacityFactor;
+  const n = parseInt(hex.slice(1), 16);
+  return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a.toFixed(3) + ')';
+}
+
+function overlayStroke(p) {
+  const base = globeMode === 'expert' ? PARAMS.overlayStrokeExpert : PARAMS.overlayStrokeRealistic;
+  const w = base * (p.kind === 'borders' ? PARAMS.borderStrokeFactor : 1);
+  return p.casing ? w + PARAMS.overlayCasingExtra : w;
+}
+
+function overlayAlt(p) {
+  const base = globeMode === 'expert' ? PARAMS.overlayAltitudeExpert : PARAMS.overlayAltitude;
+  return p.casing ? base - PARAMS.overlayCasingDrop : base;
+}
+
+// Landnamen: Natural Earth levert LABEL_X/LABEL_Y (door cartografen geplaatste
+// labelpunten, netter dan een berekende zwaartepunt) en LABELRANK als
+// belangrijkheidsvolgorde.
+// Hoe breed is dit land, in graden booglengte op de plek van zijn naam?
+//
+// We nemen de grootste aaneengesloten ring, niet de bounding box van álle ringen:
+// anders meet je bij de Verenigde Staten de afstand van Alaska tot Florida en bij
+// Rusland de sprong over de datumgrens. De lengtegraden worden met cos(lat)
+// omgerekend naar booglengte, want op 60 graden noord is een graad lengte nog maar de
+// helft van een graad aan de evenaar.
+function countryWidthDeg(f, labelLat) {
+  let breedste = 0;
+  for (const ring of featureToLines(f)) {
+    if (!ring || ring.length < 2) continue;
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const pt of ring) {
+      if (pt[0] < minX) minX = pt[0];
+      if (pt[0] > maxX) maxX = pt[0];
+      if (pt[1] < minY) minY = pt[1];
+      if (pt[1] > maxY) maxY = pt[1];
+    }
+    // de ring met het grootste oppervlak telt als het hoofdlichaam van het land
+    const opp = (maxX - minX) * (maxY - minY);
+    if (opp > breedste) {
+      breedste = opp;
+      f.__span = (maxX - minX) * Math.cos(labelLat * Math.PI / 180);
+    }
+  }
+  const span = f.__span || 0;
+  delete f.__span;
+  return span;
+}
+
+function buildCountryLabels(geo) {
+  const out = [];
+  for (const f of (geo.features || [])) {
+    const p = f.properties || {};
+    if (p.LABEL_X == null || p.LABEL_Y == null) continue;
+    const text = p.NAME || p.ADMIN || '';
+    out.push({
+      text,
+      lat: p.LABEL_Y, lng: p.LABEL_X,
+      rank: p.LABELRANK == null ? 99 : p.LABELRANK,
+      // Eén keer berekend bij het laden; het filter in renderCountryLabels() gebruikt
+      // dit om te bepalen of de naam op de huidige zoom überhaupt past.
+      widthDeg: countryWidthDeg(f, p.LABEL_Y),
+      textLen: text.length
+    });
+  }
+  return out;
+}
+
+// Overlap-behandeling via de zoomstand: ver uitgezoomd alleen de belangrijkste
+// namen, bij inzoomen komen de kleinere landen erbij. Alle 177 tegelijk is rommel.
+let labelRankLimit = PARAMS.countryLabelRankFar;
+let labelRankTimer = null;
+
+// PRESTATIE — niet terugdraaien zonder opnieuw te meten (sessie 9, 2026-07-30).
+// three-globe bouwt labels als echte tekstgeometrie. Elke aanroep van labelSize() of
+// labelsData() laat het die geometrie voor alle zichtbare landen opnieuw genereren, en
+// dat kost 350 ms met de hoofdthread op slot. Gemeten tijdens zoomen: p90 van 357 ms
+// met labels aan, tegen 8,7 ms met labels uit. Pannen was al vloeiend (9,3 ms), want
+// daar verandert de hoogte niet en gebeurt er dus niets.
+//
+// De oude code liet de maat continu met de camera-afstand meelopen en herbouwde dus bij
+// vrijwel elke zoomtick. Nu verandert er alleen iets op de momenten dat de rang-limiet
+// verspringt (hooguit acht keer over het hele bereik), en zelfs dan pas als de zoom
+// even stilstaat. Tijdens de beweging zelf wordt er niets herbouwd.
+// De hoekmaat die bij een rang-limiet hoort. Zie de toelichting in js/config.js:
+// de maat is evenredig met de camera-afstand, zodat de maat op het SCHERM constant
+// blijft. Vandaar de omweg via de altitude die bij deze rang hoort; de rang is de
+// enige zoom-trigger die we ons mogen veroorloven.
+function labelSizeForRank(lim) {
+  const t = (lim - PARAMS.countryLabelRankFar) /
+            (PARAMS.countryLabelRankNear - PARAMS.countryLabelRankFar);
+  // t is met countryLabelRankCurve uit de altitude gehaald, dus hier de inverse
+  const tAlt = Math.pow(t, 1 / PARAMS.countryLabelRankCurve);
+  const altitude = PARAMS.countryLabelAltFar -
+                   tAlt * (PARAMS.countryLabelAltFar - PARAMS.countryLabelAltNear);
+  // Het ijkpunt ligt bij de diepste zoom en blijft vast; de falloff bepaalt alleen hoe
+  // veel groter de hoekmaat wordt naarmate de camera verder weg staat. Bij falloff 1
+  // is de schermmaat overal gelijk, bij lagere waarden krimpen de namen als je uitzoomt.
+  const near = PARAMS.countryLabelAltNear;
+  return PARAMS.countryLabelScreenSize * near *
+         Math.pow(altitude / near, PARAMS.countryLabelSizeFalloff);
+}
+
+function updateLabelZoom(altitude) {
+  const tAlt = Math.min(1, Math.max(0, (PARAMS.countryLabelAltFar - altitude) /
+                                       (PARAMS.countryLabelAltFar - PARAMS.countryLabelAltNear)));
+  // Boven de 1 verspringen de hoge rangen pas bij écht diep inzoomen. Dat is de knop
+  // tegen overlappende namen in dichtbevolkte hoeken zoals de Balkan.
+  const t = Math.pow(tAlt, PARAMS.countryLabelRankCurve);
+  const lim = Math.round(PARAMS.countryLabelRankFar +
+              t * (PARAMS.countryLabelRankNear - PARAMS.countryLabelRankFar));
+  if (lim === labelRankLimit) return;
+  // Nog niet toepassen: de bezoeker is midden in een zoombeweging en passeert
+  // onderweg meerdere rangen. Pas herbouwen als het stil is.
+  clearTimeout(labelRankTimer);
+  labelRankTimer = setTimeout(() => {
+    labelRankLimit = lim;
+    renderCountryLabels();
+  }, PARAMS.countryLabelRankDebounce);
+}
+
+// Welke namen mogen er staan: eerst de rang, daarna een echte botsingstoets.
+//
+// WAAROM DIT NODIG IS. `LABELRANK` van Natural Earth is een redactionele
+// belangrijkheidsscore, geen ruimtelijke. Gemeten op 2026-07-31: **België heeft rang
+// 2, net als Rusland, Brazilië, Frankrijk en Duitsland.** Met alleen de rang is
+// "Belgium" dus nooit weg te houden bij "Germany"; die knop bestaat simpelweg niet.
+//
+// Een breedtetoets alleen ("past de naam op het land?") helpt ook niet: de
+// verhouding tekstbreedte tot landbreedte is voor Belgium (1,93 op 2,3) toevallig
+// gelijk aan die voor United Kingdom (3,85 op 4,6). Elke drempel die de een
+// wegfiltert, verliest de ander.
+//
+// Daarom botsingsdetectie op de labelvlakken zelf. Bij gelijke rang wint het bredere
+// land, want dat heeft de ruimte ook echt. Zoom je in, dan krimpt de hoekmaat terwijl
+// de landen even breed blijven, dus botsingen lossen vanzelf op. Geen tabel met
+// uitzonderingen, geen handmatige rangcorrecties.
+//
+// Kosten: kwadratisch in het aantal kandidaten, maar dat zijn er hoogstens 177 en
+// deze functie draait alleen bij een rangwissel, die al gesmoord is.
+function fitCountryLabels(limit, size) {
+  const perTeken = size * PARAMS.countryLabelCharWidth;
+  const halveHoogte = size / 2 * PARAMS.countryLabelPadding;
+
+  const kandidaten = countryLabels
+    .filter(d => d.rank <= limit)
+    // rang eerst, bij gelijke rang het bredere land voorrang geven
+    .sort((a, b) => a.rank - b.rank || b.widthDeg - a.widthDeg);
+
+  const geplaatst = [];
+  const uit = [];
+  for (const d of kandidaten) {
+    // De tekstbreedte is een booglengte. Op 52 graden noord is een lengtegraad nog
+    // maar 0,6 graad booglengte, dus delen door cos(lat) om terug te rekenen naar
+    // lengtegraden. Zonder die correctie botsen labels op hoge breedte nooit.
+    const cos = Math.max(0.2, Math.cos(d.lat * Math.PI / 180));
+    const halveBreedte = (d.textLen * perTeken) / 2 / cos * PARAMS.countryLabelPadding;
+
+    let botst = false;
+    for (const g of geplaatst) {
+      if (Math.abs(g.lng - d.lng) < g.hb + halveBreedte &&
+          Math.abs(g.lat - d.lat) < g.hh + halveHoogte) { botst = true; break; }
+    }
+    if (botst) continue;
+
+    geplaatst.push({ lng: d.lng, lat: d.lat, hb: halveBreedte, hh: halveHoogte });
+    uit.push(d);
+  }
+  return uit;
+}
+
+function renderCountryLabels() {
+  if (!overlayOn.names || !countryLabels) { world.labelsData([]); return; }
+  const size = labelSizeForRank(labelRankLimit);
+  world.labelSize(size);
+  world.labelsData(fitCountryLabels(labelRankLimit, size));
+}
+
+// `force` = de pad-hoogte of -stijl is veranderd (moduswissel). globe.gl leest de
+// accessors alleen bij het aanmaken van een pad, dus dan moeten de objecten écht
+// opnieuw door de laag heen. Zonder deze reset bleven de overlays na een wissel
+// deskundig → realistisch op de verkeerde hoogte hangen (clipping door de aarde).
+function renderOverlays(force) {
+  const expert = globeMode === 'expert';
+
+  if (force) {
+    // globe.gl leest kleur, dikte en hoogte alléén bij het aanmaken van een pad, en
+    // het vergelijkt zijn data op objectidentiteit. Bij een moduswissel veranderen
+    // alle drie, dus moeten de objecten vers zijn om opnieuw uitgelezen te worden.
+    // We vervangen ze in de opgeslagen sets: dan hergebruikt een volgende gewone
+    // render dezelfde identiteiten en sloopt globe.gl niets onnodig (de gotcha uit
+    // sessie 7).
+    //
+    // Hier stond tot 2026-07-31 `pathsData([])` gevolgd door een
+    // requestAnimationFrame die de data terugzette. Dat werkte alleen zolang die
+    // frame ook kwam. Staat rAF stil, en dat gebeurt in een achtergrondtabblad of
+    // een browser die knijpt, dan bleef het bij het leegmaken en waren de overlays
+    // voorgoed weg. Gemeten op 2026-07-31: na twee moduswissels geen enkele lijn meer.
+    for (const k of Object.keys(overlayPaths)) {
+      const set = overlayPaths[k];
+      if (!set) continue;
+      set.lines = set.lines.map(p => ({ ...p }));
+      set.casings = set.lines.map(p => ({ ...p, casing: true }));
+    }
+  }
+
+  const out = [];
+  for (const k of Object.keys(overlayPaths)) {
+    const set = overlayOn[k] ? overlayPaths[k] : null;
+    if (!set) continue;
+    // In de deskundig-modus is de achtergrond egaal donker: daar leest een kale lijn
+    // prima. In de realistische modus krijgt elke lijn een donkere casing eronder,
+    // anders verdwijnt hij in de felle dagzijde.
+    if (!expert) out.push(...set.casings);
+    out.push(...set.lines);
+  }
+  world.pathsData(out);
+}
+
+async function setOverlay(kind, on) {
+  overlayOn[kind] = on;
+  const stat = document.getElementById('es-' + kind);
+  const row = document.querySelector('.elayer[data-overlay="' + kind + '"]');
+  if (row) row.classList.toggle('on', on);
+
+  const nogLaden = kind === 'names' ? !countryLabels : !overlayPaths[kind];
+  if (on && nogLaden && !overlayLoading[kind]) {
+    overlayLoading[kind] = true;
+    if (stat) stat.textContent = 'loading…';
+    try {
+      const geo = await fetchGeo(OVERLAY_SOURCES[kind]);
+      if (kind === 'names') countryLabels = buildCountryLabels(geo);
+      else overlayPaths[kind] = buildOverlayPaths(kind, geo);
+    } catch (e) {
+      console.warn('[overlay] could not load ' + kind + ':', e);
+      overlayOn[kind] = false;
+      if (row) row.classList.remove('on');
+      if (stat) stat.textContent = 'n/a';
+      overlayLoading[kind] = false;
+      return;
+    }
+    overlayLoading[kind] = false;
+  }
+  if (stat) stat.textContent = overlayOn[kind] ? 'on' : 'off';
+  if (kind === 'names') renderCountryLabels();
+  else renderOverlays();
+}
+
+// Legenda-bolletjes krijgen de kleur van hun eigen lijnen, zodat het paneel en de
+// bol dezelfde taal spreken. Plaatgrenzen dragen twee kleuren (subductie versus de
+// rest) en krijgen daarom een tweekleurig bolletje.
+function paintOverlayDots() {
+  const set = (k, bg, glow) => {
+    const el = document.querySelector('.elayer[data-overlay="' + k + '"] .edot');
+    if (!el) return;
+    el.style.setProperty('--dot', bg);
+    el.style.setProperty('--dot-glow', glow);
+  };
+  // plaatgrenzen dragen twee kleuren (subductie versus de rest) → tweekleurig bolletje
+  set('plates',
+      'linear-gradient(135deg, ' + PARAMS.plateSubductionColor + ' 0 50%, ' +
+      PARAMS.plateOtherColor + ' 50% 100%)',
+      PARAMS.plateSubductionColor + '99');
+  set('borders', PARAMS.borderColor, PARAMS.borderColor + '99');
+  set('names', PARAMS.countryLabelColor, PARAMS.countryLabelColor + '99');
+}
+paintOverlayDots();
+
+document.querySelectorAll('.elayer[data-overlay]').forEach(el => {
+  el.addEventListener('click', () => setOverlay(el.dataset.overlay, !overlayOn[el.dataset.overlay]));
+});
+
+// ---- Globe ----------------------------------------------------
+
+// Textuurkwaliteit. Start op 2K zodat een eerste bezoeker ~2,4 MB laadt in plaats
+// van ~29 MB; de keuze wordt onthouden. Een ongeldige of oude waarde in
+// localStorage valt terug op de standaard.
+// LET OP: moet vóór `world` staan — de sterrenachtergrond leest 'm meteen.
+let texQuality = (() => {
+  try {
+    const saved = localStorage.getItem('terra-tex-quality');
+    return TEXTURE_SETS[saved] ? saved : DEFAULT_QUALITY;
+  } catch { return DEFAULT_QUALITY; }
+})();
+
+const world = Globe()
+  .backgroundImageUrl(assetsFor(texQuality).stars)
+  // lijn-overlays (platen, landgrenzen) — GeoJSON-coördinaten zijn [lng, lat]
+  .pathsData([])
+  .pathPoints(d => d.coords)
+  .pathPointLat(p => p[1])
+  .pathPointLng(p => p[0])
+  .pathColor(overlayColor)
+  .pathStroke(overlayStroke)
+  .pathPointAlt(overlayAlt)
+  .pathTransitionDuration(0)
+  .pathLabel(p => p.casing ? '' : (p.label || ''))
+  // landnamen (aparte punt-laag, los van de lijn-overlays)
+  .labelsData([])
+  .labelLat(d => d.lat)
+  .labelLng(d => d.lng)
+  .labelText(d => d.text)
+  .labelSize(labelSizeForRank(PARAMS.countryLabelRankFar))   // startwaarde; renderCountryLabels() stelt bij
+  .labelColor(() => PARAMS.countryLabelColor)
+  .labelAltitude(() => PARAMS.countryLabelAltitude)
+  .labelIncludeDot(false)
+  // Aantal segmenten per letterkromming. Elke stap omhoog kost geometrie, en die
+  // geometrie is precies wat een rebuild duur maakt. Op deze tekstgrootte is het
+  // verschil tussen 1 en 2 niet te zien; de rebuild wordt er wel merkbaar goedkoper van.
+  .labelResolution(1)
+  .atmosphereColor('#5b8fd4')
+  .atmosphereAltitude(0.2)
+  // ---- Alle indicatoren als 3D-objecten in de customLayer ----
+  // Aardbevingen: gloeiende magnitude-staaf + shockwave-shader-ring.
+  // EONET-lagen: eigen geanimeerd glyph. Interactie via eigen raycaster.
+  .customLayerData([])
+  .customThreeObject(buildGlyphObject)
+  .customThreeObjectUpdate((obj, d) => {
+    // Deskundig: ÁLLE indicatoren op één basis-hoogte, net boven de land-polygons,
+    // zodat ze nooit door de kaart worden afgedekt. Realistisch blijft ongewijzigd.
+    const alt = globeMode === 'expert' ? PARAMS.expertIndicatorAlt
+      : d.layer === 'quake' ? 0.002
+      : d.layer === 'lightning' ? PARAMS.cloudAltitude // bliksem zit ín de wolkenschil
+      : 0.006; // staaf-basis vlak op het oppervlak
+    const c = world.getCoords(d.lat, d.lng, alt);
+    obj.position.set(c.x, c.y, c.z);
+    // +Z radiaal naar BUITEN. lookAt(0,0,0) zou voor een gewoon Object3D de +Z juist
+    // naar het centrum richten (geometrie de aarde ín); kijk daarom naar een punt
+    // verder langs dezelfde straal → +Z = normalize(2c - c) = naar buiten.
+    obj.lookAt(c.x * 2, c.y * 2, c.z * 2);
+  })
+  (document.getElementById('globe'));
+
+// ---- Bloom-postprocessing (cinematische gloed op staven/ringen/glyphs) ----
+const bloomPass = new UnrealBloomPass(
+  new THREE.Vector2(window.innerWidth, window.innerHeight),
+  PARAMS.bloomStrength, PARAMS.bloomRadius, PARAMS.bloomThreshold
+);
+world.postProcessingComposer().addPass(bloomPass);
+
+// ---- Kleurgrading + chromatische aberratie (laatste pass, naar het scherm) ----
+const gradePass = new ShaderPass({
+  uniforms: {
+    tDiffuse:   { value: null },
+    aberration: { value: PARAMS.gradeAberration },
+    contrast:   { value: PARAMS.gradeContrast },
+    saturation: { value: PARAMS.gradeSaturation },
+    tint:       { value: new THREE.Color(1 - 0.08 * PARAMS.gradeTemp, 1, 1 + 0.08 * PARAMS.gradeTemp) }
+  },
+  vertexShader: `
+    varying vec2 vUv;
+    void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
+  `,
+  fragmentShader: `
+    uniform sampler2D tDiffuse;
+    uniform float aberration;
+    uniform float contrast;
+    uniform float saturation;
+    uniform vec3 tint;
+    varying vec2 vUv;
+    void main() {
+      vec2 dir = vUv - 0.5;                      // richting vanaf het midden
+      vec2 off = dir * aberration;               // sterker naar de randen
+      float r = texture2D(tDiffuse, vUv + off).r;
+      float g = texture2D(tDiffuse, vUv).g;
+      float b = texture2D(tDiffuse, vUv - off).b;
+      vec3 col = vec3(r, g, b);
+      col = (col - 0.5) * contrast + 0.5;        // contrast
+      float l = dot(col, vec3(0.299, 0.587, 0.114));
+      col = mix(vec3(l), col, saturation);       // saturatie
+      col *= tint;                               // koele tint
+      gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
+    }
+  `
+});
+world.postProcessingComposer().addPass(gradePass);
+
+// De tijdelijke lil-gui tuning-GUI is op 2026-07-30 definitief verwijderd. Hij heeft
+// zijn werk gedaan: de uitgevonden waarden staan nu vast in PARAMS (js/config.js).
+// Bijstellen doe je daar. Dit scheelt ook de hele lil-gui-import.
+
+// THREE is direct geïmporteerd en wordt met globe.gl gedeeld via de import map
+// (globe.gl is geladen met ?external=three) → gegarandeerd dezelfde instance.
+const ColorClass = THREE.Color;
+function mkColor(hex, fallback) {
+  try { return new THREE.Color(hex); }
+  catch (e) { return fallback || hex; }
+}
+
+function findThree() { return THREE; }
+
+// ---- Realistische dag/nacht-shader ----
+// Mengt day- en night-textuur over de terminator op basis van de echte zonstand,
+// met clouds-laag en fresnel-atmosfeer. Gebaseerd op het officiële globe.gl
+// day-night-cycle voorbeeld, uitgebreid met clouds + specular + fresnel.
+
+// dayNightShader (aarde dag/nacht-shader) → ./js/shaders.js (Stap 0).
+
+// subsolar point: waar staat de zon recht boven de aarde op tijdstip dt.
+// Vereenvoudigde astronomische berekening (geen externe lib nodig).
+function sunPositionAt(dt) {
+  const d = new Date(dt);
+  const rad = Math.PI / 180, deg = 180 / Math.PI;
+  // dagen sinds J2000
+  const jd = dt / 86400000 + 2440587.5;
+  const n = jd - 2451545.0;
+  // gemiddelde lengte en anomalie van de zon
+  const L = (280.460 + 0.9856474 * n) % 360;
+  const g = ((357.528 + 0.9856003 * n) % 360) * rad;
+  // ecliptische lengte
+  const lambda = (L + 1.915 * Math.sin(g) + 0.020 * Math.sin(2 * g)) * rad;
+  // schuinte ecliptica
+  const eps = (23.439 - 0.0000004 * n) * rad;
+  // declinatie (breedtegraad subsolar point)
+  const declination = Math.asin(Math.sin(eps) * Math.sin(lambda)) * deg;
+  // rechte klimming → uurhoek → lengtegraad
+  const ra = Math.atan2(Math.cos(eps) * Math.sin(lambda), Math.cos(lambda)) * deg;
+  // Greenwich mean sidereal time
+  const gmst = (18.697374558 + 24.06570982441908 * n) % 24;
+  const lon = -(((gmst * 15 - ra + 540) % 360) - 180);
+  return [lon, declination]; // [lng, lat]
+}
+
+// houd referenties zodat we tussen modi kunnen wisselen
+let shaderMaterial = null;
+let cloudMesh = null;       // losse zwevende wolkenschil-mesh
+let cloudsTexture = null;   // gedeelde wolkentextuur (schaduw + schil)
+let wireMesh = null;        // wireframe-aardbol (test-laag)
+let wireframeOn = false;
+let fogMesh = null;         // fresnel-mistschil (vertroebelt de randen)
+let fogOn = false;
+let realisticActive = false;
+let shaderRotation = { lng: 0, lat: 0 };
+// laadstatus (is de textuur succesvol geladen) vs. gebruikerskeuze (aan/uit-toggle)
+let earthLayerStatus  = { day:false, night:false, clouds:false, specular:false, normal:false };
+let earthLayerEnabled = { day:true,  night:true,  clouds:true,  specular:true,  normal:true };
+
+
+// koppelt een laag aan de shader-uniform die hem aanstuurt
+const LAYER_UNIFORM = { clouds:'hasClouds', specular:'hasSpecular', normal:'hasNormal' };
+
+// pas de toggle-keuzes toe op de shader-uniforms
+function applyLayerToggles() {
+  if (!shaderMaterial) return;
+  const u = shaderMaterial.uniforms;
+  // clouds/specular/normal schakelen direct hun effect uit
+  const cloudsOn = earthLayerStatus.clouds && earthLayerEnabled.clouds;
+  u.hasClouds.value   = cloudsOn ? 1 : 0;
+  u.hasSpecular.value = (earthLayerStatus.specular && earthLayerEnabled.specular) ? 1 : 0;
+  u.hasNormal.value   = (earthLayerStatus.normal   && earthLayerEnabled.normal)   ? 1 : 0;
+  // de losse wolkenschil volgt dezelfde aan/uit-keuze als de schaduw
+  if (cloudMesh) cloudMesh.visible = cloudsOn && globeMode === 'realistic';
+  // day/night kunnen we niet "uitzetten" zonder zwart; we mengen ze i.p.v. weglaten.
+  // dayBlend 0 = alleen nacht, 1 = alleen dag, anders normale terminator-mix.
+  u.dayEnabled.value   = earthLayerEnabled.day   ? 1 : 0;
+  u.nightEnabled.value = earthLayerEnabled.night ? 1 : 0;
+}
+
+// werk de Earth-lagen indicatie bij (welke texturen actief en aan zijn)
+function updateEarthLayers() {
+  const block = document.getElementById('earth-layers');
+  if (!block) return;
+  block.classList.toggle('show', globeMode === 'realistic');
+  const note = document.getElementById('aarde-empty');
+  if (note) note.style.display = (globeMode === 'realistic') ? 'none' : 'block';
+  for (const key of ['day','night','clouds','specular','normal']) {
+    const row = document.querySelector('.elayer[data-tex="' + key + '"]');
+    const stat = document.getElementById('es-' + key);
+    const loaded = !!earthLayerStatus[key];
+    const enabled = !!earthLayerEnabled[key];
+    const on = loaded && enabled;
+    if (row) {
+      row.classList.toggle('on', on);
+      row.classList.toggle('disabled', !loaded);
+    }
+    if (stat) stat.textContent = !loaded ? 'n/a' : (enabled ? 'on' : 'off');
+  }
+}
+
+function buildRealisticMaterial() {
+  const T = findThree();
+  if (!T) {
+    console.warn('THREE not available for the shader — realistic mode falls back to day mode.');
+    return null;
+  }
+  const loader = new T.TextureLoader();
+  const load = url => loader.loadAsync ? loader.loadAsync(url) : new Promise(res => loader.load(url, res));
+
+  const A = assetsFor(texQuality);
+  return Promise.all([
+    load(A.day),
+    load(A.night),
+    load(A.clouds).catch(() => null),
+    load(A.specular).catch(() => null),
+    load(A.normal).catch(() => null)
+  ]).then(([dayTex, nightTex, cloudsTex, specTex, normalTex]) => {
+    // rapporteer welke lagen succesvol geladen zijn voor de UI-indicatie
+    earthLayerStatus = {
+      day: !!dayTex, night: !!nightTex, clouds: !!cloudsTex,
+      specular: !!specTex, normal: !!normalTex
+    };
+    updateEarthLayers();
+    // color-textures naar sRGB zodat ze niet uitgewassen ogen in recente three.
+    // normal/specular zijn data-maps → laat die lineair (geen sRGB).
+    // wolken horizontaal kunnen herhalen zodat ze naadloos kunnen driften
+    if (cloudsTex) cloudsTex.wrapS = T.RepeatWrapping;
+    cloudsTexture = cloudsTex; // bewaren voor de zwevende wolkenschil
+    [dayTex, nightTex, cloudsTex].forEach(t => {
+      if (t && 'colorSpace' in t) t.colorSpace = T.SRGBColorSpace;
+      else if (t && 'encoding' in t && T.sRGBEncoding) t.encoding = T.sRGBEncoding;
+    });
+    const mat = new T.ShaderMaterial({
+      uniforms: {
+        dayTexture:   { value: dayTex },
+        nightTexture: { value: nightTex },
+        cloudsTexture:   { value: cloudsTex || dayTex },
+        specularTexture: { value: specTex || dayTex },
+        normalTexture:   { value: normalTex || dayTex },
+        hasClouds:   { value: cloudsTex ? 1 : 0 },
+        hasSpecular: { value: specTex ? 1 : 0 },
+        hasNormal:   { value: normalTex ? 1 : 0 },
+        dayEnabled:   { value: 1 },
+        nightEnabled: { value: 1 },
+        nightBrightness: { value: 0.12 },
+        normalStrength: { value: 2.5 },  // overdrijving van de normal-map-helling
+        reliefStrength: { value: 4.0 },  // emboss-uitvergroting → hardere reliëflijnen
+        glintStrength:  { value: 0.7 },  // sterkte zonneglinster
+        waterRipple:    { value: 0.45 }, // amplitude van de procedurele water-rimpel
+        cloudDrift:    { value: 0 },     // horizontale wolken-offset (drift)
+        cloudShadow:   { value: PARAMS.cloudShadow }, // sterkte wolk-schaduw op oppervlak
+        time:          { value: 0 },
+        sunPosition:   { value: new T.Vector2() },
+        globeRotation: { value: new T.Vector2() },
+        atmosphereDayColor:      { value: new T.Color('#6bb3ff') },
+        atmosphereTwilightColor: { value: new T.Color('#ff6b3d') }
+      },
+      vertexShader: dayNightShader.vertexShader,
+      fragmentShader: dayNightShader.fragmentShader
+    });
+    return mat;
+  });
+}
+
+// ---- Zwevende wolkenschil ----
+// Aparte transparante bol op iets grotere straal dan de aarde, zodat de wolken
+// aan de rand van de bol zichtbaar "zweven". Day/night-belichting deelt dezelfde
+// zon-uniforms als de aarde-shader; drift via dezelfde cloudDrift-uniform, zodat
+// de schaduw op het oppervlak meeloopt. Door de hogere straal ontstaat aan de
+// limbus parallax tussen wolk en schaduw → het zweef-effect.
+// Wolken-shader (CLOUD_VERT/FRAG) → ./js/shaders.js (Stap 0).
+
+function setupCloudSphere() {
+  if (!shaderMaterial || !cloudsTexture) return;
+  // vind de aarde-mesh (die ons shader-material draagt) om aan te parenten
+  let earthMesh = null;
+  world.scene().traverse(o => { if (o.material === shaderMaterial) earthMesh = o; });
+  if (!earthMesh) return;
+  // bestaande schil opruimen (bv. bij wijzigen van de hoogte in de GUI)
+  if (cloudMesh) {
+    if (cloudMesh.parent) cloudMesh.parent.remove(cloudMesh);
+    cloudMesh.geometry.dispose(); cloudMesh.material.dispose();
+    cloudMesh = null;
+  }
+  const R = 100 * (1 + PARAMS.cloudAltitude); // globe-straal = 100
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      cloudsTexture: shaderMaterial.uniforms.cloudsTexture, // gedeelde refs → synct vanzelf
+      cloudDrift:    shaderMaterial.uniforms.cloudDrift,
+      sunPosition:   shaderMaterial.uniforms.sunPosition,
+      globeRotation: shaderMaterial.uniforms.globeRotation,
+      cloudOpacity:  { value: PARAMS.cloudOpacity }
+    },
+    vertexShader: CLOUD_VERT, fragmentShader: CLOUD_FRAG,
+    transparent: true, depthWrite: false, side: THREE.FrontSide
+  });
+  cloudMesh = new THREE.Mesh(new THREE.SphereGeometry(R, 64, 48), mat);
+  earthMesh.add(cloudMesh); // erft exact de oriëntatie van de aarde → wolken op de juiste plek
+}
+
+// ---- Wireframe-aardbol (test-laag) ----
+// Toont een doorzichtig wireframe-rooster i.p.v. de getextureerde aarde, zodat de
+// indicatoren (staven/ringen) goed te inspecteren zijn zonder occlusie.
+function findEarthMesh() {
+  let m = null;
+  world.scene().traverse(o => { if (o.material === shaderMaterial) m = o; });
+  return m;
+}
+
+// globe.gl past een nieuw globeMaterial pas bij de volgende render-tick toe. Direct
+// ná `world.globeMaterial(mat)` is de aarde-mesh dus nog NIET met ons materiaal te
+// vinden, en gaven setupCloudSphere/setupFog stilletjes op.
+// Symptoom van die race: de witte wolkenschil werd nooit gebouwd, terwijl de
+// wolkschaduw in de oppervlakteshader wél tekende → wolken als donkere waas in
+// plaats van wit. Zichtbaar geworden toen de 2K-set veel sneller laadde dan 8K.
+// Daarom wachten in plaats van gokken op de timing.
+function whenEarthMeshReady(fn, tries = 90) {
+  if (findEarthMesh()) { fn(); return; }
+  if (tries <= 0) { console.warn('Earth mesh not found — cloud shell and fog skipped.'); return; }
+  requestAnimationFrame(() => whenEarthMeshReady(fn, tries - 1));
+}
+function setupWireframe() {
+  if (wireMesh) return;
+  wireMesh = new THREE.Mesh(
+    new THREE.SphereGeometry(100, 48, 32),
+    new THREE.MeshBasicMaterial({ wireframe: true, color: '#3a8fa0', transparent: true, opacity: 0.35, depthWrite: false })
+  );
+  wireMesh.visible = false;
+  world.scene().add(wireMesh); // concentrisch met de aarde (beide op de oorsprong)
+}
+function applyWireframe() {
+  setupWireframe();
+  const earthMesh = findEarthMesh();
+  if (wireMesh) wireMesh.visible = wireframeOn;
+  if (earthMesh) earthMesh.visible = !wireframeOn;
+  if (wireframeOn) {
+    if (cloudMesh) cloudMesh.visible = false; // wolken weg in wireframe-modus
+  } else {
+    applyLayerToggles(); // herstelt o.a. de wolken-schil-zichtbaarheid
+  }
+}
+
+// ---- Mist-schil ----
+// Een fresnel-waas op een schil net boven het oppervlak: helder in het midden
+// (kijkrichting recht op het oppervlak) en steeds dichter naar de randen toe
+// (scherende kijkhoek) → het kaartje wordt aan de limbus "mistig".
+// Mist-shader (FOG_VERT/FRAG) → ./js/shaders.js (Stap 0).
+function setupFog() {
+  if (fogMesh || !shaderMaterial) return;
+  const earthMesh = findEarthMesh();
+  if (!earthMesh) return;
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      fogColor:    { value: new THREE.Color(PARAMS.fogColor) },
+      fogStrength: { value: PARAMS.fogStrength },
+      fogPower:    { value: PARAMS.fogPower }
+    },
+    vertexShader: FOG_VERT, fragmentShader: FOG_FRAG,
+    transparent: true, depthWrite: false, side: THREE.FrontSide
+  });
+  fogMesh = new THREE.Mesh(new THREE.SphereGeometry(100.5, 64, 48), mat);
+  fogMesh.visible = fogOn;
+  earthMesh.add(fogMesh);
+}
+
+function applyGlobeMode() {
+  updateEarthLayers(); // toont/verbergt het Earth-lagen blok per modus
+  renderOverlays(true); // overlays blijven in béíde modi staan, maar wisselen van stijl én hoogte
+  if (globeMode === 'realistic') {
+    realisticActive = true;
+    leaveExpertIfNeeded(); // post-proc/atmosfeer/sterren terug; polygons + raster weg
+    if (shaderMaterial) {
+      world.globeMaterial(shaderMaterial);
+      world.atmosphereColor('#6bb3ff');
+      updateSunUniform();
+      if (cloudMesh) cloudMesh.visible = true;
+    } else {
+      // bouw eenmalig, daarna hergebruiken
+      const built = buildRealisticMaterial();
+      if (built && built.then) {
+        built.then(mat => {
+          if (!mat) { fallbackToDay(); return; }
+          shaderMaterial = mat;
+          world.globeMaterial(mat);
+          world.atmosphereColor('#6bb3ff');
+          updateSunUniform();
+          applyLayerToggles();
+          // pas bouwen zodra globe.gl ons materiaal echt op de aarde-mesh heeft gezet
+          whenEarthMeshReady(() => {
+            setupCloudSphere(); // losse wolkenschil opbouwen
+            setupFog();         // mist-schil opbouwen
+          });
+        });
+      } else {
+        fallbackToDay();
+      }
+    }
+  } else { // expert — schematische vector-kaart
+    realisticActive = false;
+    if (cloudMesh) cloudMesh.visible = false; // geen zwevende wolken in deskundig modus
+    enterExpertMode({ world, THREE, bloomPass, gradePass, PARAMS, landFeatures });
+  }
+}
+
+// Realistische tak: maak eerst alle deskundig-wijzigingen ongedaan
+// (post-proc terug aan, atmosfeer/sterren terug, polygons/graticule weg).
+function leaveExpertIfNeeded() {
+  exitExpertMode({ world, bloomPass, gradePass, starsUrl: assetsFor(texQuality).stars });
+}
+
+// Als de realistische shader niet te bouwen is, val terug op de deskundig-modus
+// (schematische kaart werkt zonder shader). Voorheen viel dit terug op 'dag'.
+function fallbackToDay() {
+  globeMode = 'expert';
+  updateModeButton();
+  applyGlobeMode();
+}
+
+// bewaar het originele phong material zodat we kunnen terugschakelen
+const originalPhong = world.globeMaterial();
+function restorePhongMaterial() {
+  if (world.globeMaterial() !== originalPhong) {
+    world.globeMaterial(originalPhong);
+  }
+}
+
+// sun-uniform updaten op basis van echte tijd
+function updateSunUniform() {
+  if (!shaderMaterial) return;
+  const [lng, lat] = sunPositionAt(Date.now());
+  shaderMaterial.uniforms.sunPosition.value.set(lng, lat);
+  shaderMaterial.uniforms.globeRotation.value.set(shaderRotation.lng, shaderRotation.lat);
+}
+
+// LET OP: `world.onZoom` is een SETTER, geen event-abonnement. Een tweede
+// `world.onZoom(...)` elders vervángt deze callback en breekt dan stilzwijgend de
+// dag/nacht-terminator (die bleef staan → één zijde permanent licht). Alles wat op
+// camerabeweging moet reageren hoort dus HIER bij elkaar te staan.
+world.onZoom(pov => {
+  const { lng, lat, altitude } = pov;
+  // 1. globe-rotatie naar de shader zodat de terminator klopt bij draaien
+  shaderRotation = { lng, lat };
+  if (shaderMaterial) shaderMaterial.uniforms.globeRotation.value.set(lng, lat);
+  // 2. landnamen: dichtheid én grootte volgen de zoomstand
+  updateLabelZoom(altitude);
+  // 3. luchtkwaliteit: de enige bron die per gebied werkt, laat zijn stations
+  //    meelopen met waar je kijkt. Doet niets als de laag uit staat.
+  followAqiToView();
+});
+
+world.controls().autoRotate = !REDUCED_MOTION;
+world.controls().autoRotateSpeed = PARAMS.autoRotateSpeed;
+world.controls().enableDamping = true;
+
+// ---- Zoomgrenzen ----
+// Zonder deze grenzen kon je dwars door het oppervlak heen zoomen tot de aarde
+// verdween, en aan de andere kant zo ver weg dat hij een stip werd.
+//
+// LET OP bij het bijstellen: globe.gl zet bij het monteren zelf `minDistance` op
+// ongeveer 100,06 en `maxDistance` op 10000, plus `zoomToCursor = true`. Onze regels
+// draaien ná de mount en overschrijven dat.
+//
+// `zoomToCursor` verdient aandacht. Staat hij aan, dan verschuift OrbitControls het
+// DRAAIPUNT naar de plek onder de muis, en `minDistance` bewaakt de afstand
+// camera-tot-draaipunt, niet camera-tot-aardmiddelpunt. Schuift dat draaipunt naar het
+// oppervlak, dan kun je alsnog dichter bij de aarde komen dan de grens bedoelt. Daarom
+// staat hij standaard uit: zoomen gaat naar het middelpunt in plaats van naar de
+// muisaanwijzer, en de grens houdt gegarandeerd stand. Zie js/config.js om het terug te
+// zetten.
+world.controls().zoomToCursor = PARAMS.zoomToCursor;
+if (!PARAMS.zoomToCursor) world.controls().target.set(0, 0, 0);
+// Afstand tot het middelpunt; de bol heeft straal 100, dus 100 is het oppervlak zelf.
+world.controls().minDistance = PARAMS.zoomMinDistance;
+world.controls().maxDistance = PARAMS.zoomMaxDistance;
+
+// ---- Auto-rotatie met terugkeer (sessie 9, 2026-07-30) ----
+// De rotatie stopte voorheen bij de eerste interactie en kwam nooit meer terug: één
+// keer slepen en de globe stond de rest van het bezoek stil. Nu pauzeert hij alleen,
+// en pakt hij de draad weer op zodra het even stil is. De schakelaar in Instellingen
+// zet de functie helemaal uit; `autoRotateWanted` is daarvoor de bron van waarheid,
+// zodat een lopende pauze-timer nooit iets terugzet dat de bezoeker heeft uitgezet.
+let autoRotateWanted = !REDUCED_MOTION;
+let autoRotateTimer = null;
+
+function pauseAutoRotate() {
+  world.controls().autoRotate = false;
+  clearTimeout(autoRotateTimer);
+  if (!autoRotateWanted) return;
+  autoRotateTimer = setTimeout(() => {
+    if (autoRotateWanted) world.controls().autoRotate = true;
+  }, PARAMS.autoRotateResumeMs);
+}
+
+function setAutoRotate(on) {
+  autoRotateWanted = on;
+  clearTimeout(autoRotateTimer);
+  world.controls().autoRotate = on;
+}
+
+world.controls().addEventListener('start', pauseAutoRotate);
+
+function render() {
+  const now = Date.now();
+  const windowMs = WINDOW_MS[timeWindow];
+  // slider: toon alleen events binnen het ingestelde deel van het venster.
+  // sliderFrac 1 = volledige venster, 0.25 = alleen het meest recente kwart.
+  const cutoff = now - windowMs * sliderFrac;
+  const visible = store.filter(d =>
+    active[d.layer] && (!TIME_FILTERED.has(d.layer) || d.time >= cutoff)
+  );
+  // aardbevingen ook op kracht filteren (M2+/M3+/M4+/M5+)
+  const quakes = visible.filter(d => d.layer === 'quake' && (d.value || 0) >= magFilter);
+  const others = visible.filter(d => d.layer !== 'quake');
+  const shown = quakes.concat(others);
+  // LOD-rang per laag: sorteer op significantie (value), rang 0..1 (0 = belangrijkst).
+  // animateShader toont ver uitgezoomd alleen de lage rangen; inzoomen onthult de rest.
+  const byLayer = {};
+  for (const d of shown) { (byLayer[d.layer] = byLayer[d.layer] || []).push(d); }
+  for (const layer in byLayer) {
+    const arr = byLayer[layer];
+    arr.sort((a, b) => (b.value || 0) - (a.value || 0));
+    const n = Math.max(1, arr.length);
+    for (let i = 0; i < arr.length; i++) arr[i].__lodRank = i / n;
+  }
+  world.customLayerData(shown);
+  hovered = null;            // object-refs verouderen als de customLayer herbouwt
+  rebuildLabels(quakes);     // leader-line labels voor de zwaarste bevingen
+  updateCounts(shown);
+}
+
+// ---- Counts & UI ---------------------------------------------
+
+function updateCounts(visible) {
+  const set = visible || store;
+  const tally = { quake:0, volcano:0, storm:0, ice:0, wildfire:0, aqi:0, lightning:0 };
+  for (const d of set) if (tally[d.layer] !== undefined) tally[d.layer]++;
+  for (const k in tally) {
+    const el = document.getElementById('count-' + k);
+    if (el) el.textContent = tally[k];
+  }
+}
+
+document.querySelectorAll('.layer').forEach(el => {
+  el.addEventListener('click', () => {
+    const layer = el.dataset.layer;
+    if (lockedLayers.has(layer)) return;   // vergrendeld: aanzetten heeft geen zin
+    active[layer] = !active[layer];
+    el.classList.toggle('off', !active[layer]);
+    render();
+  });
+});
+
+// ---- Slotjes: lagen met een eigen achterkant --------------------------------
+// Twee lagen werken alleen als jij er zelf iets voor regelt: luchtkwaliteit vraagt
+// een WAQI-token achter /api/waqi, bliksem vraagt een eigen relay. Op de publieke
+// demo bestaat geen van beide.
+//
+// Voorheen verdween de bliksemrij dan gewoon uit het lijstje. Dat is misleidend: de
+// bezoeker ziet niet dát de laag bestaat, laat staan hoe hij hem aan krijgt. Een
+// slotje vertelt het verschil tussen "kapot" en "hier valt iets aan te koppelen".
+//
+// Het paneeltje is uitklapbaar en niet zomaar een icoon, omdat het invoerveld voor
+// een eigen sleutel hier later in komt (beslissing 25 en 26).
+const LOCK_INFO = {
+  aqi: {
+    kop: 'Your own key required',
+    tekst: 'Air quality comes from WAQI and needs a free token. This demo runs ' +
+           'without one; deploy your own copy to add it.',
+    href: 'https://aqicn.org/data-platform/token/',
+    linkTekst: 'Request a free token'
+  },
+  lightning: {
+    kop: 'Your own relay required',
+    tekst: 'Lightning comes from Blitzortung over a permanently open WebSocket. That ' +
+           'cannot run on serverless hosting, so this layer needs your own relay.',
+    href: REPO_URL,
+    linkTekst: 'How to set one up'
+  }
+};
+
+const lockedLayers = new Set();
+// Stond de laag aan voordat het slot erop ging? Zo ja, dan zetten we hem bij herstel
+// weer aan. Zonder dit blijft een laag na het terugkomen van zijn bron op nul staan,
+// terwijl de bezoeker hem nooit zelf heeft uitgezet.
+const activeVoorSlot = {};
+
+function setLayerLocked(layer, vergrendeld) {
+  const rij = document.querySelector('.layer[data-layer="' + layer + '"]');
+  const info = LOCK_INFO[layer];
+  if (!rij || !info) return;
+  if (vergrendeld === lockedLayers.has(layer)) return;   // niets veranderd
+
+  if (!vergrendeld) {
+    lockedLayers.delete(layer);
+    rij.classList.remove('locked');
+    rij.querySelector('.lock-btn')?.remove();
+    document.querySelector('.layer-detail[data-detail="lock-' + layer + '"]')?.remove();
+    if (activeVoorSlot[layer]) {
+      active[layer] = true;
+      rij.classList.remove('off');
+      render();
+    }
+    return;
+  }
+
+  lockedLayers.add(layer);
+  activeVoorSlot[layer] = active[layer];
+  rij.classList.add('locked', 'off');
+  active[layer] = false;
+  render();
+
+  const knop = document.createElement('button');
+  knop.className = 'lock-btn';
+  knop.title = info.kop;
+  knop.setAttribute('aria-label', info.kop);
+  knop.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+    'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+    '<rect x="4" y="10" width="16" height="11" rx="2"/>' +
+    '<path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>';
+  rij.appendChild(knop);
+
+  const paneel = document.createElement('div');
+  paneel.className = 'layer-detail lock-detail';
+  paneel.dataset.detail = 'lock-' + layer;
+  paneel.innerHTML = '<h3>' + info.kop + '</h3><p>' + info.tekst + '</p>' +
+    '<a href="' + info.href + '" target="_blank" rel="noopener">' + info.linkTekst + ' ↗</a>';
+  rij.insertAdjacentElement('afterend', paneel);
+
+  knop.addEventListener('click', e => {
+    e.stopPropagation();                       // niet de laag togglen
+    paneel.classList.toggle('show');
+    knop.classList.toggle('open');
+  });
+}
+
+// Bliksem draait volledig via de relay (relay/relay.mjs). Is er geen relay-adres, dan
+// is de laag onbruikbaar. Tot 2026-07-31 werd de rij dan uit het lijstje VERWIJDERD;
+// sindsdien krijgt hij een slotje. Het verschil telt: verwijderen verbergt dat de laag
+// bestaat, een slotje nodigt uit om er zelf een relay onder te zetten.
+if (!RELAY_BASE) setLayerLocked('lightning', true);
+
+// ---- Luchtkwaliteit: handmatig het kijkgebied herladen ----
+// Forceer de customLayer om alle glyphs opnieuw te bouwen (globe.gl hergebruikt
+// objecten bij gelijke data-refs; leegmaken + na 2 frames opnieuw vullen omzeilt dat).
+function forceRebuild() {
+  world.customLayerData([]);
+  requestAnimationFrame(() => requestAnimationFrame(render));
+}
+
+// Schat het zichtbare lat/lng-vlak uit de camerastand. Voor een bol met straal R
+// op afstand d geldt voor de horizon-kap: cos(θ) = R/d = 1/(1+altitude).
+// Gebruikt door de AQI-refresh om het zichtbare gebied op te vragen.
+function viewBounds() {
+  const pov = world.pointOfView();
+  const alt = Math.max(0.05, pov.altitude);
+  let h = Math.acos(Math.min(1, 1 / (1 + alt))) * 180 / Math.PI; // halve hoek-straal (graden)
+  h = Math.min(85, h * 0.9);                                     // iets krapper dan de horizon
+  const lat = pov.lat, lng = pov.lng;
+  const lat1 = Math.max(-90, lat - h), lat2 = Math.min(90, lat + h);
+  const lngSpan = Math.min(180, h / Math.max(0.15, Math.cos(lat * Math.PI / 180))); // breder bij de polen
+  const lng1 = Math.max(-180, lng - lngSpan), lng2 = Math.min(180, lng + lngSpan);
+  return lat1.toFixed(3) + ',' + lng1.toFixed(3) + ',' + lat2.toFixed(3) + ',' + lng2.toFixed(3);
+}
+
+// Dezelfde box, maar naar buiten afgerond op een raster. Twee redenen:
+//
+//   1. Zonder afronding is elke camerastand een andere URL en slaat de edge cache in
+//      /api/waqi (s-maxage=300) nooit aan. Mét afronding vraag je binnen hetzelfde
+//      vak steeds exact dezelfde URL op, en dan komt het antwoord uit de cache in
+//      plaats van bij WAQI vandaan. Dat is niet alleen sneller: Terra draait op een
+//      gratis, niet-commerciële licentie (beslissing 21).
+//   2. Het geeft een stabiele sleutel om te bepalen óf er iets te halen valt.
+//
+// Naar BUITEN afronden, dus de box is altijd gelijk aan of groter dan het kijkgebied.
+// Naar binnen afronden zou een rand zonder stations opleveren.
+function viewBoundsSnapped() {
+  const g = PARAMS.aqiFollowGridDeg;
+  const [lat1, lng1, lat2, lng2] = viewBounds().split(',').map(Number);
+  const omlaag = v => Math.floor(v / g) * g;
+  const omhoog = v => Math.ceil(v / g) * g;
+  return [
+    Math.max(-90,  omlaag(lat1)), Math.max(-180, omlaag(lng1)),
+    Math.min(90,   omhoog(lat2)), Math.min(180,  omhoog(lng2))
+  ].join(',');
+}
+
+// Laat de luchtkwaliteitsstations meelopen met waar de camera kijkt.
+// Hangt aan de ENE onZoom-handler hierboven; zie de waarschuwing daar.
+let aqiFollowTimer = null;
+let aqiFollowKey = '';
+function followAqiToView() {
+  if (!active.aqi || lockedLayers.has('aqi')) return;   // laag uit of op slot: niets doen
+  const doel = viewBoundsSnapped();
+  if (doel === aqiFollowKey) return;                    // zelfde rastervak, niets te halen
+  // Pas ophalen als de beweging stilstaat. Tijdens het draaien passeer je meerdere
+  // vakken en die willen we niet allemaal opvragen.
+  clearTimeout(aqiFollowTimer);
+  aqiFollowTimer = setTimeout(() => {
+    if (!active.aqi || lockedLayers.has('aqi')) return;  // ondertussen uitgezet
+    aqiFollowKey = doel;
+    aqiBounds = doel;
+    pull(Adapters.waqi);
+  }, PARAMS.aqiFollowDebounce);
+}
+
+let aqiRefreshing = false;
+async function refreshAqiInView() {
+  if (aqiRefreshing) return;
+  const btn = document.getElementById('aqi-refresh');
+  // De browser weet niet meer óf er een sleutel is; dat weet alleen de achterkant.
+  // Ontbreekt hij, dan geeft /api/waqi een 404 en zet pull() de bron op offline.
+  aqiRefreshing = true;
+  if (btn) btn.classList.add('spin');
+  // Deze knop is ook de manier om het opnieuw te proberen als de laag op slot staat.
+  // Daarom niet zelf de laag aanzetten: we leggen de wens vast en laten het
+  // slot-mechanisme hem uitvoeren zodra de bron antwoordt. Anders zou de rij tegelijk
+  // "vergrendeld" en "aan" kunnen staan.
+  activeVoorSlot.aqi = true;
+  // Dezelfde afgeronde box als het automatisch volgen, anders vraagt de knop een
+  // andere URL op dan de camera doet en slaat de edge cache alsnog niet aan.
+  aqiBounds = viewBoundsSnapped();
+  aqiFollowKey = aqiBounds;    // het volgen weet nu dat dit vak al gehaald is
+  await pull(Adapters.waqi);
+  if (!lockedLayers.has('aqi') && !active.aqi) {
+    active.aqi = true;
+    document.querySelector('.layer[data-layer="aqi"]').classList.remove('off');
+    render();
+  }
+  if (btn) btn.classList.remove('spin');
+  aqiRefreshing = false;
+}
+
+document.getElementById('aqi-refresh').addEventListener('click', e => {
+  e.stopPropagation();   // niet de laag-toggle van de rij triggeren
+  refreshAqiInView();
+});
+
+// ---- Tab-navigatie (Lagen / Aarde / Instellingen) ----
+document.querySelectorAll('.panel .tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    const name = tab.dataset.tab;
+    document.querySelectorAll('.panel .tab').forEach(t => t.classList.toggle('active', t === tab));
+    document.querySelectorAll('.panel .tabpanel').forEach(p => p.classList.toggle('show', p.dataset.panel === name));
+    // Nu de kop vaststaat kun je van tab wisselen terwijl je halverwege bent
+    // weggescrold. De nieuwe tab moet dan bovenaan beginnen, niet op de scrollstand
+    // van de vorige.
+    const body = document.querySelector('.panel-body');
+    if (body) body.scrollTop = 0;
+  });
+});
+
+// ---- Uitklapbare laag-filters (chevron in een laag-rij) ----
+document.querySelectorAll('.layer .row-expand').forEach(btn => {
+  btn.addEventListener('click', e => {
+    e.stopPropagation(); // niet de laag aan/uit togglen
+    const key = btn.dataset.expand;
+    const detail = document.querySelector('.layer-detail[data-detail="' + key + '"]');
+    const open = btn.classList.toggle('open');
+    if (detail) detail.classList.toggle('show', open);
+  });
+});
+
+// ---- Verbindingen handmatig testen ----
+const healthTestBtn = document.getElementById('health-test');
+if (healthTestBtn) healthTestBtn.addEventListener('click', () => {
+  HEALTH_SOURCES.forEach(s => setHealth(s.id, 'pending', 'testing…'));
+  Object.values(Adapters).forEach(a => pull(a));
+});
+renderHealth(); // initiële weergave (pending tot de eerste pulls binnen zijn)
+
+// ---- Earth-lagen aan/uit (alleen realistische modus) ----
+document.querySelectorAll('.elayer').forEach(el => {
+  el.addEventListener('click', () => {
+    const key = el.dataset.tex;
+    if (!earthLayerStatus[key]) return; // niet-geladen lagen zijn niet schakelbaar
+    earthLayerEnabled[key] = !earthLayerEnabled[key];
+    applyLayerToggles();
+    updateEarthLayers();
+  });
+});
+
+// ---- Textuurkwaliteit (2K standaard ⇄ 8K op verzoek) ----
+// Het materiaal wordt NIET opnieuw gebouwd: we vervangen alleen de waarden in de
+// bestaande uniforms. De zwevende wolkenschil deelt diezelfde uniform-referenties
+// (zie buildCloudShell) en synct daardoor vanzelf mee.
+const texqNote = document.getElementById('texq-note');
+const texqBtns = [...document.querySelectorAll('.texq-opt')];
+const TEXQ_NOTE_IDLE = '8K is sharper up close, but downloads about 29 MB extra.';
+
+function updateTexqUI() {
+  texqBtns.forEach(b => b.classList.toggle('active', b.dataset.q === texQuality));
+}
+
+let texqBusy = false;
+async function setTextureQuality(q) {
+  if (texqBusy || q === texQuality || !TEXTURE_SETS[q]) return;
+  const T = findThree();
+  if (!T || !shaderMaterial) return;
+
+  texqBusy = true;
+  texqBtns.forEach(b => b.disabled = true);
+  texqNote.classList.add('busy');
+  texqNote.textContent = 'Loading… fetching ' + textureSetSize(q);
+
+  const A = assetsFor(q);
+  const loader = new T.TextureLoader();
+  const load = url => loader.loadAsync(url);
+  try {
+    const [day, night, clouds, spec, normal] = await Promise.all([
+      load(A.day), load(A.night),
+      load(A.clouds).catch(() => null),
+      load(A.specular).catch(() => null),
+      load(A.normal).catch(() => null)
+    ]);
+    // kleurtexturen naar sRGB; normal/specular zijn datamaps en blijven lineair
+    [day, night, clouds].forEach(t => { if (t) t.colorSpace = T.SRGBColorSpace; });
+    if (clouds) clouds.wrapS = T.RepeatWrapping;
+
+    const u = shaderMaterial.uniforms;
+    const swap = (uniform, tex) => {
+      if (!tex) return;
+      const old = uniform.value;
+      uniform.value = tex;
+      // alleen weggooien als de oude textuur nergens anders meer hangt
+      if (old && old !== tex && old.dispose) old.dispose();
+    };
+    swap(u.dayTexture, day);
+    swap(u.nightTexture, night);
+    swap(u.cloudsTexture, clouds);
+    swap(u.specularTexture, spec);
+    swap(u.normalTexture, normal);
+    if (clouds) cloudsTexture = clouds;
+    world.backgroundImageUrl(A.stars);
+
+    texQuality = q;
+    try { localStorage.setItem('terra-tex-quality', q); } catch {}
+    updateTexqUI();
+    texqNote.textContent = A.label + ' actief.';
+  } catch (e) {
+    texqNote.textContent = 'Loading failed — the previous textures remain active.';
+  } finally {
+    texqBusy = false;
+    texqBtns.forEach(b => b.disabled = false);
+    texqNote.classList.remove('busy');
+    setTimeout(() => { if (!texqBusy) texqNote.textContent = TEXQ_NOTE_IDLE; }, 4000);
+  }
+}
+
+texqBtns.forEach(b => b.addEventListener('click', () => setTextureQuality(b.dataset.q)));
+updateTexqUI();
+
+// ---- Nachtzijde-helderheid ----
+const nightSliderEl = document.getElementById('night-slider');
+nightSliderEl.addEventListener('input', () => {
+  const pct = parseInt(nightSliderEl.value, 10);
+  document.getElementById('ns-val').textContent = pct + '%';
+  if (shaderMaterial) shaderMaterial.uniforms.nightBrightness.value = pct / 100;
+});
+
+// ---- Golfanimatie-toggle: bevriest/hervat de bewegende waterruis ----
+// (tijdelijke instelling — handig om het effect snel te beoordelen)
+let waveAnimate = true;
+const waveToggleEl = document.getElementById('wave-toggle');
+waveToggleEl.addEventListener('click', () => {
+  waveAnimate = !waveAnimate;
+  waveToggleEl.classList.toggle('on', waveAnimate);
+  document.getElementById('es-wave').textContent = waveAnimate ? 'on' : 'off';
+});
+
+// ---- Animatie-loop: waterruis-uniform + 3D-glyph-animaties ----
+function animateShader() {
+  const gt = performance.now() / 1000;
+  const nowMs = Date.now(); // wandklok, voor o.a. de bliksem-leeftijd-fade
+  // camera-horizon voor de AQI-limb-fade (stations faden weg naar de rand van de bol,
+  // zodat ze niet samenpersen tot een felle additieve ring op de limb)
+  const _cam = world.camera();
+  const _camLen = _cam.position.length() || 1;
+  const _horizon = 100 / _camLen; // globe-straal = 100; dot > horizon = voorzijde
+  // schermvaste icoonschaal (app-breed): grootte ∝ camera-afstand → ~constante
+  // schermgrootte ongeacht zoom. Geklemd tegen extreme groottes.
+  const _iconScale = Math.min(PARAMS.iconScaleMax, Math.max(PARAMS.iconScaleMin,
+    Math.pow(_camLen / PARAMS.iconScaleRef, PARAMS.iconScalePow)));
+  // zoom-LOD-fractie: 0..1 deel per laag dat zichtbaar is (meer bij inzoomen).
+  const _zf = Math.min(1, Math.max(0, (PARAMS.lodCamFar - _camLen) / Math.max(1, PARAMS.lodCamFar - PARAMS.lodCamNear)));
+  const _lodFrac = PARAMS.lodFracOut + (1 - PARAMS.lodFracOut) * _zf;
+  if (shaderMaterial && waveAnimate) shaderMaterial.uniforms.time.value = gt;
+  if (shaderMaterial && shaderMaterial.uniforms.cloudDrift) {
+    shaderMaterial.uniforms.cloudDrift.value = (gt * PARAMS.cloudSpeed) % 1.0; // wolken driften
+  }
+
+  // indicatoren animeren; verwijderde objecten (uit scene) opruimen
+  for (let i = glyphList.length - 1; i >= 0; i--) {
+    const g = glyphList[i];
+    if (!g.parent) {
+      // verwijderd uit de scene → materialen/geometrieën vrijgeven (vooral van belang
+      // bij de hoogfrequente bliksem-laag, die elke poll ververst)
+      g.traverse(o => { if (o.material) o.material.dispose(); if (o.geometry) o.geometry.dispose(); });
+      glyphList.splice(i, 1); continue;
+    }
+    const { parts, phase } = g.userData;
+    // schermvaste schaal × pop-in (appear) × per-laag dichtheid-factor (alleen
+    // deskundig). appear is undefined voor noAnim-glyphs → telt als 1.
+    const _appear = g.userData.appear == null ? 1 : g.userData.appear;
+    const _layerMul = globeMode === 'expert' ? (EXPERT_LAYER_SCALE[g.userData.d.layer] || 1) : 1;
+    // zoom-LOD: minder significante events KRIMPEN, ze verdwijnen niet meer (sessie 9).
+    // Boven de drempel loopt de schaal soepel terug naar lodScaleMin, zodat drukte
+    // afneemt zonder dat er ooit een gebeurtenis onzichtbaar wordt.
+    let _lodMul = 1;
+    const _rank = g.userData.d.__lodRank;
+    if (PARAMS.lodEnabled && _rank != null && _rank > _lodFrac) {
+      const t = Math.min(1, (_rank - _lodFrac) / Math.max(0.001, PARAMS.lodScaleFade));
+      _lodMul = 1 + t * (PARAMS.lodScaleMin - 1);
+    }
+    g.scale.setScalar(_iconScale * _appear * _layerMul * _lodMul);
+    // Verbergen gebeurt alleen nog bij focus-hover: dat is een expliciete keuze van de
+    // bezoeker om één beving te isoleren, geen dichtheidsregeling.
+    g.visible = !focusedQuake || g.userData.d.layer !== 'quake' || g.userData.d === focusedQuake;
+    if (parts.shock) parts.shock.uniforms.time.value = gt;
+    if (parts.spin) parts.spin.rotation.z = gt * parts.spinSpeed + phase;
+    if (parts.volGlow) {
+      // trage, zachte puls van de vulkaan-voetgloed
+      parts.volGlow.material.opacity = PARAMS.volcanoOpacity * (0.5 + 0.25 * (0.5 + 0.5 * Math.sin(gt * 1.5 + phase)));
+    }
+    if (parts.iceGlow) {
+      // subtiele shimmer van de zee-ijs-gloed
+      parts.iceGlow.material.opacity = PARAMS.iceOpacity * (0.3 + 0.2 * (0.5 + 0.5 * Math.sin(gt * 2 + phase)));
+    }
+    if (parts.glow) {
+      // zachte, trage flikker van de gloed-dekking (bosbrand)
+      const f = 0.5 + 0.5 * Math.sin(gt * 4 + phase); // 0..1
+      parts.glow.material.opacity = PARAMS.wildfireOpacity * (1 - PARAMS.wildfireFlicker * (1 - f));
+    }
+    if (parts.lightning) {
+      // 'bliksemwolk': vaste levensduur = vol-zichtbaar plateau + uitfade-staart, met een
+      // organische puls eroverheen (per-strike gefaseerd, zoals de bosbrand-flikker). De
+      // puls volgt gt zodat hij niet hapert wanneer de laag elke poll herbouwt. De
+      // envelope volgt de absolute leeftijd zodat élke strike exact dezelfde curve doorloopt.
+      const age = nowMs - (g.userData.d.appear || g.userData.d.time);
+      const env = age < PARAMS.lightningAttackMs ? (age / PARAMS.lightningAttackMs)  // zachte fade-in
+        : age < PARAMS.lightningHoldMs ? 1                                           // plateau
+        : Math.max(0, 1 - (age - PARAMS.lightningHoldMs) / Math.max(1, PARAMS.lightningLifeMs - PARAMS.lightningHoldMs)); // staart
+      const f = 0.5 + 0.5 * Math.sin(gt * PARAMS.lightningPulseSpeed + phase);
+      const pulse = 1 - PARAMS.lightningPulse * (1 - f);
+      parts.lightning.material.opacity = PARAMS.lightningOpacity * env * pulse;
+    }
+    if (parts.aqiHalo) {
+      // limb-fade: 0 aan de horizon → 1 ruim op de voorzijde (voorkomt de rand-ring)
+      const p = g.position, pl = p.length() || 1;
+      const dot = (p.x * _cam.position.x + p.y * _cam.position.y + p.z * _cam.position.z) / (pl * _camLen);
+      const fade = Math.max(0, Math.min(1, (dot - _horizon) / 0.25));
+      // trage, ademende puls van de gloed
+      const pulse = 0.75 + 0.25 * (0.5 + 0.5 * Math.sin(gt * 1.2 + phase));
+      parts.aqiHalo.material.opacity = parts.aqiBaseOp * pulse * fade;
+      if (parts.aqiCore) parts.aqiCore.material.opacity = parts.aqiCoreBase * fade;
+    }
+  }
+
+  updateHover();      // raycaster-highlight bijwerken
+  positionLabels();   // leader-line labels herpositioneren
+  requestAnimationFrame(animateShader);
+}
+requestAnimationFrame(animateShader);
+
+// ============================================================
+//  Interactie (eigen raycaster) + leader-line labels
+// ============================================================
+const globeEl = document.getElementById('globe');
+const raycaster = new THREE.Raycaster();
+const ndc = new THREE.Vector2();
+let mouseClient = null, mouseMoved = false;
+
+// ligt een oppervlaktepunt aan de naar-ons-gekeerde kant (niet door de bol verdekt)?
+function nearSide(v3) {
+  const cam = world.camera();
+  const horizon = 100 / cam.position.length(); // globe-straal = 100
+  return v3.clone().normalize().dot(cam.position.clone().normalize()) > horizon;
+}
+
+// raycast op schermpositie → het indicator-object (group met userData.d), of null
+const _wp = new THREE.Vector3();
+function pickAt(clientX, clientY) {
+  const rect = globeEl.getBoundingClientRect();
+  ndc.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+  ndc.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+  raycaster.setFromCamera(ndc, world.camera());
+  const hits = raycaster.intersectObjects(world.scene().children, true);
+  for (const hit of hits) {
+    if (hit.object.userData && hit.object.userData.noPick) continue; // shockwave-ring overslaan
+    let o = hit.object;
+    while (o && !(o.userData && o.userData.d)) o = o.parent;
+    if (o) {
+      o.getWorldPosition(_wp);
+      if (nearSide(_wp)) return o; // alleen de voorkant is klikbaar
+    }
+  }
+  return null;
+}
+
+globeEl.addEventListener('pointermove', (e) => { mouseClient = { x: e.clientX, y: e.clientY }; mouseMoved = true; });
+
+// hover-highlight via een zachte gloed-halo (geen scale meer) — fade in/uit met GSAP
+let hoverGlow = null;
+function updateHover() {
+  if (!mouseMoved || !mouseClient) return;
+  mouseMoved = false;
+  const o = pickAt(mouseClient.x, mouseClient.y);
+  if (o === hovered) return;
+  if (hoverGlow) {
+    const g = hoverGlow; hoverGlow = null;
+    gsap.to(g.material, { opacity: 0, duration: 0.2, onComplete: () => { if (g.parent) g.parent.remove(g); } });
+  }
+  hovered = o;
+  globeEl.style.cursor = o ? 'pointer' : '';
+  if (o) {
+    const spr = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: glowTex, color: 0xffffff, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0
+    }));
+    spr.scale.set(13, 13, 1);
+    o.add(spr);
+    hoverGlow = spr;
+    gsap.to(spr.material, { opacity: 0.55, duration: 0.25 });
+  }
+}
+
+// klik onderscheiden van slepen (globe-rotatie)
+let downInfo = null;
+globeEl.addEventListener('pointerdown', (e) => { downInfo = { x: e.clientX, y: e.clientY, t: Date.now() }; });
+globeEl.addEventListener('pointerup', (e) => {
+  if (!downInfo) return;
+  const moved = Math.hypot(e.clientX - downInfo.x, e.clientY - downInfo.y);
+  const dt = Date.now() - downInfo.t;
+  downInfo = null;
+  if (moved < 6 && dt < 400) {
+    const o = pickAt(e.clientX, e.clientY);
+    if (o) showDetail(o.userData.d);
+  }
+});
+
+// ---- Leader-line labels voor de zwaarste bevingen ----
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const labelLayer = document.createElement('div');
+labelLayer.id = 'quake-labels';
+const labelSvg = document.createElementNS(SVG_NS, 'svg');
+labelSvg.id = 'label-lines';
+labelLayer.appendChild(labelSvg);
+document.body.appendChild(labelLayer);
+
+// hover op een label → toon alleen die beving (verberg de andere staven)
+let focusedQuake = null;
+function focusQuake(d) {
+  focusedQuake = d;
+  eachQuake(g => { g.visible = !d || g.userData.d === d; });
+}
+
+function rebuildLabels(quakes) {
+  Array.from(labelLayer.querySelectorAll('.qlabel')).forEach(e => e.remove());
+  while (labelSvg.firstChild) labelSvg.removeChild(labelSvg.firstChild);
+  // bouw labels voor de sterkste N bevingen; positionLabels toont er zoom-afhankelijk
+  // een deel van (meer bij inzoomen). Gesorteerd op magnitude → sterkste eerst.
+  labelQuakes = quakes.slice().sort((a, b) => (b.value || 0) - (a.value || 0)).slice(0, PARAMS.labelCountMax);
+  for (const q of labelQuakes) {
+    const el = document.createElement('div');
+    el.className = 'qlabel';
+    const place = (q.label || '').split(',')[0].replace(/^\d+\s*km\s+[\w-]+\s+of\s+/i, '');
+    el.innerHTML = '<b>M ' + (q.value != null ? q.value.toFixed(1) : '?') + '</b>' +
+                   '<span>' + place + (q.depth != null ? ' · ' + Math.round(q.depth) + ' km' : '') + '</span>';
+    labelLayer.appendChild(el);
+    q.__label = el;
+    el.addEventListener('mouseenter', () => focusQuake(q));
+    el.addEventListener('mouseleave', () => focusQuake(null));
+    el.addEventListener('click', () => showDetail(q));
+    // leader-line: van het label naar het epicentrum op de bol
+    const line = document.createElementNS(SVG_NS, 'line');
+    line.setAttribute('class', 'qline');
+    const dot = document.createElementNS(SVG_NS, 'circle');
+    dot.setAttribute('class', 'qdot');
+    dot.setAttribute('r', '2.5');
+    labelSvg.appendChild(line);
+    labelSvg.appendChild(dot);
+    q.__line = line; q.__dot = dot;
+  }
+}
+
+function positionLabels() {
+  if (!labelQuakes.length) return;
+  // zoom-afhankelijke label-schaal — leesbaarheid eerst (nauwelijks krimpen) +
+  // zoom-afhankelijk aantal (meer labels bij inzoomen).
+  const camLen = world.camera().position.length() || 1;
+  const lblScale = Math.min(PARAMS.labelScaleMax, Math.max(PARAMS.labelScaleMin, camLen / PARAMS.labelScaleRef));
+  const frac = (PARAMS.labelScaleMax - lblScale) / Math.max(0.001, PARAMS.labelScaleMax - PARAMS.labelScaleMin);
+  const K = Math.round(PARAMS.labelCountMin + (PARAMS.labelCountMax - PARAMS.labelCountMin) * frac);
+  // pass 1: bepaal zichtbare labels + schermposities (tip = labelpunt, base = epicentrum)
+  const items = [];
+  for (let idx = 0; idx < labelQuakes.length; idx++) {
+    const q = labelQuakes[idx];
+    const el = q.__label, line = q.__line, dot = q.__dot;
+    if (!el) continue;
+    const epi = world.getCoords(q.lat, q.lng, 0.0);
+    const visible = labelsOn && idx < K && nearSide(new THREE.Vector3(epi.x, epi.y, epi.z));
+    el.style.display = visible ? 'block' : 'none';
+    if (line) line.style.display = visible ? 'block' : 'none';
+    if (dot) dot.style.display = visible ? 'block' : 'none';
+    if (!visible) continue;
+    const tip = world.getScreenCoords(q.lat, q.lng, PARAMS.labelAltitude);
+    const base = world.getScreenCoords(q.lat, q.lng, 0.0);
+    items.push({ el, line, dot, x: tip.x, y: tip.y, ty: tip.y, base });
+  }
+  // pass 2: stapelen — nabije aardbeving-labels worden verticaal uit elkaar geduwd,
+  // OMHOOG (weg van de indicatoren op de kaart); elk houdt zijn dotted leader-line.
+  const gapY = PARAMS.labelStackGapY, gapX = PARAMS.labelStackGapX;
+  items.sort((a, b) => b.y - a.y); // onderste eerst → kolom groeit naar boven
+  for (let i = 0; i < items.length; i++) {
+    let changed = true, guard = 0;
+    while (changed && guard++ < items.length + 2) {
+      changed = false;
+      for (let j = 0; j < i; j++) {
+        if (Math.abs(items[i].x - items[j].x) < gapX && Math.abs(items[i].ty - items[j].ty) < gapY) {
+          items[i].ty = items[j].ty - gapY; changed = true; // push omhoog
+        }
+      }
+    }
+  }
+  // pass 3: plaats labels (op de gestapelde y) + dotted leader-line naar het epicentrum
+  for (const it of items) {
+    it.el.style.transformOrigin = '50% 100%';
+    it.el.style.transform = 'translate(' + it.x + 'px, ' + it.ty + 'px) translate(-50%, -100%) scale(' + lblScale + ')';
+    it.line.setAttribute('x1', it.x); it.line.setAttribute('y1', it.ty);
+    it.line.setAttribute('x2', it.base.x); it.line.setAttribute('y2', it.base.y);
+    it.dot.setAttribute('cx', it.base.x); it.dot.setAttribute('cy', it.base.y);
+  }
+}
+
+// labels aan/uit
+const labelToggleEl = document.getElementById('label-toggle');
+if (labelToggleEl) {
+  labelToggleEl.addEventListener('click', () => {
+    labelsOn = !labelsOn;
+    labelToggleEl.classList.toggle('on', labelsOn);
+    document.getElementById('es-label').textContent = labelsOn ? 'on' : 'off';
+  });
+}
+
+// ============================================================
+//  Toast-meldingen + meldingsgeluid voor nieuwe real-time entries
+// ============================================================
+const toastLayer = document.createElement('div');
+toastLayer.id = 'toasts';
+document.body.appendChild(toastLayer);
+
+const TOAST_NAMES = { quake:'earthquake', volcano:'volcano', storm:'storm', ice:'sea ice event', wildfire:'wildfire', aqi:'air quality reading', lightning:'lightning strike' };
+
+function showToast(layer, item) {
+  const el = document.createElement('div');
+  el.className = 'toast toast-' + layer;
+  const detail = (layer === 'quake' && item.value != null ? 'M ' + item.value.toFixed(1) + ' · ' : '') + (item.label || '');
+  el.innerHTML = '<span class="toast-dot" style="background:' + (COLORS[layer] || '#fff') + '"></span>' +
+                 '<div><b>New ' + (TOAST_NAMES[layer] || 'event') + ' detected</b>' +
+                 '<span>' + detail + '</span></div>';
+  el.addEventListener('click', () => flyTo(item)); // klik → vlieg naar de locatie
+  toastLayer.appendChild(el);
+  requestAnimationFrame(() => el.classList.add('show'));
+  setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 400); }, 6000);
+  if (soundOn) playPing(layer);
+  addNotif(layer, item); // bewaar in de meldingen-geschiedenis
+}
+
+// vlieg in een geanimeerde beweging naar de locatie van een event (globe.gl regelt
+// de soepele, kortste-pad camera-overgang)
+function flyTo(d) {
+  if (!d || d.lat == null || d.lng == null) return;
+  pauseAutoRotate();
+  // Bij minder-beweging direct naar de bestemming springen in plaats van eroverheen
+  // te vliegen. Het doel is hetzelfde, de weg ernaartoe is wat misselijk kan maken.
+  world.pointOfView({ lat: d.lat, lng: d.lng, altitude: 0.7 }, REDUCED_MOTION ? 0 : 1200);
+}
+
+// ---- Meldingen-geschiedenis (bel-menu) ----
+const notifHistory = [];
+let notifUnread = 0;
+let notifOpen = false;
+
+function addNotif(layer, item) {
+  notifHistory.unshift({ layer, label: item.label || '', value: item.value, time: item.time || Date.now(), lat: item.lat, lng: item.lng });
+  if (notifHistory.length > 40) notifHistory.pop();
+  notifUnread++;
+  updateNotifBadge();
+  if (notifOpen) renderNotifList();
+}
+function updateNotifBadge() {
+  const b = document.getElementById('notif-badge');
+  if (notifUnread > 0) { b.hidden = false; b.textContent = notifUnread > 99 ? '99+' : notifUnread; }
+  else b.hidden = true;
+}
+function renderNotifList() {
+  const list = document.getElementById('notif-list');
+  if (!notifHistory.length) { list.innerHTML = '<div class="notif-empty">No notifications yet</div>'; return; }
+  const names = { quake:'Earthquake', volcano:'Volcano', storm:'Storm', ice:'Sea ice', wildfire:'Wildfire', aqi:'Air quality', lightning:'Lightning' };
+  list.innerHTML = notifHistory.map((n, i) => {
+    const detail = (n.layer === 'quake' && n.value != null ? 'M ' + n.value.toFixed(1) + ' · ' : '') + (n.label || '');
+    const tm = new Date(n.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    const c = COLORS[n.layer] || '#fff';
+    return '<div class="notif-item" data-idx="' + i + '"><span class="nd" style="color:' + c + ';background:' + c + '"></span>' +
+           '<div class="nt"><b>' + (names[n.layer] || 'Event') + '</b><span>' + detail + '</span></div>' +
+           '<span class="ntime">' + tm + '</span></div>';
+  }).join('');
+}
+function toggleNotif() {
+  const panel = document.getElementById('notif-panel');
+  notifOpen = !notifOpen;
+  if (notifOpen) {
+    renderNotifList();
+    panel.style.display = 'block';
+    gsap.fromTo(panel, { opacity: 0, y: -12, scale: 0.97 },
+      { opacity: 1, y: 0, scale: 1, duration: 0.35, ease: 'back.out(1.4)', transformOrigin: 'top right' });
+    notifUnread = 0; updateNotifBadge();
+  } else {
+    gsap.to(panel, { opacity: 0, y: -12, duration: 0.22, ease: 'power2.in', onComplete: () => { panel.style.display = 'none'; } });
+  }
+}
+document.getElementById('notif-btn').addEventListener('click', toggleNotif);
+document.getElementById('notif-clear').addEventListener('click', () => {
+  notifHistory.length = 0; notifUnread = 0; updateNotifBadge(); renderNotifList();
+});
+document.getElementById('notif-list').addEventListener('click', (e) => {
+  const item = e.target.closest('.notif-item');
+  if (item) flyTo(notifHistory[+item.dataset.idx]); // klik in het menu → vlieg ernaartoe
+});
+
+// korte, gesynthetiseerde "ping" (WebAudio) — geen extern bestand nodig
+function playPing(layer) {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const t = audioCtx.currentTime;
+    const base = layer === 'quake' ? 294 : 392; // bevingen lager, EONET hoger
+    const o = audioCtx.createOscillator(), o2 = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = 'triangle'; o2.type = 'sine';
+    o.frequency.setValueAtTime(base, t);
+    o.frequency.exponentialRampToValueAtTime(base * 1.5, t + 0.14);
+    o2.frequency.setValueAtTime(base * 2, t);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.10, t + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.55);
+    o.connect(g); o2.connect(g); g.connect(audioCtx.destination);
+    o.start(t); o2.start(t); o.stop(t + 0.55); o2.stop(t + 0.55);
+  } catch (e) { /* audio niet beschikbaar */ }
+}
+
+const soundToggleEl = document.getElementById('sound-toggle');
+if (soundToggleEl) {
+  soundToggleEl.addEventListener('click', () => {
+    soundOn = !soundOn;
+    soundToggleEl.classList.toggle('on', soundOn);
+    document.getElementById('es-sound').textContent = soundOn ? 'on' : 'off';
+  });
+}
+
+const rotateToggleEl = document.getElementById('rotate-toggle');
+if (rotateToggleEl) {
+  // De markup staat op 'aan'; bij prefers-reduced-motion begint de schakelaar uit.
+  // De bezoeker kan hem alsnog aanzetten — het is een voorkeur, geen verbod.
+  rotateToggleEl.classList.toggle('on', autoRotateWanted);
+  document.getElementById('es-rotate').textContent = autoRotateWanted ? 'on' : 'off';
+  rotateToggleEl.addEventListener('click', () => {
+    setAutoRotate(!autoRotateWanted);
+    rotateToggleEl.classList.toggle('on', autoRotateWanted);
+    document.getElementById('es-rotate').textContent = autoRotateWanted ? 'on' : 'off';
+  });
+}
+
+const wireToggleEl = document.getElementById('wire-toggle');
+if (wireToggleEl) {
+  wireToggleEl.addEventListener('click', () => {
+    wireframeOn = !wireframeOn;
+    wireToggleEl.classList.toggle('on', wireframeOn);
+    document.getElementById('es-wire').textContent = wireframeOn ? 'on' : 'off';
+    applyWireframe();
+  });
+}
+
+const fogToggleEl = document.getElementById('fog-toggle');
+if (fogToggleEl) {
+  fogToggleEl.addEventListener('click', () => {
+    fogOn = !fogOn;
+    fogToggleEl.classList.toggle('on', fogOn);
+    document.getElementById('es-fog').textContent = fogOn ? 'on' : 'off';
+    if (fogMesh) fogMesh.visible = fogOn;
+  });
+}
+
+// ---- Inklapbaar paneel (legenda + filters) — werkt op desktop én mobiel ----
+const panelEl = document.querySelector('.panel');
+const panelOpenBtn = document.getElementById('panel-open');
+
+// Eén bron van waarheid voor "is dit een smal scherm". Het paneel en het
+// detailvenster passen daar niet naast elkaar, dus daar sluit de een de ander.
+// Bewust dezelfde grens als de media query in css/app.css; twee losse checks
+// zouden uit de pas kunnen lopen zodra iemand er één aanpast.
+const narrowMQ = window.matchMedia('(max-width: 640px)');
+const isNarrow = () => narrowMQ.matches;
+
+// De gewenste toestand, los van wat er op het scherm staat. Tijdens de sluitanimatie
+// is `display` nog `flex`, dus die kun je niet als bron van waarheid gebruiken.
+let panelOpenWanted = true;
+
+// Eindtoestand forceren. GSAP hangt aan requestAnimationFrame, en dat staat stil
+// zodra het tabblad naar de achtergrond gaat. Zonder vangnet blijft het paneel dan
+// halverwege hangen: half doorzichtig én nog steeds `display: flex`, dus het vangt
+// nog kliks af ook. Zelfde reden en zelfde patroon als het vangnet in dismissBoot().
+function finishPanelClose() {
+  if (panelOpenWanted) return;   // ondertussen weer geopend: niets doen
+  gsap.set(panelEl, { x: -16, opacity: 0 });
+  panelEl.style.display = 'none';
+}
+
+function finishPanelOpen() {
+  if (!panelOpenWanted) return;  // ondertussen weer gesloten: niets doen
+  gsap.set(panelEl, { x: 0, opacity: 1 });
+  panelOpenBtn.style.display = 'none';
+}
+
+function setPanelOpen(open) {
+  // Niets te doen: scheelt een overbodige animatie wanneer showDetail() op een
+  // smal scherm sluit terwijl het paneel al dicht is.
+  if (open === panelOpenWanted) return;
+  panelOpenWanted = open;
+  // Op een smal scherm is er ruimte voor precies één venster.
+  if (open && isNarrow()) hideDetail();
+  if (open) {
+    panelEl.style.display = 'flex';   // flexkolom: vaste kop + scrollend middendeel
+    gsap.fromTo(panelEl, { x: -16, opacity: 0 }, { x: 0, opacity: 1, duration: 0.38, ease: 'power2.out' });
+    gsap.to(panelOpenBtn, { opacity: 0, duration: 0.18, onComplete: finishPanelOpen });
+    setTimeout(finishPanelOpen, 600);   // vangnet, zie finishPanelClose
+  } else {
+    gsap.to(panelEl, { x: -16, opacity: 0, duration: 0.28, ease: 'power2.in', onComplete: finishPanelClose });
+    setTimeout(finishPanelClose, 600);   // vangnet, zie hierboven
+    panelOpenBtn.style.display = 'flex';
+    gsap.fromTo(panelOpenBtn, { opacity: 0, scale: 0.85 }, { opacity: 1, scale: 1, duration: 0.3, ease: 'back.out(1.6)' });
+    // Zelfde vangnet: anders blijft de knop om het paneel terug te halen op
+    // opacity 0 staan, en dan is er geen weg terug naar het lagenlijstje.
+    setTimeout(() => { if (!panelOpenWanted) gsap.set(panelOpenBtn, { opacity: 1, scale: 1 }); }, 600);
+  }
+}
+document.getElementById('panel-collapse').addEventListener('click', () => setPanelOpen(false));
+panelOpenBtn.addEventListener('click', () => setPanelOpen(true));
+document.getElementById('r-close').addEventListener('click', hideDetail);
+
+// ---- Tijdvenster: presets ----
+const sliderEl = document.getElementById('slider');
+const sliderValEl = document.getElementById('slider-val');
+
+document.querySelectorAll('#presets .preset').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#presets .preset').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    timeWindow = btn.dataset.win;
+    // slider terug naar volledig venster bij wisselen preset
+    sliderEl.value = 100;
+    sliderFrac = 1;
+    updateSliderLabel();
+    // USGS-feed verandert mee → opnieuw ophalen
+    pull(Adapters.usgs);
+    render();
+  });
+});
+
+// ---- Kracht-filter: minimale magnitude (alleen aardbevingen) ----
+document.querySelectorAll('#mag-presets .preset').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#mag-presets .preset').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    magFilter = parseInt(btn.dataset.mag, 10);
+    render();
+  });
+});
+
+// ---- Tijdvenster: schuifregelaar ----
+function updateSliderLabel() {
+  if (sliderFrac >= 0.999) { sliderValEl.textContent = 'full window'; return; }
+  const ms = WINDOW_MS[timeWindow] * sliderFrac;
+  const mins = Math.round(ms / 60000);
+  if (mins < 60) sliderValEl.textContent = 'last ' + mins + ' min';
+  else if (mins < 1440) sliderValEl.textContent = 'last ' + (ms/3600000).toFixed(1).replace('.0','') + ' h';
+  else sliderValEl.textContent = 'last ' + (ms/86400000).toFixed(1).replace('.0','') + ' d';
+}
+
+sliderEl.addEventListener('input', () => {
+  // minimaal 1% zodat er altijd iets te zien is
+  sliderFrac = Math.max(0.01, sliderEl.value / 100);
+  updateSliderLabel();
+  render();
+});
+
+// ---- Weergave-wissel (segmented toggle) ----
+// Beide weergaven zijn eigen knoppen, dus er wordt niet meer gecycled maar direct
+// gekozen. De labels en iconen komen nog steeds uit MODE_LABELS/MODE_ICONS, zodat de
+// vertaalslag in sessie 10 op één plek blijft.
+const modeOptEls = document.querySelectorAll('.mode-opt');
+function updateModeButton() {
+  // De lagenlijst is de legenda: de bolletjes nemen de vórm aan van de indicator
+  // in de actieve weergave. Eén klasse op <body>, de vormen zelf staan in css/app.css.
+  document.body.classList.toggle('mode-expert', globeMode === 'expert');
+  modeOptEls.forEach(b => {
+    const on = b.dataset.mode === globeMode;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    b.querySelector('.mode-icon').textContent = MODE_ICONS[b.dataset.mode];
+    b.querySelector('.mode-text').textContent = MODE_LABELS[b.dataset.mode];
+  });
+}
+modeOptEls.forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (btn.dataset.mode === globeMode) return;   // al actief, niets herbouwen
+    globeMode = btn.dataset.mode;
+    applyGlobeMode();
+    updateModeButton();
+    forceRebuild(); // herbouw de symbolen in de stijl van de nieuwe modus
+  });
+});
+
+// Detailvenster sluiten: terug naar de begintoestand uit css/app.css
+// (opacity 0, geen pointer-events). GSAP mag hier alleen opacity en y aanraken;
+// de plaatsing komt uit left/right/bottom, niet uit een transform. Zou de plaatsing
+// ooit een transform worden, dan schiet dit venster net zo weg als de mode-switch.
+let detailVisible = false;
+
+function hideDetail() {
+  if (!detailVisible) return;
+  detailVisible = false;
+  const r = document.getElementById('readout');
+  r.style.pointerEvents = 'none';   // meteen, wacht niet op de animatie
+  // De knop om het paneel terug te halen mag weer, mits het paneel dicht staat.
+  if (!panelOpenWanted) {
+    panelOpenBtn.style.display = 'flex';
+    gsap.set(panelOpenBtn, { opacity: 1, scale: 1 });
+  }
+  const settle = () => { if (!detailVisible) gsap.set(r, { opacity: 0, y: 0 }); };
+  if (REDUCED_MOTION) {
+    gsap.to(r, { opacity: 0, duration: 0.15, overwrite: true, onComplete: settle });
+  } else {
+    gsap.to(r, { opacity: 0, y: 10, duration: 0.22, ease: 'power2.in', overwrite: true, onComplete: settle });
+  }
+  setTimeout(settle, 500);   // vangnet bij een stilstaande requestAnimationFrame
+}
+
+function showDetail(d) {
+  const r = document.getElementById('readout');
+  // Zie setPanelOpen: op een smal scherm past er maar één venster tegelijk.
+  // Zonder dit bleef het paneel over het detailvenster heen staan.
+  if (isNarrow()) {
+    setPanelOpen(false);
+    // De bottom sheet loopt tot de onderrand en dekt de plek van de knop
+    // "Lagen & filters" af. Die knop is daar dus onbruikbaar; de weg terug loopt
+    // via de sluitknop van dit venster.
+    panelOpenBtn.style.display = 'none';
+  }
+  const names = { quake:'Earthquake', volcano:'Volcano', storm:'Storm', ice:'Sea ice', wildfire:'Wildfire', aqi:'Air quality', lightning:'Lightning' };
+  document.getElementById('r-kicker').textContent = names[d.layer].toUpperCase();
+  document.getElementById('r-kicker').style.color =
+    d.layer === 'aqi' ? aqiHex(d.value) : COLORS[d.layer];
+  document.getElementById('r-headline').textContent = d.label;
+  document.getElementById('r-type').textContent = names[d.layer];
+  document.getElementById('r-value').textContent =
+    d.layer === 'quake' && d.value != null
+      ? 'M ' + d.value.toFixed(1) + (d.depth != null ? ' · ' + Math.round(d.depth) + ' km deep' : '')
+      : d.layer === 'aqi' && d.value != null
+        ? 'AQI ' + d.value + ' · ' + aqiBand(d.value).label
+        : '—';
+  // Niet elke bron geeft een tijdstip. Zonder deze controle toont een ontbrekende
+  // tijd "01 Jan, 01:00" (epoch), en dat is erger dan eerlijk niets tonen.
+  document.getElementById('r-time').textContent = d.time
+    ? new Date(d.time).toLocaleString('en-GB', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' })
+    : '—';
+  // Bron-link (homepage) + event-/station-specifieke link wanneer de API die geeft.
+  const srcEl = document.getElementById('r-source');
+  srcEl.textContent = d.source;
+  srcEl.href = SOURCE_URLS[d.source] || '#';
+  const linkEl = document.getElementById('r-link');
+  if (d.url) {
+    linkEl.href = d.url;
+    linkEl.textContent = (DETAIL_LINK_LABELS[d.layer] || 'More info') + ' ↗';
+    linkEl.hidden = false;
+  } else {
+    linkEl.hidden = true;
+  }
+  r.style.pointerEvents = 'auto'; // readout klikbaar maken voor de links
+  detailVisible = true;
+  // GSAP: dialoogvenster soepel in beeld (pop met lichte overshoot). Bij
+  // minder-beweging alleen invaden, zonder verschuiven of overshoot.
+  if (REDUCED_MOTION) {
+    gsap.fromTo(r, { opacity: 0 }, { opacity: 1, duration: 0.2, overwrite: true });
+  } else {
+    gsap.fromTo(r, { opacity: 0, y: 16, scale: 0.97 },
+      { opacity: 1, y: 0, scale: 1, duration: 0.4, ease: 'back.out(1.4)', overwrite: true });
+  }
+  // Vangnet. Een `fromTo` zet eerst de BEGINwaarde, dus opacity 0. Staat
+  // requestAnimationFrame stil, dan blijft het daar staan: een onzichtbaar venster
+  // dat door de pointer-events hierboven wél kliks opvangt. Erger dan geen venster.
+  setTimeout(() => { if (detailVisible) gsap.set(r, { opacity: 1, y: 0, scale: 1 }); }, 700);
+  pauseAutoRotate();
+}
+
+// ---- Fetch loop ----------------------------------------------
+
+async function pull(adapter) {
+  // Meerdere adapters kunnen één regel in het verbindingspaneel delen (de vier
+  // EONET-categorieën tonen samen als "NASA EONET").
+  const hid = adapter.healthId || adapter.id;
+  if (!adapter.url) { // bron uit (bv. bliksem-relay niet geconfigureerd op de server)
+    if (hid) setHealth(hid, 'warn', 'off (no relay)');
+    adapter.layers.forEach(l => setLayerLocked(l, true));
+    return;
+  }
+  try {
+    // Harde timeout per bron. Een hangende verbinding mag nooit een adapter
+    // blijvend bezet houden; GDACS deed precies dat op 2026-07-30.
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), ADAPTER_TIMEOUT_MS);
+    let res;
+    try { res = await fetch(adapter.url, { signal: ctl.signal }); }
+    finally { clearTimeout(timer); }
+    if (!res.ok) throw new Error(res.status);
+    const json = await res.json();
+    const fresh = adapter.normalize(json);
+    // Een adapter mag zelf bepalen wat "gezond" betekent. De bliksemrelay is het
+    // voorbeeld: bereikbaar zijn en data leveren zijn daar twee verschillende dingen.
+    const h = adapter.health ? adapter.health(json) : { state: 'live' };
+    setHealth(hid, h.state, h.note);
+    // De bron antwoordt weer: een slotje dat er nog staat kan eraf.
+    adapter.layers.forEach(l => setLayerLocked(l, false));
+    const owned = new Set(adapter.layers);
+    // Een leeg antwoord is voor de meeste bronnen een geldig antwoord: een rustige
+    // week zonder stormen hoort de stormlaag ook echt leeg te maken. Alleen adapters
+    // met `keepOnEmpty` houden hun vorige data vast, omdat leeg daar eerder op een
+    // hapering wijst dan op stilte.
+    if (fresh.length === 0 && adapter.keepOnEmpty && store.some(d => owned.has(d.layer))) {
+      setStatus('live · last ' + new Date().toLocaleTimeString('en-GB'));
+      return;
+    }
+    // detecteer echt nieuwe, recente entries → toast-melding (na de eerste lading).
+    // Lagen uit NO_TOAST_LAYERS blijven hier volledig buiten, ook bij `seenIds`: die
+    // verzameling dient alleen om toasts te ontdubbelen en zou anders eindeloos groeien.
+    const now = Date.now();
+    const newItems = fresh.filter(d => !NO_TOAST_LAYERS.has(d.layer) && !seenIds.has(d.id));
+    newItems.forEach(d => seenIds.add(d.id));
+    if (initialLoadDone) {
+      newItems
+        .filter(d => active[d.layer] && d.time && (now - d.time) < 15 * 60 * 1000)
+        .slice(0, 4) // niet spammen bij een grote refresh
+        .forEach(d => showToast(d.layer, d));
+    }
+    // Standaard vervangt een adapter de events van zijn eigen lagen. Een adapter die
+    // geschiedenis bijhoudt (bliksem) levert een eigen `merge` en bepaalt zelf wat er
+    // blijft staan.
+    store = adapter.merge
+      ? adapter.merge(store, fresh)
+      : store.filter(d => !owned.has(d.layer)).concat(fresh);
+    render();
+    setStatus('live · last ' + new Date().toLocaleTimeString('en-GB'));
+  } catch (e) {
+    const reason = e && e.name === 'AbortError' ? 'too slow (timeout)'
+                 : adapter.offlineNote || 'network/CORS';
+    setHealth(hid, 'offline', reason);
+    // Een optionele bron is er een die niet iedereen heeft (eigen relay, eigen
+    // sleutel). Die valt stil weg in plaats van de hele app als "beperkt" te melden,
+    // en zijn lagen gaan op slot met uitleg hoe je er zelf een achterkant onder zet.
+    if (adapter.optional) {
+      adapter.layers.forEach(l => setLayerLocked(l, true));
+      return;
+    }
+    console.warn('Fetch failed for adapter:', e);
+    setStatus('limited connectivity — check your network');
+  }
+}
+
+function setStatus(msg) { document.getElementById('status').textContent = msg; }
+
+function startAdapter(adapter) {
+  pull(adapter);
+  setInterval(() => pull(adapter), adapter.interval);
+}
+
+// ---- Clock ---------------------------------------------------
+
+function tick() {
+  document.getElementById('clock').textContent =
+    new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit', second:'2-digit' }) + ' UTC' +
+    (new Date().getTimezoneOffset() < 0 ? '+' : '') + (-new Date().getTimezoneOffset()/60);
+}
+setInterval(tick, 1000); tick();
+
+// ---- Boot ----------------------------------------------------
+
+// activeer de standaard globe-modus (realistisch) en knop-label
+updateModeButton();
+applyGlobeMode();
+
+// (De zoom-afhandeling voor de landnamen zit in de ENE world.onZoom hierboven —
+//  een tweede aanroep zou die vervangen en de dag/nacht-terminator breken.)
+
+// werk de zonstand periodiek bij zodat de terminator meeloopt met de echte tijd
+setInterval(updateSunUniform, 30_000);
+
+// Het laadscherm mag nooit kunnen blijven staan. Drie waarborgen; de eerste die
+// afgaat wint:
+//   1. de kernlaag (USGS) is binnen → er valt iets te zien
+//   2. álle bronnen zijn klaar
+//   3. harde bovengrens van BOOT_MAX_MS
+// Zonder (1) en (3) hing de boot aan de tráágste bron. GDACS gaf op 2026-07-30
+// eerst een hangende verbinding en daarna HTTP 503, waardoor "de aarde opbouwen"
+// bleef staan terwijl de globe allang klaar was.
+const BOOT_MAX_MS = 8000;
+
+let bootDismissed = false;
+function dismissBoot() {
+  if (bootDismissed) return;
+  bootDismissed = true;
+  document.getElementById('boot').classList.add('done');
+  // Minder beweging gevraagd: de interface staat er meteen, zonder inschuiven.
+  if (REDUCED_MOTION) return;
+  // GSAP-intro: header + paneel soepel in beeld
+  const intro = gsap.timeline();
+  intro.from('.masthead', { y: -16, opacity: 0, duration: 0.6, ease: 'power2.out' })
+       .from('.panel', { x: -18, opacity: 0, duration: 0.6, ease: 'power2.out' }, 0.1);
+  // De modus-wissel staat los van de masthead en heeft een eigen centrering via
+  // translateX(-50%). Die mag GSAP niet overschrijven, dus alleen opacity animeren.
+  intro.from('.mode-switch', { opacity: 0, duration: 0.5, ease: 'power2.out' }, 0.25);
+
+  // Vangnet. GSAP hangt aan requestAnimationFrame, en dat wordt geknepen zodra het
+  // tabblad naar de achtergrond gaat of de hoofdthread lang bezet is (bijvoorbeeld
+  // bij het decoderen van de 8K-texturen). De intro bevriest dan halverwege en het
+  // paneel blijft op opacity ~0 staan. Een gemiste animatie is onschuldig, een
+  // onzichtbare interface niet — dus forceren we het eindresultaat.
+  setTimeout(() => {
+    intro.progress(1);
+    gsap.set(['.masthead', '.panel'], { clearProps: 'all' });
+    gsap.set('.mode-switch', { clearProps: 'opacity' });   // niet 'all': transform is de centrering
+  }, 2000);
+}
+
+// Polling start meteen: een trage eerste ronde mag de intervallen niet ophouden.
+// Een onzichtbaar tabblad pollt níét. Dát is waar de beleefdheid tegenover de
+// publieke feeds zit (en het scheelt accu op mobiel): een demo die iemand in een
+// achtergrondtabblad laat staan, bleef anders eeuwig doorvragen. De eerste ronde
+// gaat wél altijd door, ook bij laden in de achtergrond.
+const firstPulls = {};
+for (const [id, adapter] of Object.entries(Adapters)) {
+  firstPulls[id] = pull(adapter);
+  setInterval(() => { if (!document.hidden) pull(adapter); }, adapter.interval);
+}
+
+// Bij terugkeer naar het tabblad één inhaalronde, maar alleen na een echte pauze —
+// even wegklikken hoeft geen extra verkeer te veroorzaken.
+const CATCHUP_AFTER_MS = 30_000;
+let hiddenSince = 0;
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { hiddenSince = Date.now(); return; }
+  if (hiddenSince && Date.now() - hiddenSince > CATCHUP_AFTER_MS) {
+    Object.values(Adapters).forEach(a => pull(a));
+  }
+  hiddenSince = 0;
+});
+
+// (1) kernlaag binnen — korte adempauze zodat de render af is voor de intro speelt
+if (firstPulls.usgs) firstPulls.usgs.finally(() => setTimeout(dismissBoot, 400));
+// (3) bovengrens — dit is het vangnet dat een hangende bron onschadelijk maakt
+setTimeout(dismissBoot, BOOT_MAX_MS);
+
+// (2) alles klaar. Pas hier tellen nieuwe entries als "nieuw", zodat de initiële
+// lading geen toast-regen veroorzaakt, ook niet van een late adapter.
+Promise.allSettled(Object.values(firstPulls)).finally(() => {
+  initialLoadDone = true;
+  dismissBoot();
+});
+
+// responsive
+window.addEventListener('resize', () => {
+  world.width(window.innerWidth).height(window.innerHeight);
+  bloomPass.setSize(window.innerWidth, window.innerHeight);
+});
+world.width(window.innerWidth).height(window.innerHeight);
+</script>
+</body>
+</html>

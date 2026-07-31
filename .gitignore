@@ -1,0 +1,27 @@
+# ============================================================
+# TERRA — wat nooit de repo in mag
+# Aangemaakt in sessie 10 (2026-07-31), vóór de eerste commit.
+# Beslissing 2 in het publicatieplan: er komt een verse repo zonder
+# historie, juist omdat een sleutel die ooit gecommit is in de historie
+# blijft staan. Dit bestand hoort dus als eerste te bestaan.
+# ============================================================
+
+# Sleutels. De WAQI-token leeft lokaal hier en op Vercel als environment
+# variable. Nooit in de browser, nooit in de repo (beslissing 5).
+.env
+.env.local
+.env.*.local
+
+# Het oude sleutelbestand uit de tijd vóór /api/waqi. Staat in _backup/
+# en mag onder geen beding meegecommit worden.
+keys.js
+relay/keys.js
+
+# macOS
+.DS_Store
+
+# Werkmateriaal dat niet bij de code hoort
+_backup/
+Logs/
+PLAN-*.md
+node_modules/
