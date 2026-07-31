@@ -5,7 +5,7 @@ earthquakes, volcanoes, wildfires, storms, sea ice, air quality and lightning.
 Every layer is a separate data source with its own 3D indicator, and the whole
 thing is static HTML — no build step, no bundler, no framework.
 
-<!-- SCREENSHOT -->
+![Terra](docs/screenshot.jpg)
 
 ## Layers and sources
 
@@ -135,6 +135,16 @@ behaviour can be changed there without touching application code.
 - **Comments in the source are in Dutch**, apart from the configuration file,
   the adapter contract and the server files, which are English. The interface
   itself is entirely English.
+
+## A note on scope
+
+Terra is a demo, built in spare time. It works and it is honest about what it
+cannot do, but it is not a maintained product and there is no roadmap. Updates
+arrive when they arrive.
+
+You are welcome to fork it, take it apart, or connect your own sources — that
+is much of why it is here. Issues and questions are read, and answered when
+there is time for them. Just don't plan around a fix landing this week.
 
 ## Attribution
 

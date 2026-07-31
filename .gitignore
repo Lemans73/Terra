@@ -25,3 +25,6 @@ _backup/
 Logs/
 PLAN-*.md
 node_modules/
+
+# Werknotitie, geen onderdeel van het project
+docs/README-screenshot.txt
