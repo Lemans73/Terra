@@ -14,9 +14,8 @@ Updates to come!
 ![Terra plotting live earthquakes on a shaded globe](docs/screenshot.jpg)
 
 **[Live demo](https://terra.terryelemans.nl)** · **[Download terra.html](https://github.com/Lemans73/Terra/releases/latest/download/terra.html)**
-— one HTML file you can open straight from your desktop, no server and no clone.
-It still needs an internet connection: the map textures and the live feeds come
-over the network.
+— one file, no install, no clone. Details under [Running it
+locally](#running-it-locally).
 
 Earthquakes (USGS) and natural events (NASA EONET) work out of the box with no
 API key. Air quality and lightning need your own key or a local relay, see
@@ -43,6 +42,23 @@ and no bloom.
 
 ## Running it locally
 
+Three ways in, from least to most involved. Pick the first one that fits.
+
+### 1. Download one file and open it
+
+[**terra.html**](https://github.com/Lemans73/Terra/releases/latest/download/terra.html)
+from the latest release. Double-click it. That is the whole procedure — no
+clone, no server, no install.
+
+It needs an internet connection: the map textures and the live feeds come over
+the network. Two layers are locked in this build and cannot be otherwise — air
+quality needs a token behind a server route, and lightning needs a relay holding
+a WebSocket open. Neither of those exists in a file on your desktop.
+
+### 2. Clone and serve
+
+For reading the source, changing it, or running the optional layers:
+
 ```bash
 git clone https://github.com/Lemans73/Terra.git
 cd Terra
@@ -51,31 +67,24 @@ node serve.mjs
 
 Then open `http://localhost:8771`.
 
-Node 18 or newer. There are no dependencies to install — the `package.json`
-exists only to mark the project as ESM, and has no `dependencies` block.
+Node 18 or newer. Nothing to install — `package.json` exists only to mark the
+project as ESM and has no `dependencies` block.
 
 **Opening `index.html` directly will not work.** The application uses ES
 modules, which browsers refuse to load over `file://`. That is what the server
-is for.
+is for, and it is also why option 1 is a separate build rather than this same
+file renamed.
 
-### The single-file build
-
-If you want a version you can double-click or send to someone, build it:
+### 3. Build the single file yourself
 
 ```bash
 node tools/build-standalone.mjs
 ```
 
-That writes `terra.html` — one file, no server. It inlines the CSS and the local
-modules, and points the textures and GeoJSON at jsDelivr, which serves this
-repository with the CORS headers a `file://` page needs. It is a generated file
-and git-ignored: edit `index.html` and `js/*.js`, then rebuild. It is also the
-name the Release asset carries, which is what the download link above resolves
-to.
-
-Two layers are locked in that build, and cannot be otherwise: air quality needs
-a token behind a server route, and lightning needs a relay holding a WebSocket
-open. Neither exists in a file you opened from your desktop.
+That writes `terra.html`, the same artefact the release carries. It inlines the
+CSS and the local modules and points the textures and GeoJSON at jsDelivr, which
+serves this repository with the CORS headers a `file://` page needs. It is
+generated and git-ignored: edit `index.html` and `js/*.js`, then rebuild.
 
 ## Bring your own data
 
