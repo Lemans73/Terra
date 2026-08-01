@@ -33,10 +33,14 @@ node_modules/
 
 # Bouwresultaat van tools/build-standalone.mjs. Bewust NIET in de repo: het is een
 # afgeleide van index.html en js/*.js, en een gegenereerd bestand in git loopt
-# gegarandeerd achter op zijn bron. Het wordt verspreid als GitHub Release-asset;
-# de README linkt naar /releases/latest. Bouwen doe je met één commando.
-terra-standalone.html
+# gegarandeerd achter op zijn bron. Het wordt verspreid als GitHub Release-asset
+# onder exact deze naam; de README linkt naar /releases/latest/download/terra.html.
+#
+# LET OP: een .gitignore-regel werkt alleen op bestanden die git nog NIET volgt.
+# Op 2026-08-01 raakten beide builds alsnog gecommit omdat ze al in de werkboom
+# stonden toen de commit liep. Staat er ooit toch iets in: `git rm --cached`.
 terra.html
+terra-standalone.html
 
 
 # Werknotitie, geen onderdeel van het project

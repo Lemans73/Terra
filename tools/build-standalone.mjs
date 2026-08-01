@@ -32,7 +32,13 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const OUT = 'terra-standalone.html';
+
+// The output name is the name people see in their downloads folder, so it is
+// deliberately plain. It is also the filename of the Release asset, and the
+// README links straight at it via /releases/latest/download/terra.html — that
+// URL only resolves if the asset carries exactly this name. Renaming here means
+// renaming there.
+const OUT = 'terra.html';
 
 // Pin to a tag rather than a branch once this project starts tagging releases:
 // @main means the file silently follows whatever lands on the branch, which is
