@@ -2997,10 +2997,32 @@ function startAdapter(adapter) {
 
 // ---- Clock ---------------------------------------------------
 
+// De klok volgt de SYSTEEMTIJD van de bezoeker: `toLocaleTimeString` zonder
+// timeZone-optie gebruikt de zone van het apparaat. Iemand in Tokio ziet dus zijn
+// eigen tijd met UTC+9, zonder dat hij iets hoeft in te stellen. De 'en-GB' hierin
+// bepaalt alléén het formaat (24-uurs), niet de zone.
+//
+// De offset stond tot 2026-08-01 als kale deling in de tekst, en dat brak op drie
+// plaatsen: UTC+0 werd "UTC0", en elke zone met een half of driekwart uur werd een
+// decimale breuk — India kreeg "UTC+5.5" in plaats van "UTC+5:30", Nepal "UTC+5.75".
+// Dat zijn geen zeldzame uithoeken.
+function utcOffsetLabel(d) {
+  // getTimezoneOffset telt minuten WESTwaarts; wij willen oostwaarts positief.
+  const min = -d.getTimezoneOffset();
+  if (min === 0) return 'UTC';
+  const uren = Math.floor(Math.abs(min) / 60);
+  const minuten = Math.abs(min) % 60;
+  return 'UTC' + (min < 0 ? '-' : '+') + uren +
+         (minuten ? ':' + String(minuten).padStart(2, '0') : '');
+}
+
 function tick() {
+  // Eén Date voor beide helften: met drie losse aanroepen kon de klok rond
+  // middernacht een tijd en een offset van verschillende momenten combineren.
+  const nu = new Date();
   document.getElementById('clock').textContent =
-    new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit', second:'2-digit' }) + ' UTC' +
-    (new Date().getTimezoneOffset() < 0 ? '+' : '') + (-new Date().getTimezoneOffset()/60);
+    nu.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit', second:'2-digit' }) +
+    ' ' + utcOffsetLabel(nu);
 }
 setInterval(tick, 1000); tick();
 

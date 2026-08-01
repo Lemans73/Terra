@@ -36,6 +36,7 @@ node_modules/
 # gegarandeerd achter op zijn bron. Het wordt verspreid als GitHub Release-asset;
 # de README linkt naar /releases/latest. Bouwen doe je met één commando.
 terra-standalone.html
+terra.html
 
 
 # Werknotitie, geen onderdeel van het project
