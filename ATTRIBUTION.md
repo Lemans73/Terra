@@ -131,4 +131,4 @@ advertising and collects no visitor data. Two of the live sources above (WAQI an
 Blitzortung) permit non-commercial use only, and that boundary is the reason this
 distinction is stated explicitly rather than left implicit.
 
-Questions about attribution or licensing: Nimbus Agency.nl | Interactive Media.
+Questions about attribution or licensing: NimbusAgency.nl | Interactive Media.
