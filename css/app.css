@@ -824,6 +824,53 @@
   @keyframes spin { to { transform: rotate(360deg); } }
   .boot .msg { font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-dim); }
 
+  /* ---- Het boot-scherm als foutmelding (2026-08-01) --------------------------
+     Tot sessie 11 kende dit scherm maar één toestand: draaien. Startte de module
+     niet, dan bleef de ring eeuwig rondgaan en zag een kapotte app eruit alsof hij
+     nog bezig was. Dat is precies wat de boot-hang op Vercel opleverde.
+     `.failed` zet de ring uit en de uitleg aan; de opbouw zit in het head-script
+     van index.html, zodat hij ook werkt als de module nooit draait. */
+  .boot.failed .ring { display: none; }
+  .boot.failed .msg { display: none; }
+  .boot-error {
+    display: none;
+    max-width: 380px;
+    padding: 0 28px;
+    text-align: center;
+  }
+  .boot.failed .boot-error { display: block; }
+  .boot-error h2 {
+    margin: 0 0 10px;
+    font-size: 13px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ink);
+  }
+  .boot-error p {
+    margin: 0 0 18px;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--ink-dim);
+  }
+  .boot-error button {
+    font: inherit;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    color: var(--ink);
+    background: rgba(255,107,61,0.14);
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    padding: 9px 20px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+  .boot-error button:hover { background: rgba(255,107,61,0.24); }
+  .boot-error .hint {
+    margin: 16px 0 0;
+    font-size: 11px;
+    color: var(--ink-faint);
+  }
+
   /* ---- Leader-line labels voor de zwaarste bevingen ---- */
   #quake-labels {
     position: fixed;
@@ -971,7 +1018,16 @@
     .mode-switch { top: 12px; }
     .panel-open { left: 12px; bottom: 12px; }
     .notif-panel { left: 10px; right: 10px; width: auto; top: 56px; max-height: 60vh; }
-    #toasts { left: 10px; right: 10px; top: 56px; }
+    /* `transform: none` is hier GEEN opsmuk. Op desktop staat #toasts op
+       `left: 50%` met `translateX(-50%)` als centrering. Zet je dan links én
+       rechts vast zonder die transform op te heffen, dan wordt het element eerst
+       schermbreed en schuift het dáárna nog eens de halve schermbreedte naar
+       links: de meldingen vielen half buiten beeld (gezien op iPhone, portret,
+       2026-08-01).
+       Zelfde val als bij .mode-switch, waar translateX(-50%) óók de centrering
+       zelf is. Regel: verandert een media query `left`/`right`, controleer dan of
+       er nog een transform onder ligt. */
+    #toasts { left: 10px; right: 10px; top: 56px; transform: none; }
     .toast { min-width: 0; width: 100%; }
   }
 

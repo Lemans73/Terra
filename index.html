@@ -50,6 +50,126 @@
 <!-- Geen sleutelbestand meer. De WAQI-token leeft achter /api/waqi aan de serverkant;
      de relay-URL is een gewone instelling in js/config.js. -->
 <link rel="stylesheet" href="./css/app.css">
+
+<!-- ============================================================================
+     VANGNET — bewust een KLASSIEK script, en bewust hier in de <head>.
+
+     Aanleiding: op 2026-08-01 stond de app op Vercel eeuwig op "building the earth"
+     terwijl de module allang met een ReferenceError was gestopt. Er was niets dat
+     dat kón opmerken: het laadscherm verdwijnt alleen als de module zelf daarom
+     vraagt, dus een module die nooit start laat het scherm eeuwig staan.
+
+     Waarom klassiek en niet type="module": een module is impliciet deferred en
+     draait ná het parsen van het document. Dit script draait dáárvoor, dus de
+     listeners staan er gegarandeerd op tijd om een fout in de module op te vangen.
+
+     Drie faalmodi, één zichtbare uitkomst:
+       1. geen WebGL          → meteen, zonder te wachten
+       2. module gooit        → 'error' / 'unhandledrejection'
+       3. stille hang         → de watchdog. Dit is de enige die een mislukte
+                                CDN-import vangt: die gooit niets op window.
+     ============================================================================ -->
+<script>
+(function () {
+  'use strict';
+
+  // De app zet dit op true zodra het laadscherm weggaat (zie dismissBoot()).
+  // Alles hieronder is een no-op zodra die vlag staat.
+  window.__terraBooted = false;
+
+  var shown = false;
+  var pending = null;
+
+  // Registreren en tonen zijn bewust GESCHEIDEN. Dit script draait in de <head>,
+  // dus #boot bestaat nog niet: een fout die vóór de body optreedt zou anders
+  // spoorloos verdwijnen. Gemeten op 2026-08-01 — de WebGL-tak liep hier stuk.
+  function fail(title, text, hint) {
+    // Eén keer. De eerste fout is de interessante; wat erna komt is meestal gevolg.
+    if (shown || window.__terraBooted) return;
+    shown = true;
+    pending = { title: title, text: text, hint: hint };
+    toon();
+  }
+
+  function toon() {
+    if (!pending) return;
+    var boot = document.getElementById('boot');
+    if (!boot) return;                       // DOM nog niet klaar → later opnieuw
+    document.getElementById('boot-error-title').textContent = pending.title;
+    document.getElementById('boot-error-text').textContent = pending.text;
+    document.getElementById('boot-error-hint').textContent = pending.hint || '';
+    document.getElementById('boot-error-retry').onclick = function () {
+      location.reload();
+    };
+    boot.classList.add('failed');
+    pending = null;
+  }
+
+  document.addEventListener('DOMContentLoaded', toon);
+
+  // ---- 1. WebGL -------------------------------------------------------------
+  // Geen WebGL betekent geen globe, punt. Dat hoeft niemand acht seconden af te
+  // wachten. Het canvas wordt weggegooid; het is puur een test.
+  //
+  // METEEN uitvoeren, niet op DOMContentLoaded. Een <script type="module"> is
+  // impliciet deferred en draait dus VÓÓR dat event — de module crashte op zijn
+  // eigen ontbrekende context en claimde de melding, waardoor de bezoeker
+  // "something went wrong" las in plaats van "je browser kan geen 3D".
+  function hasWebGL() {
+    try {
+      var c = document.createElement('canvas');
+      return !!(c.getContext('webgl2') || c.getContext('webgl'));
+    } catch (e) {
+      return false;                          // sommige browsers gooien i.p.v. null
+    }
+  }
+
+  if (!hasWebGL()) {
+    fail('Terra needs WebGL',
+         'This browser cannot render 3D graphics. WebGL may be disabled, or the ' +
+         'device may not support it.',
+         'Try a recent version of Chrome, Safari, Firefox or Edge.');
+  }
+
+  // ---- 2. Fouten ------------------------------------------------------------
+  // Let op de voorwaarde in fail(): ná de boot mag een adapterfout géén foutscherm
+  // over een werkende globe zetten. De console houdt hoe dan ook het origineel —
+  // deze melding vervangt de diagnose niet, hij maakt hem zichtbaar.
+  window.addEventListener('error', function (e) {
+    fail('Terra could not start',
+         'Something went wrong while loading the application.',
+         'Technical details are in the browser console.');
+    if (e && e.error) console.error('[terra] boot failure:', e.error);
+  });
+
+  window.addEventListener('unhandledrejection', function (e) {
+    fail('Terra could not start',
+         'Something went wrong while loading the application.',
+         'Technical details are in the browser console.');
+    if (e && e.reason) console.error('[terra] boot failure (promise):', e.reason);
+  });
+
+  // ---- 3. Watchdog ----------------------------------------------------------
+  // GEEN wachttijd: dit is één controlemoment. Bij een gezonde start staat
+  // __terraBooted er al na ongeveer een seconde en doet deze timer niets.
+  //
+  //   t ≈ 0,5–2 s  kernlaag binnen → laadscherm weg
+  //   t = 8 s      BOOT_MAX_MS, de harde bovengrens in de module
+  //   t = 20 s     hier: staat de vlag? Zo nee, dan is er iets grondig mis
+  //
+  // De marge is ruim boven die 8 s omdat een trage mobiele verbinding geen vals
+  // alarm mag opleveren. Dit vangt het geval waarin er niets gebeurt en niets
+  // klaagt — een geblokkeerde of onbereikbare CDN-import bijvoorbeeld.
+  var WATCHDOG_MS = 20000;
+
+  setTimeout(function () {
+    fail('Terra is taking longer than expected',
+         'The application did not finish loading. This is usually a network ' +
+         'problem or a blocked script.',
+         'Technical details are in the browser console.');
+  }, WATCHDOG_MS);
+})();
+</script>
 </head>
 <body>
   <div id="globe"></div>
@@ -282,6 +402,15 @@
   <div class="boot" id="boot">
     <div class="ring"></div>
     <div class="msg">building the earth</div>
+    <!-- Blijft verborgen tot het head-script `.failed` op .boot zet. De markup staat
+         hier en niet in JavaScript, zodat er niets meer opgebouwd hoeft te worden op
+         het moment dat er juist iets stuk is. -->
+    <div class="boot-error">
+      <h2 id="boot-error-title"></h2>
+      <p id="boot-error-text"></p>
+      <button type="button" id="boot-error-retry">Reload</button>
+      <p class="hint" id="boot-error-hint"></p>
+    </div>
   </div>
 
 <script type="module">
@@ -302,7 +431,7 @@ import {
   AQI_BANDS, aqiBand, aqiHex,
   PARAMS, WINDOW_MS, MODE_LABELS, MODE_ICONS, EXPERT_LAYER_SCALE,
   TEXTURE_SETS, DEFAULT_QUALITY, assetsFor, textureSetSize, RELAY_URL, REPO_URL,
-  ANALYTICS
+  ANALYTICS_HOSTS, LOCK_DETAILS
 } from './js/config.js';
 // GLSL shader-bronnen (Stap 0 refactor).
 import {
@@ -602,8 +731,10 @@ const RELAY_BASE = RELAY_URL || (IS_LOCAL ? 'http://localhost:8772' : '');
 // Bezoekersteller (Vercel Web Analytics). Bewust hier geïnjecteerd en niet als vaste
 // scripttag in de <head>: buiten Vercel bestaat dit bestand niet, en een 404 in de
 // netwerktab is geen nette visitekaart in juist de standalone-variant die je uitdeelt.
-// Twee voorwaarden, elk met een eigen reden — zie ANALYTICS in js/config.js.
-if (ANALYTICS && !IS_LOCAL) {
+// De hostname-lijst vervangt sinds 2026-08-01 de oude `ANALYTICS && !IS_LOCAL`: die
+// eerste voorwaarde was een kale `true` en zette de teller dus óók aan bij iedereen
+// die de repo forkte en elders draaide. Zie ANALYTICS_HOSTS in js/config.js.
+if (ANALYTICS_HOSTS.includes(location.hostname)) {
   const insights = document.createElement('script');
   insights.defer = true;
   insights.src = '/_vercel/insights/script.js';
@@ -1851,15 +1982,25 @@ function setLayerLocked(layer, vergrendeld) {
   active[layer] = false;
   render();
 
-  const knop = document.createElement('button');
+  // Staat het uitklappen uit (LOCK_DETAILS), dan is dit geen knop maar een teken.
+  // Een <button> die niets doet is erger dan geen knop: hij belooft een handeling.
+  // De uitleg zit dan in de tooltip, zodat de bezoeker nog steeds ziet wát er
+  // ontbreekt — alleen de weg naar buiten (de repo-link) is dicht.
+  const knop = document.createElement(LOCK_DETAILS ? 'button' : 'span');
   knop.className = 'lock-btn';
-  knop.title = info.kop;
-  knop.setAttribute('aria-label', info.kop);
+  knop.title = LOCK_DETAILS ? info.kop : info.kop + ' — ' + info.tekst;
+  knop.setAttribute('aria-label', knop.title);
+  if (!LOCK_DETAILS) {
+    knop.setAttribute('role', 'img');
+    knop.style.cursor = 'default';
+  }
   knop.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
     'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
     '<rect x="4" y="10" width="16" height="11" rx="2"/>' +
     '<path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>';
   rij.appendChild(knop);
+
+  if (!LOCK_DETAILS) return;
 
   const paneel = document.createElement('div');
   paneel.className = 'layer-detail lock-detail';
@@ -2867,6 +3008,9 @@ let bootDismissed = false;
 function dismissBoot() {
   if (bootDismissed) return;
   bootDismissed = true;
+  // Sein aan het vangnet in de <head>: vanaf hier zwijgt de watchdog, en een fout
+  // in een adapter zet geen foutscherm meer over een werkende globe heen.
+  window.__terraBooted = true;
   document.getElementById('boot').classList.add('done');
   // Minder beweging gevraagd: de interface staat er meteen, zonder inschuiven.
   if (REDUCED_MOTION) return;

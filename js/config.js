@@ -21,9 +21,24 @@
 export const RELAY_URL = '';
 
 // Waar de uitleg staat voor wie een laag zelf wil aankoppelen. De slotjes in het
-// lagenlijstje verwijzen hiernaartoe. Sessie 11 maakt deze repo aan; tot dan wijst de
-// link vooruit.
+// lagenlijstje verwijzen hiernaartoe.
 export const REPO_URL = 'https://github.com/Lemans73/Terra#bring-your-own-data';
+
+// Klapt het slotje in de lagenlijst een paneeltje uit met uitleg en een link naar de
+// repo? Staat sinds 2026-08-01 UIT, en dat is een tijdelijke stand.
+//
+// De reden: dat paneeltje belooft iets dat de app nog niet kan waarmaken. Er is geen
+// invoerveld voor een eigen sleutel (beslissing 26 staat nog open), dus de enige weg
+// die het aanwijst is "fork de repo en deploy zelf". Dat is een grote stap om een
+// bezoeker vanuit een demo in te sturen, en het stuurt hem weg vóórdat we iets te
+// bieden hebben.
+//
+// Het slotje zelf BLIJFT staan, met de uitleg in zijn tooltip. Dat is het punt van
+// een slotje: het onderscheidt "hier valt iets aan te koppelen" van "dit is kapot".
+//
+// Zet dit weer op true zodra de sleutel-invoer echt werkt — dan wijst het paneeltje
+// naar een functie in de app in plaats van naar de uitgang.
+export const LOCK_DETAILS = false;
 
 // ---- Bezoekersteller ----------------------------------------------------
 // Vercel Web Analytics: één scriptbestand dat Vercel zelf serveert vanaf hetzelfde
@@ -31,18 +46,21 @@ export const REPO_URL = 'https://github.com/Lemans73/Terra#bring-your-own-data';
 // belofte blijft staan. Cookieloos en zonder persoonsgegevens, dus er hoort geen
 // cookiebanner bij.
 //
-// ZET DIT OP false in elke variant die NIET op Vercel draait: de standalone-versie,
-// een deploy op je eigen server, of openen via file://. Daar bestaat
-// /_vercel/insights/script.js niet en levert het alleen een 404 in de netwerktab op.
-// De app werkt in beide gevallen gewoon; dit gaat puur om een nette netwerktab.
+// Dit is een LIJST VAN HOSTNAMES, geen aan/uit-schakelaar. Dat is bewust. Een kale
+// `true` betekent "aan, tenzij", en dat klopt niet voor een repo die geforkt wordt:
+// /_vercel/insights/script.js bestaat alleen op een Vercel-deployment. Wie dit op een
+// eigen server, op GitHub Pages of via file:// draait, kreeg daar een 404 in de
+// netwerktab voor iets dat hij nooit heeft aangezet. Nu vuurt de teller alleen op een
+// host die hier expliciet staat.
 //
-// Lokaal draaien telt sowieso niet mee — index.html eist ook !IS_LOCAL, zodat je eigen
-// ontwikkelbezoeken de cijfers niet vervuilen.
+// Fork je dit? Zet je eigen domein erin — het zijn dan jouw cijfers op jouw
+// Vercel-project, want /_vercel/insights/ hoort bij de deployment, niet bij ons.
+// Aanzetten moet daar wel eerst in het dashboard: project → Analytics → Enable.
+// Lege lijst = geen teller, nergens.
 //
-// Fork je dit? Dan zijn het jouw cijfers op jouw Vercel-project; /_vercel/insights/
-// hoort bij de deployment, niet bij ons. Aanzetten moet daar wel eerst in het
-// dashboard: project → Analytics → Enable.
-export const ANALYTICS = true;
+// Localhost hoeft er niet in te staan en hoort er ook niet in: eigen ontwikkelbezoeken
+// horen niet in de cijfers.
+export const ANALYTICS_HOSTS = ['terra.terryelemans.nl'];
 
 // ---- Per-dataset visuele identiteit ----
 export const COLORS = {

@@ -22,9 +22,15 @@ relay/keys.js
 
 # Werkmateriaal dat niet bij de code hoort
 _backup/
-Logs/
+logs/
 PLAN-*.md
 node_modules/
+
+# Lokale werkomgeving. Bevat geen sleutels (gecontroleerd op 2026-08-01), maar wel
+# persoonlijke permissies en paden die niemand anders iets zeggen. Draaien staat in
+# de README: `node serve.mjs`. Wie met Claude Code werkt maakt zijn eigen launch.json.
+.claude/
+
 
 # Werknotitie, geen onderdeel van het project
 docs/README-screenshot.txt
