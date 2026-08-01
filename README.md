@@ -13,6 +13,11 @@ Updates to come!
 
 ![Terra plotting live earthquakes on a shaded globe](docs/screenshot.jpg)
 
+**[Live demo](https://terra.terryelemans.nl)** · **[Download the single-file
+version](https://github.com/Lemans73/Terra/releases/latest)** — one HTML file you
+can open straight from your desktop, no server and no clone. It still needs an
+internet connection: the map textures and the live feeds come over the network.
+
 Earthquakes (USGS) and natural events (NASA EONET) work out of the box with no
 API key. Air quality and lightning need your own key or a local relay, see
 Optional layers below.
@@ -52,6 +57,23 @@ exists only to mark the project as ESM, and has no `dependencies` block.
 **Opening `index.html` directly will not work.** The application uses ES
 modules, which browsers refuse to load over `file://`. That is what the server
 is for.
+
+### The single-file build
+
+If you want a version you can double-click or send to someone, build it:
+
+```bash
+node tools/build-standalone.mjs
+```
+
+That writes `terra-standalone.html` — one file, no server. It inlines the CSS
+and the local modules, and points the textures and GeoJSON at jsDelivr, which
+serves this repository with the CORS headers a `file://` page needs. It is a
+generated file: edit `index.html` and `js/*.js`, then rebuild.
+
+Two layers are locked in that build, and cannot be otherwise: air quality needs
+a token behind a server route, and lightning needs a relay holding a WebSocket
+open. Neither exists in a file you opened from your desktop.
 
 ## Bring your own data
 

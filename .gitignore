@@ -31,6 +31,12 @@ node_modules/
 # de README: `node serve.mjs`. Wie met Claude Code werkt maakt zijn eigen launch.json.
 .claude/
 
+# Bouwresultaat van tools/build-standalone.mjs. Bewust NIET in de repo: het is een
+# afgeleide van index.html en js/*.js, en een gegenereerd bestand in git loopt
+# gegarandeerd achter op zijn bron. Het wordt verspreid als GitHub Release-asset;
+# de README linkt naar /releases/latest. Bouwen doe je met één commando.
+terra-standalone.html
+
 
 # Werknotitie, geen onderdeel van het project
 docs/README-screenshot.txt

@@ -111,7 +111,7 @@
   // Geen WebGL betekent geen globe, punt. Dat hoeft niemand acht seconden af te
   // wachten. Het canvas wordt weggegooid; het is puur een test.
   //
-  // METEEN uitvoeren, niet op DOMContentLoaded. Een <script type="module"> is
+  // METEEN uitvoeren, niet op DOMContentLoaded. Een script met type="module" is
   // impliciet deferred en draait dus VÓÓR dat event — de module crashte op zijn
   // eigen ontbrekende context en claimde de melding, waardoor de bezoeker
   // "something went wrong" las in plaats van "je browser kan geen 3D".
@@ -431,7 +431,7 @@ import {
   AQI_BANDS, aqiBand, aqiHex,
   PARAMS, WINDOW_MS, MODE_LABELS, MODE_ICONS, EXPERT_LAYER_SCALE,
   TEXTURE_SETS, DEFAULT_QUALITY, assetsFor, textureSetSize, RELAY_URL, REPO_URL,
-  ANALYTICS_HOSTS, LOCK_DETAILS
+  ANALYTICS_HOSTS, LOCK_DETAILS, ASSET_BASE, asset
 } from './js/config.js';
 // GLSL shader-bronnen (Stap 0 refactor).
 import {
@@ -725,7 +725,16 @@ let aqiBounds = '-90,-180,90,180';
 // Daarom: lokaal → localhost-relay; elders → RELAY_URL uit js/config.js, of uit.
 // De relay-URL is geen geheim maar een instelling, en verhuisde daarom op 2026-07-31
 // van keys.js naar config.js. keys.js bestaat sindsdien niet meer.
-const IS_LOCAL = ['localhost', '127.0.0.1', ''].includes(location.hostname);
+// Let op de protocol-toets, die is niet decoratief. Onder file:// is
+// location.hostname een LEGE STRING, en die staat in de lijst hieronder — zonder
+// deze uitsluiting zou de standalone-variant bij de ontvanger vrolijk
+// http://localhost:8772 gaan bevragen voor bliksem. Daar draait niets, dus de laag
+// zou "offline" melden waar hij netjes op slot hoort te gaan, én er zou een
+// verbinding naar localhost in hun netwerktab verschijnen. Gevonden op 2026-08-01.
+// Dit is dezelfde valkuil als de boot-hang van sessie 11: een IS_LOCAL-tak is
+// ongetest tot hij ergens ánders dan op localhost draait.
+const IS_FILE = location.protocol === 'file:';
+const IS_LOCAL = !IS_FILE && ['localhost', '127.0.0.1', ''].includes(location.hostname);
 const RELAY_BASE = RELAY_URL || (IS_LOCAL ? 'http://localhost:8772' : '');
 
 // Bezoekersteller (Vercel Web Analytics). Bewust hier geïnjecteerd en niet als vaste
@@ -1019,7 +1028,7 @@ let globeMode = 'realistic';       // 'realistic' | 'expert'
 // Eénmalig geladen; de expert-modus tekent deze als vlakke land-polygons +
 // harde kustlijn-stroke. Leeg tot de fetch klaar is (expert toont dan kale bol).
 let landFeatures = [];
-fetch('./assets/geo/ne_110m_land.geojson')
+fetch(asset('assets/geo/ne_110m_land.geojson'))
   .then(r => r.json())
   .then(geo => {
     landFeatures = geo.features || [];
@@ -1035,9 +1044,9 @@ fetch('./assets/geo/ne_110m_land.geojson')
 // Bewust LAZY: samen zijn de bestanden bijna een megabyte, en de meeste bezoekers
 // zetten deze overlays nooit aan. Pas ophalen bij de eerste keer aanzetten.
 const OVERLAY_SOURCES = {
-  plates:  './assets/geo/PB2002_boundaries.json',
-  borders: './assets/geo/ne_110m_admin_0_countries.geojson',
-  names:   './assets/geo/ne_110m_admin_0_countries.geojson' // zelfde bestand als borders
+  plates:  asset('assets/geo/PB2002_boundaries.json'),
+  borders: asset('assets/geo/ne_110m_admin_0_countries.geojson'),
+  names:   asset('assets/geo/ne_110m_admin_0_countries.geojson') // zelfde bestand als borders
 };
 const overlayOn = { plates: false, borders: false, names: false };
 const overlayPaths = { plates: null, borders: null };   // lijn-overlays
@@ -1578,6 +1587,11 @@ function buildRealisticMaterial() {
     return null;
   }
   const loader = new T.TextureLoader();
+  // Expliciet, ook al is dit three's eigen standaard. Zodra ASSET_BASE naar een CDN
+  // wijst (de standalone-variant) is deze vlag het verschil tussen een aarde en een
+  // zwarte bol: zonder CORS-toestemming laadt het plaatje wel, maar raakt het canvas
+  // tainted en weigert WebGL het als texture. Gemeten op 2026-08-01.
+  loader.setCrossOrigin('anonymous');
   const load = url => loader.loadAsync ? loader.loadAsync(url) : new Promise(res => loader.load(url, res));
 
   const A = assetsFor(texQuality);
@@ -2197,6 +2211,7 @@ async function setTextureQuality(q) {
 
   const A = assetsFor(q);
   const loader = new T.TextureLoader();
+  loader.setCrossOrigin('anonymous');          // zie de toelichting bij de andere loader
   const load = url => loader.loadAsync(url);
   try {
     const [day, night, clouds, spec, normal] = await Promise.all([
@@ -2439,10 +2454,17 @@ labelLayer.appendChild(labelSvg);
 document.body.appendChild(labelLayer);
 
 // hover op een label → toon alleen die beving (verberg de andere staven)
+//
+// Hier stond een aanroep van `eachQuake()`, een functie die niet bestaat. Elke
+// hover over een label gooide daardoor een ReferenceError. Dat viel nooit op omdat
+// de highlight tóch werkte: `focusedQuake` wordt hierboven al gezet, en de
+// per-frame lus leest die waarde zelf (zoek op `focusedQuake` in de animatiestap).
+// De aanroep was dus niet alleen kapot maar ook overbodig — en hij verborg
+// bovendien élke glyph, niet alleen de bevingen.
+// Gevonden op 2026-08-01 door de nieuwe error-listener, die precies hiervoor is.
 let focusedQuake = null;
 function focusQuake(d) {
   focusedQuake = d;
-  eachQuake(g => { g.visible = !d || g.userData.d === d; });
 }
 
 function rebuildLabels(quakes) {

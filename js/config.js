@@ -423,6 +423,26 @@ export const PARAMS = {
 // venster-duur in ms per preset, voor de slider-berekening
 export const WINDOW_MS = { hour: 3_600_000, day: 86_400_000, week: 604_800_000 };
 
+// ---- Waar de assets vandaan komen -------------------------------------------
+// Leeg = naast dit bestand, zoals altijd. Gevuld = een absolute prefix, en dan
+// moet die op een `/` eindigen.
+//
+// Dit bestaat voor de standalone-variant (tools/build-standalone.mjs): één HTML die
+// je kunt doorsturen en die via file:// opent. Daar werkt `fetch('./assets/…')`
+// niet — file:// heeft origin `null` — dus wijzen de assets naar jsDelivr, dat de
+// publieke repo al serveert met `access-control-allow-origin: *`.
+//
+// LET OP bij een gevulde base: texturen moeten dan met `crossOrigin = 'anonymous'`
+// geladen worden. Gemeten op 2026-08-01: zonder die vlag laadt het plaatje wél,
+// maar raakt het canvas "tainted" en weigert WebGL het als texture (SecurityError).
+// three's TextureLoader zet die vlag standaard, maar de code doet het expliciet —
+// dit is precies het soort onzichtbare afhankelijkheid dat iemand later opruimt.
+export const ASSET_BASE = '';
+
+export function asset(path) {
+  return (ASSET_BASE || './') + path;
+}
+
 // Lokale earth-assets (in ./assets/earth/), in twee kwaliteiten.
 // -----------------------------------------------------------------------------
 // 2K is de STANDAARD. De 8K-set is samen ongeveer 29 MB en die willen we niemand
@@ -433,22 +453,22 @@ export const TEXTURE_SETS = {
   '2k': {
     label: 'Standard (2K)',
     bytes: 2_476_000,
-    day:      './assets/earth/2k_earth_daymap.jpg',
-    night:    './assets/earth/2k_earth_nightmap.jpg',
-    clouds:   './assets/earth/2k_earth_clouds.jpg',
-    normal:   './assets/earth/2k_earth_normal_map.png',
-    specular: './assets/earth/2k_earth_specular_map.png',
-    stars:    './assets/stars/2k_stars_milky_way.jpg'
+    day:      asset('assets/earth/2k_earth_daymap.jpg'),
+    night:    asset('assets/earth/2k_earth_nightmap.jpg'),
+    clouds:   asset('assets/earth/2k_earth_clouds.jpg'),
+    normal:   asset('assets/earth/2k_earth_normal_map.png'),
+    specular: asset('assets/earth/2k_earth_specular_map.png'),
+    stars:    asset('assets/stars/2k_stars_milky_way.jpg')
   },
   '8k': {
     label: 'High resolution (8K)',
     bytes: 29_675_000,
-    day:      './assets/earth/8k_earth_daymap.jpg',
-    night:    './assets/earth/8k_earth_nightmap.jpg',
-    clouds:   './assets/earth/8k_earth_clouds.jpg',
-    normal:   './assets/earth/8k_earth_normal_map.png',
-    specular: './assets/earth/8k_earth_specular_map.png',
-    stars:    './assets/stars/8k_stars_milky_way.jpg'
+    day:      asset('assets/earth/8k_earth_daymap.jpg'),
+    night:    asset('assets/earth/8k_earth_nightmap.jpg'),
+    clouds:   asset('assets/earth/8k_earth_clouds.jpg'),
+    normal:   asset('assets/earth/8k_earth_normal_map.png'),
+    specular: asset('assets/earth/8k_earth_specular_map.png'),
+    stars:    asset('assets/stars/8k_stars_milky_way.jpg')
   }
 };
 
