@@ -25,6 +25,25 @@ export const RELAY_URL = '';
 // link vooruit.
 export const REPO_URL = 'https://github.com/Lemans73/Terra#bring-your-own-data';
 
+// ---- Bezoekersteller ----------------------------------------------------
+// Vercel Web Analytics: één scriptbestand dat Vercel zelf serveert vanaf hetzelfde
+// domein. Geen npm-pakket, geen build-stap, geen dependency — de nul-afhankelijkheden
+// belofte blijft staan. Cookieloos en zonder persoonsgegevens, dus er hoort geen
+// cookiebanner bij.
+//
+// ZET DIT OP false in elke variant die NIET op Vercel draait: de standalone-versie,
+// een deploy op je eigen server, of openen via file://. Daar bestaat
+// /_vercel/insights/script.js niet en levert het alleen een 404 in de netwerktab op.
+// De app werkt in beide gevallen gewoon; dit gaat puur om een nette netwerktab.
+//
+// Lokaal draaien telt sowieso niet mee — index.html eist ook !IS_LOCAL, zodat je eigen
+// ontwikkelbezoeken de cijfers niet vervuilen.
+//
+// Fork je dit? Dan zijn het jouw cijfers op jouw Vercel-project; /_vercel/insights/
+// hoort bij de deployment, niet bij ons. Aanzetten moet daar wel eerst in het
+// dashboard: project → Analytics → Enable.
+export const ANALYTICS = true;
+
 // ---- Per-dataset visuele identiteit ----
 export const COLORS = {
   quake:    '#ff6b3d',

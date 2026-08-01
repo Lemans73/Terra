@@ -294,7 +294,8 @@ import {
   COLORS, SOURCE_URLS, DETAIL_LINK_LABELS,
   AQI_BANDS, aqiBand, aqiHex,
   PARAMS, WINDOW_MS, MODE_LABELS, MODE_ICONS, EXPERT_LAYER_SCALE,
-  TEXTURE_SETS, DEFAULT_QUALITY, assetsFor, textureSetSize, RELAY_URL, REPO_URL
+  TEXTURE_SETS, DEFAULT_QUALITY, assetsFor, textureSetSize, RELAY_URL, REPO_URL,
+  ANALYTICS
 } from './js/config.js';
 // GLSL shader-bronnen (Stap 0 refactor).
 import {
@@ -590,6 +591,17 @@ let aqiBounds = '-90,-180,90,180';
 // van keys.js naar config.js. keys.js bestaat sindsdien niet meer.
 const IS_LOCAL = ['localhost', '127.0.0.1', ''].includes(location.hostname);
 const RELAY_BASE = RELAY_URL || (IS_LOCAL ? 'http://localhost:8772' : '');
+
+// Bezoekersteller (Vercel Web Analytics). Bewust hier geïnjecteerd en niet als vaste
+// scripttag in de <head>: buiten Vercel bestaat dit bestand niet, en een 404 in de
+// netwerktab is geen nette visitekaart in juist de standalone-variant die je uitdeelt.
+// Twee voorwaarden, elk met een eigen reden — zie ANALYTICS in js/config.js.
+if (ANALYTICS && !IS_LOCAL) {
+  const insights = document.createElement('script');
+  insights.defer = true;
+  insights.src = '/_vercel/insights/script.js';
+  document.head.appendChild(insights);
+}
 
 // Harde timeout per bron-fetch. Zonder deze grens kan één hangende verbinding een
 // adapter onbeperkt bezet houden (en daarmee het laadscherm laten staan).
@@ -1860,7 +1872,17 @@ function setLayerLocked(layer, vergrendeld) {
 // is de laag onbruikbaar. Tot 2026-07-31 werd de rij dan uit het lijstje VERWIJDERD;
 // sindsdien krijgt hij een slotje. Het verschil telt: verwijderen verbergt dat de laag
 // bestaat, een slotje nodigt uit om er zelf een relay onder te zetten.
-if (!RELAY_BASE) setLayerLocked('lightning', true);
+//
+// DE AANROEP STAAT HIER NIET. Hij is op 2026-08-01 verplaatst naar het init-blok
+// onderaan dit script, en dat moet zo blijven. setLayerLocked() roept render() aan,
+// render() roept rebuildLabels() aan, en die leest `labelLayer` — een const die pas
+// ~400 regels verderop wordt aangemaakt. Op deze plek is dat een temporal dead zone
+// en gooit de hele module een ReferenceError.
+//
+// Waarom dat lang onopgemerkt bleef: op localhost is RELAY_BASE gevuld met
+// http://localhost:8772 (zie regel 592), dus de tak werd hier nooit genomen. Alleen
+// op een echte host is RELAY_URL leeg en vuurt hij wél. De demo bleef daardoor op
+// Vercel eeuwig op het boot-scherm hangen terwijl lokaal alles goed leek.
 
 // ---- Luchtkwaliteit: handmatig het kijkgebied herladen ----
 // Forceer de customLayer om alle glyphs opnieuw te bouwen (globe.gl hergebruikt
@@ -2860,6 +2882,12 @@ function dismissBoot() {
     gsap.set('.mode-switch', { clearProps: 'opacity' });   // niet 'all': transform is de centrering
   }, 2000);
 }
+
+// Bliksem op slot als er geen relay is. Zie de uitleg bij setLayerLocked() waarom dit
+// hier staat en niet daar: de aanroep raakt via render() → rebuildLabels() de const
+// `labelLayer`, en die bestaat pas na dit punt. Alles wat setLayerLocked() nodig heeft,
+// is hier geïnitialiseerd.
+if (!RELAY_BASE) setLayerLocked('lightning', true);
 
 // Polling start meteen: een trage eerste ronde mag de intervallen niet ophouden.
 // Een onzichtbaar tabblad pollt níét. Dát is waar de beleefdheid tegenover de
