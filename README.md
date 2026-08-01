@@ -1,11 +1,21 @@
 # Terra
 
-An interactive WebGL globe that plots live geophysical data on a shaded Earth:
-earthquakes, volcanoes, wildfires, storms, sea ice, air quality and lightning.
-Every layer is a separate data source with its own 3D indicator, and the whole
-thing is static HTML — no build step, no bundler, no framework.
+I wanted to know whether the earthquakes that make the news are the big ones.
 
-![Terra](docs/screenshot.jpg)
+Terra is an interactive Three.js/WebGL globe that plots live geophysical data on Earth:
+earthquakes, volcanoes, wildfires, storms and sea ice, each as its own layer
+with its own 3D indicator.
+
+It is static HTML. No build step, no bundler, no framework. Open the file and
+it runs.
+
+Updates to come!
+
+![Terra plotting live earthquakes on a shaded globe](docs/screenshot.jpg)
+
+Earthquakes (USGS) and natural events (NASA EONET) work out of the box with no
+API key. Air quality and lightning need your own key or a local relay, see
+Optional layers below.
 
 ## Layers and sources
 
