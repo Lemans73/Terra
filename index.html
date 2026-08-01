@@ -4,10 +4,34 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Terra — Live global geophysical overview</title>
-<!-- Iconen expliciet, niet op conventie: onder een subpad (Pages) wordt /favicon.ico
-     anders niet gevonden. De 2048px favicon.png werd nergens gebruikt en gaat niet mee. -->
 <link rel="icon" href="./assets/icon-32.png" sizes="32x32">
 <link rel="apple-touch-icon" href="./assets/icon-180.png">
+
+<!-- Deelkaart voor Slack, LinkedIn, WhatsApp, Discord.
+     De URL's hieronder zijn ABSOLUUT en dat is geen slordigheid: crawlers halen deze
+     pagina op zonder browsercontext en lossen een relatief pad niet op. Een ./docs/…
+     hier levert een deelkaart zonder afbeelding. Verhuist de demo naar een ander
+     adres, dan moeten deze vier regels mee. -->
+<meta name="description" content="Live earthquakes, volcanoes, wildfires, storms, sea ice, air quality and lightning on an interactive WebGL globe.">
+<link rel="canonical" href="https://terra.terryelemans.nl/">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Terra">
+<meta property="og:url" content="https://terra.terryelemans.nl/">
+<meta property="og:title" content="Terra — Live global geophysical overview">
+<meta property="og:description" content="Live earthquakes, volcanoes, wildfires, storms, sea ice, air quality and lightning on an interactive WebGL globe.">
+<meta property="og:image" content="https://terra.terryelemans.nl/docs/social-preview.jpg">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="640">
+<meta property="og:image:alt" content="A shaded 3D Earth with coloured indicators marking live earthquakes, volcanoes and wildfires.">
+
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Terra — Live global geophysical overview">
+<meta name="twitter:description" content="Live earthquakes, volcanoes, wildfires, storms, sea ice, air quality and lightning on an interactive WebGL globe.">
+<meta name="twitter:image" content="https://terra.terryelemans.nl/docs/social-preview.jpg">
+<meta name="twitter:image:alt" content="A shaded 3D Earth with coloured indicators marking live earthquakes, volcanoes and wildfires.">
+
+<meta name="theme-color" content="#080b11">
 <!-- Import map: ÉÉN gedeelde three-instance, alles gepind (geen CDN-"latest"-drift meer).
      three@0.184.0 is de bewezen-werkende versie. globe.gl laadt via ?external=three →
      hergebruikt ONZE three i.p.v. een eigen kopie te bundelen ("multiple instances"-fix).
@@ -30,12 +54,6 @@
 <body>
   <div id="globe"></div>
 
-  <!-- De modus-wissel staat sinds sessie 9 als zwevend eiland midden bovenaan, los van
-       de masthead. Het is de enige knop die de héle weergave omgooit; tussen wordmark
-       en klok las hij als een van de vele bedieningselementen.
-       Sinds 2026-07-31 een segmented toggle: béide weergaven staan er altijd, met de
-       actieve ingedrukt. Als losse knop met één label was niet te zien dát er een
-       tweede weergave bestond — je moest erop klikken om erachter te komen. -->
   <div class="mode-switch" id="mode-switch" role="group" aria-label="Globe view">
     <button class="mode-opt active" data-mode="realistic" aria-pressed="true">
       <span class="mode-icon">◐</span><span class="mode-text">Realistic</span>
@@ -46,9 +64,6 @@
   </div>
 
   <div class="masthead">
-    <!-- Wordmark en klok op één regel, de ondertitel eronder. De klok hoort bij de
-         identiteit ("dit is Terra, en dit is hoe laat het nu is"), niet bij de
-         bedieningselementen rechts. -->
     <div class="brand">
       <div class="brand-row">
         <span class="wordmark">TERRA<span class="dot">.</span></span>
@@ -73,10 +88,6 @@
   </button>
 
   <div class="panel">
-    <!-- Vaste kop (sessie 9): tabs en inklappijl blijven altijd staan, de inhoud
-         scrolt eronder door. Zonder dit moest je op een klein scherm eerst terug
-         omhoog scrollen om van tab te kunnen wisselen. De voetregel is bewust NIET
-         vastgezet: die ruimte hebben de filters harder nodig. -->
     <div class="panel-head">
       <div class="tabs" role="tablist">
         <button class="tab active" data-tab="lagen">Layers</button>
@@ -108,11 +119,7 @@
           <button class="preset" data-mag="4">M4+</button>
           <button class="preset" data-mag="5">M5+</button>
         </div>
-        <!-- Het tijdvenster stond tot sessie 9 als losse sectie onder alle lagen, wat
-             suggereerde dat het app-breed gold. Dat is niet zo: USGS levert
-             momentgebeurtenissen, EONET gebeurtenissen mét duur. Een venster van een uur
-             over een vulkaan die al drie maanden uitbarst is betekenisloos. Daarom hoort
-             het filter bij de laag waarvoor het werkt. -->
+
         <h3>Time window</h3>
         <div class="presets" id="presets">
           <button class="preset" data-win="hour">Hour</button>
@@ -320,7 +327,7 @@ import { buildExpertGlyph } from './js/symbols-expert.js';
    ============================================================ */
 
 // Bezoekers die in hun systeem hebben aangegeven minder beweging te willen, krijgen
-// geen intro-animatie en geen draaiende globe (sessie 9). Bewust bovenaan gedeclareerd:
+// geen intro-animatie en geen draaiende globe (Toegankelijkheids Instellingen). Bewust bovenaan gedeclareerd:
 // verderop wordt hij gebruikt vóór de plek waar hij anders zou staan, en een const die
 // pas later in het bestand staat zit in de temporal dead zone. De datalaag-animaties
 // (puls, shockwave) blijven wél draaien: die zijn geen versiering maar de weergave van
