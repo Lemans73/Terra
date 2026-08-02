@@ -192,6 +192,54 @@ export function ephemeris(date) {
   };
 }
 
+/* ------------------------------------------------------------------
+   Fysieke efemeriden van de zon — Meeus hfst. 29.
+
+   WAAROM DIT ER MOET ZIJN. De rotatie-as van de zon staat 7,25 graden
+   scheef op de ecliptica, en de aarde kijkt daardoor het jaar rond
+   afwisselend iets over de noord- en de zuidpool van de zon heen. Die
+   hoek heet B0 en loopt van -7,25 (7 maart) tot +7,25 graden
+   (9 september), met een doorgang door nul rond 6-8 juni en 8-9 december.
+
+   Wie hem negeert, zet elke zonnevlek er bij het schijfmidden
+   0,102 zonsstraal naast — ruim een tiende van de bol — en merkt dat
+   twee keer per jaar niet omdat het dan toevallig klopt.
+
+   Deze functie levert de POOL van de zon, in exact dezelfde vorm als
+   `subSolar` en `subLunar`: een lat/lon in Terra's frame, klaar voor
+   `latLonToUnit()`. Wie de as zo neerzet, krijgt B0 er gratis bij: het
+   is niets anders dan de hoek tussen de as en de richting naar de aarde.
+   B0 wordt hier ook analytisch teruggegeven, zodat de twee tegen elkaar
+   te leggen zijn.
+------------------------------------------------------------------- */
+const SUN_INCLINATION = 7.25;   // helling van het zonne-equatorvlak op de ecliptica
+
+export function solarPhysical(eph) {
+  const T = eph.sun.T;
+  // Lengte van de klimmende knoop van het zonne-equatorvlak (Carrington).
+  const K = 73.6667 + 1.3958333 * (eph.jdUT - 2396758) / 36525;
+  // De pool van een vlak met knoop K en helling I ligt op ecliptische lengte
+  // K - 90 en breedte 90 - I. Dat is de standaardrelatie, niet iets eigens.
+  const lam = K - 90, bet = 90 - SUN_INCLINATION;
+  const eps = meanObliquity(T) + nutation(T).deps;
+  // ecliptisch -> equatoriaal
+  const dec = Math.asin(sind(bet) * cosd(eps) + cosd(bet) * sind(eps) * sind(lam)) / DEG;
+  const ra = norm360(Math.atan2(
+    sind(lam) * cosd(bet) * cosd(eps) - sind(bet) * sind(eps),
+    cosd(lam) * cosd(bet)
+  ) / DEG);
+  return {
+    // De pool in Terra's frame. Zelfde vorm als subSolar: door latLonToUnit
+    // halen levert de eenheidsvector van de rotatie-as.
+    pole: { lat: dec, lon: norm180(ra - eph.gast) },
+    // Heliografische breedte van het schijfmidden. `eph.sun.lambda` is de
+    // schijnbare lengte; het verschil met de ware lengte werkt hier door in
+    // de vierde decimaal en is dus ruim binnen de ruis.
+    B0: Math.asin(sind(eph.sun.lambda - K) * sind(SUN_INCLINATION)) / DEG,
+    K
+  };
+}
+
 export function groundTrack(date, days, samples, which) {
   const spanMs = days * 86400000;
   const t0 = date.getTime() - spanMs / 2;

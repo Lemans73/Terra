@@ -34,7 +34,7 @@
    op +X, de noordpool op +Y.
    ============================================================ */
 
-import { ephemeris, latLonToUnit, DEG } from './sunmoon.js';
+import { ephemeris, latLonToUnit, solarPhysical, DEG } from './sunmoon.js';
 
 export function createSunMoonLayer(THREE, opts = {}) {
   const cfg = Object.assign({
@@ -47,6 +47,7 @@ export function createSunMoonLayer(THREE, opts = {}) {
     sunGlowScale:      5.5,
     moonGlowScale:     2.2,
     sunColorBoost:     [2.6, 2.25, 1.85],
+    photosphereColor:  [1.15, 1.0, 0.82],   // zie de noot bij photosphereMaterial
     subPointRadius:    2.6,
     subPointAltitude: 0.025,
     trackAltitude:    0.018,   // ground tracks zweven net boven het oppervlak
@@ -151,6 +152,53 @@ export function createSunMoonLayer(THREE, opts = {}) {
   sunGroup.add(sunCore, sunGlow);
   loadInto(cfg.sunTextureUrl, sunMaterial);
 
+  /* ---- neutrale fotosfeer ----
+     De zontextuur is een GESCHILDERDE zon, mét eigen vlekken. Echte, gemeten
+     vlekken daar bovenop leggen geeft twee sets die niets met elkaar te maken
+     hebben, en dan is niet meer te zien welke de waarneming is. Zodra de
+     vlekkenlaag aan gaat wijkt de textuur dus voor dit oppervlak.
+
+     Waarom een shader en geen egale kleur of een verlooptextuur: randverduistering
+     hangt af van de KIJKHOEK, niet van een plek op de bol. Een radiale gradiënt in
+     een textuur zou een donkere ring om een vast punt op het oppervlak leggen, die
+     meedraait — precies verkeerd. `dot(normaal, blikrichting)` doet het wel goed en
+     kost vier regels. De lineaire wet I/I0 = 1 - u(1 - mu) met u = 0,6 hoort bij
+     zichtbaar licht rond 550 nm.
+
+     De kleur houdt dezelfde boost boven 1 als het gewone materiaal, anders valt de
+     zon onder de bloom-drempel en verliest hij zijn corona — zie de noot bij
+     `sunColorBoost`. */
+  const photosphereMaterial = track(new THREE.ShaderMaterial({
+    // BEWUST VEEL ZWAKKER DAN `sunColorBoost`. Die boost bestaat om de zon vanaf
+    // de aarde — een schijfje van een paar pixels — boven de bloom-drempel van
+    // 0,75 te tillen. Van dichtbij werkt hij averechts: alles verzadigt naar wit
+    // en de vlekken verdwijnen in de gloed. Met een piek van 1,15 in het midden
+    // blijft het schijfmidden nog nét boven de drempel en gloeit dus, terwijl de
+    // randverduistering het naar 0,46 brengt — onder de drempel, dus daar geen
+    // bloom. Dat is precies het beeld dat een echte opname geeft.
+    uniforms: { uColor: { value: new THREE.Color().setRGB(...cfg.photosphereColor) } },
+    vertexShader: [
+      'varying vec3 vN;',
+      'varying vec3 vV;',
+      'void main() {',
+      '  vec4 mv = modelViewMatrix * vec4(position, 1.0);',
+      '  vN = normalize(normalMatrix * normal);',
+      '  vV = normalize(-mv.xyz);',
+      '  gl_Position = projectionMatrix * mv;',
+      '}'
+    ].join('\n'),
+    fragmentShader: [
+      'uniform vec3 uColor;',
+      'varying vec3 vN;',
+      'varying vec3 vV;',
+      'void main() {',
+      '  float mu = clamp(dot(normalize(vN), normalize(vV)), 0.0, 1.0);',
+      '  float f = 1.0 - 0.6 * (1.0 - mu);',
+      '  gl_FragColor = vec4(uColor * f, 1.0);',
+      '}'
+    ].join('\n')
+  }));
+
   // De maan krijgt een material dat WEL op licht reageert. Daar zit de winst:
   // de fase hoeft niet getekend te worden, hij ontstaat uit de belichting vanaf
   // de zonrichting. De controle daarop staat in de readout — de verlichte
@@ -194,6 +242,106 @@ export function createSunMoonLayer(THREE, opts = {}) {
   const ownLight = new THREE.DirectionalLight(0xfff4e0, 2.6);
   const ownAmbient = new THREE.AmbientLight(0x0b1020, 0.5);
   if (cfg.addLights) group.add(ownLight, ownAmbient);
+
+  /* ---- zonnevlekken ----
+     Actieve gebieden van NOAA SWPC, op hun echte plaats op de bol.
+
+     HET FRAME. NOAA geeft de heliografische breedte en een lengte die gemeten is
+     vanaf de CENTRALE MERIDIAAN zoals gezien vanaf de aarde. Dat is precies het
+     frame dat we al hebben: de richting zon->aarde is `-sunDirection`. Daar zijn
+     maar drie vectoren voor nodig:
+
+        n  de rotatie-as van de zon        (solarPhysical -> latLonToUnit)
+        p  de centrale meridiaan           (aardrichting, geprojecteerd op de evenaar)
+        q  = n x p, de draairichting       (dus: naar het westen)
+
+     Zet je de as zo neer, dan volgt de schuinstand B0 er VANZELF uit; hij hoeft
+     nergens apart in de formule te staan. Geverifieerd: B0 uit deze vectoren valt
+     tot in de vierde decimaal samen met de gesloten formule van Meeus, over het
+     hele jaarbereik van -7,25 tot +7,25 graden.
+
+     HET TEKEN. NOAA telt west NEGATIEF: `longitude: -3` staat in dezelfde regel
+     als `location: "N15W03"`. En west is de kant waar de rotatie een vlek heen
+     draagt, dus L_west = -longitude en die richting is +q.
+
+     DE ACHTERKANT REGELT ZICHZELF. Een gebied voorbij de rand (vandaag regio 4494
+     op 100 graden west) komt op de afgewende helft te liggen en verdwijnt achter de
+     bol. Er is geen zichtbaarheidstoets — in 3D is dat geen uitzondering die je
+     programmeert maar een gevolg.
+
+     DE MAAT IS OVERDREVEN, en dat is een keuze. Een gebied van 120 miljoensten van
+     de zonshelft heeft een straal van ongeveer 0,016 zonsstraal; op deze bol van 22
+     eenheden is dat een derde van een eenheid en dus onzichtbaar. De schaal
+     hieronder houdt de ONDERLINGE verhoudingen (wortel uit het oppervlak) intact
+     maar tilt alles naar een leesbare maat. */
+  const sunspotGroup = new THREE.Group();
+  sunGroup.add(sunspotGroup);
+  const spotMeshes = [];
+  let sunspotData = [];
+  const _Y = new THREE.Vector3(0, 1, 0);
+  const _axis = new THREE.Vector3(), _toEarth = new THREE.Vector3(),
+        _cm = new THREE.Vector3(), _west = new THREE.Vector3(), _spot = new THREE.Vector3();
+
+  const spotRadius = (s) =>
+    Math.max(0.55, Math.min(3.2, 0.55 + Math.sqrt(Math.max(s.area || 0, 4)) / 5));
+
+  /* BOLKAPJES, GEEN PLATTE SCHIJVEN. Een schijf raakt de bol in één punt en loopt
+     er verder vanaf; bij de rand steekt hij daardoor buiten de silhouetlijn uit en
+     hangt een vlek zichtbaar naast de zon. Een kapje van dezelfde bol volgt de
+     kromming exact, kan per definitie niet buiten het silhouet komen, en vertoont
+     bij scherende inval vanzelf de ellipsvorm die een echte vlek daar ook heeft.
+     Dezelfde redenering als bij de eclipsschaduw: laat de meetkunde het doen.
+
+     De geometrie hangt aan de MAAT van de vlek en verandert dus alleen als NOAA
+     een nieuwe dag publiceert — één keer per dag, niet per frame. */
+  function capGeometry(sceneRadius) {
+    // Hoekstraal op de bol. asin omdat de koorde naar de booghoek moet.
+    const alpha = Math.asin(Math.min(0.9, sceneRadius / cfg.sunRadius));
+    return new THREE.SphereGeometry(cfg.sunRadius * 1.002, 24, 12, 0, Math.PI * 2, 0, alpha);
+  }
+
+  function setSunspots(list) {
+    sunspotData = Array.isArray(list) ? list : [];
+    while (spotMeshes.length < sunspotData.length) {
+      const m = new THREE.Mesh(
+        capGeometry(1),
+        track(new THREE.MeshBasicMaterial({ color: 0x2b1508 }))
+      );
+      m.renderOrder = 3;   // ná de gloed-sprite, anders wast die de vlek uit
+      spotMeshes.push(m);
+      sunspotGroup.add(m);
+    }
+    spotMeshes.forEach((m, i) => {
+      m.visible = i < sunspotData.length;
+      if (!m.visible) return;
+      m.geometry.dispose();
+      m.geometry = capGeometry(spotRadius(sunspotData[i]));
+    });
+  }
+
+  // Plaatst de vlekken voor dit moment. `sunDirection` moet al bijgewerkt zijn.
+  function placeSunspots(eph) {
+    if (!sunspotData.length) return;
+    const sp = solarPhysical(eph);
+    vec(latLonToUnit(sp.pole.lat, sp.pole.lon), 1, _axis);
+    _toEarth.copy(sunDirection).negate();
+    _cm.copy(_toEarth).addScaledVector(_axis, -_toEarth.dot(_axis)).normalize();
+    _west.crossVectors(_axis, _cm);
+    for (let i = 0; i < sunspotData.length; i++) {
+      const s = sunspotData[i], m = spotMeshes[i];
+      const B = (s.lat || 0) * DEG, L = -(s.lon || 0) * DEG;
+      _spot.copy(_cm).multiplyScalar(Math.cos(B) * Math.cos(L))
+           .addScaledVector(_west, Math.cos(B) * Math.sin(L))
+           .addScaledVector(_axis, Math.sin(B));
+      // Het kapje ligt al op de goede straal en om de +Y-as; alleen draaien dus,
+      // niet verplaatsen. Geen lookAt: sunspotGroup hangt onder sunGroup en een
+      // quaternion tussen twee eenheidsvectoren is hier eenduidiger.
+      m.quaternion.setFromUnitVectors(_Y, _spot);
+      // De richting vanaf het zonnemiddelpunt, bewaard voor metingen en voor wat
+      // er later aan aanwijzen of etiketten bij komt.
+      (m.userData.dir || (m.userData.dir = new THREE.Vector3())).copy(_spot);
+    }
+  }
 
   /* ---- subpunt-markers ---- */
   // Waar het lichaam op dat moment exact recht boven de aarde staat.
@@ -502,6 +650,7 @@ export function createSunMoonLayer(THREE, opts = {}) {
     vec(latLonToUnit(eph.subLunar.lat, eph.subLunar.lon), 1, moonDirection);
 
     sunGroup.position.copy(sunDirection).multiplyScalar(cfg.sunDistance);
+    if (sunspotGroup.visible) placeSunspots(eph);
 
     // De echte afstand stuurt de getekende afstand, zodat perigeum en apogeum
     // zichtbaar zijn. 356400 en 406700 km zijn de uitersten van de maanbaan.
@@ -567,11 +716,16 @@ export function createSunMoonLayer(THREE, opts = {}) {
     tracks:    [sunTrack, moonTrack],
     ticks:     [sunTicks, moonTicks],
     twilight:  [terminatorGroup],
-    eclipse:   [eclipseGroup]
+    eclipse:   [eclipseGroup],
+    sunspots:  [sunspotGroup]
   };
   function setVisible(what) {
     for (const [k, on] of Object.entries(what)) {
       (targets[k] || []).forEach(o => { o.visible = on; });
+      // De vlekken en de geschilderde textuur sluiten elkaar uit — zie de noot
+      // bij `photosphereMaterial`. Aanzetten wisselt het oppervlak om, uitzetten
+      // legt de textuur terug.
+      if (k === 'sunspots') sunCore.material = on ? photosphereMaterial : sunMaterial;
       // De tracks kosten rekenwerk, dus die bouwen we alleen als ze zichtbaar zijn.
       if (k === 'tracks') {
         tracksVisible = on;
@@ -597,14 +751,15 @@ export function createSunMoonLayer(THREE, opts = {}) {
   setVisible({
     sun: true, moon: true, sunMark: true, moonMark: true,
     leaders: true, alignment: true, tracks: true, ticks: true, twilight: true,
-    eclipse: false
+    eclipse: false, sunspots: false
   });
 
   return {
     group, update, setVisible, setTrackWindow, dispose,
-    setUmbra, setEclipsePath,
+    setUmbra, setEclipsePath, setSunspots,
     sunDirection, moonDirection, config: cfg,
     // handig voor het aanroepende bestand en voor metingen
-    meshes: { sunGroup, moonGroup, sunMarker, moonMarker, sunMaterial, moonMaterial }
+    meshes: { sunGroup, moonGroup, sunMarker, moonMarker, sunMaterial, moonMaterial,
+              sunGlow, sunspotGroup, spotMeshes, photosphereMaterial }
   };
 }

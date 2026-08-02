@@ -467,6 +467,46 @@
             Four circles: sunset, then the end of civil, nautical and astronomical
             twilight &#8212; the Sun at 0&#176;, &#8722;6&#176;, &#8722;12&#176; and &#8722;18&#176; below the horizon.
           </div>
+          <!-- Standaard UIT: de vlekken vervangen de zontextuur, en dat is een
+               ingrijpender beeld dan een lijn erbij. -->
+          <div class="elayer expandable" id="sunspots-toggle">
+            <span class="edot"></span>Sunspots
+            <button class="row-expand" data-note="sunspots-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <span class="estat" id="es-sunspots">off</span>
+          </div>
+          <div class="layer-detail" id="sunspots-note">
+            The active regions NOAA reported today, at their measured heliographic
+            position. Switching this on replaces the painted Sun texture with a
+            plain photosphere, so what you see is the measurement and nothing else.
+            Spot sizes are exaggerated to be visible &#8212; a real group covers a
+            fraction of a percent of the disc &#8212; but their relative sizes are true.
+            Regions past the limb sit on the far side and are hidden by the Sun itself.
+          </div>
+          <button class="apply" id="sunview-btn">Observe the Sun</button>
+        </div>
+      </section>
+
+      <!-- ---------- ZONNEACTIVITEIT ---------- -->
+      <section class="acc" data-acc="cosmos-activity">
+        <button class="acc-head" type="button" aria-expanded="false">
+          <span>Sun activity</span>
+          <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="acc-body">
+          <div class="sunstat" id="sun-activity">
+            <div class="sunstat-row"><span>Sunspot number</span><b id="sa-ssn">&#8212;</b></div>
+            <div class="sunstat-row"><span>Active regions</span><b id="sa-regions">&#8212;</b></div>
+            <div class="sunstat-row"><span>Solar flux 10.7 cm</span><b id="sa-flux">&#8212;</b></div>
+            <div class="sunstat-row"><span>X-ray flux now</span><b id="sa-xray">&#8212;</b></div>
+            <div class="sunstat-row"><span>Strongest today</span><b id="sa-flare">&#8212;</b></div>
+            <h3>Flare probability, next 24 h</h3>
+            <div class="sunstat-row"><span>C class</span><b id="sa-pc">&#8212;</b></div>
+            <div class="sunstat-row"><span>M class</span><b id="sa-pm">&#8212;</b></div>
+            <div class="sunstat-row"><span>X class</span><b id="sa-px">&#8212;</b></div>
+            <div class="sunstat-note" id="sa-note">&#8212;</div>
+          </div>
         </div>
       </section>
 
@@ -1055,6 +1095,13 @@ function eonetAdapters(spec) {
 // zodra de eerste pull vóór de declaratie valt.
 const QUAKE_FLOOR_MAG = 1;
 
+// ---- Zonneactiviteit (NOAA SWPC) ------------------------------
+// Vier bestanden vullen samen dit ene object. Staat om dezelfde reden BOVEN
+// `Adapters`: hun `normalize` schrijft erin. `applySolarState()` moet dus met een
+// half gevulde toestand overweg kunnen — welk bestand het eerst binnen is, ligt
+// niet vast.
+const solarState = { date: null, regions: [], ssn: null, prob: null, xray: null, flux: null };
+
 // Twee adapters delen de laag `quake`. De standaard-merge vervangt álle events
 // van de eigen lagen, dus zouden ze elkaar om beurten wissen: USGS haalt op en
 // gooit EMSC weg, EMSC haalt op en gooit USGS weg. Elke bron vervangt daarom
@@ -1238,6 +1285,85 @@ const Adapters = {
     afterMerge: markQuakeDuplicates
   },
 
+  // NOAA SWPC — de zon. DRIE BESTANDEN, ÉÉN REGEL in het verbindingenpaneel.
+  // ---------------------------------------------------------------------------
+  // Deze drie leveren geen kaartlaag maar getallen, en daarom staat `layers` leeg:
+  // hun `normalize` schrijft in `solarState` en geeft een lege lijst terug, zodat
+  // de standaard-merge de store met rust laat. Het delen van één gezondheidsregel
+  // gaat via `healthId`, hetzelfde mechanisme dat de vier EONET-categorieën als
+  // "NASA EONET" toont.
+  //
+  // Alles vrij toegankelijk, geen sleutel, en services.swpc.noaa.gov stuurt
+  // `access-control-allow-origin: *` — gemeten 2026-08-02. Een kwartier tussen de
+  // rondes: deze producten verversen per uur tot per dag, sneller pollen levert
+  // niets op en is onbeleefd.
+  swpcRegions: {
+    layers: [], healthId: 'swpc', interval: 15 * 60_000,
+    url: 'https://services.swpc.noaa.gov/json/solar_regions.json',
+    normalize(json) {
+      const rows = Array.isArray(json) ? json : [];
+      // Het bestand draagt een maand historie; alleen de laatste dag telt.
+      const last = rows.reduce((a, r) => (r.observed_date > a ? r.observed_date : a), '');
+      solarState.date = last || null;
+      solarState.regions = rows.filter(r => r.observed_date === last).map(r => ({
+        region: r.region,
+        lat: r.latitude,
+        // NOAA telt west NEGATIEF ("N15W03" staat naast longitude -3). De laag
+        // rekent daarmee; hier blijft het getal onaangeroerd zodat er maar één
+        // plek is waar de afspraak vertaald wordt.
+        lon: r.longitude,
+        area: r.area,
+        spots: r.number_spots,
+        spotClass: r.spot_class,
+        magClass: r.mag_class,
+        pC: r.c_flare_probability, pM: r.m_flare_probability, pX: r.x_flare_probability
+      }));
+      solarState.ssn = solarState.regions.reduce((n, r) => n + (r.spots || 0), 0);
+      applySolarState();
+      return [];
+    },
+  },
+
+  swpcProbabilities: {
+    layers: [], healthId: 'swpc', interval: 15 * 60_000,
+    url: 'https://services.swpc.noaa.gov/json/solar_probabilities.json',
+    normalize(json) {
+      const rows = Array.isArray(json) ? json : [];
+      // Nieuwste eerst in dit bestand, maar daar rekenen we niet op.
+      const latest = rows.reduce((a, r) => (!a || r.date > a.date ? r : a), null);
+      solarState.prob = latest
+        ? { c: latest.c_class_1_day, m: latest.m_class_1_day, x: latest.x_class_1_day,
+            date: latest.date }
+        : null;
+      applySolarState();
+      return [];
+    }
+  },
+
+  swpcXray: {
+    layers: [], healthId: 'swpc', interval: 5 * 60_000,
+    url: 'https://services.swpc.noaa.gov/json/goes/primary/xray-flares-latest.json',
+    normalize(json) {
+      const r = Array.isArray(json) ? json[0] : json;
+      solarState.xray = r
+        ? { now: r.current_class || null, max: r.max_class || null, maxTime: r.max_time || null }
+        : null;
+      applySolarState();
+      return [];
+    }
+  },
+
+  swpcFlux: {
+    layers: [], healthId: 'swpc', interval: 60 * 60_000,
+    url: 'https://services.swpc.noaa.gov/products/summary/10cm-flux.json',
+    normalize(json) {
+      const r = Array.isArray(json) ? json[0] : json;
+      solarState.flux = r && r.flux != null ? r.flux : null;
+      applySolarState();
+      return [];
+    }
+  },
+
   // NASA EONET — open natural events, ÉÉN AANROEP PER CATEGORIE.
   // ---------------------------------------------------------------------------
   // Niet terugdraaien naar één gedeelde aanroep met `days=30`. EONET's `days=`
@@ -1384,6 +1510,7 @@ const HEALTH_SOURCES = [
   { id:'usgs',      label:'USGS',              sub:'Earthquakes (global)' },
   { id:'emsc',      label:'EMSC',              sub:'Earthquakes (Euro-Med)' },
   { id:'eonet',     label:'NASA EONET',        sub:'Volcano · fire · storm · sea ice' },
+  { id:'swpc',      label:'NOAA SWPC',         sub:'Sunspots · flares · solar flux' },
   { id:'waqi',      label:'WAQI',              sub:'Air quality' },
   { id:'lightning', label:'Blitzortung relay', sub:'Lightning (local relay)' }
 ];
@@ -2876,6 +3003,19 @@ function animateShader() {
     }
   }
 
+  // Het draaipunt volgt de zon zolang je hem bekijkt — zie de noot bij setSunView().
+  if (sunView && sunMoon) {
+    const sp = sunMoon.meshes.sunGroup.position;
+    if (!sp.equals(_sunAnchor)) {
+      _sunDelta.subVectors(sp, _sunAnchor);
+      // x/y/z rechtstreeks, niet .add() — zie de noot bij lockControlsTarget().
+      const tg = world.controls().target;
+      tg.x += _sunDelta.x; tg.y += _sunDelta.y; tg.z += _sunDelta.z;
+      _cam.position.add(_sunDelta);
+      _sunAnchor.copy(sp);
+    }
+  }
+
   updateHover();      // raycaster-highlight bijwerken
   positionLabels();   // leader-line labels herpositioneren
   requestAnimationFrame(animateShader);
@@ -3318,6 +3458,143 @@ function bindCosmosToggle(id, statId, apply, start = true) {
 // én met de klasse `on` in de markup — drie plekken die één verhaal vertellen.
 bindCosmosToggle('subpoint-toggle', 'es-subpoint',
   on => sunMoon.setVisible({ sunMark: on, moonMark: on }));
+// Standaard uit — zie de noot in de markup. Dit is de vierde plek die met de
+// andere drie moet overeenkomen: markup zonder `on`, `setVisible` onderaan de
+// laag, en de `start`-parameter hier.
+bindCosmosToggle('sunspots-toggle', 'es-sunspots',
+  on => sunMoon.setVisible({ sunspots: on }), false);
+
+// ---- De zon van dichtbij bekijken ----------------------------
+//
+// De vlekken zitten op een bol van straal 22 op 420 eenheden afstand; vanaf de
+// aarde is dat een schijfje van een paar pixels. Deze knop verplaatst het
+// DRAAIPUNT van OrbitControls naar de zon. Daarmee krijg je het omheen draaien
+// er gratis bij — dat is geen bijwerking maar de hele truc.
+//
+// MEEBEWEGEN IS GEEN LUXE. De zon verschuift zodra je aan de tijdschuif trekt, en
+// een draaipunt dat blijft staan laat het beeld dan wegspringen. Per frame
+// schuift het draaipunt mee en de camera met exact hetzelfde verschil, zodat
+// blikrichting en afstand blijven staan.
+//
+// ZOOMGRENZEN MOETEN MEE. `minDistance`/`maxDistance` meten camera-tot-draaipunt,
+// en die staan op de aarde afgestemd (straal 100). Met de zon als draaipunt
+// (straal 22) zou je er dwars doorheen zoomen. OrbitControls klemt bovendien
+// alleen in `update()` — zie de noot bij de zoomgrenzen hierboven.
+let sunView = false;
+const _sunViewPrev = { pos: null, target: null, min: 0, max: 0 };
+const _sunAnchor = new THREE.Vector3();   // waar de zon stond bij de vorige frame
+const _sunShift = new THREE.Vector3();    // hulpvector bij het instappen
+const _sunDelta = new THREE.Vector3();    // verplaatsing per frame
+
+function setSunView(on) {
+  if (!sunMoon || on === sunView) return;
+  const ctl = world.controls(), cam = world.camera();
+  const btn = document.getElementById('sunview-btn');
+  if (on) {
+    _sunViewPrev.pos = cam.position.clone();
+    _sunViewPrev.target = ctl.target.clone();
+    _sunViewPrev.min = ctl.minDistance;
+    _sunViewPrev.max = ctl.maxDistance;
+    pauseAutoRotate();
+    // De corona is een BILLBOARD van 5,5 zonsstralen breed. Vanaf de aarde is dat
+    // een geloofwaardige krans om een schijfje van een paar pixels; van 99
+    // eenheden af beslaat hij het hele scherm en telt hij additief bij alles op,
+    // waardoor de bol verzadigt naar wit en de vlekken verdwijnen. Van dichtbij
+    // is een plat vlak ook gewoon niet wat een corona is.
+    sunMoon.meshes.sunGlow.visible = false;
+    const R = sunMoon.config.sunRadius;
+    const sunPos = sunMoon.meshes.sunGroup.position;
+    // Aan de kant van de aarde gaan staan: dat is de helft die NOAA meet, en de
+    // enige helft waar vlekken van bekend zijn.
+    _sunShift.copy(sunPos).normalize().multiplyScalar(-R * 4.5);
+    flyCamera(cam, ctl, sunPos.clone().add(_sunShift), sunPos.clone(),
+              { min: R * 1.6, max: R * 24 });
+    _sunAnchor.copy(sunPos);
+  } else {
+    sunMoon.meshes.sunGlow.visible = true;
+    flyCamera(cam, ctl, _sunViewPrev.pos, _sunViewPrev.target,
+              { min: _sunViewPrev.min, max: _sunViewPrev.max });
+  }
+  sunView = on;
+  if (btn) btn.textContent = on ? 'Back to Earth' : 'Observe the Sun';
+}
+
+// De sprong van de aarde naar de zon is 400 eenheden; ineens is dat een harde
+// knip waarbij je het spoor bijster raakt. GSAP schrijft alleen in de camera en
+// het draaipunt — OrbitControls rekent daar in zijn eigen `update()` mee, dus de
+// besturing blijft de hele tijd geldig.
+//
+// DE ZOOMGRENZEN GAAN ER TIJDENS DE VLUCHT AF. OrbitControls herberekent de
+// camerapositie elke frame uit draaipunt plus straal, en klemt die straal tussen
+// min en max. Zet je de nieuwe grenzen vóór de vlucht, dan trekt hij de camera
+// onderweg naar zijn eigen grens terug. GEMETEN: de terugweg eindigde op 1018
+// eenheden van de aarde in plaats van de 350 waar hij vandaan kwam — vlak onder
+// de maximumafstand van 1053. Vandaar: grenzen pas zetten als de vlucht klaar is.
+function flyCamera(cam, ctl, pos, target, limits) {
+  const dur = REDUCED_MOTION ? 0 : 1.1;
+  ctl.minDistance = 0.01;
+  ctl.maxDistance = Infinity;
+  gsap.to(cam.position, { x: pos.x, y: pos.y, z: pos.z, duration: dur,
+                          ease: 'power2.inOut', overwrite: true });
+  gsap.to(ctl.target,   { x: target.x, y: target.y, z: target.z, duration: dur,
+                          ease: 'power2.inOut', overwrite: true,
+                          onComplete: () => {
+                            ctl.minDistance = limits.min;
+                            ctl.maxDistance = limits.max;
+                          } });
+}
+
+// GEMETEN, en dit koste de halve blok: globe.gl 2.46.1 zet bij ELKE 'change' van
+// OrbitControls het draaipunt terug op de oorsprong, met `controls.target.setScalar()`
+// vanuit een eigen event-handler. Zolang de aarde het onderwerp is, is dat precies
+// goed — de bol blijft gecentreerd, wat je ook doet. Voor het zonaanzicht is het
+// dodelijk: het draaipunt sprong elke frame terug naar (0,0,0), de camera stond op
+// de juiste plek maar keek naar de aarde, en aan de code was niets te zien.
+//
+// De handler is anoniem en zit in de gebundelde CDN-code, dus opsporen en afkoppelen
+// zou ons aan een versie vastklinken. In plaats daarvan blokkeren we de twee
+// methodes waarmee hij schrijft, en alleen zolang het zonaanzicht aan staat. Onze
+// eigen code (GSAP en het meebewegen per frame) schrijft x/y/z RECHTSTREEKS en loopt
+// er dus langs. Dat is geen toeval maar de voorwaarde waarop dit werkt: wie hier een
+// `target.set(...)` toevoegt, ziet het stilzwijgend niets doen.
+(function lockControlsTarget() {
+  const t = world.controls().target;
+  for (const naam of ['set', 'setScalar']) {
+    const orig = t[naam].bind(t);
+    t[naam] = (...args) => (sunView ? t : orig(...args));
+  }
+})();
+
+document.getElementById('sunview-btn').addEventListener('click', () => setSunView(!sunView));
+
+// Zet de gemeten zonnetoestand in beeld: de getallen in de Cosmos-tab en de
+// vlekken op de bol. Wordt aangeroepen zodra één van de vier NOAA-bestanden
+// binnen is, dus nooit met een volledig gevulde toestand.
+function applySolarState() {
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  const s = solarState;
+  set('sa-ssn', s.ssn == null ? '—' : s.ssn);
+  set('sa-regions', s.regions.length || '—');
+  set('sa-flux', s.flux == null ? '—' : s.flux + ' sfu');
+  set('sa-xray', (s.xray && s.xray.now) || '—');
+  set('sa-flare', (s.xray && s.xray.max) || '—');
+  set('sa-pc', s.prob ? s.prob.c + '%' : '—');
+  set('sa-pm', s.prob ? s.prob.m + '%' : '—');
+  set('sa-px', s.prob ? s.prob.x + '%' : '—');
+  // Gebieden voorbij de rand staan op de afgewende helft. Ze zijn er wel, maar
+  // niemand kan ze zien — dat hoort er eerlijk bij te staan in plaats van dat de
+  // teller en het beeld onverklaarbaar uiteenlopen.
+  const far = s.regions.filter(r => Math.abs(r.lon || 0) > 90).length;
+  set('sa-note', s.date
+    ? 'NOAA SWPC · ' + String(s.date).slice(0, 10) +
+      (far ? ' · ' + far + (far > 1 ? ' regions' : ' region') + ' past the limb' : '')
+    : '—');
+  if (!sunMoon) return;
+  sunMoon.setSunspots(s.regions);
+  // Zonder dit verschijnen verse vlekken pas bij de volgende tick — zie dezelfde
+  // reden bij bindCosmosToggle.
+  updateSunUniform();
+}
 bindCosmosToggle('leaders-toggle', 'es-leaders', on => sunMoon.setVisible({ leaders: on }));
 bindCosmosToggle('align-toggle', 'es-align', on => sunMoon.setVisible({ alignment: on }));
 bindCosmosToggle('tracks-toggle', 'es-tracks', on => sunMoon.setVisible({ tracks: on }));
@@ -4258,6 +4535,9 @@ document.addEventListener('visibilitychange', () => {
 if (IS_LOCAL) {
   window.__terra = {
     store: () => store,
+    sun: () => sunMoon,
+    solar: () => solarState,
+    world: () => world,
     quakeStats() {
       const q = store.filter(d => d.layer === 'quake');
       const by = (s) => q.filter(d => d.src === s);
