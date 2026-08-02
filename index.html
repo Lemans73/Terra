@@ -226,10 +226,6 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
           <span class="tab-label">Layers</span>
         </button>
-        <button class="tab" data-tab="aarde" title="Earth" aria-label="Earth">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><ellipse cx="12" cy="12" rx="4" ry="10"/><line x1="2" y1="12" x2="22" y2="12"/></svg>
-          <span class="tab-label">Earth</span>
-        </button>
         <button class="tab" data-tab="cosmos" title="Sun &amp; Moon" aria-label="Sun and Moon">
           <!-- Halfgevulde cirkel: de ene helft licht, de andere donker. Leest als
                dag en nacht én als maanfase, wat precies is wat deze tab regelt. -->
@@ -248,147 +244,334 @@
 
     <!-- ====================== LAGEN ====================== -->
     <div class="tabpanel show" data-panel="lagen">
-      <section class="acc open" data-acc="layers-list">
-        <button class="acc-head" type="button" aria-expanded="true">
-          <span>Layers</span>
-          <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-        </button>
-        <div class="acc-body">
+
+<section class="acc open" data-acc="layers-list">
+      <button class="acc-head" type="button" aria-expanded="true">
+      <span>Layers</span>
+      <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="acc-body">
       <div class="layer expandable" data-layer="quake">
-        <span class="swatch sw-quake"></span>
-        <span class="name">Earthquakes</span>
-        <!-- De aardbeving-filters staan standaard OPEN: dit is de laag waar de
-             meeste bezoekers iets aan willen bijstellen, en dichtgeklapt is niet te
-             zien dat er filters zijn. -->
-        <button class="row-expand open" data-expand="quake" title="Hide filters" aria-label="Hide filters">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-        </button>
-        <span class="count" id="count-quake">—</span>
+      <span class="swatch sw-quake"></span>
+      <span class="name">Earthquakes</span>
+      <!-- De aardbeving-filters staan standaard OPEN: dit is de laag waar de
+      meeste bezoekers iets aan willen bijstellen, en dichtgeklapt is niet te
+      zien dat er filters zijn. -->
+      <button class="row-expand open" data-expand="quake" title="Hide filters" aria-label="Hide filters">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <span class="count" id="count-quake">—</span>
       </div>
       <div class="layer-detail show" data-detail="quake">
-        <!-- Twee bronnen, elk apart aan of uit. USGS dekt de wereld, EMSC ziet
-             in Europa wat USGS mist (gemeten: 819 tegen 5 over een week M1+).
-             Beide aan betekent ontdubbelen; dat gaat vanzelf. -->
-        <h3>Sources</h3>
-        <div class="srcs" id="quake-sources">
-          <label class="src">
-            <input type="checkbox" data-src="usgs" checked>
-            <span>USGS</span><em>global coverage</em>
-          </label>
-          <label class="src">
-            <input type="checkbox" data-src="emsc" checked>
-            <span>EMSC</span><em>Euro-Med detail</em>
-          </label>
-        </div>
-        <button class="apply" id="src-apply" disabled>Apply</button>
+      <!-- Twee bronnen, elk apart aan of uit. USGS dekt de wereld, EMSC ziet
+      in Europa wat USGS mist (gemeten: 819 tegen 5 over een week M1+).
+      Beide aan betekent ontdubbelen; dat gaat vanzelf. -->
+      <h3>Sources</h3>
+      <div class="srcs" id="quake-sources">
+      <label class="src">
+      <input type="checkbox" data-src="usgs" checked>
+      <span>USGS</span><em>global coverage</em>
+      </label>
+      <label class="src">
+      <input type="checkbox" data-src="emsc" checked>
+      <span>EMSC</span><em>Euro-Med detail</em>
+      </label>
+      </div>
+      <button class="apply" id="src-apply" disabled>Apply</button>
 
-        <h3>Magnitude</h3>
-        <div class="presets" id="mag-presets">
-          <button class="preset" data-mag="1">All</button>
-          <button class="preset active" data-mag="2">M2+</button>
-          <button class="preset" data-mag="3">M3+</button>
-          <button class="preset" data-mag="4">M4+</button>
-          <button class="preset" data-mag="5">M5+</button>
-        </div>
+      <h3>Magnitude</h3>
+      <div class="presets" id="mag-presets">
+      <button class="preset" data-mag="1">All</button>
+      <button class="preset active" data-mag="2">M2+</button>
+      <button class="preset" data-mag="3">M3+</button>
+      <button class="preset" data-mag="4">M4+</button>
+      <button class="preset" data-mag="5">M5+</button>
+      </div>
 
-        <h3>Upper limit</h3>
-        <div class="presets" id="magmax-presets">
-          <button class="preset active" data-magmax="">None</button>
-          <button class="preset" data-magmax="2">≤ M2</button>
-          <button class="preset" data-magmax="3">≤ M3</button>
-          <button class="preset" data-magmax="4">≤ M4</button>
-          <button class="preset" data-magmax="5">≤ M5</button>
-        </div>
+      <h3>Upper limit</h3>
+      <div class="presets" id="magmax-presets">
+      <button class="preset active" data-magmax="">None</button>
+      <button class="preset" data-magmax="2">≤ M2</button>
+      <button class="preset" data-magmax="3">≤ M3</button>
+      <button class="preset" data-magmax="4">≤ M4</button>
+      <button class="preset" data-magmax="5">≤ M5</button>
+      </div>
 
-        <h3>Time window</h3>
-        <div class="presets" id="presets">
-          <button class="preset" data-win="hour">Hour</button>
-          <button class="preset active" data-win="day">Day</button>
-          <button class="preset" data-win="week">Week</button>
-        </div>
-        <div class="slider-wrap">
-          <input type="range" id="slider" min="0" max="100" value="100" />
-          <div class="slider-label">
-            <span>older</span>
-            <span id="slider-val">full window</span>
-          </div>
-        </div>
-        <h3>Depth</h3>
-        <div class="depth-scale"></div>
-        <div class="depth-label"><span>shallow</span><span>deep</span></div>
+      <h3>Time window</h3>
+      <div class="presets" id="presets">
+      <button class="preset" data-win="hour">Hour</button>
+      <button class="preset active" data-win="day">Day</button>
+      <button class="preset" data-win="week">Week</button>
+      </div>
+      <div class="slider-wrap">
+      <input type="range" id="slider" min="0" max="100" value="100" />
+      <div class="slider-label">
+      <span>older</span>
+      <span id="slider-val">full window</span>
+      </div>
+      </div>
+      <h3>Depth</h3>
+      <div class="depth-scale"></div>
+      <div class="depth-label"><span>shallow</span><span>deep</span></div>
       </div>
 
       <div class="layer" data-layer="volcano">
-        <span class="swatch sw-volcano"></span>
-        <span class="name">Volcanoes</span>
-        <span class="count" id="count-volcano">—</span>
+      <span class="swatch sw-volcano"></span>
+      <span class="name">Volcanoes</span>
+      <span class="count" id="count-volcano">—</span>
       </div>
       <div class="layer" data-layer="wildfire">
-        <span class="swatch sw-wildfire"></span>
-        <span class="name">Wildfires</span>
-        <span class="count" id="count-wildfire">—</span>
+      <span class="swatch sw-wildfire"></span>
+      <span class="name">Wildfires</span>
+      <span class="count" id="count-wildfire">—</span>
       </div>
       <div class="layer" data-layer="lightning">
-        <span class="swatch sw-lightning"></span>
-        <span class="name">Lightning</span>
-        <span class="count" id="count-lightning">—</span>
+      <span class="swatch sw-lightning"></span>
+      <span class="name">Lightning</span>
+      <span class="count" id="count-lightning">—</span>
       </div>
       <div class="layer" data-layer="storm">
-        <span class="swatch sw-storm"></span>
-        <span class="name">Storms</span>
-        <span class="count" id="count-storm">—</span>
+      <span class="swatch sw-storm"></span>
+      <span class="name">Storms</span>
+      <span class="count" id="count-storm">—</span>
       </div>
       <div class="layer" data-layer="ice">
-        <span class="swatch sw-ice"></span>
-        <span class="name">Sea ice</span>
-        <span class="count" id="count-ice">—</span>
+      <span class="swatch sw-ice"></span>
+      <span class="name">Sea ice</span>
+      <span class="count" id="count-ice">—</span>
       </div>
       <div class="layer off" data-layer="aqi">
-        <span class="swatch sw-aqi"></span>
-        <span class="name">Air quality</span>
-        <button class="aqi-refresh" id="aqi-refresh" title="Reload stations in view (max 600)" aria-label="Reload stations in view">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-        </button>
-        <span class="count" id="count-aqi">—</span>
+      <span class="swatch sw-aqi"></span>
+      <span class="name">Air quality</span>
+      <button class="aqi-refresh" id="aqi-refresh" title="Reload stations in view (max 600)" aria-label="Reload stations in view">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+      </button>
+      <span class="count" id="count-aqi">—</span>
       </div>
-        </div>
+      </div>
+      </section>
+
+      <!-- Overlays stonden tot 2026-08-02 in een eigen Aarde-tab, met als reden dat
+           Layers LIVE gebeurtenissen met een teller toont en overlays statische
+           kaartlagen zonder teller zijn. Dat onderscheid is er nog steeds — het zit nu
+           in de SECTIE in plaats van in de tab. Een eigen tab voor drie schakelaars
+           was te veel eer, en de tabrij zat vol. -->
+<section class="acc" data-acc="earth-overlays">
+      <button class="acc-head" type="button" aria-expanded="false">
+      <span>Earth overlays</span>
+      <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="acc-body">
+      <div class="elayer" data-overlay="plates"><span class="edot"></span>Tectonic plates<span class="estat" id="es-plates">off</span></div>
+      <div class="elayer" data-overlay="borders"><span class="edot"></span>Country borders<span class="estat" id="es-borders">off</span></div>
+      <div class="elayer" data-overlay="names"><span class="edot"></span>Country names<span class="estat" id="es-names">off</span></div>
+      </div>
+      </section>
+
+<section class="acc" data-acc="cosmos-layers">
+      <button class="acc-head" type="button" aria-expanded="false">
+      <span>Sun &amp; Moon layers</span>
+      <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="acc-body">
+      <!-- Zon en maan hebben geen schakelaar: die horen er altijd te zijn. -->
+      <div class="elayer on" id="subpoint-toggle"><span class="edot"></span>Sub-points<span class="estat" id="es-subpoint">on</span></div>
+      <div class="elayer on" id="leaders-toggle"><span class="edot"></span>Leader lines<span class="estat" id="es-leaders">on</span></div>
+      <div class="elayer on" id="align-toggle"><span class="edot"></span>Sun&#8211;Moon line<span class="estat" id="es-align">on</span></div>
+      <div class="elayer on" id="tracks-toggle"><span class="edot"></span>Ground tracks<span class="estat" id="es-tracks">on</span></div>
+      <div class="elayer on" id="ticks-toggle"><span class="edot"></span>Hour marks<span class="estat" id="es-ticks">on</span></div>
+      <!-- De uitleg zit achter DEZELFDE uitklap-chevron als de
+      aardbeving-filters, en staat in de rij zelf. Als losse knop eronder
+      ("What are these?") was niet te zien waar hij bij hoorde. -->
+      <div class="elayer on expandable" id="twilight-toggle">
+      <span class="edot"></span>Twilight bands
+      <button class="row-expand" data-note="twilight-note" title="What are these?" aria-label="What are these?" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <span class="estat" id="es-twilight">on</span>
+      </div>
+      <div class="layer-detail" id="twilight-note">
+      Four circles: sunset, then the end of civil, nautical and astronomical
+      twilight &#8212; the Sun at 0&#176;, &#8722;6&#176;, &#8722;12&#176; and &#8722;18&#176; below the horizon.
+      </div>
+
+      </div>
       </section>
     </div>
 
-    <!-- ====================== AARDE ====================== -->
-    <div class="tabpanel" data-panel="aarde">
+    <div class="tabpanel" data-panel="cosmos">
 
-      <!-- ---------- OVERLAYS ----------
-           Blijven hier en verhuizen niet naar Layers: de Layers-tab toont LIVE
-           gebeurtenissen met een teller, deze overlays zijn statische kaartlagen
-           zonder teller. Dat onderscheid is de reden dat de tellers betekenis
-           hebben. -->
-      <section class="acc open" data-acc="earth-overlays">
-        <button class="acc-head" type="button" aria-expanded="true">
-          <span>Overlays</span>
+<section class="acc open" data-acc="cosmos-moment">
+      <button class="acc-head" type="button" aria-expanded="true">
+      <span>Moment</span>
+      <!-- De i-knop zit IN de kop maar buiten de klik die in- en uitklapt:
+      daarom een eigen element met stopPropagation, niet genest in de
+      head-knop zelf (een button in een button is bovendien ongeldig). -->
+      <span class="acc-info" role="button" tabindex="0" id="moment-info-btn"
+      aria-expanded="false" title="What does this affect?"
+      aria-label="What does this affect?">i</span>
+      <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="acc-body">
+      <div class="cosmos-note" id="moment-info" hidden>
+      These controls move the Sun, the Moon and the day/night cycle only.
+      The live layers &#8212; earthquakes, volcanoes, wildfires and the rest &#8212;
+      always show the present, whatever moment you pick here.
+      </div>
+
+      <h3>Date &amp; time</h3>
+      <input type="datetime-local" id="time-input" class="time-input"
+      aria-label="Date and time for Sun and Moon" />
+
+      <!-- Het venster staat v&#243;&#243;r de slider omdat het de schaal ervan bepaalt. -->
+      <h3>Track window</h3>
+      <div class="presets" id="track-presets">
+      <button class="preset" data-days="1">1 d</button>
+      <button class="preset active" data-days="3">3 d</button>
+      <button class="preset" data-days="7">7 d</button>
+      <button class="preset" data-days="27.32">Month</button>
+      </div>
+
+      <h3>Shift within window</h3>
+      <div class="slider-wrap">
+      <input type="range" id="time-slider" class="range" min="-216" max="216" step="1" value="0"
+      aria-label="Shift the moment within the track window" />
+      <div class="slider-label">
+      <span id="time-span">&#177; 1 d 12 h</span>
+      <span id="time-val">now</span>
+      </div>
+      </div>
+
+      <h3>Playback</h3>
+      <div class="play-row">
+      <button class="play-btn" id="play-back" title="Play backwards" aria-label="Play backwards">&#9664;</button>
+      <button class="play-btn" id="play-pause" title="Pause" aria-label="Pause" disabled>&#10073;&#10073;</button>
+      <button class="play-btn" id="play-fwd" title="Play forwards" aria-label="Play forwards">&#9654;</button>
+      <span class="play-speed-val" id="play-speed-val">6 h/s</span>
+      </div>
+      <input type="range" id="play-speed" class="range" min="0" max="100" step="1" value="50"
+      aria-label="Playback speed" />
+      <button class="time-reset" id="time-reset" hidden>Back to now</button>
+      </div>
+      </section>
+
+<section class="acc" data-acc="cosmos-eclipse">
+      <button class="acc-head" type="button" aria-expanded="false">
+      <span>Eclipse</span>
+      <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="acc-body">
+      <div class="elayer on" id="eclipse-toggle"><span class="edot"></span>Shadow on Earth<span class="estat" id="es-eclipse">on</span></div>
+      <div class="eclipse-state" id="eclipse-state">No eclipse at this moment.</div>
+      <!-- Zonder deze knoppen zou vrijwel niemand de schaduw ooit te zien
+      krijgen: er zijn twee tot vijf zonsverduisteringen per jaar, elk een
+      uur of twee lang. -->
+      <div class="eclipse-nav">
+      <button class="play-btn" id="eclipse-prev" title="Previous eclipse">&#9664; Previous</button>
+      <button class="play-btn" id="eclipse-jump" title="Next eclipse">Next &#9654;</button>
+      </div>
+      </div>
+      </section>
+
+<section class="acc open" data-acc="cosmos-readings">
+      <button class="acc-head" type="button" aria-expanded="true">
+      <span>Readings</span>
+      <span class="acc-sub" id="readout-head">right now</span>
+      <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="acc-body">
+      <dl class="cosmos-readout">
+      <dt>Sub-solar point</dt>
+      <dd id="rd-subsolar">&#8212;</dd>
+      <dt>Sub-lunar point</dt>
+      <dd id="rd-sublunar">&#8212;</dd>
+      <dt>Moon phase</dt>
+      <dd class="phase-row">
+      <canvas id="phase-canvas" width="128" height="128" aria-hidden="true"></canvas>
+      <span id="rd-phase">&#8212;</span>
+      </dd>
+      <dt>Illuminated</dt>
+      <dd id="rd-fraction">&#8212;</dd>
+      <dt>Elongation</dt>
+      <dd id="rd-elongation">&#8212;</dd>
+      <dt>Moon distance</dt>
+      <dd id="rd-distance">&#8212;</dd>
+      </dl>
+      <div class="cosmos-note">
+      Positions are calculated in the browser from Meeus&#39; algorithms &#8212; no feed,
+      no key. Sun and Moon are drawn at compressed distances so both stay
+      readable; the real Moon distance is in the readout above.
+      </div>
+      </div>
+      </section>
+
+<section class="acc open" data-acc="cosmos-activity">
+      <button class="acc-head" type="button" aria-expanded="true">
+      <span>Sun activity</span>
+      <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="acc-body">
+      <!-- Standaard AAN: dit is een meting, en die hoort te staan; de
+      geschilderde zontextuur is dat niet. -->
+      <div class="elayer on expandable" id="sunspots-toggle">
+      <span class="edot"></span>Sunspots
+      <button class="row-expand" data-note="sunspots-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <span class="estat" id="es-sunspots">on</span>
+      </div>
+      <div class="layer-detail" id="sunspots-note">
+      Drawn automatically from whatever NOAA published today, at the measured
+      heliographic position. The painted texture steps aside so you see the
+      data and nothing else. Sizes are exaggerated to be visible; their
+      proportions are true.
+      </div>
+      <div class="sunstat" id="sun-activity">
+      <div class="sunstat-row"><span>Sunspot number</span><b id="sa-ssn">&#8212;</b></div>
+      <div class="sunstat-row"><span>Active regions</span><b id="sa-regions">&#8212;</b></div>
+      <div class="sunstat-row"><span>Solar flux 10.7 cm</span><b id="sa-flux">&#8212;</b></div>
+      <div class="sunstat-row"><span>X-ray flux now</span><b id="sa-xray">&#8212;</b></div>
+      <div class="sunstat-row"><span>Strongest today</span><b id="sa-flare">&#8212;</b></div>
+      <h3>Flare probability, next 24 h</h3>
+      <div class="sunstat-row"><span>C class</span><b id="sa-pc">&#8212;</b></div>
+      <div class="sunstat-row"><span>M class</span><b id="sa-pm">&#8212;</b></div>
+      <div class="sunstat-row"><span>X class</span><b id="sa-px">&#8212;</b></div>
+      <div class="sunstat-note" id="sa-note">&#8212;</div>
+      </div>
+      <button class="apply" id="sunview-btn">Observe the Sun</button>
+      </div>
+      </section>
+    </div>
+
+    <div class="tabpanel" data-panel="instellingen">
+
+<section class="acc open" data-acc="settings-prefs">
+      <button class="acc-head" type="button" aria-expanded="true">
+      <span>Preferences</span>
+      <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="acc-body">
+      <div class="elayer on" id="sound-toggle"><span class="edot"></span>Notification sound<span class="estat" id="es-sound">on</span></div>
+      <div class="elayer on" id="label-toggle"><span class="edot"></span>Quake labels<span class="estat" id="es-label">on</span></div>
+      <div class="elayer on" id="rotate-toggle"><span class="edot"></span>Auto-rotate<span class="estat" id="es-rotate">on</span></div>
+      </div>
+      </section>
+
+      <!-- ---------- AARDE-TEXTUREN ----------
+           Earth layers en Texture quality zijn hier samengevoegd: het zijn allebei
+           instellingen over hoe de aarde WORDT GETEKEND, niet over wat je erop ziet.
+           Ze stonden in een eigen Aarde-tab, die daarmee overbodig werd.
+
+           #earth-layers en #aarde-empty moeten hier binnen blijven staan:
+           updateEarthLayers() verbergt het eerste en toont het tweede zodra je naar
+           de schematische weergave wisselt, waar texturen geen rol spelen. -->
+      <section class="acc" data-acc="settings-textures">
+        <button class="acc-head" type="button" aria-expanded="false">
+          <span>Earth textures</span>
           <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
         <div class="acc-body">
-          <div class="elayer" data-overlay="plates"><span class="edot"></span>Tectonic plates<span class="estat" id="es-plates">off</span></div>
-          <div class="elayer" data-overlay="borders"><span class="edot"></span>Country borders<span class="estat" id="es-borders">off</span></div>
-          <div class="elayer" data-overlay="names"><span class="edot"></span>Country names<span class="estat" id="es-names">off</span></div>
-        </div>
-      </section>
-
-      <!-- ---------- AARDE-LAGEN ----------
-           `Day texture` en `Fog` zijn hier weg. De dagtextuur staat altijd aan (de
-           aarde zonder is een zwarte bol) en de mist altijd uit. De mist-code
-           blijft wel bestaan, aangestuurd door PARAMS: het is een werkende optie
-           die zo terug kan. -->
-      <!-- Deze id wordt door updateEarthLayers() gebruikt om het hele blok te
-           verbergen in de schematische weergave, waar texturen geen rol spelen. -->
-      <div id="earth-layers">
-        <section class="acc" data-acc="earth-layers">
-          <button class="acc-head" type="button" aria-expanded="false">
-            <span>Earth layers</span>
-            <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-          </button>
-          <div class="acc-body">
+          <div class="earth-layers" id="earth-layers">
             <div class="elayer" data-tex="night"><span class="edot"></span>Night lights<span class="estat" id="es-night">&#8212;</span></div>
             <div class="elayer" data-tex="clouds"><span class="edot"></span>Clouds<span class="estat" id="es-clouds">&#8212;</span></div>
             <div class="elayer" data-tex="specular"><span class="edot"></span>Water reflection<span class="estat" id="es-specular">&#8212;</span></div>
@@ -402,15 +585,7 @@
               </div>
               <input type="range" id="night-slider" class="range" min="0" max="60" value="12" />
             </div>
-          </div>
-        </section>
-
-        <section class="acc" data-acc="earth-quality">
-          <button class="acc-head" type="button" aria-expanded="false">
-            <span>Texture quality</span>
-            <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-          </button>
-          <div class="acc-body">
+            <h3>Texture quality</h3>
             <div class="texq" id="texq">
               <button class="texq-opt" data-q="2k">
                 <span class="texq-name">Standard</span>
@@ -423,225 +598,22 @@
             </div>
             <div class="texq-note" id="texq-note">8K is sharper up close, but downloads about 29 MB extra.</div>
           </div>
-        </section>
+          <div class="aarde-empty" id="aarde-empty">The Earth textures only apply in <b>Realistic</b> mode. Switch mode at the top to control them.</div>
+        </div>
+      </section>
+
+<section class="acc" data-acc="settings-connections">
+      <button class="acc-head" type="button" aria-expanded="false">
+      <span>Connections</span>
+      <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="acc-body">
+      <div class="health" id="health-list"></div>
+      <button class="health-test" id="health-test">Test now</button>
       </div>
-
-      <!-- Staat BUITEN de accordions: in de schematische weergave zijn de secties
-           hierboven verborgen, en dan moet deze uitleg juist wel te zien zijn. -->
-      <div class="aarde-empty" id="aarde-empty">The Earth layers only apply in <b>Realistic</b> mode. Switch mode at the top to control textures and wireframe.</div>
-    </div>
-
-    <!-- ====================== COSMOS ======================
-         Zon en maan. Bewust karig in deel 1: twee schakelaars en een readout,
-         genoeg om te kunnen testen. De tijdkiezer, de ground tracks en het
-         paneel-redesign horen bij deel 2. -->
-    <div class="tabpanel" data-panel="cosmos">
-
-      <!-- ACCORDION. Het paneel is 248px breed en deze tab heeft inmiddels tien
-           schakelaars, een datumkiezer, drie sliders en een readout. Alles tegelijk
-           tonen maakt er een lijst van waarin niets meer opvalt; per sectie in- en
-           uitklappen houdt zichtbaar wat je op dat moment gebruikt.
-           `open` in de markup is de beginstand. -->
-
-      <!-- ---------- LAGEN ---------- -->
-      <section class="acc open" data-acc="cosmos-layers">
-        <button class="acc-head" type="button" aria-expanded="true">
-          <span>Layers</span>
-          <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-        </button>
-        <div class="acc-body">
-          <!-- Zon en maan hebben geen schakelaar: die horen er altijd te zijn. -->
-          <div class="elayer on" id="subpoint-toggle"><span class="edot"></span>Sub-points<span class="estat" id="es-subpoint">on</span></div>
-          <div class="elayer on" id="leaders-toggle"><span class="edot"></span>Leader lines<span class="estat" id="es-leaders">on</span></div>
-          <div class="elayer on" id="align-toggle"><span class="edot"></span>Sun&#8211;Moon line<span class="estat" id="es-align">on</span></div>
-          <div class="elayer on" id="tracks-toggle"><span class="edot"></span>Ground tracks<span class="estat" id="es-tracks">on</span></div>
-          <div class="elayer on" id="ticks-toggle"><span class="edot"></span>Hour marks<span class="estat" id="es-ticks">on</span></div>
-          <!-- De uitleg zit achter DEZELFDE uitklap-chevron als de
-               aardbeving-filters, en staat in de rij zelf. Als losse knop eronder
-               ("What are these?") was niet te zien waar hij bij hoorde. -->
-          <div class="elayer on expandable" id="twilight-toggle">
-            <span class="edot"></span>Twilight bands
-            <button class="row-expand" data-note="twilight-note" title="What are these?" aria-label="What are these?" aria-expanded="false">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-            </button>
-            <span class="estat" id="es-twilight">on</span>
-          </div>
-          <div class="layer-detail" id="twilight-note">
-            Four circles: sunset, then the end of civil, nautical and astronomical
-            twilight &#8212; the Sun at 0&#176;, &#8722;6&#176;, &#8722;12&#176; and &#8722;18&#176; below the horizon.
-          </div>
-
-        </div>
       </section>
 
-<section class="acc open" data-acc="cosmos-moment">
-        <button class="acc-head" type="button" aria-expanded="true">
-          <span>Moment</span>
-          <!-- De i-knop zit IN de kop maar buiten de klik die in- en uitklapt:
-               daarom een eigen element met stopPropagation, niet genest in de
-               head-knop zelf (een button in een button is bovendien ongeldig). -->
-          <span class="acc-info" role="button" tabindex="0" id="moment-info-btn"
-                aria-expanded="false" title="What does this affect?"
-                aria-label="What does this affect?">i</span>
-          <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-        </button>
-        <div class="acc-body">
-          <div class="cosmos-note" id="moment-info" hidden>
-            These controls move the Sun, the Moon and the day/night cycle only.
-            The live layers &#8212; earthquakes, volcanoes, wildfires and the rest &#8212;
-            always show the present, whatever moment you pick here.
-          </div>
-
-          <h3>Date &amp; time</h3>
-          <input type="datetime-local" id="time-input" class="time-input"
-                 aria-label="Date and time for Sun and Moon" />
-
-          <!-- Het venster staat v&#243;&#243;r de slider omdat het de schaal ervan bepaalt. -->
-          <h3>Track window</h3>
-          <div class="presets" id="track-presets">
-            <button class="preset" data-days="1">1 d</button>
-            <button class="preset active" data-days="3">3 d</button>
-            <button class="preset" data-days="7">7 d</button>
-            <button class="preset" data-days="27.32">Month</button>
-          </div>
-
-          <h3>Shift within window</h3>
-          <div class="slider-wrap">
-            <input type="range" id="time-slider" class="range" min="-216" max="216" step="1" value="0"
-                   aria-label="Shift the moment within the track window" />
-            <div class="slider-label">
-              <span id="time-span">&#177; 1 d 12 h</span>
-              <span id="time-val">now</span>
-            </div>
-          </div>
-
-          <h3>Playback</h3>
-          <div class="play-row">
-            <button class="play-btn" id="play-back" title="Play backwards" aria-label="Play backwards">&#9664;</button>
-            <button class="play-btn" id="play-pause" title="Pause" aria-label="Pause" disabled>&#10073;&#10073;</button>
-            <button class="play-btn" id="play-fwd" title="Play forwards" aria-label="Play forwards">&#9654;</button>
-            <span class="play-speed-val" id="play-speed-val">6 h/s</span>
-          </div>
-          <input type="range" id="play-speed" class="range" min="0" max="100" step="1" value="50"
-                 aria-label="Playback speed" />
-          <button class="time-reset" id="time-reset" hidden>Back to now</button>
-        </div>
-      </section>
-
-<section class="acc" data-acc="cosmos-activity">
-        <button class="acc-head" type="button" aria-expanded="false">
-          <span>Sun activity</span>
-          <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-        </button>
-        <div class="acc-body">
-          <!-- Standaard AAN: dit is een meting, en die hoort te staan; de
-               geschilderde zontextuur is dat niet. -->
-          <div class="elayer on expandable" id="sunspots-toggle">
-            <span class="edot"></span>Sunspots
-            <button class="row-expand" data-note="sunspots-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-            </button>
-            <span class="estat" id="es-sunspots">on</span>
-          </div>
-          <div class="layer-detail" id="sunspots-note">
-            Drawn automatically from whatever NOAA published today, at the measured
-            heliographic position. The painted texture steps aside so you see the
-            data and nothing else. Sizes are exaggerated to be visible; their
-            proportions are true.
-          </div>
-          <div class="sunstat" id="sun-activity">
-            <div class="sunstat-row"><span>Sunspot number</span><b id="sa-ssn">&#8212;</b></div>
-            <div class="sunstat-row"><span>Active regions</span><b id="sa-regions">&#8212;</b></div>
-            <div class="sunstat-row"><span>Solar flux 10.7 cm</span><b id="sa-flux">&#8212;</b></div>
-            <div class="sunstat-row"><span>X-ray flux now</span><b id="sa-xray">&#8212;</b></div>
-            <div class="sunstat-row"><span>Strongest today</span><b id="sa-flare">&#8212;</b></div>
-            <h3>Flare probability, next 24 h</h3>
-            <div class="sunstat-row"><span>C class</span><b id="sa-pc">&#8212;</b></div>
-            <div class="sunstat-row"><span>M class</span><b id="sa-pm">&#8212;</b></div>
-            <div class="sunstat-row"><span>X class</span><b id="sa-px">&#8212;</b></div>
-            <div class="sunstat-note" id="sa-note">&#8212;</div>
-          </div>
-          <button class="apply" id="sunview-btn">Observe the Sun</button>
-        </div>
-      </section>
-
-<section class="acc" data-acc="cosmos-readings">
-        <button class="acc-head" type="button" aria-expanded="false">
-          <span>Readings</span>
-          <span class="acc-sub" id="readout-head">right now</span>
-          <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-        </button>
-        <div class="acc-body">
-          <dl class="cosmos-readout">
-            <dt>Sub-solar point</dt>
-            <dd id="rd-subsolar">&#8212;</dd>
-            <dt>Sub-lunar point</dt>
-            <dd id="rd-sublunar">&#8212;</dd>
-            <dt>Moon phase</dt>
-            <dd class="phase-row">
-              <canvas id="phase-canvas" width="128" height="128" aria-hidden="true"></canvas>
-              <span id="rd-phase">&#8212;</span>
-            </dd>
-            <dt>Illuminated</dt>
-            <dd id="rd-fraction">&#8212;</dd>
-            <dt>Elongation</dt>
-            <dd id="rd-elongation">&#8212;</dd>
-            <dt>Moon distance</dt>
-            <dd id="rd-distance">&#8212;</dd>
-          </dl>
-          <div class="cosmos-note">
-            Positions are calculated in the browser from Meeus&#39; algorithms &#8212; no feed,
-            no key. Sun and Moon are drawn at compressed distances so both stay
-            readable; the real Moon distance is in the readout above.
-          </div>
-        </div>
-      </section>
-
-<section class="acc" data-acc="cosmos-eclipse">
-        <button class="acc-head" type="button" aria-expanded="false">
-          <span>Eclipse</span>
-          <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-        </button>
-        <div class="acc-body">
-          <div class="elayer on" id="eclipse-toggle"><span class="edot"></span>Shadow on Earth<span class="estat" id="es-eclipse">on</span></div>
-          <div class="eclipse-state" id="eclipse-state">No eclipse at this moment.</div>
-          <!-- Zonder deze knoppen zou vrijwel niemand de schaduw ooit te zien
-               krijgen: er zijn twee tot vijf zonsverduisteringen per jaar, elk een
-               uur of twee lang. -->
-          <div class="eclipse-nav">
-            <button class="play-btn" id="eclipse-prev" title="Previous eclipse">&#9664; Previous</button>
-            <button class="play-btn" id="eclipse-jump" title="Next eclipse">Next &#9654;</button>
-          </div>
-        </div>
-      </section>
-    </div>
-
-    <!-- ====================== INSTELLINGEN ====================== -->
-    <div class="tabpanel" data-panel="instellingen">
-      <section class="acc open" data-acc="settings-prefs">
-        <button class="acc-head" type="button" aria-expanded="true">
-          <span>Preferences</span>
-          <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-        </button>
-        <div class="acc-body">
-          <div class="elayer on" id="sound-toggle"><span class="edot"></span>Notification sound<span class="estat" id="es-sound">on</span></div>
-          <div class="elayer on" id="label-toggle"><span class="edot"></span>Quake labels<span class="estat" id="es-label">on</span></div>
-          <div class="elayer on" id="rotate-toggle"><span class="edot"></span>Auto-rotate<span class="estat" id="es-rotate">on</span></div>
-        </div>
-      </section>
-
-      <section class="acc" data-acc="settings-connections">
-        <button class="acc-head" type="button" aria-expanded="false">
-          <span>Connections</span>
-          <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-        </button>
-        <div class="acc-body">
-          <div class="health" id="health-list"></div>
-          <button class="health-test" id="health-test">Test now</button>
-        </div>
-      </section>
-
-      <details class="credits">
+      <details class="credits" open>
         <summary>Sources &amp; licenses</summary>
         <dl>
           <dt>Textures</dt>
