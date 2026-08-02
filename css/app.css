@@ -412,14 +412,33 @@
     display: flex; gap: 4px; margin: 0; padding: 3px;
     background: rgba(255,255,255,0.04); border: 1px solid var(--hair); border-radius: 9px;
   }
+  /* Vier icoon-tabs. Inactief zijn ze allemaal even breed en tonen ze alleen hun
+     icoon; de actieve groeit en schuift zijn label erbij. `flex: 0 0 auto` op de
+     inactieve houdt ze op een vaste maat, zodat het label van de actieve de
+     resterende ruimte krijgt in plaats van alle vier iets te verbreden. */
   .panel .tab {
-    flex: 1; padding: 6px 8px; font-family: inherit; font-size: 11px; font-weight: 600;
+    flex: 0 0 auto;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 6px 8px; font-family: inherit; font-size: 11px; font-weight: 600;
     letter-spacing: 0.04em; color: var(--ink-dim); background: transparent; border: none;
-    border-radius: 6px; cursor: pointer; transition: color 0.15s, background 0.15s;
+    border-radius: 6px; cursor: pointer; overflow: hidden;
+    /* Zonder dit selecteert een dubbelklik op een tab het label, wat een blauwe
+       vlek achterlaat in de kop. Tabs zijn knoppen, geen tekst om te kopiëren. */
+    -webkit-user-select: none; user-select: none;
+    transition: color 0.15s, background 0.15s, flex-grow 0.18s;
   }
+  .panel .tab svg { width: 15px; height: 15px; flex-shrink: 0; display: block; }
   .panel .tab:hover { color: var(--ink); }
-  .panel .tab.active { color: var(--ink); background: rgba(255,255,255,0.10); }
-  .panel .tab[data-tab="instellingen"] { flex: 0 0 32px; font-size: 13px; }
+  .panel .tab.active {
+    flex: 1 1 auto; color: var(--ink); background: rgba(255,255,255,0.10);
+  }
+  /* Icoon en label wisselen elkaar af: inactief alleen het icoon, actief alleen de
+     tekst. Beide met `display: none` en niet met `opacity`, want een verborgen
+     element dat ruimte blijft opeisen zou de rij laten overlopen. */
+  .panel .tab .tab-label { display: none; white-space: nowrap; }
+  .panel .tab.active .tab-label { display: inline; }
+  .panel .tab.active svg { display: none; }
+  @media (prefers-reduced-motion: reduce) { .panel .tab { transition: none; } }
   .tabpanel { display: none; }
   .tabpanel.show { display: block; }
 
@@ -436,11 +455,19 @@
   .layer-detail { display: none; margin: 2px 0 10px; padding: 11px 12px;
     background: rgba(255,255,255,0.03); border: 1px solid var(--hair); border-radius: 8px; }
   .layer-detail.show { display: block; }
-  .layer-detail h3 {
+  /* Subkop binnen een tabpanel of een uitgeklapt filterblok. De Cosmos-tab gebruikt
+     hem buiten `.layer-detail`, vandaar de tweede selector — zonder die regel viel
+     hij terug op de browser-default van 18,72px en schreeuwde "Track window" over
+     de rest van het paneel heen. */
+  .layer-detail h3,
+  .tabpanel > h3,
+  .acc-body h3 {
     font-size: 9px; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase;
     color: var(--ink-dim); margin: 0 0 8px;
   }
-  .layer-detail h3:not(:first-child) { margin-top: 12px; }
+  .layer-detail h3:not(:first-child),
+  .tabpanel > h3:not(:first-child),
+  .acc-body h3:not(:first-child) { margin-top: 12px; }
   .aarde-empty { display: none; font-size: 11px; color: var(--ink-faint); line-height: 1.55; }
   .aarde-empty b { color: var(--ink-dim); }
 
@@ -495,6 +522,158 @@
   .credits dd { color: var(--ink-dim); margin-top: 2px; }
   .credits a { color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--hair); }
   .credits a:hover { color: #5fcdfb; border-bottom-color: #5fcdfb; }
+
+  /* ---- Accordion ----
+     Generiek opgezet zodat elke tab hem kan gebruiken, niet alleen Cosmos. De
+     body wordt met grid-template-rows geanimeerd in plaats van met max-height:
+     dat laatste vraagt een gokwaarde die bij een langere sectie afkapt of bij een
+     korte een trage naloop geeft. `1fr` is exact de inhoudshoogte. */
+  .acc { border-top: 1px solid var(--hair); }
+  .acc:first-child { border-top: none; }
+  .acc-head {
+    display: flex; align-items: center; gap: 8px; width: 100%;
+    background: transparent; border: none; cursor: pointer;
+    padding: 12px 0 11px; color: var(--ink-dim); font: inherit;
+    font-size: 10px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase;
+    text-align: left;
+  }
+  .acc-head:hover { color: var(--ink); }
+  .acc.open > .acc-head { color: var(--ink); }
+  .acc-head > span:first-child { flex-shrink: 0; }
+  .acc-sub {
+    margin-left: auto; font-size: 9px; font-weight: 400; letter-spacing: 0.04em;
+    text-transform: none; color: var(--ink-faint); font-variant-numeric: tabular-nums;
+  }
+  .acc-sub.shifted { color: #ffd166; }
+  .acc-chev {
+    width: 13px; height: 13px; flex-shrink: 0; margin-left: auto;
+    transform: rotate(-90deg); transition: transform 0.18s ease;
+  }
+  .acc-sub + .acc-chev { margin-left: 0; }
+  .acc.open > .acc-head .acc-chev { transform: rotate(0deg); }
+  .acc-body {
+    display: grid; grid-template-rows: 0fr;
+    transition: grid-template-rows 0.22s ease;
+  }
+  .acc.open > .acc-body { grid-template-rows: 1fr; padding-bottom: 4px; }
+  /* De wrapper (door JS toegevoegd) moet overflow verbergen, anders steekt de
+     inhoud bij 0fr gewoon buiten de nulhoogte uit. */
+  .acc-inner { overflow: hidden; min-height: 0; }
+  @media (prefers-reduced-motion: reduce) {
+    .acc-body, .acc-chev { transition: none; }
+  }
+
+  /* De i-knop bij Moment en de chevron-toelichting bij Twilight. */
+  .acc-info {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 16px; height: 16px; flex-shrink: 0; margin-left: auto; border-radius: 50%;
+    background: transparent; border: 1px solid var(--hair); color: var(--ink-faint);
+    font: inherit; font-size: 9px; font-style: italic; font-weight: 400;
+    letter-spacing: 0; text-transform: none; line-height: 1;
+    cursor: pointer; padding: 0;
+  }
+  /* Staat de i-knop in de kop, dan neemt hij de `margin-left: auto` over en moet de
+     chevron zijn eigen automarge loslaten — anders duwen ze elkaar uit elkaar. */
+  .acc-info + .acc-chev { margin-left: 8px; }
+  .acc-info:hover, .acc-info.on { color: var(--ink); border-color: var(--ink-faint); }
+  /* Een `.elayer` gebruikt dezelfde uitklap-chevron als een `.layer`, zodat het
+     gebaar overal hetzelfde is. De basisregels staan bij `.layer .row-expand`. */
+  .elayer .row-expand {
+    background: transparent; border: none; cursor: pointer; color: var(--ink-faint);
+    padding: 0; margin-left: 6px; display: flex; align-items: center;
+    transition: transform 0.18s ease, color 0.15s;
+    transform: rotate(-90deg);
+  }
+  .elayer .row-expand:hover { color: var(--ink); }
+  .elayer .row-expand.open { transform: rotate(0deg); color: var(--ink-dim); }
+  .elayer .row-expand svg { width: 12px; height: 12px; display: block; }
+  /* De toelichting hoort visueel bij de rij erboven, niet bij een filterblok, dus
+     zonder de kaderstijl van de quake-filters. */
+  .acc-body .layer-detail {
+    background: transparent; border: none; padding: 2px 0 8px; margin: 0;
+    font-size: 10px; line-height: 1.55; color: var(--ink-faint);
+  }
+
+  /* ---- Cosmos-readout (zon en maan) ----
+     Label boven waarde, net als de credits-lijst, zodat lange waarden als
+     "387.509 km" niet met het label om de 248px paneelbreedte hoeven te vechten. */
+  .cosmos-readout { margin-top: 4px; font-size: 11px; line-height: 1.5; }
+  .cosmos-readout dt {
+    font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: rgba(125,138,160,0.7); margin-top: 11px;
+  }
+  .cosmos-readout dt:first-child { margin-top: 0; }
+  .cosmos-readout dd {
+    color: var(--ink); margin-top: 2px;
+    font-variant-numeric: tabular-nums;   /* cijfers springen niet bij het bijwerken */
+  }
+  .cosmos-note {
+    margin-top: 16px; font-size: 10px; line-height: 1.55; color: var(--ink-faint);
+  }
+  /* Fase-indicator naast de faseregel. Canvas is 128px voor scherpte op retina,
+     maar wordt op 34px getoond — zo blijft de readout-regel één regel hoog. */
+  .cosmos-readout .phase-row { display: flex; align-items: center; gap: 9px; }
+  .cosmos-readout .phase-row canvas {
+    width: 34px; height: 34px; flex-shrink: 0; display: block;
+  }
+  /* De tijdkiezer. `.shifted` is de niet te missen markering dat de scene een ander
+     moment toont dan het heden — de live datalagen doen dat namelijk niet. */
+  #time-val { font-variant-numeric: tabular-nums; }
+  #time-val.shifted { color: #ffd166; font-weight: 600; }
+  /* Sliders lopen over de VOLLE paneelbreedte; knoppen krijgen een eigen regel.
+     Eerder deelde "Back to now" de regel met het slider-label, waardoor de slider
+     zelf smaller oogde dan de rest van het paneel. */
+  .time-reset {
+    display: block; width: 100%; margin-top: 9px;
+    background: transparent; border: 1px solid var(--hair); border-radius: 5px;
+    color: var(--ink-dim); font: inherit; font-size: 10px; letter-spacing: 0.04em;
+    padding: 5px 7px; cursor: pointer; text-align: center;
+  }
+  .time-reset:hover { color: var(--ink); border-color: var(--ink-faint); }
+  /* Een expliciete `display` in CSS wint van het `hidden`-attribuut, dat immers
+     niets anders doet dan `display: none` als user-agent-stijl. Zonder deze regel
+     bleef "Back to now" zichtbaar terwijl de tijd gewoon op nu stond. */
+  .time-reset[hidden] { display: none; }
+  .time-input {
+    display: block; width: 100%; box-sizing: border-box; margin-bottom: 10px;
+    background: rgba(255,255,255,0.04); border: 1px solid var(--hair); border-radius: 6px;
+    color: var(--ink); font: inherit; font-size: 11px; padding: 5px 8px;
+    font-variant-numeric: tabular-nums;
+  }
+  .time-input:focus { outline: none; border-color: var(--ink-faint); }
+  /* De native kalender-knop is standaard bijna zwart op een donkere achtergrond. */
+  .time-input::-webkit-calendar-picker-indicator {
+    filter: invert(0.7); cursor: pointer;
+  }
+  .play-row { display: flex; align-items: center; gap: 6px; margin-top: 10px; }
+  .play-btn {
+    background: transparent; border: 1px solid var(--hair); border-radius: 5px;
+    color: var(--ink-dim); font: inherit; font-size: 10px; line-height: 1;
+    padding: 5px 9px; cursor: pointer; transition: color 0.15s, border-color 0.15s;
+  }
+  .play-btn:hover:not(:disabled) { color: var(--ink); border-color: var(--ink-faint); }
+  .play-btn:disabled { opacity: 0.35; cursor: default; }
+  .play-btn.active { color: #ffd166; border-color: rgba(255,209,102,0.45); }
+  .play-speed-val {
+    margin-left: auto; font-size: 10px; color: var(--ink-faint);
+    font-variant-numeric: tabular-nums;
+  }
+  .speed-slider { display: block; width: 100%; margin-top: 7px; }
+  .eclipse-state {
+    margin: 4px 0 9px; font-size: 10px; line-height: 1.55; color: var(--ink-faint);
+  }
+  .eclipse-state.active {
+    padding: 7px 9px; border-radius: 6px; color: var(--ink-dim);
+    background: rgba(255,209,102,0.08); border: 1px solid rgba(255,209,102,0.22);
+  }
+  .eclipse-state.active b { color: #ffd166; }
+  .eclipse-nav { display: flex; gap: 6px; }
+  .eclipse-nav .play-btn { flex: 1; text-align: center; }
+  .cosmos-warn {
+    margin-top: 9px; padding: 7px 9px; border-radius: 6px;
+    background: rgba(255,209,102,0.08); border: 1px solid rgba(255,209,102,0.22);
+    font-size: 10px; line-height: 1.5; color: #e4cd9a;
+  }
 
   /* ---- Time filter ---- */
   .panel .divider {
@@ -581,10 +760,18 @@
     letter-spacing: 0.02em;
   }
   .slider-wrap { margin-bottom: 2px; }
-  #slider {
+  /* Deze styling hing eerst alleen aan `#slider`, het ID van de tijdvenster-slider
+     bij de aardbevingen. Elke nieuwe slider viel daardoor terug op de native
+     browserstijl — smaller dan het paneel en met een ander uiterlijk. Nu een klasse
+     die alle sliders delen; `#slider` blijft erbij zodat de bestaande markup niets
+     hoeft te veranderen. */
+  #slider,
+  .range {
     -webkit-appearance: none;
     appearance: none;
+    display: block;
     width: 100%;
+    box-sizing: border-box;
     height: 3px;
     border-radius: 2px;
     background: var(--hair);
@@ -594,7 +781,8 @@
     touch-action: none;
     margin: 4px 0 8px;
   }
-  #slider::-webkit-slider-thumb {
+  #slider::-webkit-slider-thumb,
+  .range::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
     width: 14px; height: 14px;
@@ -603,7 +791,8 @@
     cursor: pointer;
     box-shadow: 0 0 8px rgba(255,107,61,0.6);
   }
-  #slider::-moz-range-thumb {
+  #slider::-moz-range-thumb,
+  .range::-moz-range-thumb {
     width: 14px; height: 14px;
     border: none;
     border-radius: 50%;

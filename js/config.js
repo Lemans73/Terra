@@ -387,6 +387,51 @@ export const PARAMS = {
   // Wie hem verlaagt, krijgt die zwarte vlakken terug.
   zoomMinDistance: 155,
   zoomMaxDistance: 450,
+  // ===== ZON EN MAAN (sessie 14) ================================================
+  // Afstanden zijn BEWUST niet realistisch. De echte maan staat op 60 aardstralen
+  // (dus 6030 in deze eenheden) en de zon op 23.480 (2,3 miljoen). Op die schaal is
+  // de aarde een stip en de maan onvindbaar. Wat wél klopt is de VERHOUDING: de maan
+  // staat dichterbij dan de zon, en de maanafstand ademt mee met perigeum/apogeum.
+  //
+  // Beide afstanden liggen ruim boven `zoomMinDistance` (155). Dat is geen toeval:
+  // stond een lichaam daarbinnen, dan kwam het bij inzoomen achter de camera terecht.
+  //
+  // De stralen zijn eveneens vergroot. Zon en maan hebben in werkelijkheid allebei
+  // een hoekdiameter van ongeveer een halve graad; op deze afstanden zou dat een
+  // straal van ~2 units geven, oftewel een stip. De waarden hieronder geven ze een
+  // hoekdiameter van ruwweg 6 graden — herkenbaar zonder de aarde te overheersen.
+  sunDistance:  420,
+  sunRadius:     22,
+  moonDistance: 300,
+  moonRadius:    15,
+  // Perigeum/apogeum: de maan komt zichtbaar dichterbij en verder weg. 35 op 300 is
+  // dezelfde relatieve slag (11,6%) die het prototype gebruikte.
+  moonDistanceSwing: 35,
+  // Gloed rond de lichamen, als factor van hun straal. De zon krijgt een royale
+  // additieve halo; de maan een subtiele koele zoom.
+  sunGlowScale:  5.5,
+  moonGlowScale: 2.2,
+  // Helderheidsboost van de zon, als RGB-vermenigvuldiger over de textuur.
+  //
+  // WAAROM BOVEN 1: de renderer draait zonder tonemapping (`toneMapping: 0`,
+  // gemeten), dus de zon is letterlijk textuur maal deze kleur. De zontextuur van
+  // Solar System Scope is rood-oranje en komt daarmee niet boven de bloom-drempel
+  // van 0,75 uit — de UnrealBloomPass deed dus niets en de zon oogde als een matte
+  // rode knikker zonder corona. MeshBasicMaterial klemt `color.setRGB()` niet op 1,
+  // dus waarden boven 1 zijn de weg naar HDR-pixels die wél bloomen.
+  //
+  // Iets warmer dan neutraal (R > G > B) houdt de zon herkenbaar geel-oranje in
+  // plaats van klinisch wit.
+  sunColorBoost: [2.6, 2.25, 1.85],
+  // Subpunt-markers op het aardoppervlak (waar het lichaam recht boven staat).
+  subPointRadius: 2.6,
+  // Hoogte boven het oppervlak, als fractie van de straal. Twee grenzen knijpen
+  // deze waarde vast: hij moet BOVEN 0,010 blijven, want de schematische weergave
+  // legt de land-polygons op precies die hoogte en de markers zouden er anders
+  // onder verdwijnen; en zo LAAG mogelijk, want een marker die zichtbaar boven de
+  // bol zweeft leest als een object in de ruimte in plaats van als een plek op de
+  // kaart. 0,015 is dezelfde hoogte als de schemeringslijnen.
+  subPointAltitude: 0.015,
   //   zoomToCursor — zoomt de camera naar de muisaanwijzer of naar het middelpunt?
   //     false  naar het middelpunt. De grenzen hierboven houden gegarandeerd stand  ← standaard
   //     true   naar de muisaanwijzer, wat prettiger navigeert, maar dan verschuift het

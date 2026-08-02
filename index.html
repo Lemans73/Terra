@@ -210,9 +210,33 @@
   <div class="panel">
     <div class="panel-head">
       <div class="tabs" role="tablist">
-        <button class="tab active" data-tab="lagen">Layers</button>
-        <button class="tab" data-tab="aarde">Earth</button>
-        <button class="tab" data-tab="instellingen" title="Settings" aria-label="Settings">⚙</button>
+        <!-- Vier icoon-tabs. Alle vier als inline SVG met `stroke: currentColor`,
+             zodat ze dezelfde lijndikte en kleur delen en vanzelf meekleuren met de
+             actieve staat. Tekst-emoji zoals ☾ en ⚙ deden dat niet: die brengen hun
+             eigen gewicht en kleur mee en vielen zichtbaar uit de toon naast een
+             lijn-icoon.
+
+             Alleen de ACTIEVE tab toont zijn label. Vier iconen met tekst passen
+             niet in de 180px die de tabrij heeft, maar vier iconen waarvan er één
+             een woord draagt wel — en zo blijft zichtbaar waar je bent. -->
+        <button class="tab active" data-tab="lagen" title="Layers" aria-label="Layers">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+          <span class="tab-label">Layers</span>
+        </button>
+        <button class="tab" data-tab="aarde" title="Earth" aria-label="Earth">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><ellipse cx="12" cy="12" rx="4" ry="10"/><line x1="2" y1="12" x2="22" y2="12"/></svg>
+          <span class="tab-label">Earth</span>
+        </button>
+        <button class="tab" data-tab="cosmos" title="Sun &amp; Moon" aria-label="Sun and Moon">
+          <!-- Halfgevulde cirkel: de ene helft licht, de andere donker. Leest als
+               dag en nacht én als maanfase, wat precies is wat deze tab regelt. -->
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20z" fill="currentColor" stroke="none"/></svg>
+          <span class="tab-label">Sun &amp; Moon</span>
+        </button>
+        <button class="tab" data-tab="instellingen" title="Settings" aria-label="Settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+          <span class="tab-label">Settings</span>
+        </button>
       </div>
       <button class="panel-collapse" id="panel-collapse" title="Collapse panel" aria-label="Collapse panel">‹</button>
     </div>
@@ -221,16 +245,24 @@
 
     <!-- ====================== LAGEN ====================== -->
     <div class="tabpanel show" data-panel="lagen">
-      <h2>Layers</h2>
+      <section class="acc open" data-acc="layers-list">
+        <button class="acc-head" type="button" aria-expanded="true">
+          <span>Layers</span>
+          <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="acc-body">
       <div class="layer expandable" data-layer="quake">
         <span class="swatch sw-quake"></span>
         <span class="name">Earthquakes</span>
-        <button class="row-expand" data-expand="quake" title="Show filters" aria-label="Show filters">
+        <!-- De aardbeving-filters staan standaard OPEN: dit is de laag waar de
+             meeste bezoekers iets aan willen bijstellen, en dichtgeklapt is niet te
+             zien dat er filters zijn. -->
+        <button class="row-expand open" data-expand="quake" title="Hide filters" aria-label="Hide filters">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
         <span class="count" id="count-quake">—</span>
       </div>
-      <div class="layer-detail" data-detail="quake">
+      <div class="layer-detail show" data-detail="quake">
         <h3>Magnitude</h3>
         <div class="presets" id="mag-presets">
           <button class="preset" data-mag="-10">All</button>
@@ -291,70 +323,264 @@
         </button>
         <span class="count" id="count-aqi">—</span>
       </div>
-
+        </div>
+      </section>
     </div>
 
     <!-- ====================== AARDE ====================== -->
     <div class="tabpanel" data-panel="aarde">
-      <!-- Overlays staan BUITEN #earth-layers: dat blok verbergt zich in de
-           deskundig-modus, terwijl deze overlays juist in béíde modi werken. -->
-      <h2>Overlays</h2>
-      <div class="elayer" data-overlay="plates"><span class="edot"></span>Tectonic plates<span class="estat" id="es-plates">off</span></div>
-      <div class="elayer" data-overlay="borders"><span class="edot"></span>Country borders<span class="estat" id="es-borders">off</span></div>
-      <div class="elayer" data-overlay="names"><span class="edot"></span>Country names<span class="estat" id="es-names">off</span></div>
-      <div class="divider"></div>
 
-      <div class="earth-layers" id="earth-layers">
-        <h2>Earth layers</h2>
-        <div class="elayer" data-tex="day"><span class="edot"></span>Day texture<span class="estat" id="es-day">—</span></div>
-        <div class="elayer" data-tex="night"><span class="edot"></span>Night lights<span class="estat" id="es-night">—</span></div>
-        <div class="elayer" data-tex="clouds"><span class="edot"></span>Clouds<span class="estat" id="es-clouds">—</span></div>
-        <div class="elayer" data-tex="specular"><span class="edot"></span>Water reflection<span class="estat" id="es-specular">—</span></div>
-        <div class="elayer" data-tex="normal"><span class="edot"></span>Relief (normal map)<span class="estat" id="es-normal">—</span></div>
-        <div class="elayer on" id="wave-toggle"><span class="edot"></span>Wave animation<span class="estat" id="es-wave">on</span></div>
-        <div class="elayer" id="wire-toggle"><span class="edot"></span>Earth wireframe<span class="estat" id="es-wire">off</span></div>
-        <div class="elayer" id="fog-toggle"><span class="edot"></span>Fog<span class="estat" id="es-fog">off</span></div>
-        <div class="night-slider">
-          <div class="ns-label">
-            <span>Night side</span>
-            <span id="ns-val">12%</span>
+      <!-- ---------- OVERLAYS ----------
+           Blijven hier en verhuizen niet naar Layers: de Layers-tab toont LIVE
+           gebeurtenissen met een teller, deze overlays zijn statische kaartlagen
+           zonder teller. Dat onderscheid is de reden dat de tellers betekenis
+           hebben. -->
+      <section class="acc open" data-acc="earth-overlays">
+        <button class="acc-head" type="button" aria-expanded="true">
+          <span>Overlays</span>
+          <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="acc-body">
+          <div class="elayer" data-overlay="plates"><span class="edot"></span>Tectonic plates<span class="estat" id="es-plates">off</span></div>
+          <div class="elayer" data-overlay="borders"><span class="edot"></span>Country borders<span class="estat" id="es-borders">off</span></div>
+          <div class="elayer" data-overlay="names"><span class="edot"></span>Country names<span class="estat" id="es-names">off</span></div>
+        </div>
+      </section>
+
+      <!-- ---------- AARDE-LAGEN ----------
+           `Day texture` en `Fog` zijn hier weg. De dagtextuur staat altijd aan (de
+           aarde zonder is een zwarte bol) en de mist altijd uit. De mist-code
+           blijft wel bestaan, aangestuurd door PARAMS: het is een werkende optie
+           die zo terug kan. -->
+      <!-- Deze id wordt door updateEarthLayers() gebruikt om het hele blok te
+           verbergen in de schematische weergave, waar texturen geen rol spelen. -->
+      <div id="earth-layers">
+        <section class="acc" data-acc="earth-layers">
+          <button class="acc-head" type="button" aria-expanded="false">
+            <span>Earth layers</span>
+            <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div class="acc-body">
+            <div class="elayer" data-tex="night"><span class="edot"></span>Night lights<span class="estat" id="es-night">&#8212;</span></div>
+            <div class="elayer" data-tex="clouds"><span class="edot"></span>Clouds<span class="estat" id="es-clouds">&#8212;</span></div>
+            <div class="elayer" data-tex="specular"><span class="edot"></span>Water reflection<span class="estat" id="es-specular">&#8212;</span></div>
+            <div class="elayer" data-tex="normal"><span class="edot"></span>Relief (normal map)<span class="estat" id="es-normal">&#8212;</span></div>
+            <div class="elayer on" id="wave-toggle"><span class="edot"></span>Wave animation<span class="estat" id="es-wave">on</span></div>
+            <div class="elayer" id="wire-toggle"><span class="edot"></span>Earth wireframe<span class="estat" id="es-wire">off</span></div>
+            <div class="night-slider">
+              <div class="ns-label">
+                <span>Night side</span>
+                <span id="ns-val">12%</span>
+              </div>
+              <input type="range" id="night-slider" class="range" min="0" max="60" value="12" />
+            </div>
           </div>
-          <input type="range" id="night-slider" min="0" max="60" value="12" />
-        </div>
+        </section>
 
-        <div class="divider"></div>
-        <h2>Texture quality</h2>
-        <div class="texq" id="texq">
-          <button class="texq-opt" data-q="2k">
-            <span class="texq-name">Standard</span>
-            <span class="texq-meta">2K · ~2.4 MB</span>
+        <section class="acc" data-acc="earth-quality">
+          <button class="acc-head" type="button" aria-expanded="false">
+            <span>Texture quality</span>
+            <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
           </button>
-          <button class="texq-opt" data-q="8k">
-            <span class="texq-name">High resolution</span>
-            <span class="texq-meta">8K · ~29 MB</span>
-          </button>
-        </div>
-        <div class="texq-note" id="texq-note">8K is sharper up close, but downloads about 29 MB extra.</div>
+          <div class="acc-body">
+            <div class="texq" id="texq">
+              <button class="texq-opt" data-q="2k">
+                <span class="texq-name">Standard</span>
+                <span class="texq-meta">2K &#183; ~2.4 MB</span>
+              </button>
+              <button class="texq-opt" data-q="8k">
+                <span class="texq-name">High resolution</span>
+                <span class="texq-meta">8K &#183; ~29 MB</span>
+              </button>
+            </div>
+            <div class="texq-note" id="texq-note">8K is sharper up close, but downloads about 29 MB extra.</div>
+          </div>
+        </section>
       </div>
-      <div class="aarde-empty" id="aarde-empty">The Earth layers only apply in <b>Realistic</b> mode. Switch mode at the top to control textures, fog and wireframe.</div>
+
+      <!-- Staat BUITEN de accordions: in de schematische weergave zijn de secties
+           hierboven verborgen, en dan moet deze uitleg juist wel te zien zijn. -->
+      <div class="aarde-empty" id="aarde-empty">The Earth layers only apply in <b>Realistic</b> mode. Switch mode at the top to control textures and wireframe.</div>
+    </div>
+
+    <!-- ====================== COSMOS ======================
+         Zon en maan. Bewust karig in deel 1: twee schakelaars en een readout,
+         genoeg om te kunnen testen. De tijdkiezer, de ground tracks en het
+         paneel-redesign horen bij deel 2. -->
+    <div class="tabpanel" data-panel="cosmos">
+
+      <!-- ACCORDION. Het paneel is 248px breed en deze tab heeft inmiddels tien
+           schakelaars, een datumkiezer, drie sliders en een readout. Alles tegelijk
+           tonen maakt er een lijst van waarin niets meer opvalt; per sectie in- en
+           uitklappen houdt zichtbaar wat je op dat moment gebruikt.
+           `open` in de markup is de beginstand. -->
+
+      <!-- ---------- LAGEN ---------- -->
+      <section class="acc open" data-acc="cosmos-layers">
+        <button class="acc-head" type="button" aria-expanded="true">
+          <span>Layers</span>
+          <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="acc-body">
+          <!-- Zon en maan hebben geen schakelaar: die horen er altijd te zijn. -->
+          <div class="elayer on" id="subpoint-toggle"><span class="edot"></span>Sub-points<span class="estat" id="es-subpoint">on</span></div>
+          <div class="elayer on" id="leaders-toggle"><span class="edot"></span>Leader lines<span class="estat" id="es-leaders">on</span></div>
+          <div class="elayer on" id="align-toggle"><span class="edot"></span>Sun&#8211;Moon line<span class="estat" id="es-align">on</span></div>
+          <div class="elayer on" id="tracks-toggle"><span class="edot"></span>Ground tracks<span class="estat" id="es-tracks">on</span></div>
+          <div class="elayer on" id="ticks-toggle"><span class="edot"></span>Hour marks<span class="estat" id="es-ticks">on</span></div>
+          <!-- De uitleg zit achter DEZELFDE uitklap-chevron als de
+               aardbeving-filters, en staat in de rij zelf. Als losse knop eronder
+               ("What are these?") was niet te zien waar hij bij hoorde. -->
+          <div class="elayer on expandable" id="twilight-toggle">
+            <span class="edot"></span>Twilight bands
+            <button class="row-expand" data-note="twilight-note" title="What are these?" aria-label="What are these?" aria-expanded="false">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <span class="estat" id="es-twilight">on</span>
+          </div>
+          <div class="layer-detail" id="twilight-note">
+            Four circles: sunset, then the end of civil, nautical and astronomical
+            twilight &#8212; the Sun at 0&#176;, &#8722;6&#176;, &#8722;12&#176; and &#8722;18&#176; below the horizon.
+          </div>
+        </div>
+      </section>
+
+      <!-- ---------- MOMENT ----------
+           Bundelt alles wat met tijd te maken heeft. Het trackvenster is geen los
+           tijdbegrip maar de SCHAAL van de slider: kies je 7 dagen, dan loopt de
+           slider van -3,5 tot +3,5 dag en is dat precies het spoor dat je ziet. -->
+      <section class="acc open" data-acc="cosmos-moment">
+        <button class="acc-head" type="button" aria-expanded="true">
+          <span>Moment</span>
+          <!-- De i-knop zit IN de kop maar buiten de klik die in- en uitklapt:
+               daarom een eigen element met stopPropagation, niet genest in de
+               head-knop zelf (een button in een button is bovendien ongeldig). -->
+          <span class="acc-info" role="button" tabindex="0" id="moment-info-btn"
+                aria-expanded="false" title="What does this affect?"
+                aria-label="What does this affect?">i</span>
+          <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="acc-body">
+          <div class="cosmos-note" id="moment-info" hidden>
+            These controls move the Sun, the Moon and the day/night cycle only.
+            The live layers &#8212; earthquakes, volcanoes, wildfires and the rest &#8212;
+            always show the present, whatever moment you pick here.
+          </div>
+
+          <h3>Date &amp; time</h3>
+          <input type="datetime-local" id="time-input" class="time-input"
+                 aria-label="Date and time for Sun and Moon" />
+
+          <!-- Het venster staat v&#243;&#243;r de slider omdat het de schaal ervan bepaalt. -->
+          <h3>Track window</h3>
+          <div class="presets" id="track-presets">
+            <button class="preset" data-days="1">1 d</button>
+            <button class="preset active" data-days="3">3 d</button>
+            <button class="preset" data-days="7">7 d</button>
+            <button class="preset" data-days="27.32">Month</button>
+          </div>
+
+          <h3>Shift within window</h3>
+          <div class="slider-wrap">
+            <input type="range" id="time-slider" class="range" min="-216" max="216" step="1" value="0"
+                   aria-label="Shift the moment within the track window" />
+            <div class="slider-label">
+              <span id="time-span">&#177; 1 d 12 h</span>
+              <span id="time-val">now</span>
+            </div>
+          </div>
+
+          <h3>Playback</h3>
+          <div class="play-row">
+            <button class="play-btn" id="play-back" title="Play backwards" aria-label="Play backwards">&#9664;</button>
+            <button class="play-btn" id="play-pause" title="Pause" aria-label="Pause" disabled>&#10073;&#10073;</button>
+            <button class="play-btn" id="play-fwd" title="Play forwards" aria-label="Play forwards">&#9654;</button>
+            <span class="play-speed-val" id="play-speed-val">6 h/s</span>
+          </div>
+          <input type="range" id="play-speed" class="range" min="0" max="100" step="1" value="50"
+                 aria-label="Playback speed" />
+          <button class="time-reset" id="time-reset" hidden>Back to now</button>
+        </div>
+      </section>
+
+      <!-- ---------- ECLIPS ---------- -->
+      <section class="acc" data-acc="cosmos-eclipse">
+        <button class="acc-head" type="button" aria-expanded="false">
+          <span>Eclipse</span>
+          <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="acc-body">
+          <div class="elayer on" id="eclipse-toggle"><span class="edot"></span>Shadow on Earth<span class="estat" id="es-eclipse">on</span></div>
+          <div class="eclipse-state" id="eclipse-state">No eclipse at this moment.</div>
+          <!-- Zonder deze knoppen zou vrijwel niemand de schaduw ooit te zien
+               krijgen: er zijn twee tot vijf zonsverduisteringen per jaar, elk een
+               uur of twee lang. -->
+          <div class="eclipse-nav">
+            <button class="play-btn" id="eclipse-prev" title="Previous eclipse">&#9664; Previous</button>
+            <button class="play-btn" id="eclipse-jump" title="Next eclipse">Next &#9654;</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ---------- READINGS ---------- -->
+      <section class="acc" data-acc="cosmos-readings">
+        <button class="acc-head" type="button" aria-expanded="false">
+          <span>Readings</span>
+          <span class="acc-sub" id="readout-head">right now</span>
+          <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="acc-body">
+          <dl class="cosmos-readout">
+            <dt>Sub-solar point</dt>
+            <dd id="rd-subsolar">&#8212;</dd>
+            <dt>Sub-lunar point</dt>
+            <dd id="rd-sublunar">&#8212;</dd>
+            <dt>Moon phase</dt>
+            <dd class="phase-row">
+              <canvas id="phase-canvas" width="128" height="128" aria-hidden="true"></canvas>
+              <span id="rd-phase">&#8212;</span>
+            </dd>
+            <dt>Illuminated</dt>
+            <dd id="rd-fraction">&#8212;</dd>
+            <dt>Elongation</dt>
+            <dd id="rd-elongation">&#8212;</dd>
+            <dt>Moon distance</dt>
+            <dd id="rd-distance">&#8212;</dd>
+          </dl>
+          <div class="cosmos-note">
+            Positions are calculated in the browser from Meeus&#39; algorithms &#8212; no feed,
+            no key. Sun and Moon are drawn at compressed distances so both stay
+            readable; the real Moon distance is in the readout above.
+          </div>
+        </div>
+      </section>
     </div>
 
     <!-- ====================== INSTELLINGEN ====================== -->
     <div class="tabpanel" data-panel="instellingen">
-      <h2>Preferences</h2>
-      <div class="elayer on" id="sound-toggle"><span class="edot"></span>Notification sound<span class="estat" id="es-sound">on</span></div>
-      <div class="elayer on" id="label-toggle"><span class="edot"></span>Quake labels<span class="estat" id="es-label">on</span></div>
-      <div class="elayer on" id="rotate-toggle"><span class="edot"></span>Auto-rotate<span class="estat" id="es-rotate">on</span></div>
+      <section class="acc open" data-acc="settings-prefs">
+        <button class="acc-head" type="button" aria-expanded="true">
+          <span>Preferences</span>
+          <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="acc-body">
+          <div class="elayer on" id="sound-toggle"><span class="edot"></span>Notification sound<span class="estat" id="es-sound">on</span></div>
+          <div class="elayer on" id="label-toggle"><span class="edot"></span>Quake labels<span class="estat" id="es-label">on</span></div>
+          <div class="elayer on" id="rotate-toggle"><span class="edot"></span>Auto-rotate<span class="estat" id="es-rotate">on</span></div>
+        </div>
+      </section>
 
-      <div class="divider"></div>
-      <h2>Connections</h2>
-      <div class="health" id="health-list"></div>
-      <button class="health-test" id="health-test">Test now</button>
+      <section class="acc" data-acc="settings-connections">
+        <button class="acc-head" type="button" aria-expanded="false">
+          <span>Connections</span>
+          <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="acc-body">
+          <div class="health" id="health-list"></div>
+          <button class="health-test" id="health-test">Test now</button>
+        </div>
+      </section>
 
-      <!-- Credits. Bewust ingeklapt en onderaan: verplichte attributie (CC BY 4.0
-           voor de texturen, ODC-BY voor de plaatgrenzen, WAQI's eigen voorwaarden)
-           hoort zichtbaar te zijn, maar niet in de weg te zitten. Volledige
-           verantwoording staat in ATTRIBUTION.md. -->
       <details class="credits">
         <summary>Sources &amp; licenses</summary>
         <dl>
@@ -438,6 +664,10 @@ import {
   SHOCK_VERT, SHOCK_FRAG,
   dayNightShader, CLOUD_VERT, CLOUD_FRAG, FOG_VERT, FOG_FRAG
 } from './js/shaders.js';
+// Efemeriden voor zon en maan (Meeus). Puur JS, geen netwerk, geen sleutel.
+import { ephemeris as sunMoonEphemeris, latLonToUnit, eclipseShadow,
+         nextSolarEclipse, previousSolarEclipse, eclipsePath } from './js/sunmoon.js';
+import { createSunMoonLayer } from './js/sunmoon-layer.js';
 // Deskundig (schematische) weergavemodus (Fase 1).
 import { enterExpertMode, exitExpertMode } from './js/modes/expert.js';
 // Schematische datalaag-symbolen voor de deskundig-modus (Fase 2).
@@ -1500,28 +1730,23 @@ function findThree() { return THREE; }
 // dayNightShader (aarde dag/nacht-shader) → ./js/shaders.js (Stap 0).
 
 // subsolar point: waar staat de zon recht boven de aarde op tijdstip dt.
-// Vereenvoudigde astronomische berekening (geen externe lib nodig).
+//
+// EEN BRON VOOR DE ZONSTAND (sessie 14, beslispunt B1). Hier stond een eigen,
+// vereenvoudigde berekening. Nu de maan erbij komt — en die vraagt de volledige
+// Meeus-reeks — is dit een dunne wrapper om `js/sunmoon.js` geworden. Niet omdat
+// het nauwkeuriger moest, maar omdat twee zonberekeningen naast elkaar in
+// dezelfde codebase een sluipende bug zijn zodra iemand er één aanpast.
+//
+// GEMETEN vóór de overstap, heel 2026, elke zes uur (1460 monsters): de oude
+// functie week gemiddeld 0,304 km en maximaal 0,490 km van Meeus af. Op een bol
+// van 6371 km is dat bij elke zoomstand die Terra toestaat ver onder één pixel.
+// De overstap verandert dus niets zichtbaars; hij haalt alleen de tweede bron weg.
+//
+// De signatuur blijft [lng, lat], zodat de aanroepende code en de shader-uniform
+// ongemoeid blijven.
 function sunPositionAt(dt) {
-  const d = new Date(dt);
-  const rad = Math.PI / 180, deg = 180 / Math.PI;
-  // dagen sinds J2000
-  const jd = dt / 86400000 + 2440587.5;
-  const n = jd - 2451545.0;
-  // gemiddelde lengte en anomalie van de zon
-  const L = (280.460 + 0.9856474 * n) % 360;
-  const g = ((357.528 + 0.9856003 * n) % 360) * rad;
-  // ecliptische lengte
-  const lambda = (L + 1.915 * Math.sin(g) + 0.020 * Math.sin(2 * g)) * rad;
-  // schuinte ecliptica
-  const eps = (23.439 - 0.0000004 * n) * rad;
-  // declinatie (breedtegraad subsolar point)
-  const declination = Math.asin(Math.sin(eps) * Math.sin(lambda)) * deg;
-  // rechte klimming → uurhoek → lengtegraad
-  const ra = Math.atan2(Math.cos(eps) * Math.sin(lambda), Math.cos(lambda)) * deg;
-  // Greenwich mean sidereal time
-  const gmst = (18.697374558 + 24.06570982441908 * n) % 24;
-  const lon = -(((gmst * 15 - ra + 540) % 360) - 180);
-  return [lon, declination]; // [lng, lat]
+  const { lat, lon } = sunMoonEphemeris(new Date(dt)).subSolar;
+  return [lon, lat]; // [lng, lat]
 }
 
 // houd referenties zodat we tussen modi kunnen wisselen
@@ -1534,6 +1759,27 @@ let fogMesh = null;         // fresnel-mistschil (vertroebelt de randen)
 let fogOn = false;
 let realisticActive = false;
 let shaderRotation = { lng: 0, lat: 0 };
+// Zon/maan-laag (sessie 14). Blijft null tot het init-blok onderaan hem maakt —
+// zie de TDZ-noot daar. Alles wat hem gebruikt moet daarom op null controleren.
+let sunMoon = null;
+let sunLight = null;        // globe.gl's eigen DirectionalLight, opgezocht bij init
+let lastEphemeris = null;   // laatste efemeride, voor de readout
+// Verschuiving van de tijdkiezer, in ms ten opzichte van nu. 0 = het heden.
+//
+// STAAT HIER EN NIET BIJ DE TIJDKIEZER-CODE, en dat is geen slordigheid: hij wordt
+// gelezen door momentNow() in updateSunUniform(), en die draait al tijdens de opbouw
+// van de scene — ruim voordat het Cosmos-blok verderop is geëvalueerd. Een `let` is
+// tot zijn declaratie in de temporal dead zone, dus daar zou de module op stukbreken
+// en zou het bootscherm blijven staan. Zelfde klasse als de setLayerLocked-bug van
+// sessie 11. Niet naar beneden verplaatsen — en dat geldt net zo goed voor
+// `baseMoment` hieronder, die door dezelfde momentNow() gelezen wordt.
+let timeOffsetMs = 0;
+// Gekozen tijdstip uit het datumveld. `null` = nu, en dan loopt de scene mee met de
+// echte klok; staat er een moment, dan staat de scene daar stil.
+let baseMoment = null;
+// Wordt de eclipsschaduw getekend? Staat hier en niet bij de Cosmos-code, want
+// updateSunUniform() leest hem tijdens de opbouw van de scene (zie de TDZ-noot).
+let eclipseWanted = true;
 // laadstatus (is de textuur succesvol geladen) vs. gebruikerskeuze (aan/uit-toggle)
 let earthLayerStatus  = { day:false, night:false, clouds:false, specular:false, normal:false };
 let earthLayerEnabled = { day:true,  night:true,  clouds:true,  specular:true,  normal:true };
@@ -1566,7 +1812,10 @@ function updateEarthLayers() {
   block.classList.toggle('show', globeMode === 'realistic');
   const note = document.getElementById('aarde-empty');
   if (note) note.style.display = (globeMode === 'realistic') ? 'none' : 'block';
-  for (const key of ['day','night','clouds','specular','normal']) {
+  // `day` staat hier niet meer bij: de dagtextuur heeft geen schakelaar meer, want
+  // een aarde zonder is een zwarte bol. `earthLayerEnabled.day` blijft wel bestaan
+  // en op true staan — de shader mengt day en night en heeft beide nodig.
+  for (const key of ['night','clouds','specular','normal']) {
     const row = document.querySelector('.elayer[data-tex="' + key + '"]');
     const stat = document.getElementById('es-' + key);
     const loaded = !!earthLayerStatus[key];
@@ -1639,6 +1888,13 @@ function buildRealisticMaterial() {
         time:          { value: 0 },
         sunPosition:   { value: new T.Vector2() },
         globeRotation: { value: new T.Vector2() },
+        // Zonsverduistering. `moonPosition` is [lng, lat] van het sublunaire punt,
+        // net als sunPosition, zodat hij dezelfde omzetting en camera-rotatie
+        // ondergaat. De afstanden zijn echte kilometers.
+        moonPosition:   { value: new T.Vector2() },
+        sunDistanceKm:  { value: 149597870.7 },
+        moonDistanceKm: { value: 384400 },
+        eclipseEnabled: { value: 0 },
         atmosphereDayColor:      { value: new T.Color('#6bb3ff') },
         atmosphereTwilightColor: { value: new T.Color('#ff6b3d') }
       },
@@ -1676,6 +1932,13 @@ function setupCloudSphere() {
       cloudDrift:    shaderMaterial.uniforms.cloudDrift,
       sunPosition:   shaderMaterial.uniforms.sunPosition,
       globeRotation: shaderMaterial.uniforms.globeRotation,
+      // Eclips: dezelfde gedeelde referenties, dus de wolkenschil dooft mee met het
+      // oppervlak eronder. De mesh is een KIND van de aarde-mesh, dus zijn
+      // modelMatrix bevat dezelfde -90 graden draai en spreekt hetzelfde frame.
+      moonPosition:   shaderMaterial.uniforms.moonPosition,
+      sunDistanceKm:  shaderMaterial.uniforms.sunDistanceKm,
+      moonDistanceKm: shaderMaterial.uniforms.moonDistanceKm,
+      eclipseEnabled: shaderMaterial.uniforms.eclipseEnabled,
       cloudOpacity:  { value: PARAMS.cloudOpacity }
     },
     vertexShader: CLOUD_VERT, fragmentShader: CLOUD_FRAG,
@@ -1811,12 +2074,66 @@ function restorePhongMaterial() {
   }
 }
 
-// sun-uniform updaten op basis van echte tijd
+// ---- EEN BRON VOOR DE ZONRICHTING (blok D, sessie 14) ----
+// Dit is de enige plek waar de zonstand wordt berekend, en alle drie de afnemers
+// worden hier uit diezelfde ene efemeride gevoed:
+//
+//   1. de shader-uniform `sunPosition`  → terminator, reliëf én de waterglinster
+//   2. de zon-mesh van de sunmoon-laag  → wat je als zon ziet staan
+//   3. globe.gl's DirectionalLight      → wat de maan zijn fase geeft
+//
+// Waarom dit strikt moet: de belichting van Terra komt NIET uit een lamp maar uit
+// js/shaders.js. Daar hangt ook de waterreflectie aan (regels 161-187, een
+// Blinn-Phong glint van macht 80 plus een sheen van macht 14). Rekent de zichtbare
+// zon zijn eigen stand uit, dan staat hij ergens anders dan waar het water
+// glinstert — en dat is precies het soort fout dat je meteen ziet.
+//
+// De verificatie die het bewijst: de zon-mesh moet exact boven de zonneglinster
+// op het water staan.
 function updateSunUniform() {
-  if (!shaderMaterial) return;
-  const [lng, lat] = sunPositionAt(Date.now());
-  shaderMaterial.uniforms.sunPosition.value.set(lng, lat);
-  shaderMaterial.uniforms.globeRotation.value.set(shaderRotation.lng, shaderRotation.lat);
+  // Het GEKOZEN moment, niet per se nu — de tijdkiezer in de Cosmos-tab schuift
+  // hem. Omdat zon, maan, terminator, waterglinster en DirectionalLight allemaal uit
+  // deze ene efemeride komen, verschuift de hele dag/nacht-cyclus consistent mee.
+  // De live datalagen doen dat NIET: die blijven het heden tonen, en het paneel
+  // zegt dat er ook bij zodra de tijd verschoven is.
+  const now = typeof momentNow === 'function' ? momentNow() : new Date();
+
+  // De laag rekent de efemeride en zet zijn eigen meshes; hij geeft het volledige
+  // resultaat terug zodat we het niet twee keer hoeven uit te rekenen. Bestaat de
+  // laag nog niet (tijdens de opbouw), dan doet de wrapper hetzelfde werk.
+  const eph = sunMoon ? sunMoon.update(now) : null;
+  lastEphemeris = eph;
+
+  const [lng, lat] = eph ? [eph.subSolar.lon, eph.subSolar.lat] : sunPositionAt(now.getTime());
+
+  if (shaderMaterial) {
+    const u = shaderMaterial.uniforms;
+    u.sunPosition.value.set(lng, lat);
+    u.globeRotation.value.set(shaderRotation.lng, shaderRotation.lat);
+    // ---- zonsverduistering ----
+    // De shader rekent de schaduw zelf uit; wij leveren alleen waar zon en maan
+    // staan en hoe ver ze echt weg zijn. `eclipseEnabled` is puur een schakelaar om
+    // het rekenwerk over te slaan als de gebruiker het niet wil zien.
+    if (eph && u.moonPosition) {
+      u.moonPosition.value.set(eph.subLunar.lon, eph.subLunar.lat);
+      u.sunDistanceKm.value  = eph.sun.distanceAU * 149597870.7;
+      u.moonDistanceKm.value = eph.moon.distanceKm;
+      u.eclipseEnabled.value = eclipseWanted ? 1 : 0;
+    }
+  }
+
+  // globe.gl's DirectionalLight stond op (0,1,0), pal boven de noordpool, en
+  // bewoog nooit — de standaard was nooit aangeraakt. Hem op de zonrichting
+  // zetten laat de maanfase FYSIEK ontstaan in plaats van getekend.
+  // LET OP: een DirectionalLight kent geen afstand, alleen richting. De schaal
+  // hieronder is dus cosmetisch; alleen de richting telt.
+  if (sunLight && sunMoon) {
+    sunLight.position.copy(sunMoon.sunDirection).multiplyScalar(1000);
+    sunLight.target.position.set(0, 0, 0);
+    sunLight.target.updateMatrixWorld();
+  }
+
+  updateCosmosReadout();
 }
 
 // LET OP: `world.onZoom` is een SETTER, geen event-abonnement. Een tweede
@@ -2683,6 +3000,451 @@ if (rotateToggleEl) {
   });
 }
 
+// ============================================================
+//  Cosmos-tab — zon en maan (sessie 14, deel 1)
+// ============================================================
+
+// Graden als 52,1 grd N / 5,1 grd O. Een lengte- of breedtegraad met een minteken
+// leest slechter dan een windrichting, zeker naast elkaar in een readout.
+function formatLatLon(lat, lon) {
+  const ns = lat >= 0 ? 'N' : 'S';
+  const ew = lon >= 0 ? 'E' : 'W';
+  return `${Math.abs(lat).toFixed(2)}° ${ns} · ${Math.abs(lon).toFixed(2)}° ${ew}`;
+}
+
+function updateCosmosReadout() {
+  const e = lastEphemeris;
+  if (!e) return;
+  const set = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
+  set('rd-subsolar',   formatLatLon(e.subSolar.lat, e.subSolar.lon));
+  set('rd-sublunar',   formatLatLon(e.subLunar.lat, e.subLunar.lon));
+  set('rd-phase',      e.illumination.name);
+  // Dit getal is de controle op de 3D-maan: de verlichte fractie die je in beeld
+  // ziet moet hiermee overeenkomen. Klopt dat niet, dan staat de DirectionalLight
+  // niet op de zonrichting.
+  set('rd-fraction',   `${(e.illumination.fraction * 100).toFixed(1)}%`);
+  set('rd-elongation', `${e.illumination.elongation.toFixed(1)}°`);
+  set('rd-distance',   `${Math.round(e.moon.distanceKm).toLocaleString('en-GB')} km`);
+  drawPhase(e.illumination);
+  updateEclipseState(e);
+}
+
+// Meldt of er op dit moment ergens op aarde een zonsverduistering te zien is.
+// De schaduw zelf tekent de shader; dit is de aflezing ernaast.
+function updateEclipseState(e) {
+  const el = document.getElementById('eclipse-state');
+  if (!el) return;
+  const sh = eclipseShadow(e);
+  // De umbra-ring markeert waar de totaliteit is; zonder hem is die in beeld niet
+  // te vinden tussen de veel grotere, zachte penumbra.
+  if (sunMoon) {
+    sunMoon.setVisible({ eclipse: sh.hits && eclipseWanted });
+    if (sh.hits) sunMoon.setUmbra(sh.lat, sh.lon, sh.umbraKm);
+  }
+  if (!sh.hits) {
+    el.textContent = 'No eclipse at this moment.';
+    el.classList.remove('active');
+    return;
+  }
+  const ns = sh.lat >= 0 ? 'N' : 'S', ew = sh.lon >= 0 ? 'E' : 'W';
+  // De umbra-straal is negatief zodra het oppervlak voorbij de punt van de
+  // schaduwkegel ligt: de maan staat dan te ver weg om de zon helemaal te bedekken
+  // en er blijft een ring over.
+  const breedte = Math.round(Math.abs(sh.umbraKm) * 2);
+  el.innerHTML = `<b>${sh.type} solar eclipse</b><br>` +
+    `centred on ${Math.abs(sh.lat).toFixed(1)}° ${ns} · ${Math.abs(sh.lon).toFixed(1)}° ${ew}<br>` +
+    `${sh.type === 'Total' ? 'umbra' : 'antumbra'} ${breedte} km wide · ` +
+    `striking the surface at ${Math.round(sh.invalshoek)}°`;
+  el.classList.add('active');
+}
+
+// ---- Fase-indicator ----
+// De terminator op een maanschijf is een ELLIPS, geen cirkel: je kijkt schuin tegen
+// een grote cirkel op een bol aan. De halve korte as loopt van +r (volle maan) via 0
+// (kwartier) naar -r (nieuwe maan), en dat is precies r·cos(fasehoek). Uit de
+// verlichte fractie f volgt cos(i) = 2f - 1, dus die ene waarde stuurt de hele vorm.
+//
+// `waxing` bepaalt welke kant verlicht is. Wassend = rechterhelft, zoals je hem op
+// het noordelijk halfrond ziet staan.
+function drawPhase(illum) {
+  const c = document.getElementById('phase-canvas');
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  const S = c.width, R = S / 2 - 4, cx = S / 2, cy = S / 2;
+  ctx.clearRect(0, 0, S, S);
+
+  // donkere schijf als ondergrond
+  ctx.fillStyle = '#1b2230';
+  ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.fill();
+
+  const k = 2 * illum.fraction - 1;          // cos(fasehoek): +1 vol, 0 kwartier, -1 nieuw
+  const rx = Math.abs(k) * R;
+
+  ctx.fillStyle = '#e8eef7';
+  ctx.beginPath();
+  // De verlichte helft: een halve cirkel plus de halve ellips van de terminator.
+  // Bij k > 0 bolt de terminator wég van de verlichte kant (gibbeus), bij k < 0
+  // ligt hij eroverheen (sikkel) — vandaar de omgekeerde draairichting.
+  const kant = illum.waxing ? 1 : -1;
+  ctx.ellipse(cx, cy, R, R, 0, -Math.PI / 2, Math.PI / 2, kant < 0);
+  ctx.ellipse(cx, cy, rx, R, 0, Math.PI / 2, -Math.PI / 2, (k > 0) !== (kant > 0));
+  ctx.fill();
+
+  // dunne rand zodat een nieuwe maan niet volledig verdwijnt
+  ctx.strokeStyle = 'rgba(125,138,160,0.45)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.stroke();
+}
+
+// De schakelaars. `sunMoon` kan nog null zijn als de gebruiker sneller klikt dan de
+// scene klaar is, vandaar de check. `start` moet overeenkomen met de klasse `on` in
+// de markup én met de beginstand in setVisible() onderaan sunmoon-layer.js.
+function bindCosmosToggle(id, statId, apply, start = true) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  let on = start;
+  el.addEventListener('click', () => {
+    on = !on;
+    el.classList.toggle('on', on);
+    document.getElementById(statId).textContent = on ? 'on' : 'off';
+    if (!sunMoon) return;
+    apply(on);
+    // Zonder deze aanroep gebeurt er niets zichtbaars tot de volgende 30-seconden-
+    // tick: `setVisible()` zet alleen vlaggen, en de geometrie van de ground tracks
+    // en de schemeringslijnen wordt pas in `update()` gebouwd. Dat is bewust — het
+    // scheelt rekenwerk zolang ze uit staan — maar het aanzetten moet dan wel meteen
+    // een update afdwingen.
+    updateSunUniform();
+  });
+}
+// Zon en maan hebben geen schakelaar: die horen er altijd te zijn. De overige
+// beginstanden moeten overeenkomen met `setVisible()` onderaan js/sunmoon-layer.js
+// én met de klasse `on` in de markup — drie plekken die één verhaal vertellen.
+bindCosmosToggle('subpoint-toggle', 'es-subpoint',
+  on => sunMoon.setVisible({ sunMark: on, moonMark: on }));
+bindCosmosToggle('leaders-toggle', 'es-leaders', on => sunMoon.setVisible({ leaders: on }));
+bindCosmosToggle('align-toggle', 'es-align', on => sunMoon.setVisible({ alignment: on }));
+bindCosmosToggle('tracks-toggle', 'es-tracks', on => sunMoon.setVisible({ tracks: on }));
+bindCosmosToggle('ticks-toggle', 'es-ticks', on => sunMoon.setVisible({ ticks: on }));
+bindCosmosToggle('twilight-toggle', 'es-twilight', on => sunMoon.setVisible({ twilight: on }));
+
+// ---- Accordion ----
+// Werkt op elke `.acc` in het paneel, dus ook de andere tabs kunnen hem gebruiken
+// zodra ze zo opgebouwd worden. Bewust GEEN exclusieve accordion: meerdere secties
+// open kunnen hebben is hier nuttiger dan er telkens één dichtklappen.
+//
+// De hoogte-animatie gebruikt `grid-template-rows: 0fr -> 1fr`, want dat is de enige
+// manier om naar de ECHTE inhoudshoogte te animeren; `max-height` vraagt een
+// gokwaarde die bij een lange sectie afkapt en bij een korte een trage naloop geeft.
+// Die truc werkt alleen met precies ÉÉN grid-kind — met meerdere kinderen krijgt
+// alleen de eerste rij 0fr en blijft de rest gewoon staan. Vandaar dat we de inhoud
+// hier in een wrapper zetten in plaats van in de markup: zo hoeft geen enkele tab
+// daar rekening mee te houden.
+document.querySelectorAll('.panel .acc-body').forEach(body => {
+  if (body.children.length === 1 && body.firstElementChild.classList.contains('acc-inner')) return;
+  const inner = document.createElement('div');
+  inner.className = 'acc-inner';
+  while (body.firstChild) inner.appendChild(body.firstChild);
+  body.appendChild(inner);
+});
+document.querySelectorAll('.panel .acc-head').forEach(head => {
+  head.addEventListener('click', () => {
+    const sec = head.closest('.acc');
+    const open = sec.classList.toggle('open');
+    head.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+});
+
+// Uitklapbare toelichtingen: de i-knop bij Moment en de chevron bij Twilight.
+function bindNoteToggle(btn, noteId) {
+  if (!btn) return;
+  const note = document.getElementById(noteId);
+  if (!note) return;
+  const wissel = (ev) => {
+    // De i-knop zit binnen de accordion-kop; zonder dit zou dezelfde klik de
+    // sectie ook in- of uitklappen, en zag je de uitleg nooit.
+    ev.stopPropagation();
+    ev.preventDefault();
+    const open = note.hidden;
+    note.hidden = !open;
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    btn.classList.toggle('on', open);
+    // Zit de sectie dicht, dan heeft uitklappen van de toelichting geen zin.
+    const sec = btn.closest('.acc');
+    if (open && sec && !sec.classList.contains('open')) sec.querySelector('.acc-head').click();
+  };
+  btn.addEventListener('click', wissel);
+  btn.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter' || ev.key === ' ') wissel(ev);
+  });
+}
+bindNoteToggle(document.getElementById('moment-info-btn'), 'moment-info');
+
+// Uitklap-chevrons binnen een laagrij (nu: Twilight bands). Ze gebruiken dezelfde
+// `.row-expand` + `.layer-detail` als de aardbeving-filters, zodat het overal
+// hetzelfde gebaar is. LET OP: `.layer-detail` staat standaard op `display: none`
+// en wordt zichtbaar met de klasse `show` — het `hidden`-attribuut doet daar niets.
+document.querySelectorAll('.elayer .row-expand[data-note]').forEach(btn => {
+  const note = document.getElementById(btn.dataset.note);
+  if (!note) return;
+  btn.addEventListener('click', (ev) => {
+    // De rij eromheen is zelf een schakelaar; zonder dit zou de uitleg openen én
+    // de laag aan- of uitzetten.
+    ev.stopPropagation();
+    const open = !note.classList.contains('show');
+    note.classList.toggle('show', open);
+    btn.classList.toggle('open', open);
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+});
+
+// ============================================================
+//  De tijdkiezer
+// ------------------------------------------------------------
+//  Het getoonde moment bestaat uit TWEE delen:
+//
+//    baseMoment    het gekozen tijdstip uit het datumveld. `null` betekent "nu",
+//                  en dan loopt de scene mee met de echte klok. Staat er wél een
+//                  moment, dan staat de scene stil — je hebt immers een absoluut
+//                  tijdstip gekozen, dat hoort niet weg te schuiven.
+//    timeOffsetMs  de verschuiving die de slider eromheen legt.
+//
+//  Waarom niet één absolute waarde: met alleen een absoluut moment zou de
+//  30-seconden-interval de stand elke halve minuut terugzetten (precies de bug
+//  waar ik in deel 1 tegenaan liep). Met deze splitsing werkt de interval gewoon:
+//  bij `baseMoment === null` loopt hij mee, anders verandert er niets.
+// ============================================================
+
+const STAP_MS = 10 * 60 * 1000;      // slidereenheid: 10 minuten
+let trackDays = 3;                   // ook de schaal van de slider, zie hieronder
+// (`baseMoment` en `timeOffsetMs` staan bovenaan bij de scene-state — zie de
+//  TDZ-noot daar; momentNow() wordt al tijdens de opbouw aangeroepen.)
+
+function momentNow() {
+  const basis = baseMoment ? baseMoment.getTime() : Date.now();
+  return new Date(basis + timeOffsetMs);
+}
+
+function formatOffset(ms) {
+  if (ms === 0) return null;
+  const teken = ms < 0 ? '−' : '+';
+  const totaalMin = Math.round(Math.abs(ms) / 60000);
+  const d = Math.floor(totaalMin / 1440), u = Math.floor((totaalMin % 1440) / 60), m = totaalMin % 60;
+  const delen = [];
+  if (d) delen.push(`${d} d`);
+  if (u) delen.push(`${u} h`);
+  if (m && !d) delen.push(`${m} min`);   // bij dagen zijn minuten ruis
+  return `${teken}${delen.join(' ')}`;
+}
+
+// Het TRACKVENSTER IS DE SCHAAL VAN DE SLIDER. Kies je 7 dagen, dan loopt de slider
+// van −3,5 tot +3,5 dag, en dat is precies het spoor dat op de bol getekend staat.
+// Slider en spoor vertellen daarmee hetzelfde verhaal: je schuift binnen het pad dat
+// je ziet. Bij 1 dag wordt de slider vanzelf fijn, bij een maanmaand grof.
+function sliderStappen() {
+  return Math.round((trackDays * 86400000 / 2) / STAP_MS);
+}
+function herschaalSlider() {
+  const s = document.getElementById('time-slider');
+  if (!s) return;
+  const n = sliderStappen();
+  s.min = String(-n);
+  s.max = String(n);
+  // De huidige stand meenemen, maar binnen het nieuwe bereik houden.
+  const grens = n * STAP_MS;
+  timeOffsetMs = Math.max(-grens, Math.min(grens, timeOffsetMs));
+  s.value = String(Math.round(timeOffsetMs / STAP_MS));
+  // Toon hoe ver de slider reikt, zodat zichtbaar is wat het venster met hem doet.
+  const span = document.getElementById('time-span');
+  if (span) span.textContent = `± ${formatOffset(grens).replace('+', '')}`;
+}
+
+// Het datumveld verwacht lokale tijd zonder tijdzone-achtervoegsel.
+function naarVeldWaarde(d) {
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}` +
+         `T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+function refreshTimeUI() {
+  const verschoven = baseMoment !== null || timeOffsetMs !== 0;
+  const val = document.getElementById('time-val');
+  const reset = document.getElementById('time-reset');
+  const head = document.getElementById('readout-head');
+  const stamp = momentNow().toLocaleString('en-GB',
+    { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+  if (val) {
+    const off = formatOffset(timeOffsetMs);
+    // "+3 d" alleen zegt te weinig; het moment zelf hoort erbij.
+    val.textContent = verschoven ? (off ? `${off} · ${stamp}` : stamp) : 'now';
+    val.classList.toggle('shifted', verschoven);
+  }
+  if (reset) reset.hidden = !verschoven;
+  // De Readings-kop draagt zijn eigen tijdstempel, zodat je bij een ingeklapte
+  // sectie nog steeds ziet welk moment de getallen erin beschrijven. De
+  // waarschuwing die hier stond is vervangen door de i-knop bij Moment: die is er
+  // altijd, in plaats van alleen wanneer de tijd al verschoven is.
+  if (head) {
+    head.textContent = verschoven ? stamp : 'right now';
+    head.classList.toggle('shifted', verschoven);
+  }
+  updateSunUniform();
+}
+
+const timeSliderEl = document.getElementById('time-slider');
+timeSliderEl?.addEventListener('input', () => {
+  timeOffsetMs = parseInt(timeSliderEl.value, 10) * STAP_MS;
+  refreshTimeUI();
+});
+
+// Kies je een datum, dan wordt die het nulpunt en gaat de slider weer op 0 staan:
+// de verschuiving hoort bij het gekozen tijdstip, niet bovenop een vorige stand.
+const timeInputEl = document.getElementById('time-input');
+timeInputEl?.addEventListener('change', () => {
+  if (!timeInputEl.value) { terugNaarNu(); return; }
+  const d = new Date(timeInputEl.value);
+  if (isNaN(d)) return;
+  baseMoment = d;
+  timeOffsetMs = 0;
+  if (timeSliderEl) timeSliderEl.value = '0';
+  refreshTimeUI();
+});
+
+function terugNaarNu() {
+  stopPlay();
+  baseMoment = null;
+  timeOffsetMs = 0;
+  if (timeSliderEl) timeSliderEl.value = '0';
+  if (timeInputEl) timeInputEl.value = '';
+  refreshTimeUI();
+}
+document.getElementById('time-reset')?.addEventListener('click', terugNaarNu);
+
+// ---- Eclips ----
+const eclipseToggleEl = document.getElementById('eclipse-toggle');
+eclipseToggleEl?.addEventListener('click', () => {
+  eclipseWanted = !eclipseWanted;
+  eclipseToggleEl.classList.toggle('on', eclipseWanted);
+  document.getElementById('es-eclipse').textContent = eclipseWanted ? 'on' : 'off';
+  updateSunUniform();
+});
+
+// Spring naar de vorige of volgende zonsverduistering. Zoeken kost ongeveer 10 ms —
+// de scan slaat alles over waar de maan niet dicht bij de zon staat — maar de knop
+// gaat even op slot zodat een dubbelklik niet twee scans start.
+function springNaarEclips(richting, btn) {
+  const label = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '…';
+  // Uit de render-tick halen, anders bevriest de knoptekst tot de scan klaar is.
+  setTimeout(() => {
+    // Drie dagen marge zodat we niet de eclips vinden waar we al op staan.
+    const vanaf = new Date(momentNow().getTime() + richting * 3 * 86400000);
+    const gevonden = richting > 0 ? nextSolarEclipse(vanaf) : previousSolarEclipse(vanaf);
+    btn.disabled = false;
+    btn.textContent = label;
+    if (!gevonden) { btn.textContent = 'none'; setTimeout(() => btn.textContent = label, 1500); return; }
+    stopPlay();
+    // Een venster van één dag maakt de slider fijn genoeg om de schaduw stap voor
+    // stap over de aarde te zien trekken; de hele passage duurt maar een uur of twee.
+    trackDays = 1;
+    document.querySelectorAll('#track-presets .preset').forEach(b =>
+      b.classList.toggle('active', b.dataset.days === '1'));
+    if (sunMoon) sunMoon.setTrackWindow(1);
+    baseMoment = gevonden.date;
+    timeOffsetMs = 0;
+    herschaalSlider();
+    if (timeInputEl) timeInputEl.value = naarVeldWaarde(gevonden.date);
+    // Het pad van de umbra over het oppervlak. Dit is wat de eclips leesbaar maakt:
+    // de umbra zelf is maar zo'n procent van de aardschijf breed, dus zonder dit
+    // spoor zie je alleen de zachte penumbra en niet waar de totaliteit langs gaat.
+    if (sunMoon) sunMoon.setEclipsePath(eclipsePath(gevonden.date));
+    refreshTimeUI();
+    // Draai de bol naar de plek waar de schaduw valt, anders sta je ernaast.
+    world.pointOfView({ lat: gevonden.shadow.lat, lng: gevonden.shadow.lon, altitude: 1.4 }, 900);
+  }, 30);
+}
+document.getElementById('eclipse-jump')?.addEventListener('click',
+  (ev) => springNaarEclips(1, ev.currentTarget));
+document.getElementById('eclipse-prev')?.addEventListener('click',
+  (ev) => springNaarEclips(-1, ev.currentTarget));
+
+// ---- Trackvenster ----
+// Bepaalt zowel het spoor op de bol als het bereik van de slider hierboven.
+document.getElementById('track-presets')?.addEventListener('click', (ev) => {
+  const btn = ev.target.closest('.preset');
+  if (!btn || !sunMoon) return;
+  document.querySelectorAll('#track-presets .preset').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  trackDays = parseFloat(btn.dataset.days);
+  sunMoon.setTrackWindow(trackDays);
+  herschaalSlider();
+  refreshTimeUI();
+});
+
+// ---- Afspelen ----
+// De snelheidsregelaar bepaalt UITSLUITEND hoe snel de tijd loopt tijdens het
+// afspelen. Hoe fijn de slider is, komt uit het trackvenster — dat zijn twee
+// verschillende dingen en ze horen niet allebei aan dezelfde knop te hangen.
+//
+// Logaritmische schaal, want het bruikbare bereik loopt van "een kwartier per
+// seconde" tot "twee dagen per seconde"; lineair zou het onderste stuk onbruikbaar
+// fijn maken.
+const SPEED_MIN_H = 0.25, SPEED_MAX_H = 48;
+let playDir = 0;          // -1 achteruit, 0 stil, +1 vooruit
+let playRaf = null;
+let playVorigeTijd = 0;
+
+function speedUurPerSec() {
+  const el = document.getElementById('play-speed');
+  const t = el ? parseInt(el.value, 10) / 100 : 0.5;
+  return SPEED_MIN_H * Math.pow(SPEED_MAX_H / SPEED_MIN_H, t);
+}
+
+function toonSpeed() {
+  const v = speedUurPerSec();
+  const el = document.getElementById('play-speed-val');
+  if (el) el.textContent = v < 1 ? `${Math.round(v * 60)} min/s` : `${v.toFixed(v < 10 ? 1 : 0)} h/s`;
+}
+document.getElementById('play-speed')?.addEventListener('input', toonSpeed);
+
+function playStap(nu) {
+  if (!playDir) return;
+  const dt = Math.min(0.1, (nu - playVorigeTijd) / 1000);   // klem na een tabwissel
+  playVorigeTijd = nu;
+  const grens = sliderStappen() * STAP_MS;
+  timeOffsetMs += playDir * speedUurPerSec() * 3600000 * dt;
+  // Aan de grens rondlopen in plaats van stoppen: dat maakt er een doorlopende
+  // animatie van de dag/nacht-cyclus van, wat precies het effect is dat we willen.
+  if (timeOffsetMs > grens) timeOffsetMs = -grens;
+  if (timeOffsetMs < -grens) timeOffsetMs = grens;
+  if (timeSliderEl) timeSliderEl.value = String(Math.round(timeOffsetMs / STAP_MS));
+  refreshTimeUI();
+  playRaf = requestAnimationFrame(playStap);
+}
+
+function setPlay(dir) {
+  playDir = dir;
+  document.getElementById('play-back')?.classList.toggle('active', dir === -1);
+  document.getElementById('play-fwd')?.classList.toggle('active', dir === 1);
+  const pauze = document.getElementById('play-pause');
+  if (pauze) pauze.disabled = dir === 0;
+  cancelAnimationFrame(playRaf);
+  playRaf = null;
+  if (dir !== 0) {
+    playVorigeTijd = performance.now();
+    playRaf = requestAnimationFrame(playStap);
+  }
+}
+function stopPlay() { setPlay(0); }
+
+document.getElementById('play-back')?.addEventListener('click', () => setPlay(playDir === -1 ? 0 : -1));
+document.getElementById('play-fwd')?.addEventListener('click', () => setPlay(playDir === 1 ? 0 : 1));
+document.getElementById('play-pause')?.addEventListener('click', stopPlay);
+
+herschaalSlider();
+toonSpeed();
+
 const wireToggleEl = document.getElementById('wire-toggle');
 if (wireToggleEl) {
   wireToggleEl.addEventListener('click', () => {
@@ -2693,6 +3455,10 @@ if (wireToggleEl) {
   });
 }
 
+// De mist heeft geen schakelaar meer in het paneel en staat altijd uit. De code
+// hieronder blijft staan omdat de fresnel-mistschil een werkende optie is die zo
+// terug kan: `fogOn` op true zetten volstaat. De guard maakt het onschadelijk
+// zolang het element niet bestaat.
 const fogToggleEl = document.getElementById('fog-toggle');
 if (fogToggleEl) {
   fogToggleEl.addEventListener('click', () => {
@@ -3084,6 +3850,98 @@ function dismissBoot() {
 // is hier geïnitialiseerd.
 if (!RELAY_BASE) setLayerLocked('lightning', true);
 
+// ============================================================
+//  Zon en maan (sessie 14)
+// ------------------------------------------------------------
+//  Staat hier onderaan om dezelfde reden als de regel hierboven: de laag raakt via
+//  updateSunUniform() → updateCosmosReadout() de DOM-verwijzingen en `shaderMaterial`,
+//  en die zijn pas vanaf dit punt geïnitialiseerd. Bovenaan zetten geeft een temporal
+//  dead zone: de module stopt en het bootscherm blijft eeuwig staan. Dat is precies
+//  wat er in sessie 11 gebeurde met setLayerLocked().
+// ============================================================
+sunMoon = createSunMoonLayer(THREE, {
+  earthRadius:       100,           // globe.gl's bolstraal; alle lagen rekenen hierin
+  sunDistance:       PARAMS.sunDistance,
+  sunRadius:         PARAMS.sunRadius,
+  moonDistance:      PARAMS.moonDistance,
+  moonRadius:        PARAMS.moonRadius,
+  moonDistanceSwing: PARAMS.moonDistanceSwing,
+  sunGlowScale:      PARAMS.sunGlowScale,
+  moonGlowScale:     PARAMS.moonGlowScale,
+  sunColorBoost:     PARAMS.sunColorBoost,
+  subPointRadius:    PARAMS.subPointRadius,
+  subPointAltitude:  PARAMS.subPointAltitude,
+  sunTextureUrl:     asset('assets/planets/2k_sun.jpg'),
+  moonTextureUrl:    asset('assets/planets/2k_moon.jpg'),
+  addLights:         false          // globe.gl zet er zelf al twee neer
+});
+world.scene().add(sunMoon.group);
+
+// globe.gl's eigen DirectionalLight opzoeken. Terra's code voegt geen enkel licht
+// toe; globe.gl zet er twee neer (AmbientLight PI en DirectionalLight 0,6·PI op
+// (0,1,0)). Die laatste stond pal boven de noordpool en bewoog nooit. We pakken hem
+// hier op zodat updateSunUniform() hem met de zon kan meedraaien.
+//
+// GEMETEN, en dit was een echte val: `world.scene().traverse()` vindt hem op dit
+// moment NIET. globe.gl houdt zijn lichten intern bij en hangt ze pas bij de eerste
+// render in de scene-graph, dus een traverse hier levert null en het licht bleef op
+// de noordpool staan. De accessor `world.lights()` geeft de interne lijst en werkt
+// wél meteen. Zelfde klasse als `whenEarthMeshReady()`: wat globe.gl belooft is er
+// niet noodzakelijk al op het moment dat je ernaar vraagt.
+sunLight = (world.lights() || []).find(l => l.isDirectionalLight) || null;
+// Een DirectionalLight schijnt van `position` naar `target`, en dat target moet in
+// de scene-graph zitten om zijn wereldmatrix te krijgen.
+if (sunLight && !sunLight.target.parent) world.scene().add(sunLight.target);
+
+// ---- Lichtsterktes bijstellen, uitsluitend voor de maan ----
+// globe.gl's standaard is AmbientLight PI (3,1416) tegen DirectionalLight 0,6·PI
+// (1,885). Die verhouding maakt de nachtzijde van de maan 62% zo helder als de
+// dagzijde: de fase was daardoor niet te zien. Bij eerste kwartier (49,9% verlicht)
+// leek de maan vrijwel vol.
+//
+// DIT MAG, EN DAT IS GEMETEN: buiten de zon/maan-laag heeft de scene 406 materials
+// en NUL daarvan reageert op licht (181 MeshBasic, 68 Shader, 156 Sprite, 1
+// LineBasic). De aarde tekent zijn eigen belichting in js/shaders.js. Deze twee
+// lichten raken dus letterlijk niets anders dan onze maan.
+//
+// Zet iemand hier later wel een Lambert/Phong/Standard-material neer, dan gaat die
+// aanname niet meer op en moet dit opnieuw beoordeeld worden.
+//
+// 0,20 tegen PI geeft een nachtzijde van 6% — donker genoeg voor een scherpe
+// terminator, licht genoeg om niet pikzwart te zijn. Dat laatste is bovendien
+// fysiek juist: de nachtzijde van de maan vangt aardschijn.
+const ambientLight = (world.lights() || []).find(l => l.isAmbientLight);
+if (ambientLight) ambientLight.intensity = 0.20;
+if (sunLight) sunLight.intensity = Math.PI;
+
+// ---- Camerabereik (blok G) ----
+// Een lichaam op afstand S van het middelpunt valt gegarandeerd binnen beeld zodra
+// de camera op D >= S / sin(h) staat, met h de KLEINSTE halve beeldhoek. De
+// verticale hoek is `fov` en ligt vast; de horizontale volgt uit de aspectratio, en
+// op een telefoon in portret is díé de krappe. Vandaar geen vast getal maar een
+// formule die met het venster meebeweegt: één vaste waarde straft óf desktop
+// (onnodig ver) óf mobiel (de zon valt buiten beeld).
+//
+// Gemeten met fov 50: desktop 16:9 vraagt 2,37 x de zonafstand, een telefoon in
+// portret 4,76 x. `zoomMinDistance` blijft 155 — dat is geen smaak maar de omweg
+// voor de zwarte clipping bij diep inzoomen.
+function fitDistance(S) {
+  const cam = world.camera();
+  const halfV = (cam.fov / 2) * Math.PI / 180;
+  const halfH = Math.atan(cam.aspect * Math.tan(halfV));
+  return S / Math.sin(Math.min(halfV, halfH));
+}
+function applyZoomRange() {
+  // Marge van 6% zodat het lichaam niet exact op de beeldrand plakt.
+  const far = Math.max(PARAMS.zoomMaxDistance, fitDistance(PARAMS.sunDistance) * 1.06);
+  world.controls().maxDistance = far;
+  return far;
+}
+applyZoomRange();
+
+// Eerste stand meteen zetten; daarna houdt de setInterval hem bij.
+updateSunUniform();
+
 // Polling start meteen: een trage eerste ronde mag de intervallen niet ophouden.
 // Een onzichtbaar tabblad pollt níét. Dát is waar de beleefdheid tegenover de
 // publieke feeds zit (en het scheelt accu op mobiel): een demo die iemand in een
@@ -3123,6 +3981,8 @@ Promise.allSettled(Object.values(firstPulls)).finally(() => {
 window.addEventListener('resize', () => {
   world.width(window.innerWidth).height(window.innerHeight);
   bloomPass.setSize(window.innerWidth, window.innerHeight);
+  // De maximale zoomafstand hangt af van de aspectratio — zie fitDistance().
+  applyZoomRange();
 });
 world.width(window.innerWidth).height(window.innerHeight);
 </script>

@@ -107,6 +107,34 @@ setup. It is listed here for completeness.
 
 ---
 
+## Algorithms
+
+### Positions of the Sun and the Moon
+
+**Jean Meeus**, *Astronomical Algorithms*, 2nd edition (Willmann-Bell, 1998)
+
+The Sun and Moon positions in `js/sunmoon.js` are computed from the methods in
+that book: chapter 12 (sidereal time), chapter 22 (nutation and obliquity),
+chapter 25 (solar coordinates), chapter 47 (lunar position, a truncated form of
+ELP-2000/82) and chapter 48 (illuminated fraction of the Moon). Delta-T uses the
+polynomial published by Fred Espenak and Jean Meeus for the years 2005 to 2050.
+
+Mathematical methods are not copyrightable and no permission is required to
+implement them. The credit is given because the work deserves it and because
+knowing which reference an implementation follows is what makes it checkable.
+
+The implementation is verified against Meeus' own worked examples and against
+published events: solar right ascension and declination within 0.5 arcseconds,
+lunar longitude within 2 arcseconds, the new moon of 18 January 2026 within one
+minute, and an eclipse gamma of 0.9015 against a published 0.8977. On the ground
+that is roughly 2 km of positional error, well under one pixel at any zoom level
+Terra allows.
+
+No network request and no API key is involved: the positions are calculated in
+the browser.
+
+---
+
 ## Libraries
 
 All loaded from [esm.sh](https://esm.sh/) at pinned versions, declared in the
