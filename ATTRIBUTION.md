@@ -71,6 +71,16 @@ Files: `assets/geo/ne_110m_admin_0_countries.geojson`, `assets/geo/ne_110m_land.
 Work of the United States Geological Survey, a US government agency. Public
 domain, no restriction on use.
 
+**EMSC-CSEM** (European-Mediterranean Seismological Centre) &nbsp;·&nbsp;
+[emsc-csem.org](https://www.emsc-csem.org/) &nbsp;·&nbsp; via the FDSN event
+service on [seismicportal.eu](https://www.seismicportal.eu/)
+
+A non-profit that aggregates the real-time solutions of national seismological
+institutes across Europe and beyond. Free access for non-commercial use, with
+attribution. The contributing institute is named per event in the `auth` field
+and is shown in the readout — "EMSC · BMKG" credits both the aggregator and the
+agency that made the measurement.
+
 ### Volcanoes, wildfires, storms and sea ice
 
 **NASA EONET** (Earth Observatory Natural Event Tracker) &nbsp;·&nbsp;

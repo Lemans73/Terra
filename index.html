@@ -263,13 +263,38 @@
         <span class="count" id="count-quake">—</span>
       </div>
       <div class="layer-detail show" data-detail="quake">
+        <!-- Twee bronnen, elk apart aan of uit. USGS dekt de wereld, EMSC ziet
+             in Europa wat USGS mist (gemeten: 819 tegen 5 over een week M1+).
+             Beide aan betekent ontdubbelen; dat gaat vanzelf. -->
+        <h3>Sources</h3>
+        <div class="srcs" id="quake-sources">
+          <label class="src">
+            <input type="checkbox" data-src="usgs" checked>
+            <span>USGS</span><em>global coverage</em>
+          </label>
+          <label class="src">
+            <input type="checkbox" data-src="emsc" checked>
+            <span>EMSC</span><em>Euro-Med detail</em>
+          </label>
+        </div>
+        <button class="apply" id="src-apply" disabled>Apply</button>
+
         <h3>Magnitude</h3>
         <div class="presets" id="mag-presets">
-          <button class="preset" data-mag="-10">All</button>
+          <button class="preset" data-mag="1">All</button>
           <button class="preset active" data-mag="2">M2+</button>
           <button class="preset" data-mag="3">M3+</button>
           <button class="preset" data-mag="4">M4+</button>
           <button class="preset" data-mag="5">M5+</button>
+        </div>
+
+        <h3>Upper limit</h3>
+        <div class="presets" id="magmax-presets">
+          <button class="preset active" data-magmax="">None</button>
+          <button class="preset" data-magmax="2">≤ M2</button>
+          <button class="preset" data-magmax="3">≤ M3</button>
+          <button class="preset" data-magmax="4">≤ M4</button>
+          <button class="preset" data-magmax="5">≤ M5</button>
         </div>
 
         <h3>Time window</h3>
@@ -594,7 +619,7 @@
           <dd><a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener">Natural Earth</a> · public domain</dd>
 
           <dt>Live data</dt>
-          <dd><a href="https://earthquake.usgs.gov" target="_blank" rel="noopener">USGS</a> · <a href="https://eonet.gsfc.nasa.gov" target="_blank" rel="noopener">NASA EONET</a> · <a href="https://aqicn.org" target="_blank" rel="noopener">World Air Quality Index Project</a> and the measuring authority per station · <a href="https://www.blitzortung.org" target="_blank" rel="noopener">Blitzortung.org</a>. The last two: non-commercial use only</dd>
+          <dd><a href="https://earthquake.usgs.gov" target="_blank" rel="noopener">USGS</a> · <a href="https://www.emsc-csem.org" target="_blank" rel="noopener">EMSC-CSEM</a> and the reporting institute per event · <a href="https://eonet.gsfc.nasa.gov" target="_blank" rel="noopener">NASA EONET</a> · <a href="https://aqicn.org" target="_blank" rel="noopener">World Air Quality Index Project</a> and the measuring authority per station · <a href="https://www.blitzortung.org" target="_blank" rel="noopener">Blitzortung.org</a>. The last three: non-commercial use only</dd>
 
           <dt>Built with</dt>
           <dd><a href="https://threejs.org/" target="_blank" rel="noopener">three.js</a>, <a href="https://github.com/vasturiano/globe.gl" target="_blank" rel="noopener">globe.gl</a> · MIT · <a href="https://gsap.com/" target="_blank" rel="noopener">GSAP</a></dd>
@@ -606,6 +631,7 @@
       <span class="live"></span><span id="status">connecting…</span><br>
       Sources:
       <a href="https://earthquake.usgs.gov" target="_blank" rel="noopener">USGS</a> ·
+      <a href="https://www.emsc-csem.org" target="_blank" rel="noopener">EMSC</a> ·
       <a href="https://eonet.gsfc.nasa.gov" target="_blank" rel="noopener">NASA EONET</a> ·
       <a href="https://aqicn.org" target="_blank" rel="noopener">WAQI</a> ·
       <a href="https://www.blitzortung.org" target="_blank" rel="noopener">Blitzortung</a>
@@ -1021,6 +1047,86 @@ function eonetAdapters(spec) {
   return out;
 }
 
+// ---- Aardbevingen uit twee bronnen ----------------------------
+//
+// De laagste magnitude die de interface kan tonen ("All"). Ook de ondergrens
+// waarmee bij EMSC wordt opgehaald. Staat BOVEN `Adapters` omdat de url-getter
+// van de EMSC-adapter hem leest — een const eronder zou een TDZ-fout geven
+// zodra de eerste pull vóór de declaratie valt.
+const QUAKE_FLOOR_MAG = 1;
+
+// Twee adapters delen de laag `quake`. De standaard-merge vervangt álle events
+// van de eigen lagen, dus zouden ze elkaar om beurten wissen: USGS haalt op en
+// gooit EMSC weg, EMSC haalt op en gooit USGS weg. Elke bron vervangt daarom
+// alleen zijn eigen `src`.
+function quakeMerge(prev, fresh, src) {
+  return prev.filter(d => !(d.layer === 'quake' && d.src === src)).concat(fresh);
+}
+
+// Twee records zijn hetzelfde event als tijd, plaats ÉN kracht dicht genoeg bij
+// elkaar liggen. Die derde eis is er om een échte naschok binnen een minuut en
+// een graad NIET op te slokken: bij de 222 gemeten dubbels was het
+// magnitudeverschil gemiddeld 0,03 en maximaal 0,50, dus 1,0 laat elke dubbel
+// door en houdt een los event apart.
+const DUP_MS = 60_000, DUP_DEG = 1.0, DUP_MAG = 1.0;
+
+// Binnen Europa en de Middellandse Zee meet EMSC fijner, daarbuiten USGS. Dit
+// bepaalt uitsluitend WELK record een dubbel paar overleeft. Unieke events van
+// beide bronnen blijven altijd staan — ook de 99 Mexicaanse en 37 Indonesische
+// die alleen EMSC heeft.
+const EMSC_HOME = { latMin: 30, latMax: 75, lonMin: -30, lonMax: 50 };
+const preferredSrc = (d) =>
+  (d.lat >= EMSC_HOME.latMin && d.lat <= EMSC_HOME.latMax &&
+   d.lng >= EMSC_HOME.lonMin && d.lng <= EMSC_HOME.lonMax) ? 'emsc' : 'usgs';
+
+// Lengteverschil over de datumgrens heen. Zonder dit staan twee metingen van
+// dezelfde beving op 179,9 en -179,9 volgens de rekensom 359,8 graden uit
+// elkaar — precies in de Koerilen- en Fiji-troggen, waar het hard genoeg beeft
+// om dat te merken.
+function lonDelta(a, b) {
+  const d = Math.abs(a - b) % 360;
+  return d > 180 ? 360 - d : d;
+}
+
+// Rasterzoek in plaats van elk paar vergelijken: op ~5000 events zou paarsgewijs
+// ruim 12 miljoen vergelijkingen kosten, en dat bij elke pull. Cellen zijn
+// DUP_DEG breed en DUP_MS lang, en alleen de 27 buurcellen worden nagelopen.
+// De lengtecel wordt naar 0..359 gevouwen zodat de datumgrens geen naad is.
+function markQuakeDuplicates(list) {
+  const grid = new Map();
+  const cellT = (t) => Math.floor(t / DUP_MS);
+  const cellLa = (la) => Math.floor(la / DUP_DEG);
+  const cellLo = (lo) => ((Math.floor(lo / DUP_DEG) % 360) + 360) % 360;
+
+  for (const d of list) if (d.layer === 'quake') d.dup = false;
+
+  for (const d of list) {
+    if (d.layer !== 'quake') continue;
+    const t = cellT(d.time), la = cellLa(d.lat), lo = cellLo(d.lng);
+    let twin = null;
+    for (let dt = -1; dt <= 1 && !twin; dt++) {
+      for (let dla = -1; dla <= 1 && !twin; dla++) {
+        for (let dlo = -1; dlo <= 1 && !twin; dlo++) {
+          const cell = grid.get((t + dt) + '|' + (la + dla) + '|' + (((lo + dlo) % 360) + 360) % 360);
+          if (!cell) continue;
+          for (const o of cell) {
+            if (o.src === d.src) continue;           // binnen één bron niet ontdubbelen
+            if (Math.abs(o.time - d.time) < DUP_MS &&
+                Math.abs(o.lat - d.lat) < DUP_DEG &&
+                lonDelta(o.lng, d.lng) < DUP_DEG &&
+                Math.abs((o.value || 0) - (d.value || 0)) < DUP_MAG) { twin = o; break; }
+          }
+        }
+      }
+    }
+    if (twin) (d.src === preferredSrc(d) ? twin : d).dup = true;
+    const k = t + '|' + la + '|' + lo;
+    if (!grid.has(k)) grid.set(k, []);
+    grid.get(k).push(d);
+  }
+  return list;
+}
+
 const Adapters = {
   // USGS — aardbevingen. Feed-keuze volgt het actieve tijdvenster:
   // 'hour' → all_hour, 'day' → all_day, 'week' → all_week.
@@ -1042,15 +1148,94 @@ const Adapters = {
         return {
           id: f.id,
           layer: 'quake',
+          src: 'usgs',
           lat, lng, depth,
           value: f.properties.mag,
+          magType: f.properties.magType || null,
           label: f.properties.place || 'Unknown location',
           time: f.properties.time,
           source: 'USGS',
           url: f.properties.url // directe link naar de USGS-eventpagina
         };
       });
-    }
+    },
+    merge: (prev, fresh) => quakeMerge(prev, fresh, 'usgs'),
+    afterMerge: markQuakeDuplicates
+  },
+
+  // EMSC / seismicportal.eu — tweede seismische bron naast USGS.
+  // ---------------------------------------------------------------------------
+  // WAAROM ERBIJ. De mondiale USGS-catalogus is in Europa vrijwel blind onder de
+  // M4. Gemeten 2026-08-02 over de Europa-box (34-72N, 25W-45O), 7 dagen, M1+:
+  // EMSC 819 events tegen USGS 5. Dat is geen aanvulling maar een andere kaart.
+  // Wereldwijd op M4+ is EMSC bijna een superset: 431 tegen 227, waarvan 222
+  // hetzelfde event — met 209 die alléén EMSC heeft (regionale instituten als
+  // UNM in Mexico, BMKG in Indonesië, JMA in Japan) en 5 die alleen USGS heeft.
+  //
+  // HET CONTRACT WIJKT AF, op meer punten dan het lijkt:
+  //   - `unid` in plaats van `id`, `flynn_region` in plaats van `place`
+  //   - de tijd is een ISO-string, geen epoch in milliseconden
+  //   - de coördinaten staan in `properties.lat`/`lon`, niet in de geometrie
+  //   - de DIEPTE IS NEGATIEF in `geometry.coordinates[2]` (-38 waar USGS +38
+  //     schrijft) terwijl `properties.depth` wél positief is
+  //   - geen kant-en-klare event-URL; die stellen we samen uit `unid`
+  //   - `magtype` is meest `ml` (781 van 819 in Europa), bij USGS meest `mb`/`mww`
+  //   - `auth` noemt het instituut dat de meting deed — gratis herkomst
+  //
+  // Er wordt altijd vanaf M1 opgehaald, ongeacht het filter: dat is de laagste
+  // stand die de interface kent, en het scheelt over een week maar 286 KB op
+  // 1,75 MB. In ruil werkt het magnitudefilter direct, zonder opnieuw op te halen.
+  //
+  // EMSC ontdubbelt zichzelf al: over dezelfde 431 events zat er precies één
+  // intern dubbel paar. De ontdubbeling die wij bouwen is dus alleen nodig tussen
+  // de twee bronnen — zie markQuakeDuplicates().
+  emsc: {
+    layers: ['quake'],
+    interval: 60_000,
+    days: { hour: 1 / 24, day: 1, week: 7 },
+    get url() {
+      const back = (this.days[timeWindow] ?? 1) * 86_400_000;
+      const start = new Date(Date.now() - back).toISOString().slice(0, 19);
+      return 'https://www.seismicportal.eu/fdsnws/event/1/query' +
+             '?format=json&limit=2000&minmag=' + QUAKE_FLOOR_MAG +
+             '&start=' + start;
+    },
+    normalize(json) {
+      return (json.features || []).map(f => {
+        const p = f.properties || {};
+        return {
+          id: 'emsc-' + p.unid,   // eigen voorvoegsel: `seenIds` mag nooit botsen
+          layer: 'quake',
+          src: 'emsc',
+          lat: p.lat,
+          lng: p.lon,
+          // Math.abs is het vangnet: `properties.depth` is positief, maar een
+          // record dat alleen de geometrie draagt zou de diepte negatief leveren
+          // en de marker onder het oppervlak zetten.
+          depth: Math.abs(p.depth ?? f.geometry?.coordinates?.[2] ?? 0),
+          value: p.mag,
+          magType: p.magtype || null,
+          agency: p.auth || null,
+          label: p.flynn_region || 'Unknown location',
+          time: Date.parse(p.time),
+          source: 'EMSC',
+          // De eventpagina wil `source_id`, NIET `unid` — en het pad is
+          // `Earthquake_information`, niet `Earthquake_info`. Gemeten
+          // 2026-08-02: die laatste geeft 404, en `source_id` was over 672
+          // events altijd gevuld. De eventdetail-pagina van seismicportal.eu
+          // werkt ook, maar rendert client-side: de plaatsnaam staat niet in de
+          // HTML en een onzin-id geeft er evengoed een 200. Deze wel — de
+          // pagina bevat de regio en de magnitude, en een onbekend id levert
+          // een duidelijk andere pagina.
+          url: p.source_id
+            ? 'https://www.emsc-csem.org/Earthquake_information/earthquake.php?id=' + p.source_id
+            : null
+        };
+      }).filter(d => Number.isFinite(d.time) && Number.isFinite(d.value) &&
+                     Number.isFinite(d.lat) && Number.isFinite(d.lng));
+    },
+    merge: (prev, fresh) => quakeMerge(prev, fresh, 'emsc'),
+    afterMerge: markQuakeDuplicates
   },
 
   // NASA EONET — open natural events, ÉÉN AANROEP PER CATEGORIE.
@@ -1196,7 +1381,8 @@ Object.entries(Adapters).forEach(([id, a]) => { a.id = id; });
 
 // ---- Verbindingsstatus (health) ------------------------------
 const HEALTH_SOURCES = [
-  { id:'usgs',      label:'USGS',              sub:'Earthquakes' },
+  { id:'usgs',      label:'USGS',              sub:'Earthquakes (global)' },
+  { id:'emsc',      label:'EMSC',              sub:'Earthquakes (Euro-Med)' },
   { id:'eonet',     label:'NASA EONET',        sub:'Volcano · fire · storm · sea ice' },
   { id:'waqi',      label:'WAQI',              sub:'Air quality' },
   { id:'lightning', label:'Blitzortung relay', sub:'Lightning (local relay)' }
@@ -1248,7 +1434,11 @@ let audioCtx = null;
 // objectreferentie, dus de tuning-GUI muteert 'm ongewijzigd.
 
 let timeWindow = 'day';            // 'hour' | 'day' | 'week' — stuurt feed-keuze
-let magFilter = 2;                 // minimale aardbeving-magnitude (M2+/M3+/M4+/M5+)
+let magMin = 2;                    // ondergrens aardbeving-magnitude ("All" = QUAKE_FLOOR_MAG)
+// Bovengrens, `null` = geen. Sessie 14 wees een maximum nog af omdat de vraag
+// zeldzaam was; met EMSC erbij is de band M1-M2 pas gevuld en wordt "laat me
+// alleen de kleine bevingen zien" een echte vraag.
+let magMax = null;
 let sliderFrac = 1;                // 0..1 — toont events tot dit deel van het venster (1 = alles)
 let globeMode = 'realistic';       // 'realistic' | 'expert'
 
@@ -2212,8 +2402,14 @@ function render() {
   const visible = store.filter(d =>
     active[d.layer] && (!TIME_FILTERED.has(d.layer) || d.time >= cutoff)
   );
-  // aardbevingen ook op kracht filteren (M2+/M3+/M4+/M5+)
-  const quakes = visible.filter(d => d.layer === 'quake' && (d.value || 0) >= magFilter);
+  // Aardbevingen ook op kracht filteren, en de dubbels eruit. Dit is de ENIGE
+  // plek waar dat gebeurt: markers, labels, tellers en de lijst eten allemaal
+  // uit `quakes`, dus ze kunnen per constructie niet uiteenlopen.
+  const quakes = visible.filter(d =>
+    d.layer === 'quake' && !d.dup &&
+    (d.value || 0) >= magMin &&
+    (magMax === null || (d.value || 0) <= magMax)
+  );
   const others = visible.filter(d => d.layer !== 'quake');
   const shown = quakes.concat(others);
   // LOD-rang per laag: sorteer op significantie (value), rang 0..1 (0 = belangrijkst).
@@ -3539,20 +3735,83 @@ document.querySelectorAll('#presets .preset').forEach(btn => {
     sliderEl.value = 100;
     sliderFrac = 1;
     updateSliderLabel();
-    // USGS-feed verandert mee → opnieuw ophalen
+    // Beide seismische bronnen kiezen hun venster zelf op `timeWindow`, dus
+    // beide moeten opnieuw ophalen. Een uitgezette bron valt in pull() weg.
     pull(Adapters.usgs);
+    pull(Adapters.emsc);
     render();
   });
 });
 
-// ---- Kracht-filter: minimale magnitude (alleen aardbevingen) ----
+// ---- Kracht-filter: onder- en bovengrens (alleen aardbevingen) ----
+// Een bovengrens onder de ondergrens laat zich niet kiezen. Dat is bewust geen
+// correctie achteraf: een keuze die na het klikken verspringt vraagt om uitleg,
+// een knop die niet ingedrukt kan worden niet.
+function syncMagMaxAvailability() {
+  if (magMax !== null && magMax < magMin) magMax = null;
+  document.querySelectorAll('#magmax-presets .preset').forEach(b => {
+    const v = b.dataset.magmax;
+    b.disabled = v !== '' && Number(v) < magMin;
+    b.classList.toggle('active',
+      v === '' ? magMax === null : Number(v) === magMax);
+  });
+}
+
 document.querySelectorAll('#mag-presets .preset').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('#mag-presets .preset').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    magFilter = parseInt(btn.dataset.mag, 10);
+    magMin = parseInt(btn.dataset.mag, 10);
+    syncMagMaxAvailability();
     render();
   });
+});
+
+document.querySelectorAll('#magmax-presets .preset').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (btn.disabled) return;
+    magMax = btn.dataset.magmax === '' ? null : parseInt(btn.dataset.magmax, 10);
+    syncMagMaxAvailability();
+    render();
+  });
+});
+syncMagMaxAvailability();
+
+// ---- Bronkeuze: welke seismische catalogus wordt geladen ----
+// Toepassen zit achter een knop en niet achter de vinkjes zelf: een bron
+// aanzetten kost een netwerkronde, en wie beide vinkjes omzet zou er anders
+// twee doen.
+const srcBoxes = [...document.querySelectorAll('#quake-sources input[data-src]')];
+const srcApplyBtn = document.getElementById('src-apply');
+const srcIsOn = (id) => Adapters[id].enabled !== false;
+const srcSelectionChanged = () =>
+  srcBoxes.some(b => srcIsOn(b.dataset.src) !== b.checked);
+
+srcBoxes.forEach(box => {
+  box.addEventListener('change', () => {
+    // De laatste bron laat zich niet uitzetten: een lege aardbevingslaag is
+    // geen instelling, dat ziet eruit als een storing.
+    if (!srcBoxes.some(b => b.checked)) box.checked = true;
+    srcApplyBtn.disabled = !srcSelectionChanged();
+  });
+});
+
+srcApplyBtn.addEventListener('click', () => {
+  for (const box of srcBoxes) {
+    const id = box.dataset.src, adapter = Adapters[id];
+    if (box.checked) {
+      if (!srcIsOn(id)) { adapter.enabled = true; pull(adapter); }
+    } else {
+      adapter.enabled = false;
+      store = store.filter(d => !(d.layer === 'quake' && d.src === id));
+      setHealth(id, 'warn', 'switched off');
+    }
+  }
+  // Opnieuw ontdubbelen: de dubbels die de weggevallen bron veroorzaakte, moeten
+  // hun tegenhanger weer vrijgeven.
+  markQuakeDuplicates(store);
+  srcApplyBtn.disabled = true;
+  render();
 });
 
 // ---- Tijdvenster: schuifregelaar ----
@@ -3641,9 +3900,14 @@ function showDetail(d) {
     d.layer === 'aqi' ? aqiHex(d.value) : COLORS[d.layer];
   document.getElementById('r-headline').textContent = d.label;
   document.getElementById('r-type').textContent = names[d.layer];
+  // Het magnitudetype staat erbij omdat de twee bronnen niet hetzelfde meten:
+  // EMSC levert vrijwel alles als `ml` (lokale magnitude), USGS meest `mb` of
+  // `mww`. M 3,0 uit de ene bron is dus niet exact M 3,0 uit de andere, en dat
+  // hoort zichtbaar te zijn zodra iemand op een enkele beving inzoomt.
   document.getElementById('r-value').textContent =
     d.layer === 'quake' && d.value != null
-      ? 'M ' + d.value.toFixed(1) + (d.depth != null ? ' · ' + Math.round(d.depth) + ' km deep' : '')
+      ? 'M ' + d.value.toFixed(1) + (d.magType ? ' ' + d.magType : '') +
+        (d.depth != null ? ' · ' + Math.round(d.depth) + ' km deep' : '')
       : d.layer === 'aqi' && d.value != null
         ? 'AQI ' + d.value + ' · ' + aqiBand(d.value).label
         : '—';
@@ -3654,12 +3918,17 @@ function showDetail(d) {
     : '—';
   // Bron-link (homepage) + event-/station-specifieke link wanneer de API die geeft.
   const srcEl = document.getElementById('r-source');
-  srcEl.textContent = d.source;
+  // EMSC bundelt tientallen instituten; `auth` noemt wie de meting daadwerkelijk
+  // deed. "EMSC · BMKG" is eerlijker dan alleen de aggregator noemen.
+  srcEl.textContent = d.source + (d.agency ? ' · ' + d.agency : '');
   srcEl.href = SOURCE_URLS[d.source] || '#';
   const linkEl = document.getElementById('r-link');
   if (d.url) {
     linkEl.href = d.url;
-    linkEl.textContent = (DETAIL_LINK_LABELS[d.layer] || 'More info') + ' ↗';
+    // Bevingen komen uit twee catalogi, dus het label kan niet vastliggen per laag.
+    linkEl.textContent = (d.layer === 'quake'
+      ? 'View on ' + d.source
+      : (DETAIL_LINK_LABELS[d.layer] || 'More info')) + ' ↗';
     linkEl.hidden = false;
   } else {
     linkEl.hidden = true;
@@ -3687,6 +3956,12 @@ async function pull(adapter) {
   // Meerdere adapters kunnen één regel in het verbindingspaneel delen (de vier
   // EONET-categorieën tonen samen als "NASA EONET").
   const hid = adapter.healthId || adapter.id;
+  // Door de bezoeker uitgezet (de bronkeuze bij aardbevingen). Het interval
+  // blijft tikken maar doet niets; aanzetten hervat zonder herstart.
+  if (adapter.enabled === false) {
+    if (hid) setHealth(hid, 'warn', 'switched off');
+    return;
+  }
   if (!adapter.url) { // bron uit (bv. bliksem-relay niet geconfigureerd op de server)
     if (hid) setHealth(hid, 'warn', 'off (no relay)');
     adapter.layers.forEach(l => setLayerLocked(l, true));
@@ -3718,11 +3993,28 @@ async function pull(adapter) {
       setStatus('live · last ' + new Date().toLocaleTimeString('en-GB'));
       return;
     }
+    // Standaard vervangt een adapter de events van zijn eigen lagen. Een adapter die
+    // geschiedenis bijhoudt (bliksem) levert een eigen `merge` en bepaalt zelf wat er
+    // blijft staan.
+    store = adapter.merge
+      ? adapter.merge(store, fresh)
+      : store.filter(d => !owned.has(d.layer)).concat(fresh);
+    // Nabewerking over de SAMENGEVOEGDE verzameling. Alleen de twee
+    // aardbevingsbronnen gebruiken dit, om elkaars dubbels te merken; adapters
+    // zonder deze haak merken er niets van.
+    if (adapter.afterMerge) adapter.afterMerge(store);
+
     // detecteer echt nieuwe, recente entries → toast-melding (na de eerste lading).
     // Lagen uit NO_TOAST_LAYERS blijven hier volledig buiten, ook bij `seenIds`: die
     // verzameling dient alleen om toasts te ontdubbelen en zou anders eindeloos groeien.
+    //
+    // DIT STAAT BEWUST NÁ DE MERGE. Een nieuwe beving komt vaak eerst via EMSC en
+    // een halve minuut later via USGS binnen; vóór de merge kent geen van beide de
+    // ander en meldde Terra dezelfde beving twee keer. De `dup`-vlag die
+    // afterMerge zet, is precies wat dat tegenhoudt — en `fresh` bevat dezelfde
+    // objecten als de store, dus de vlag staat er al op.
     const now = Date.now();
-    const newItems = fresh.filter(d => !NO_TOAST_LAYERS.has(d.layer) && !seenIds.has(d.id));
+    const newItems = fresh.filter(d => !NO_TOAST_LAYERS.has(d.layer) && !d.dup && !seenIds.has(d.id));
     newItems.forEach(d => seenIds.add(d.id));
     if (initialLoadDone) {
       newItems
@@ -3730,12 +4022,6 @@ async function pull(adapter) {
         .slice(0, 4) // niet spammen bij een grote refresh
         .forEach(d => showToast(d.layer, d));
     }
-    // Standaard vervangt een adapter de events van zijn eigen lagen. Een adapter die
-    // geschiedenis bijhoudt (bliksem) levert een eigen `merge` en bepaalt zelf wat er
-    // blijft staan.
-    store = adapter.merge
-      ? adapter.merge(store, fresh)
-      : store.filter(d => !owned.has(d.layer)).concat(fresh);
     render();
     setStatus('live · last ' + new Date().toLocaleTimeString('en-GB'));
   } catch (e) {
@@ -3964,6 +4250,43 @@ document.addEventListener('visibilitychange', () => {
   }
   hiddenSince = 0;
 });
+
+// Meetluik voor de ontwikkelmachine. De store zit in de modulescope en is van
+// buiten niet te bereiken, waardoor elke claim over ontdubbeling of aantallen op
+// gevoel zou berusten. Achter IS_LOCAL, net als de tuning-GUI: op een echte host
+// bestaat dit niet.
+if (IS_LOCAL) {
+  window.__terra = {
+    store: () => store,
+    quakeStats() {
+      const q = store.filter(d => d.layer === 'quake');
+      const by = (s) => q.filter(d => d.src === s);
+      return {
+        total: q.length,
+        usgs: by('usgs').length,
+        emsc: by('emsc').length,
+        dup: q.filter(d => d.dup).length,
+        dupUsgs: by('usgs').filter(d => d.dup).length,
+        dupEmsc: by('emsc').filter(d => d.dup).length,
+        shown: q.filter(d => !d.dup).length
+      };
+    },
+    // De readout hangt aan een raycast op een 3D-marker en is daardoor niet te
+    // beproeven zonder de juiste pixel te raken. Deze ingang doet dat wel.
+    showDetail: (d) => showDetail(d),
+    // Kosten van de ontdubbeling zelf, om de O(n)-claim af te kunnen rekenen.
+    dedupMs(runs = 20) {
+      const t = [];
+      for (let i = 0; i < runs; i++) {
+        const t0 = performance.now();
+        markQuakeDuplicates(store);
+        t.push(performance.now() - t0);
+      }
+      t.sort((a, b) => a - b);
+      return { n: store.length, median: +t[runs >> 1].toFixed(2), max: +t[runs - 1].toFixed(2) };
+    }
+  };
+}
 
 // (1) kernlaag binnen — korte adempauze zodat de render af is voor de intro speelt
 if (firstPulls.usgs) firstPulls.usgs.finally(() => setTimeout(dismissBoot, 400));

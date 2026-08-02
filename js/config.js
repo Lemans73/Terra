@@ -77,6 +77,7 @@ export const COLORS = {
 // event-/station-specifieke link per laag (alleen getoond als de API een url geeft).
 export const SOURCE_URLS = {
   'USGS':       'https://earthquake.usgs.gov',
+  'EMSC':       'https://www.emsc-csem.org',
   'NASA EONET': 'https://eonet.gsfc.nasa.gov',
   'WAQI':       'https://aqicn.org',
   'Blitzortung':'https://www.blitzortung.org'

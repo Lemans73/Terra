@@ -706,6 +706,50 @@
     border-color: var(--accent);
     color: #1a0d06;
   }
+  /* Een bovengrens onder de ondergrens is niet te kiezen in plaats van achteraf
+     te corrigeren — dan hoeft er nooit uitgelegd te worden waarom je keuze
+     verspringt. */
+  .preset:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+    border-color: var(--hair);
+    color: var(--ink-faint);
+  }
+  .preset:disabled:hover { border-color: var(--hair); color: var(--ink-faint); }
+
+  /* ---- Bronkeuze (aardbevingen) ---- */
+  .srcs { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+  .src {
+    display: grid;
+    grid-template-columns: auto auto 1fr;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    border: 1px solid var(--hair);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  .src:hover { border-color: var(--ink-dim); }
+  .src input { accent-color: var(--accent); width: 14px; height: 14px; cursor: pointer; }
+  .src span { font-size: 12px; font-weight: 600; color: var(--ink); }
+  .src em { font-style: normal; font-size: 11px; color: var(--ink-faint); text-align: right; }
+  .apply {
+    width: 100%;
+    background: transparent;
+    border: 1px solid var(--hair);
+    border-radius: 8px;
+    padding: 7px 0;
+    margin-bottom: 14px;
+    color: var(--ink-dim);
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .apply:not(:disabled):hover { border-color: var(--accent); color: var(--accent); }
+  .apply:disabled { opacity: 0.35; cursor: default; }
   /* ---- Textuurkwaliteit (Aarde-tab) ---- */
   .texq { display: flex; gap: 6px; }
   .texq-opt {
