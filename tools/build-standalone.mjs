@@ -40,10 +40,19 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 // renaming there.
 const OUT = 'terra.html';
 
-// Pin to a tag rather than a branch once this project starts tagging releases:
-// @main means the file silently follows whatever lands on the branch, which is
-// the wrong behaviour for something people download and keep.
-const CDN = 'https://cdn.jsdelivr.net/gh/Lemans73/Terra@main/';
+// WHICH REF THE ASSETS COME FROM.
+//
+//   node tools/build-standalone.mjs               -> @main
+//   node tools/build-standalone.mjs --ref v1.1.0  -> @v1.1.0
+//
+// `@main` means the file silently follows whatever lands on the branch, and that
+// is the wrong behaviour for something people download and keep: a texture that
+// moves under an old copy is at best confusing. Release builds therefore pin to
+// the tag. The tag only exists after the merge, which is why this is a parameter
+// and not a constant — during development `@main` is the honest default.
+const refArg = process.argv.indexOf('--ref');
+const REF = refArg !== -1 && process.argv[refArg + 1] ? process.argv[refArg + 1] : 'main';
+const CDN = `https://cdn.jsdelivr.net/gh/Lemans73/Terra@${REF}/`;
 
 const read = (p) => readFile(join(ROOT, p), 'utf8');
 
@@ -107,6 +116,120 @@ function deModule(src) {
 function assertGone(html, needle, label) {
   if (html.includes(needle)) {
     throw new Error(`build failed: ${label} still present (${needle})`);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   COMMENTAAR STRIPPEN
+
+   Drie soorten commentaar in één bestand, elk met hun eigen regels:
+     - HTML  <!-- ... -->   buiten <style> en <script>
+     - CSS   /* ... *​/      binnen <style>
+     - JS    // en /* *​/     binnen <script>
+
+   Alleen de JS is lastig. De scanner loopt teken voor teken en houdt bij of hij
+   in een string, een template literal of een regex-literal zit; binnen die drie
+   blijft alles staan. Een `/` opent alleen een regex als het vorige betekenisvolle
+   teken geen naam, getal, `)` of `]` is — anders is het een deling.
+--------------------------------------------------------------------------- */
+function stripJs(src) {
+  let uit = '', i = 0;
+  const n = src.length;
+  let laatsteZinvol = '';   // laatste niet-witruimteteken buiten commentaar
+  while (i < n) {
+    const c = src[i], d = src[i + 1];
+    if (c === '/' && d === '/') {                       // regelcommentaar
+      while (i < n && src[i] !== '\n') i++;
+      continue;
+    }
+    if (c === '/' && d === '*') {                       // blokcommentaar
+      i += 2;
+      while (i < n && !(src[i] === '*' && src[i + 1] === '/')) i++;
+      i += 2;
+      continue;
+    }
+    if (c === '"' || c === "'" || c === '`') {          // string of template
+      const q = c;
+      uit += c; i++;
+      while (i < n) {
+        if (src[i] === '\\') { uit += src[i] + (src[i + 1] || ''); i += 2; continue; }
+        uit += src[i];
+        if (src[i] === q) { i++; break; }
+        i++;
+      }
+      laatsteZinvol = q;
+      continue;
+    }
+    if (c === '/' && !/[A-Za-z0-9_$)\]]/.test(laatsteZinvol)) {   // regex-literal
+      uit += c; i++;
+      let inKlasse = false;
+      while (i < n) {
+        if (src[i] === '\\') { uit += src[i] + (src[i + 1] || ''); i += 2; continue; }
+        if (src[i] === '[') inKlasse = true;
+        else if (src[i] === ']') inKlasse = false;
+        else if (src[i] === '/' && !inKlasse) { uit += src[i]; i++; break; }
+        uit += src[i]; i++;
+      }
+      laatsteZinvol = '/';
+      continue;
+    }
+    if (!/\s/.test(c)) laatsteZinvol = c;
+    uit += c; i++;
+  }
+  return uit;
+}
+
+// CSS kent alleen /* */ en geen strings met // erin die ertoe doen; een gewone
+// vervanging volstaat, mits niet-gulzig.
+const stripCss = (src) => src.replace(/\/\*[\s\S]*?\*\//g, '');
+
+// Lege en witruimte-regels die na het strippen overblijven, samenvouwen tot één.
+const vouwLegeRegels = (src) => src.replace(/\n[ \t]*(?=\n[ \t]*\n)/g, '').replace(/\n{3,}/g, '\n\n');
+
+// Loopt de HTML door en past per blok de juiste stripper toe. Buiten <style> en
+// <script> gaan alleen de HTML-commentaren eruit.
+function stripComments(html) {
+  const stukken = [];
+  const BLOK = /<(style|script)\b[^>]*>[\s\S]*?<\/\1>/gi;
+  let laatst = 0, m;
+  while ((m = BLOK.exec(html)) !== null) {
+    stukken.push({ soort: 'html', tekst: html.slice(laatst, m.index) });
+    const open = m[0].indexOf('>') + 1;
+    const sluit = m[0].lastIndexOf('</');
+    stukken.push({ soort: m[1].toLowerCase(), kop: m[0].slice(0, open),
+                   body: m[0].slice(open, sluit), voet: m[0].slice(sluit) });
+    laatst = m.index + m[0].length;
+  }
+  stukken.push({ soort: 'html', tekst: html.slice(laatst) });
+  return stukken.map(s => {
+    if (s.soort === 'html') return vouwLegeRegels(s.tekst.replace(/<!--[\s\S]*?-->/g, ''));
+    const body = s.soort === 'style' ? stripCss(s.body) : stripJs(s.body);
+    return s.kop + vouwLegeRegels(body) + s.voet;
+  }).join('');
+}
+
+// Parseert elk scriptblok apart. `node --check` leest een bestand en voert het
+// niet uit, dus dit is een pure syntaxtoets — precies wat we willen weten.
+async function assertParses(html) {
+  const { execFile } = await import('node:child_process');
+  const { promisify } = await import('node:util');
+  const { unlink } = await import('node:fs/promises');
+  const { tmpdir } = await import('node:os');
+  const run = promisify(execFile);
+  const blokken = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)];
+  for (let i = 0; i < blokken.length; i++) {
+    const [, attrs, body] = blokken[i];
+    if (/type\s*=\s*["']importmap["']/i.test(attrs)) continue;   // JSON, geen JS
+    if (!body.trim()) continue;
+    const pad = join(tmpdir(), `terra-check-${i}.mjs`);
+    await writeFile(pad, body, 'utf8');
+    try {
+      await run(process.execPath, ['--check', pad]);
+    } catch (e) {
+      throw new Error(`build failed: stripping broke script block ${i} — ${e.stderr || e.message}`);
+    } finally {
+      await unlink(pad).catch(() => {});
+    }
   }
 }
 
@@ -179,7 +302,23 @@ out = out.replace(
   'const ANALYTICS_HOSTS = [];   // standalone: never on Vercel'
 );
 
-// ---- 5. Mark the file -----------------------------------------------------
+// ---- 5. Strip the comments ------------------------------------------------
+// Measured before this step existed: 118 KB of 296 KB was comment — 40%. The
+// repository keeps every word of it; only this derived file is stripped.
+//
+// WHY A SCANNER AND NOT A REGEX. The shaders are JS template literals, and a `//`
+// inside one is GLSL code or part of a URL, not a comment. A regex on `//` cuts
+// straight through them and the failure is a SyntaxError on a GLSL identifier —
+// which is exactly how two hours went missing in session 14.
+const stripped = stripComments(out);
+const winst = Buffer.byteLength(out, 'utf8') - Buffer.byteLength(stripped, 'utf8');
+// A silent breakage here is the worst outcome: the file would still be written and
+// only fall over in someone's browser. So the stripped script is parsed before it
+// is allowed through.
+await assertParses(stripped);
+out = stripped;
+
+// ---- 6. Mark the file -----------------------------------------------------
 out = out.replace(
   '<title>',
   '<!-- GENERATED FILE — do not edit.\n' +
@@ -191,6 +330,7 @@ out = out.replace(
 
 await writeFile(join(ROOT, OUT), out, 'utf8');
 
+console.log(`comments stripped — ${Math.round(winst / 1024)} KB saved`);
 const kb = Math.round(Buffer.byteLength(out, 'utf8') / 1024);
 console.log(`${OUT} written — ${kb} KB`);
 console.log(`assets from ${CDN}`);
