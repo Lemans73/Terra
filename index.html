@@ -531,14 +531,14 @@
           <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
         <div class="acc-body">
-          <!-- Standaard UIT: de vlekken vervangen de zontextuur, en dat is een
-               ingrijpender beeld dan een lijn erbij. -->
-          <div class="elayer expandable" id="sunspots-toggle">
+          <!-- Standaard AAN: dit is een meting, en die hoort te staan; de
+               geschilderde zontextuur is dat niet. -->
+          <div class="elayer on expandable" id="sunspots-toggle">
             <span class="edot"></span>Sunspots
             <button class="row-expand" data-note="sunspots-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
             </button>
-            <span class="estat" id="es-sunspots">off</span>
+            <span class="estat" id="es-sunspots">on</span>
           </div>
           <div class="layer-detail" id="sunspots-note">
             Drawn automatically from whatever NOAA published today, at the measured
@@ -3027,15 +3027,19 @@ function animateShader() {
 
   // Het draaipunt volgt de zon zolang je hem bekijkt — zie de noot bij setSunView().
   if (sunView && !sunFlight.actief && sunMoon) {
+    ensureTargetLock();
     const sp = sunMoon.meshes.sunGroup.position;
     if (!sp.equals(_sunAnchor)) {
       _sunDelta.subVectors(sp, _sunAnchor);
-      // x/y/z rechtstreeks, niet .add() — zie de noot bij lockControlsTarget().
-      const tg = world.controls().target;
-      tg.x += _sunDelta.x; tg.y += _sunDelta.y; tg.z += _sunDelta.z;
       _cam.position.add(_sunDelta);
       _sunAnchor.copy(sp);
     }
+    // ELKE FRAME schrijven, niet alleen als de zon bewoog. Deze lus draait ná die
+    // van globe.gl, dus wat hier staat is wat er getekend wordt — ook als de reset
+    // van globe.gl er tussendoor overheen ging. Het slot is de tweede verdediging,
+    // niet de enige. x/y/z rechtstreeks, want `set()` is juist wat het slot blokkeert.
+    const tg = world.controls().target;
+    tg.x = sp.x; tg.y = sp.y; tg.z = sp.z;
   }
 
   updateHover();      // raycaster-highlight bijwerken
@@ -3258,6 +3262,10 @@ function showToast(layer, item) {
 // de soepele, kortste-pad camera-overgang)
 function flyTo(d) {
   if (!d || d.lat == null || d.lng == null) return;
+  // Wie naar een plek op de AARDE vliegt, verlaat het zonaanzicht. Zonder deze regel
+  // brengt een klik op een melding je wel terug naar de aarde, maar blijft de
+  // toestand achter bij de zon — zie de noot bij setSunView().
+  setSunView(false, { vlieg: false });
   pauseAutoRotate();
   // Bij minder-beweging direct naar de bestemming springen in plaats van eroverheen
   // te vliegen. Het doel is hetzelfde, de weg ernaartoe is wat misselijk kan maken.
@@ -3484,7 +3492,7 @@ bindCosmosToggle('subpoint-toggle', 'es-subpoint',
 // andere drie moet overeenkomen: markup zonder `on`, `setVisible` onderaan de
 // laag, en de `start`-parameter hier.
 bindCosmosToggle('sunspots-toggle', 'es-sunspots',
-  on => sunMoon.setVisible({ sunspots: on }), false);
+  on => sunMoon.setVisible({ sunspots: on }), true);
 
 // ---- De zon van dichtbij bekijken ----------------------------
 //
@@ -3519,8 +3527,15 @@ const _sunAnchor = new THREE.Vector3();   // waar de zon stond bij de vorige fra
 const _sunShift = new THREE.Vector3();    // hulpvector bij het instappen
 const _sunDelta = new THREE.Vector3();    // verplaatsing per frame
 
-function setSunView(on) {
+// `vlieg: false` verlaat het zonaanzicht zónder eigen terugvlucht. Dat is nodig
+// wanneer iets ánders de camera al naar de aarde brengt — een klik op een melding
+// bijvoorbeeld. Zonder deze uitgang bleef `sunView` op true staan terwijl je de
+// aarde zag: het draaipunt bleef aan de zon vastgeklonken, het slot op
+// `controls.target` bleef dicht en de knop zei nog "Back to Earth". Je kwam er dan
+// niet meer uit — de vlucht ging wel, het blijven niet.
+function setSunView(on, opties) {
   if (!sunMoon || on === sunView) return;
+  const vlieg = !opties || opties.vlieg !== false;
   const ctl = world.controls(), cam = world.camera();
   const btn = document.getElementById('sunview-btn');
   if (on) {
@@ -3560,8 +3575,16 @@ function setSunView(on) {
     setAutoRotate(_sunViewPrev.autoRotate);
     // De schakelaars in Instellingen moeten weer kloppen met wat er werkelijk staat.
     syncViewToggles();
-    flyCamera(cam, ctl, _sunViewPrev.pos, _sunViewPrev.target,
-              { min: _sunViewPrev.min, max: _sunViewPrev.max });
+    if (vlieg) {
+      flyCamera(cam, ctl, _sunViewPrev.pos, _sunViewPrev.target,
+                { min: _sunViewPrev.min, max: _sunViewPrev.max });
+    } else {
+      // Een lopende vlucht afbreken en alles meteen teruggeven aan wie het overneemt.
+      sunFlight.actief = false;
+      ctl.minDistance = _sunViewPrev.min;
+      ctl.maxDistance = _sunViewPrev.max;
+      ctl.target.x = 0; ctl.target.y = 0; ctl.target.z = 0;
+    }
   }
   sunView = on;
   if (btn) btn.textContent = on ? 'Back to Earth' : 'Observe the Sun';
@@ -3639,15 +3662,27 @@ function stepSunFlight(cam, ctl) {
 // eigen code (GSAP en het meebewegen per frame) schrijft x/y/z RECHTSTREEKS en loopt
 // er dus langs. Dat is geen toeval maar de voorwaarde waarop dit werkt: wie hier een
 // `target.set(...)` toevoegt, ziet het stilzwijgend niets doen.
-(function lockControlsTarget() {
+// HET SLOT MOET ZICHZELF HERSTELLEN. Eén keer bij de start plaatsen was niet
+// genoeg: `world.pointOfView()` VERVANGT `controls.target` door een nieuwe Vector3,
+// en daarna zat het slot op een object dat niemand meer gebruikt. Gemeten gevolg:
+// de eerste keer naar de zon ging goed, en elke keer daarná sprong het draaipunt
+// terug naar de oorsprong op exact het moment dat de vlucht eindigde — de camera
+// stond dan goed, maar keek naar de aarde.
+//
+// Vandaar een merkteken op de vector zelf en een controle per frame. Dat is O(1) en
+// overleeft elke vervanging.
+function ensureTargetLock() {
   const t = world.controls().target;
+  if (t.__terraLocked) return;
   for (const naam of ['set', 'setScalar']) {
     const orig = t[naam].bind(t);
     // Ook tijdens de TERUGVLUCHT blijft het slot dicht: dan staat `sunView` al op
     // false terwijl het draaipunt nog onderweg is naar de oorsprong.
     t[naam] = (...args) => ((sunView || sunFlight.actief) ? t : orig(...args));
   }
-})();
+  t.__terraLocked = true;
+}
+ensureTargetLock();
 
 document.getElementById('sunview-btn').addEventListener('click', () => setSunView(!sunView));
 
@@ -3901,6 +3936,8 @@ function springNaarEclips(richting, btn) {
     btn.disabled = false;
     btn.textContent = label;
     if (!gevonden) { btn.textContent = 'none'; setTimeout(() => btn.textContent = label, 1500); return; }
+    // Ook deze sprong gaat naar een plek op de aarde — zie de noot bij setSunView().
+    setSunView(false, { vlieg: false });
     stopPlay();
     // Een venster van één dag maakt de slider fijn genoeg om de schaduw stap voor
     // stap over de aarde te zien trekken; de hele passage duurt maar een uur of twee.
@@ -4639,6 +4676,8 @@ if (IS_LOCAL) {
     // De readout hangt aan een raycast op een 3D-marker en is daardoor niet te
     // beproeven zonder de juiste pixel te raken. Deze ingang doet dat wel.
     showDetail: (d) => showDetail(d),
+    flyTo: (d) => flyTo(d),
+    sunView: () => sunView,
     // Kosten van de ontdubbeling zelf, om de O(n)-claim af te kunnen rekenen.
     dedupMs(runs = 20) {
       const t = [];

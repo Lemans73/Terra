@@ -282,8 +282,27 @@ export function createSunMoonLayer(THREE, opts = {}) {
   const _axis = new THREE.Vector3(), _toEarth = new THREE.Vector3(),
         _cm = new THREE.Vector3(), _west = new THREE.Vector3(), _spot = new THREE.Vector3();
 
+  /* DE MAAT IS GEIJKT OP EEN ECHTE OPNAME, niet op wat er aardig uitziet.
+     Gemeten op het SDO/HMI-continuüm van 2026-08-02 18:15 UT (schijfstraal 484 px):
+
+       regio 4498, area 120  ->  groep 39 px breed
+       regio 4501, area  90  ->  groep 28 px breed
+
+     Dat is 0,081 respectievelijk 0,058 zonsstraal in doorsnede, en de wortel uit
+     `area` volgt die verhouding netjes. De deler 12 legt de grootste groep van die
+     dag op zijn werkelijke breedte.
+
+     `extent` lag meer voor de hand — dat veld IS de uitgestrektheid in graden —
+     maar het bleek de zichtbare vlek slecht te voorspellen: regio 4499 had met 8
+     graden de grootste extent van de dag en was op de opname nauwelijks te vinden.
+     Extent beslaat het hele actieve gebied, `area` alleen het donkere deel.
+
+     Er blijft een lichte overdrijving in zitten: het equivalente cirkeltje bij area
+     120 is 15 px, terwijl de groep 39 px beslaat. Dat verschil is echt — een groep
+     is verstrooide vlekken, geen schijf — en wij tekenen die verstrooiing als één
+     vlek. De ondergrens houdt de kleinste gebieden zichtbaar en aanklikbaar. */
   const spotRadius = (s) =>
-    Math.max(0.55, Math.min(3.2, 0.55 + Math.sqrt(Math.max(s.area || 0, 4)) / 5));
+    Math.max(0.30, Math.min(2.2, Math.sqrt(Math.max(s.area || 0, 10)) / 12));
 
   /* BOLKAPJES, GEEN PLATTE SCHIJVEN. Een schijf raakt de bol in één punt en loopt
      er verder vanaf; bij de rand steekt hij daardoor buiten de silhouetlijn uit en
@@ -751,7 +770,7 @@ export function createSunMoonLayer(THREE, opts = {}) {
   setVisible({
     sun: true, moon: true, sunMark: true, moonMark: true,
     leaders: true, alignment: true, tracks: true, ticks: true, twilight: true,
-    eclipse: false, sunspots: false
+    eclipse: false, sunspots: true
   });
 
   return {
