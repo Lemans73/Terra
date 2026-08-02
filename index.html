@@ -195,10 +195,13 @@
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
       <span class="notif-badge" id="notif-badge" hidden>0</span>
     </button>
+    <button class="qlist-open" id="qlist-open" title="Earthquake list" aria-label="Earthquake list" aria-pressed="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="8" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="20" y2="12"/><line x1="8" y1="18" x2="20" y2="18"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg>
+    </button>
   </div>
 
   <div class="notif-panel" id="notif-panel">
-    <div class="notif-head"><span>Notifications</span><button id="notif-clear">clear</button></div>
+    <div class="notif-head"><span>Notifications</span><button id="notif-clear">clear</button><button class="notif-close" id="notif-close" title="Close notifications" aria-label="Close notifications">&#215;</button></div>
     <div class="notif-list" id="notif-list"><div class="notif-empty">No notifications yet</div></div>
   </div>
 
@@ -238,7 +241,7 @@
           <span class="tab-label">Settings</span>
         </button>
       </div>
-      <button class="panel-collapse" id="panel-collapse" title="Collapse panel" aria-label="Collapse panel">‹</button>
+      <button class="panel-collapse" id="panel-collapse" title="Close panel" aria-label="Close panel">×</button>
     </div>
 
     <div class="panel-body">
@@ -672,6 +675,29 @@
     </div><!-- /.panel-body -->
   </div>
 
+  <!-- ====================== AARDBEVINGENLIJST ======================
+       Dezelfde verzameling die de bol tekent, dan als lijst. Voeding gebeurt in
+       render(), uit exact dezelfde `quakes`-array — lijst en bol kunnen dus per
+       constructie niet uiteenlopen.
+
+       GEEN TWEEDE SET FILTERS. De kop toont een samenvatting die bij aanklikken de
+       filter-accordion opent. Twee sets bedieningselementen die elk hun eigen
+       waarde bijhouden lopen gegarandeerd uiteen, en dat merk je pas weken later. -->
+  <aside class="qlist" id="qlist">
+    <div class="qlist-head">
+      <span class="qlist-title">Earthquakes</span>
+      <span class="qlist-count" id="qlist-count">&#8212;</span>
+      <button class="qlist-collapse" id="qlist-collapse" title="Close the list" aria-label="Close the list">&#215;</button>
+    </div>
+    <button class="qlist-summary" id="qlist-summary" title="Open the filters">&#8212;</button>
+    <div class="presets qlist-sort" id="qlist-sort">
+      <button class="preset active" data-sort="mag">Strongest</button>
+      <button class="preset" data-sort="time">Newest</button>
+    </div>
+    <div class="qlist-body" id="qlist-body"></div>
+    <button class="apply qlist-more" id="qlist-more" hidden>Load more</button>
+  </aside>
+
   <div class="readout" id="readout">
     <button class="readout-close" id="r-close" title="Close" aria-label="Close detail panel">×</button>
     <div class="kicker" id="r-kicker">EVENT</div>
@@ -712,7 +738,7 @@ import { gsap } from 'gsap';
 // PARAMS, WINDOW_MS, TEXTURE_SETS, MODE_*. Pure data — gedeelde objectreferenties.
 import {
   COLORS, SOURCE_URLS, DETAIL_LINK_LABELS,
-  AQI_BANDS, aqiBand, aqiHex,
+  AQI_BANDS, aqiBand, aqiHex, magHex,
   PARAMS, WINDOW_MS, MODE_LABELS, MODE_ICONS, EXPERT_LAYER_SCALE,
   TEXTURE_SETS, DEFAULT_QUALITY, assetsFor, textureSetSize, RELAY_URL, REPO_URL,
   ANALYTICS_HOSTS, LOCK_DETAILS, ASSET_BASE, asset
@@ -2570,6 +2596,7 @@ function render() {
   world.customLayerData(shown);
   hovered = null;            // object-refs verouderen als de customLayer herbouwt
   rebuildLabels(quakes);     // leader-line labels voor de zwaarste bevingen
+  renderQuakeList(quakes);   // en dezelfde verzameling als lijst
   updateCounts(shown);
 }
 
@@ -3272,6 +3299,156 @@ function flyTo(d) {
   world.pointOfView({ lat: d.lat, lng: d.lng, altitude: 0.7 }, REDUCED_MOTION ? 0 : 1200);
 }
 
+// ---- Aardbevingenlijst (sidebar rechts) ----------------------
+//
+// Voeding komt uit render(), uit dezelfde `quakes`-array die de bol tekent. Deze
+// functie filtert dus NIETS: ze sorteert en toont. Dat is de hele reden dat lijst
+// en bol niet uiteen kunnen lopen.
+const QLIST_PAGE = 20;
+let listSort = 'mag';         // 'mag' | 'time'
+let listLimit = QLIST_PAGE;
+let listOpen = true;
+
+// Relatieve tijd. Een lijst met twintig keer "02 Aug, 19:14" leest slechter dan
+// "3 min" — je wilt zien hoe vers iets is, niet hoe laat het was.
+function geledenKort(ms) {
+  const s = Math.max(0, (Date.now() - ms) / 1000);
+  if (s < 90) return Math.round(s) + ' s';
+  const m = s / 60;
+  if (m < 90) return Math.round(m) + ' min';
+  const u = m / 60;
+  if (u < 36) return Math.round(u) + ' h';
+  return Math.round(u / 24) + ' d';
+}
+
+function quakeFilterSamenvatting() {
+  const mag = magMax === null
+    ? (magMin <= QUAKE_FLOOR_MAG ? 'All magnitudes' : 'M' + magMin + '+')
+    : 'M' + magMin + '–' + magMax;
+  const venster = { hour: 'past hour', day: 'past day', week: 'past week' }[timeWindow] || timeWindow;
+  const bronnen = srcBoxes.filter(b => srcIsOn(b.dataset.src)).map(b => b.dataset.src.toUpperCase());
+  return mag + ' · ' + venster + ' · ' + bronnen.join(' + ');
+}
+
+function renderQuakeList(quakes) {
+  const body = document.getElementById('qlist-body');
+  const meer = document.getElementById('qlist-more');
+  if (!body) return;
+  document.getElementById('qlist-count').textContent = quakes.length;
+  document.getElementById('qlist-summary').textContent = quakeFilterSamenvatting();
+
+  const gesorteerd = quakes.slice().sort(listSort === 'mag'
+    ? (a, b) => (b.value || 0) - (a.value || 0)
+    : (a, b) => (b.time || 0) - (a.time || 0));
+  const tonen = gesorteerd.slice(0, listLimit);
+
+  body.textContent = '';
+  if (!tonen.length) {
+    const leeg = document.createElement('div');
+    leeg.className = 'qlist-empty';
+    leeg.textContent = 'Nothing matches these filters.';
+    body.appendChild(leeg);
+    meer.hidden = true;
+    return;
+  }
+  for (const q of tonen) {
+    const rij = document.createElement('button');
+    rij.className = 'qrow';
+    rij.type = 'button';
+
+    const mag = document.createElement('span');
+    mag.className = 'qrow-mag';
+    mag.style.color = magHex(q.value || 0);
+    mag.textContent = (q.value == null ? '?' : q.value.toFixed(1));
+
+    const plaats = document.createElement('span');
+    plaats.className = 'qrow-place';
+    plaats.textContent = q.label || 'Unknown location';
+    plaats.title = q.label || '';
+
+    // Herkomst hoort erbij zodra er twee catalogi door elkaar lopen; bij EMSC is
+    // dat het instituut dat de meting deed, niet alleen de aggregator.
+    const meta = document.createElement('span');
+    meta.className = 'qrow-meta';
+    const delen = [geledenKort(q.time)];
+    if (q.depth != null) delen.push(Math.round(q.depth) + ' km');
+    if (q.magType) delen.push(q.magType);
+    delen.push(q.source + (q.agency ? ' · ' + q.agency : ''));
+    meta.textContent = delen.join(' · ');
+
+    rij.append(mag, plaats, meta);
+    rij.addEventListener('click', () => { flyTo(q); showDetail(q); });
+    body.appendChild(rij);
+  }
+  meer.hidden = gesorteerd.length <= listLimit;
+  meer.textContent = 'Load more (' + (gesorteerd.length - tonen.length) + ' left)';
+}
+
+// Een nieuwe filterstand betekent een nieuwe lijst; blijven hangen op regel 140
+// van de vorige selectie is verwarrend.
+function resetQuakeList() { listLimit = QLIST_PAGE; }
+
+document.querySelectorAll('#qlist-sort .preset').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#qlist-sort .preset').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    listSort = btn.dataset.sort;
+    resetQuakeList();
+    render();
+  });
+});
+
+document.getElementById('qlist-more').addEventListener('click', () => {
+  listLimit += QLIST_PAGE;
+  render();
+});
+
+// De samenvatting is de enige plek waar de lijst iets over filters zegt, en hij
+// brengt je naar de echte bediening in plaats van die te dupliceren.
+document.getElementById('qlist-summary').addEventListener('click', () => {
+  setPanelOpen(true);
+  document.querySelector('.tab[data-tab="lagen"]')?.click();
+  const acc = document.querySelector('[data-acc="layers-list"]');
+  if (acc && !acc.classList.contains('open')) acc.querySelector('.acc-head')?.click();
+  const uitklap = document.querySelector('[data-expand="quake"]');
+  if (uitklap && !uitklap.classList.contains('open')) uitklap.click();
+  document.querySelector('.layer-detail[data-detail="quake"]')
+    ?.scrollIntoView({ behavior: REDUCED_MOTION ? 'auto' : 'smooth', block: 'nearest' });
+});
+
+function setQuakeListOpen(open) {
+  if (open === listOpen) return;
+  listOpen = open;
+  const el = document.getElementById('qlist'), knop = document.getElementById('qlist-open');
+  el.style.display = open ? 'flex' : 'none';
+  // De knop blijft staan en wordt een schakelaar: hij is de derde manier om de
+  // lijst te sluiten, naast het kruisje en de meldingenknop.
+  knop.classList.toggle('on', open);
+  knop.setAttribute('aria-pressed', String(open));
+  if (open) setNotifOpen(false);   // maar één van de twee tegelijk
+  // Op een smal scherm is er ruimte voor precies één venster — zelfde afspraak als
+  // bij de readout. De sheet loopt tot de onderrand en dekt de knop "Layers &
+  // filters" af; die knop is daar dus onbruikbaar en hoort weg, anders staat hij
+  // over "Load more" heen.
+  if (isNarrow()) {
+    if (open) {
+      setPanelOpen(false);
+      panelOpenBtn.style.display = 'none';
+    } else if (!panelOpenWanted) {
+      // Alleen terughalen als het paneel óók dicht staat — anders zou de knop
+      // naast een open paneel komen te staan. Zelfde afweging als in hideDetail().
+      panelOpenBtn.style.display = 'flex';
+      gsap.set(panelOpenBtn, { opacity: 1, scale: 1 });
+    }
+  }
+}
+document.getElementById('qlist-collapse').addEventListener('click', () => setQuakeListOpen(false));
+document.getElementById('qlist-open').addEventListener('click', () => setQuakeListOpen(!listOpen));
+// De beginstand op een telefoon staat in het init-blok onderaan, NIET hier:
+// `isNarrow` wordt pas ~800 regels verderop gedeclareerd en een aanroep op
+// top-level zou hier een temporal dead zone raken. Dat is dezelfde fout die in
+// sessie 11 de hele demo op het laadscherm liet hangen.
+
 // ---- Meldingen-geschiedenis (bel-menu) ----
 const notifHistory = [];
 let notifUnread = 0;
@@ -3302,10 +3479,18 @@ function renderNotifList() {
            '<span class="ntime">' + tm + '</span></div>';
   }).join('');
 }
-function toggleNotif() {
+// De meldingen en de aardbevingenlijst delen dezelfde hoek van het scherm en
+// dezelfde bovenkant. Er kan er dus maar ÉÉN open staan. Beide setters sluiten de
+// ander alleen bij het OPENEN — dat is wat de wederzijdse aanroep eindig houdt.
+function setNotifOpen(open) {
+  if (open === notifOpen) return;
   const panel = document.getElementById('notif-panel');
-  notifOpen = !notifOpen;
+  const btn = document.getElementById('notif-btn');
+  notifOpen = open;
+  btn.classList.toggle('on', open);
+  btn.setAttribute('aria-pressed', String(open));
   if (notifOpen) {
+    setQuakeListOpen(false);
     renderNotifList();
     panel.style.display = 'block';
     gsap.fromTo(panel, { opacity: 0, y: -12, scale: 0.97 },
@@ -3315,7 +3500,8 @@ function toggleNotif() {
     gsap.to(panel, { opacity: 0, y: -12, duration: 0.22, ease: 'power2.in', onComplete: () => { panel.style.display = 'none'; } });
   }
 }
-document.getElementById('notif-btn').addEventListener('click', toggleNotif);
+document.getElementById('notif-btn').addEventListener('click', () => setNotifOpen(!notifOpen));
+document.getElementById('notif-close').addEventListener('click', () => setNotifOpen(false));
 document.getElementById('notif-clear').addEventListener('click', () => {
   notifHistory.length = 0; notifUnread = 0; updateNotifBadge(); renderNotifList();
 });
@@ -4137,6 +4323,7 @@ document.querySelectorAll('#presets .preset').forEach(btn => {
     // beide moeten opnieuw ophalen. Een uitgezette bron valt in pull() weg.
     pull(Adapters.usgs);
     pull(Adapters.emsc);
+    resetQuakeList();
     render();
   });
 });
@@ -4161,6 +4348,7 @@ document.querySelectorAll('#mag-presets .preset').forEach(btn => {
     btn.classList.add('active');
     magMin = parseInt(btn.dataset.mag, 10);
     syncMagMaxAvailability();
+    resetQuakeList();
     render();
   });
 });
@@ -4170,6 +4358,7 @@ document.querySelectorAll('#magmax-presets .preset').forEach(btn => {
     if (btn.disabled) return;
     magMax = btn.dataset.magmax === '' ? null : parseInt(btn.dataset.magmax, 10);
     syncMagMaxAvailability();
+    resetQuakeList();
     render();
   });
 });
@@ -4209,6 +4398,7 @@ srcApplyBtn.addEventListener('click', () => {
   // hun tegenhanger weer vrijgeven.
   markQuakeDuplicates(store);
   srcApplyBtn.disabled = true;
+  resetQuakeList();
   render();
 });
 
@@ -4622,6 +4812,13 @@ function applyZoomRange() {
   return far;
 }
 applyZoomRange();
+
+// Op een telefoon begint de aardbevingenlijst dicht: daar is het een bottom sheet
+// die het bedienpaneel zou verdringen zodra je de app opent. Deze aanroep MOET
+// hier staan en niet bij de rest van de lijstcode — zie de noot daar.
+document.getElementById('qlist-open').classList.toggle('on', listOpen);
+document.getElementById('qlist-open').setAttribute('aria-pressed', String(listOpen));
+if (isNarrow()) setQuakeListOpen(false);
 
 // Eerste stand meteen zetten; daarna houdt de setInterval hem bij.
 updateSunUniform();

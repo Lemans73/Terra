@@ -717,6 +717,123 @@
   }
   .preset:disabled:hover { border-color: var(--hair); color: var(--ink-faint); }
 
+  /* ---- Aardbevingenlijst (sidebar rechts) ----
+     Gespiegeld aan `.panel`: zelfde maten, zelfde glas, zelfde `dvh`-truc. Zie de
+     lange noot daar waarom `100vh` op een telefoon niet deugt. */
+  /* VAN BOVEN NAAR BENEDEN, met dezelfde bovenkant als het meldingenpaneel.
+     Eerst hing deze kolom aan de ONDERrand en groeide hij omhoog; dan loopt hij bij
+     een lange lijst de bel en de meldingen in, en moest de hoogte zo streng geknepen
+     worden dat er op 1080p nog vijf regels over waren (gemeten). Vanaf de bovenkant
+     ligt de bovengrens vast en mag de lijst gewoon lang zijn. Het meldingenpaneel
+     deelt die bovenkant en tekent er met z-index 35 overheen wanneer je het opent —
+     dat is een dropdown, geen botsing. */
+  .qlist {
+    position: fixed;
+    right: 28px;
+    top: 62px;
+    z-index: 10;
+    width: 268px;
+    /* Tot ongeveer twee derde van de hoogte. Daaronder blijft het beeld vrij voor
+       het detailvenster, dat rechtsonder opkomt. */
+    max-height: 58vh;
+    max-height: 58dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: rgba(11,16,24,0.72);
+    backdrop-filter: blur(14px);
+    border: 1px solid var(--hair);
+    border-radius: 14px;
+  }
+  .qlist-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 12px 10px 16px;
+    border-bottom: 1px solid var(--hair);
+  }
+  .qlist-title {
+    font-size: 10px; font-weight: 600; letter-spacing: 0.18em;
+    text-transform: uppercase; color: var(--ink-dim);
+  }
+  /* Direct naast de titel, NIET tegen de rechterrand: daar zit nu het kruisje, en
+     een getal ernaast leest als "sluit 323" in plaats van als een telling. */
+  .qlist-count {
+    font-size: 12px; font-weight: 600; color: var(--ink);
+    font-variant-numeric: tabular-nums;
+  }
+  .qlist-collapse {
+    margin-left: auto;
+    background: none; border: 0; padding: 0 2px;
+    color: var(--ink-dim); font-family: inherit; font-size: 17px; line-height: 1;
+    cursor: pointer;
+  }
+  .qlist-collapse:hover { color: var(--ink); }
+  .qlist-summary {
+    display: block; width: 100%;
+    background: none; border: 0; border-bottom: 1px solid var(--hair);
+    padding: 9px 16px;
+    color: var(--ink-faint); font-family: inherit; font-size: 11px; text-align: left;
+    cursor: pointer;
+  }
+  .qlist-summary:hover { color: var(--accent); }
+  .qlist-sort { margin: 12px 16px 10px; }
+  .qlist-body { overflow-y: auto; overscroll-behavior: contain; padding: 0 8px 4px; }
+  .qrow {
+    display: grid;
+    grid-template-columns: 46px 1fr;
+    gap: 2px 10px;
+    align-items: baseline;
+    width: 100%;
+    background: none; border: 0; border-radius: 8px;
+    padding: 8px;
+    font-family: inherit; text-align: left; cursor: pointer;
+    transition: background 0.15s;
+  }
+  .qrow:hover { background: rgba(255,255,255,0.05); }
+  .qrow-mag {
+    grid-row: span 2;
+    font-size: 15px; font-weight: 700; letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+  }
+  .qrow-place {
+    font-size: 12px; color: var(--ink);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .qrow-meta { font-size: 10.5px; color: var(--ink-faint); }
+  .qlist-more { margin: 6px 16px 14px; width: calc(100% - 32px); }
+  .qlist-empty { padding: 26px 16px; text-align: center; font-size: 11px; color: var(--ink-faint); }
+  /* Staat in de masthead, links van de notificatiebel. Zelfde maatvoering als
+     .notif-btn, zodat het één rij knoppen blijft en niet twee losse dingen. */
+  /* De masthead heeft `gap: 18px` tussen zijn kinderen; deze twee knoppen horen
+     juist strak naast elkaar te staan als één groepje. Vandaar een negatieve marge
+     die de gap terugneemt en er 6px van overlaat. */
+  .qlist-open {
+    margin-left: -12px;
+    pointer-events: auto;
+    display: flex; align-items: center;
+    background: rgba(11,16,24,0.72);
+    backdrop-filter: blur(14px);
+    border: 1px solid var(--hair);
+    border-radius: 9px;
+    padding: 7px 9px;
+    color: var(--ink-dim);
+    cursor: pointer;
+    transition: color 0.18s, border-color 0.18s;
+  }
+  .qlist-open:hover { color: var(--ink); border-color: var(--ink-dim); }
+  .qlist-open svg { width: 15px; height: 15px; }
+  /* Actieve stand voor beide schakelaars in de masthead. Ze sluiten elkaar uit, dus
+     er brandt er hoogstens één. */
+  .qlist-open.on, .notif-btn.on { color: var(--accent); border-color: var(--accent); }
+  .notif-close {
+    margin-left: 2px;
+    background: none; border: 0; padding: 0 2px;
+    color: var(--ink-dim); font-family: inherit; font-size: 15px; line-height: 1;
+    text-transform: none; letter-spacing: 0; cursor: pointer;
+  }
+  .notif-close:hover { color: var(--ink); }
+
   /* ---- Zonneactiviteit (Cosmos-tab) ---- */
   .sunstat-row {
     display: flex;
@@ -1287,6 +1404,14 @@
        er nog een transform onder ligt. */
     #toasts { left: 10px; right: 10px; top: 56px; transform: none; }
     .toast { min-width: 0; width: 100%; }
+    /* Volledige breedte, als bottom sheet — hier past niet twee dingen naast
+       elkaar. Openen sluit daarom het linkerpaneel, net als de readout doet. */
+    .qlist {
+      left: 10px; right: 10px; width: auto;
+      top: 56px;
+      max-height: 58vh;
+      max-height: 58dvh;
+    }
   }
 
   /* ---- Lage schermen: telefoon in landscape ----------------------------------
@@ -1316,4 +1441,11 @@
       overscroll-behavior: contain;
     }
     .notif-panel { max-height: calc(100dvh - 120px); }
+    /* Landscape: 58dvh is hier 170px en dus onbruikbaar. Net als bij het paneel
+       bepalen top en bottom samen de hoogte, onder de bedieningsstrook door. */
+    .qlist {
+      top: 92px;
+      bottom: 12px;
+      max-height: none;
+    }
   }
