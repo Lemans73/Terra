@@ -467,54 +467,11 @@
             Four circles: sunset, then the end of civil, nautical and astronomical
             twilight &#8212; the Sun at 0&#176;, &#8722;6&#176;, &#8722;12&#176; and &#8722;18&#176; below the horizon.
           </div>
-          <!-- Standaard UIT: de vlekken vervangen de zontextuur, en dat is een
-               ingrijpender beeld dan een lijn erbij. -->
-          <div class="elayer expandable" id="sunspots-toggle">
-            <span class="edot"></span>Sunspots
-            <button class="row-expand" data-note="sunspots-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-            </button>
-            <span class="estat" id="es-sunspots">off</span>
-          </div>
-          <div class="layer-detail" id="sunspots-note">
-            The active regions NOAA reported today, at their measured heliographic
-            position. Switching this on replaces the painted Sun texture with a
-            plain photosphere, so what you see is the measurement and nothing else.
-            Spot sizes are exaggerated to be visible &#8212; a real group covers a
-            fraction of a percent of the disc &#8212; but their relative sizes are true.
-            Regions past the limb sit on the far side and are hidden by the Sun itself.
-          </div>
-          <button class="apply" id="sunview-btn">Observe the Sun</button>
+
         </div>
       </section>
 
-      <!-- ---------- ZONNEACTIVITEIT ---------- -->
-      <section class="acc" data-acc="cosmos-activity">
-        <button class="acc-head" type="button" aria-expanded="false">
-          <span>Sun activity</span>
-          <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-        </button>
-        <div class="acc-body">
-          <div class="sunstat" id="sun-activity">
-            <div class="sunstat-row"><span>Sunspot number</span><b id="sa-ssn">&#8212;</b></div>
-            <div class="sunstat-row"><span>Active regions</span><b id="sa-regions">&#8212;</b></div>
-            <div class="sunstat-row"><span>Solar flux 10.7 cm</span><b id="sa-flux">&#8212;</b></div>
-            <div class="sunstat-row"><span>X-ray flux now</span><b id="sa-xray">&#8212;</b></div>
-            <div class="sunstat-row"><span>Strongest today</span><b id="sa-flare">&#8212;</b></div>
-            <h3>Flare probability, next 24 h</h3>
-            <div class="sunstat-row"><span>C class</span><b id="sa-pc">&#8212;</b></div>
-            <div class="sunstat-row"><span>M class</span><b id="sa-pm">&#8212;</b></div>
-            <div class="sunstat-row"><span>X class</span><b id="sa-px">&#8212;</b></div>
-            <div class="sunstat-note" id="sa-note">&#8212;</div>
-          </div>
-        </div>
-      </section>
-
-      <!-- ---------- MOMENT ----------
-           Bundelt alles wat met tijd te maken heeft. Het trackvenster is geen los
-           tijdbegrip maar de SCHAAL van de slider: kies je 7 dagen, dan loopt de
-           slider van -3,5 tot +3,5 dag en is dat precies het spoor dat je ziet. -->
-      <section class="acc open" data-acc="cosmos-moment">
+<section class="acc open" data-acc="cosmos-moment">
         <button class="acc-head" type="button" aria-expanded="true">
           <span>Moment</span>
           <!-- De i-knop zit IN de kop maar buiten de klik die in- en uitklapt:
@@ -568,27 +525,44 @@
         </div>
       </section>
 
-      <!-- ---------- ECLIPS ---------- -->
-      <section class="acc" data-acc="cosmos-eclipse">
+<section class="acc" data-acc="cosmos-activity">
         <button class="acc-head" type="button" aria-expanded="false">
-          <span>Eclipse</span>
+          <span>Sun activity</span>
           <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
         <div class="acc-body">
-          <div class="elayer on" id="eclipse-toggle"><span class="edot"></span>Shadow on Earth<span class="estat" id="es-eclipse">on</span></div>
-          <div class="eclipse-state" id="eclipse-state">No eclipse at this moment.</div>
-          <!-- Zonder deze knoppen zou vrijwel niemand de schaduw ooit te zien
-               krijgen: er zijn twee tot vijf zonsverduisteringen per jaar, elk een
-               uur of twee lang. -->
-          <div class="eclipse-nav">
-            <button class="play-btn" id="eclipse-prev" title="Previous eclipse">&#9664; Previous</button>
-            <button class="play-btn" id="eclipse-jump" title="Next eclipse">Next &#9654;</button>
+          <!-- Standaard UIT: de vlekken vervangen de zontextuur, en dat is een
+               ingrijpender beeld dan een lijn erbij. -->
+          <div class="elayer expandable" id="sunspots-toggle">
+            <span class="edot"></span>Sunspots
+            <button class="row-expand" data-note="sunspots-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <span class="estat" id="es-sunspots">off</span>
           </div>
+          <div class="layer-detail" id="sunspots-note">
+            Drawn automatically from whatever NOAA published today, at the measured
+            heliographic position. The painted texture steps aside so you see the
+            data and nothing else. Sizes are exaggerated to be visible; their
+            proportions are true.
+          </div>
+          <div class="sunstat" id="sun-activity">
+            <div class="sunstat-row"><span>Sunspot number</span><b id="sa-ssn">&#8212;</b></div>
+            <div class="sunstat-row"><span>Active regions</span><b id="sa-regions">&#8212;</b></div>
+            <div class="sunstat-row"><span>Solar flux 10.7 cm</span><b id="sa-flux">&#8212;</b></div>
+            <div class="sunstat-row"><span>X-ray flux now</span><b id="sa-xray">&#8212;</b></div>
+            <div class="sunstat-row"><span>Strongest today</span><b id="sa-flare">&#8212;</b></div>
+            <h3>Flare probability, next 24 h</h3>
+            <div class="sunstat-row"><span>C class</span><b id="sa-pc">&#8212;</b></div>
+            <div class="sunstat-row"><span>M class</span><b id="sa-pm">&#8212;</b></div>
+            <div class="sunstat-row"><span>X class</span><b id="sa-px">&#8212;</b></div>
+            <div class="sunstat-note" id="sa-note">&#8212;</div>
+          </div>
+          <button class="apply" id="sunview-btn">Observe the Sun</button>
         </div>
       </section>
 
-      <!-- ---------- READINGS ---------- -->
-      <section class="acc" data-acc="cosmos-readings">
+<section class="acc" data-acc="cosmos-readings">
         <button class="acc-head" type="button" aria-expanded="false">
           <span>Readings</span>
           <span class="acc-sub" id="readout-head">right now</span>
@@ -616,6 +590,24 @@
             Positions are calculated in the browser from Meeus&#39; algorithms &#8212; no feed,
             no key. Sun and Moon are drawn at compressed distances so both stay
             readable; the real Moon distance is in the readout above.
+          </div>
+        </div>
+      </section>
+
+<section class="acc" data-acc="cosmos-eclipse">
+        <button class="acc-head" type="button" aria-expanded="false">
+          <span>Eclipse</span>
+          <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="acc-body">
+          <div class="elayer on" id="eclipse-toggle"><span class="edot"></span>Shadow on Earth<span class="estat" id="es-eclipse">on</span></div>
+          <div class="eclipse-state" id="eclipse-state">No eclipse at this moment.</div>
+          <!-- Zonder deze knoppen zou vrijwel niemand de schaduw ooit te zien
+               krijgen: er zijn twee tot vijf zonsverduisteringen per jaar, elk een
+               uur of twee lang. -->
+          <div class="eclipse-nav">
+            <button class="play-btn" id="eclipse-prev" title="Previous eclipse">&#9664; Previous</button>
+            <button class="play-btn" id="eclipse-jump" title="Next eclipse">Next &#9654;</button>
           </div>
         </div>
       </section>
@@ -3029,8 +3021,12 @@ function animateShader() {
     }
   }
 
+  // De vlucht naar of van de zon. Staat hier, en niet in een tween, omdat deze lus
+  // altijd na die van globe.gl draait — zie de noot bij flyCamera().
+  stepSunFlight(_cam, world.controls());
+
   // Het draaipunt volgt de zon zolang je hem bekijkt — zie de noot bij setSunView().
-  if (sunView && sunMoon) {
+  if (sunView && !sunFlight.actief && sunMoon) {
     const sp = sunMoon.meshes.sunGroup.position;
     if (!sp.equals(_sunAnchor)) {
       _sunDelta.subVectors(sp, _sunAnchor);
@@ -3507,7 +3503,18 @@ bindCosmosToggle('sunspots-toggle', 'es-sunspots',
 // (straal 22) zou je er dwars doorheen zoomen. OrbitControls klemt bovendien
 // alleen in `update()` — zie de noot bij de zoomgrenzen hierboven.
 let sunView = false;
-const _sunViewPrev = { pos: null, target: null, min: 0, max: 0 };
+const _sunViewPrev = { pos: null, target: null, min: 0, max: 0, labels: true, autoRotate: false };
+
+// De twee schakelaars in Instellingen die het zonaanzicht tijdelijk overneemt.
+// Zonder deze koppeling staan ze "on" terwijl het uit is, en dat is erger dan
+// een schakelaar die vanzelf verspringt: dan klopt het beeld niet meer.
+function syncViewToggles() {
+  const l = document.getElementById('label-toggle'), r = document.getElementById('rotate-toggle');
+  if (l) { l.classList.toggle('on', labelsOn);
+           document.getElementById('es-label').textContent = labelsOn ? 'on' : 'off'; }
+  if (r) { r.classList.toggle('on', autoRotateWanted);
+           document.getElementById('es-rotate').textContent = autoRotateWanted ? 'on' : 'off'; }
+}
 const _sunAnchor = new THREE.Vector3();   // waar de zon stond bij de vorige frame
 const _sunShift = new THREE.Vector3();    // hulpvector bij het instappen
 const _sunDelta = new THREE.Vector3();    // verplaatsing per frame
@@ -3528,6 +3535,17 @@ function setSunView(on) {
     // waardoor de bol verzadigt naar wit en de vlekken verdwijnen. Van dichtbij
     // is een plat vlak ook gewoon niet wat een corona is.
     sunMoon.meshes.sunGlow.visible = false;
+    // De aardbevingslabels wijzen naar plekken op een aarde die je niet meer ziet en
+    // zouden als losse tekst in de leegte blijven hangen. Alleen de WEERGAVE gaat
+    // uit: de adapters blijven draaien en meldingen van nieuwe bevingen komen ook
+    // hier gewoon binnen. `labelsOn` is genoeg — positionLabels() leest die vlag.
+    _sunViewPrev.labels = labelsOn;
+    labelsOn = false;
+    // Auto-rotatie zou om de zon heen draaien en juist de kant tonen waar NOAA
+    // niets van weet: de helft die naar de aarde wijst is de helft met data.
+    _sunViewPrev.autoRotate = autoRotateWanted;
+    setAutoRotate(false);
+    syncViewToggles();
     const R = sunMoon.config.sunRadius;
     const sunPos = sunMoon.meshes.sunGroup.position;
     // Aan de kant van de aarde gaan staan: dat is de helft die NOAA meet, en de
@@ -3538,6 +3556,10 @@ function setSunView(on) {
     _sunAnchor.copy(sunPos);
   } else {
     sunMoon.meshes.sunGlow.visible = true;
+    labelsOn = _sunViewPrev.labels;
+    setAutoRotate(_sunViewPrev.autoRotate);
+    // De schakelaars in Instellingen moeten weer kloppen met wat er werkelijk staat.
+    syncViewToggles();
     flyCamera(cam, ctl, _sunViewPrev.pos, _sunViewPrev.target,
               { min: _sunViewPrev.min, max: _sunViewPrev.max });
   }
@@ -3550,24 +3572,58 @@ function setSunView(on) {
 // het draaipunt — OrbitControls rekent daar in zijn eigen `update()` mee, dus de
 // besturing blijft de hele tijd geldig.
 //
-// DE ZOOMGRENZEN GAAN ER TIJDENS DE VLUCHT AF. OrbitControls herberekent de
-// camerapositie elke frame uit draaipunt plus straal, en klemt die straal tussen
-// min en max. Zet je de nieuwe grenzen vóór de vlucht, dan trekt hij de camera
-// onderweg naar zijn eigen grens terug. GEMETEN: de terugweg eindigde op 1018
-// eenheden van de aarde in plaats van de 350 waar hij vandaan kwam — vlak onder
-// de maximumafstand van 1053. Vandaar: grenzen pas zetten als de vlucht klaar is.
+// DE VLUCHT LOOPT NIET VIA GSAP, en dat is een gemeten keuze. Twee dingen vechten
+// hier om dezelfde waarden: GSAP schrijft in `camera.position` en `controls.target`,
+// terwijl globe.gl en OrbitControls die elke frame in hun eigen `update()`
+// herberekenen. De uitkomst hing af van wie er won. Gemeten symptomen: het
+// draaipunt bleef halverwege steken op (-11, 4, -3), de tween werd onderweg
+// afgebroken en `onComplete` vuurde nooit, waardoor de zoomgrenzen op 0,01 en
+// oneindig bleven staan.
+//
+// De frame-lus hieronder draait ná die van globe.gl en is dus altijd de laatste die
+// schrijft. Eén voortgangswaarde stuurt camera en draaipunt samen — geen tweens,
+// geen overwrite-regels, geen volgorde-afhankelijkheid.
+//
+// DE ZOOMGRENZEN GAAN ER TIJDENS DE VLUCHT AF. OrbitControls klemt de straal tussen
+// min en max en trekt de camera anders onderweg naar zijn eigen grens. GEMETEN: de
+// terugweg eindigde op 1018 eenheden van de aarde in plaats van de 350 waar hij
+// vandaan kwam — vlak onder het maximum van 1053.
+const sunFlight = { actief: false, t0: 0, duur: 1100,
+                    vanPos: new THREE.Vector3(), naarPos: new THREE.Vector3(),
+                    vanDoel: new THREE.Vector3(), naarDoel: new THREE.Vector3(),
+                    min: 0, max: 0 };
+
 function flyCamera(cam, ctl, pos, target, limits) {
-  const dur = REDUCED_MOTION ? 0 : 1.1;
+  sunFlight.vanPos.copy(cam.position);
+  sunFlight.naarPos.copy(pos);
+  sunFlight.vanDoel.copy(ctl.target);
+  sunFlight.naarDoel.copy(target);
+  sunFlight.min = limits.min;
+  sunFlight.max = limits.max;
+  sunFlight.duur = REDUCED_MOTION ? 0 : 1100;
+  sunFlight.t0 = performance.now();
+  sunFlight.actief = true;
   ctl.minDistance = 0.01;
   ctl.maxDistance = Infinity;
-  gsap.to(cam.position, { x: pos.x, y: pos.y, z: pos.z, duration: dur,
-                          ease: 'power2.inOut', overwrite: true });
-  gsap.to(ctl.target,   { x: target.x, y: target.y, z: target.z, duration: dur,
-                          ease: 'power2.inOut', overwrite: true,
-                          onComplete: () => {
-                            ctl.minDistance = limits.min;
-                            ctl.maxDistance = limits.max;
-                          } });
+}
+
+// Wordt elke frame aangeroepen vanuit animateShader.
+function stepSunFlight(cam, ctl) {
+  if (!sunFlight.actief) return;
+  const u = sunFlight.duur <= 0 ? 1
+    : Math.min(1, (performance.now() - sunFlight.t0) / sunFlight.duur);
+  // dezelfde S-curve als power2.inOut
+  const e = u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2;
+  cam.position.lerpVectors(sunFlight.vanPos, sunFlight.naarPos, e);
+  // x/y/z rechtstreeks — zie de noot bij lockControlsTarget().
+  ctl.target.x = sunFlight.vanDoel.x + (sunFlight.naarDoel.x - sunFlight.vanDoel.x) * e;
+  ctl.target.y = sunFlight.vanDoel.y + (sunFlight.naarDoel.y - sunFlight.vanDoel.y) * e;
+  ctl.target.z = sunFlight.vanDoel.z + (sunFlight.naarDoel.z - sunFlight.vanDoel.z) * e;
+  if (u >= 1) {
+    sunFlight.actief = false;
+    ctl.minDistance = sunFlight.min;
+    ctl.maxDistance = sunFlight.max;
+  }
 }
 
 // GEMETEN, en dit koste de halve blok: globe.gl 2.46.1 zet bij ELKE 'change' van
@@ -3587,7 +3643,9 @@ function flyCamera(cam, ctl, pos, target, limits) {
   const t = world.controls().target;
   for (const naam of ['set', 'setScalar']) {
     const orig = t[naam].bind(t);
-    t[naam] = (...args) => (sunView ? t : orig(...args));
+    // Ook tijdens de TERUGVLUCHT blijft het slot dicht: dan staat `sunView` al op
+    // false terwijl het draaipunt nog onderweg is naar de oorsprong.
+    t[naam] = (...args) => ((sunView || sunFlight.actief) ? t : orig(...args));
   }
 })();
 
