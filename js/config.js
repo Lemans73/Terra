@@ -70,7 +70,8 @@ export const COLORS = {
   ice:      '#b3e5fc',
   wildfire: '#ff3b30',
   aqi:      '#a78bfa',  // identiteitskleur (legenda/melding); glyph zelf volgt de AQI-band
-  lightning:'#bcd6ff'   // bliksem — zacht blauw-wit (minder fel dan puur wit)
+  lightning:'#bcd6ff',  // bliksem — zacht blauw-wit (minder fel dan puur wit)
+  region:   '#ffb347'   // actief gebied op de zon — warm oranje, kleur van de fotosfeer
 };
 
 // Bron-homepages (algemene "bron"-link in de readout) en het label voor de
@@ -78,11 +79,13 @@ export const COLORS = {
 export const SOURCE_URLS = {
   'USGS':       'https://earthquake.usgs.gov',
   'EMSC':       'https://www.emsc-csem.org',
+  'NOAA SWPC':  'https://www.swpc.noaa.gov',
   'NASA EONET': 'https://eonet.gsfc.nasa.gov',
   'WAQI':       'https://aqicn.org',
   'Blitzortung':'https://www.blitzortung.org'
 };
 export const DETAIL_LINK_LABELS = {
+  region: 'Solar region summary',
   quake: 'View on USGS', volcano: 'Source report', wildfire: 'Source report',
   storm: 'Source report', ice: 'Source report', aqi: 'Station on WAQI'
 };

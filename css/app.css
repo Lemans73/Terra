@@ -1275,6 +1275,32 @@
     border-color: var(--quake);
     background: rgba(11,16,24,0.92);
   }
+  /* Labels bij de actieve gebieden op de zon. Zelfde bouw als .qlabel — ze delen
+     dezelfde overlay-laag — maar warmer van kleur en zonder de zoom-afhankelijke
+     schaling, want in het zonaanzicht staat de camera altijd op dezelfde afstand. */
+  .rlabel {
+    position: absolute;
+    top: 0; left: 0;
+    display: none;
+    white-space: nowrap;
+    background: rgba(5,7,13,0.82);
+    backdrop-filter: blur(6px);
+    border: 1px solid var(--hair);
+    border-radius: 7px;
+    padding: 4px 9px;
+    font-size: 11px;
+    line-height: 1.3;
+    color: var(--ink);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+    pointer-events: auto;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .rlabel b { color: #ffb347; font-weight: 700; }
+  .rlabel span { color: var(--ink-dim); margin-left: 6px; }
+  .rlabel:hover { border-color: #ffb347; background: rgba(11,16,24,0.92); }
+  .rline { stroke: #ffb347; stroke-width: 1; stroke-dasharray: 2 3; opacity: 0.55; }
+
   #label-lines {
     position: absolute;
     inset: 0;

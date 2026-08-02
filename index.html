@@ -269,7 +269,7 @@
       <h3>Sources</h3>
       <div class="srcs" id="quake-sources">
       <label class="src">
-      <input type="checkbox" data-src="usgs" checked>
+      <input type="checkbox" data-src="usgs">
       <span>USGS</span><em>global coverage</em>
       </label>
       <label class="src">
@@ -656,7 +656,7 @@
        GEEN TWEEDE SET FILTERS. De kop toont een samenvatting die bij aanklikken de
        filter-accordion opent. Twee sets bedieningselementen die elk hun eigen
        waarde bijhouden lopen gegarandeerd uiteen, en dat merk je pas weken later. -->
-  <aside class="qlist" id="qlist">
+  <aside class="qlist" id="qlist" style="display:none">
     <div class="qlist-head">
       <span class="qlist-title">Earthquakes</span>
       <span class="qlist-count" id="qlist-count">&#8212;</span>
@@ -679,6 +679,10 @@
     <div class="row"><span class="k">Value</span><span class="v" id="r-value"></span></div>
     <div class="row"><span class="k">Time</span><span class="v" id="r-time"></span></div>
     <div class="row"><span class="k">Source</span><span class="v"><a id="r-source" target="_blank" rel="noopener"></a></span></div>
+    <!-- Vrije regels. Een aardbeving past in de vaste rijen hierboven; een actief
+         zonnegebied heeft meer te vertellen (positie, twee classificaties, drie
+         flare-kansen). `d.extra` vult dit, en leeg laten is het normale geval. -->
+    <div id="r-extra"></div>
     <a class="more-link" id="r-link" target="_blank" rel="noopener" hidden></a>
   </div>
 
@@ -1170,6 +1174,11 @@ const Adapters = {
   // 'hour' → all_hour, 'day' → all_day, 'week' → all_week.
   usgs: {
     layers: ['quake'],
+    // STANDAARD UIT. EMSC dekt Europa en de Middellandse Zee onvergelijkbaar veel
+    // fijner (gemeten: 819 events tegen 5 over een week M1+) en is wereldwijd
+    // bijna een superset. USGS staat één vinkje ver weg voor wie de mondiale
+    // catalogus erbij wil; zie de bronkeuze in de aardbevingsfilters.
+    enabled: false,
     // USGS ververst per minuut en publiceert deze feeds juist om gepold te worden
     // (statische bestanden achter een CDN). 60 s houdt de globe levendig; de
     // beleefdheid zit in de tabblad-pauze in pull(), niet in een traag interval.
@@ -1307,7 +1316,8 @@ const Adapters = {
         spots: r.number_spots,
         spotClass: r.spot_class,
         magClass: r.mag_class,
-        pC: r.c_flare_probability, pM: r.m_flare_probability, pX: r.x_flare_probability
+        pC: r.c_flare_probability, pM: r.m_flare_probability, pX: r.x_flare_probability,
+        firstDate: r.first_date
       }));
       solarState.ssn = solarState.regions.reduce((n, r) => n + (r.spots || 0), 0);
       applySolarState();
@@ -3082,6 +3092,7 @@ function animateShader() {
     tg.x = sp.x; tg.y = sp.y; tg.z = sp.z;
   }
 
+  positionRegionLabels(_cam);   // labels bij de actieve gebieden op de zon
   updateHover();      // raycaster-highlight bijwerken
   positionLabels();   // leader-line labels herpositioneren
   requestAnimationFrame(animateShader);
@@ -3312,6 +3323,107 @@ function flyTo(d) {
   world.pointOfView({ lat: d.lat, lng: d.lng, altitude: 0.7 }, REDUCED_MOTION ? 0 : 1200);
 }
 
+// ---- Labels bij de actieve gebieden op de zon ----------------
+//
+// Zelfde principe als de aardbevingslabels — een DOM-laag boven het canvas met een
+// leader-line — maar de projectie werkt anders. Een beving heeft lat/lng en gaat via
+// `world.getScreenCoords()`; een zonnegebied heeft alleen een RICHTING vanaf het
+// zonnemiddelpunt, dus die projecteren we zelf met de camera.
+//
+// Ze verschijnen ALLEEN in het zonaanzicht. Vanaf de aarde is de zon een schijfje
+// van een paar pixels; zeven labels eromheen zou ruis zijn, geen informatie.
+const regionLabels = [];
+
+// Een gebied als readout-item. Dezelfde vorm als een event uit de store, zodat
+// showDetail() er zonder uitzonderingen mee overweg kan — op `extra` na, dat de
+// vrije regels vult die een beving niet nodig heeft.
+function regionItem(r) {
+  const pos = (r.lat >= 0 ? 'N' : 'S') + String(Math.abs(r.lat)).padStart(2, '0') +
+              (r.lon <= 0 ? 'W' : 'E') + String(Math.abs(r.lon)).padStart(2, '0');
+  const extra = [];
+  if (r.spotClass) extra.push(['Spot class', r.spotClass + ' (McIntosh)']);
+  if (r.magClass) extra.push(['Magnetic class', r.magClass + ' (Hale)']);
+  extra.push(['Position', pos + (Math.abs(r.lon) > 90 ? ' · far side' : '')]);
+  // Deze drie zijn per gebied, niet de mondiale kans uit het activiteitenpaneel.
+  if (r.pC != null) extra.push(['Flare odds 24 h', 'C ' + r.pC + '% · M ' + (r.pM ?? '?') + '% · X ' + (r.pX ?? '?') + '%']);
+  return {
+    layer: 'region',
+    label: 'Region ' + r.region,
+    value: r.spots,
+    // NOAA geeft alleen de dag waarop het gebied voor het eerst gezien is.
+    time: r.firstDate ? Date.parse(r.firstDate) : null,
+    source: 'NOAA SWPC',
+    url: 'https://www.swpc.noaa.gov/products/solar-region-summary',
+    area: r.area,
+    extra
+  };
+}
+
+function rebuildRegionLabels() {
+  regionLabels.forEach(l => { l.el.remove(); l.line.remove(); });
+  regionLabels.length = 0;
+  if (!sunMoon) return;
+  const meshes = sunMoon.meshes.spotMeshes;
+  solarState.regions.forEach((r, i) => {
+    const mesh = meshes[i];
+    if (!mesh || !mesh.userData.dir) return;
+    const el = document.createElement('div');
+    el.className = 'rlabel';
+    el.innerHTML = '<b>' + r.region + '</b><span>' +
+                   (r.spots == null ? 'no spots' : r.spots + (r.spots === 1 ? ' spot' : ' spots')) +
+                   '</span>';
+    el.addEventListener('click', () => showDetail(regionItem(r)));
+    labelLayer.appendChild(el);
+    const line = document.createElementNS(SVG_NS, 'line');
+    line.setAttribute('class', 'rline');
+    labelSvg.appendChild(line);
+    regionLabels.push({ el, line, mesh });
+  });
+}
+
+const _regionPos = new THREE.Vector3();
+const _regionNaar = new THREE.Vector3();
+function positionRegionLabels(cam) {
+  if (!regionLabels.length) return;
+  const aan = sunView && sunMoon && sunMoon.meshes.sunspotGroup.visible;
+  const zon = sunMoon ? sunMoon.meshes.sunGroup.position : null;
+  const R = sunMoon ? sunMoon.config.sunRadius : 1;
+  // Richting van de zon naar de camera: dát bepaalt welke helft je ziet, niet de
+  // richting naar de aarde. In het zonaanzicht draai je er immers omheen.
+  if (aan) _regionNaar.subVectors(cam.position, zon).normalize();
+  // Pass 1: zichtbaarheid en schermpositie.
+  const items = [];
+  for (const l of regionLabels) {
+    if (!aan) { l.el.style.display = 'none'; l.line.style.display = 'none'; continue; }
+    const dir = l.mesh.userData.dir;
+    const zichtbaar = dir.dot(_regionNaar) > 0.12;   // net binnen de rand blijven
+    l.el.style.display = zichtbaar ? 'block' : 'none';
+    l.line.style.display = zichtbaar ? 'block' : 'none';
+    if (!zichtbaar) continue;
+    _regionPos.copy(dir).multiplyScalar(R).add(zon).project(cam);
+    const x = (_regionPos.x * 0.5 + 0.5) * window.innerWidth;
+    const y = (-_regionPos.y * 0.5 + 0.5) * window.innerHeight;
+    items.push({ l, x, y, ty: y - 34 });             // label boven de vlek
+  }
+  // Pass 2: stapelen. Actieve gebieden liggen vaak dicht bij elkaar — 4498 en 4500
+  // staan vandaag 5 graden uit elkaar — en dan liggen de labels over elkaar. Zelfde
+  // aanpak als bij de aardbevingslabels: het onderste blijft liggen, de rest schuift
+  // omhoog, en de leader-line houdt de koppeling met de vlek zichtbaar.
+  items.sort((a, b) => b.y - a.y);
+  for (let i = 0; i < items.length; i++) {
+    for (let j = 0; j < i; j++) {
+      if (Math.abs(items[i].x - items[j].x) < 96 && Math.abs(items[i].ty - items[j].ty) < 26) {
+        items[i].ty = items[j].ty - 26;
+      }
+    }
+  }
+  for (const it of items) {
+    it.l.el.style.transform = 'translate(' + it.x + 'px, ' + it.ty + 'px) translate(-50%, -100%)';
+    it.l.line.setAttribute('x1', it.x); it.l.line.setAttribute('y1', it.ty);
+    it.l.line.setAttribute('x2', it.x); it.l.line.setAttribute('y2', it.y);
+  }
+}
+
 // ---- Aardbevingenlijst (sidebar rechts) ----------------------
 //
 // Voeding komt uit render(), uit dezelfde `quakes`-array die de bol tekent. Deze
@@ -3320,7 +3432,7 @@ function flyTo(d) {
 const QLIST_PAGE = 20;
 let listSort = 'mag';         // 'mag' | 'time'
 let listLimit = QLIST_PAGE;
-let listOpen = true;
+let listOpen = false;   // standaard dicht — zie de knop in de masthead
 
 // Relatieve tijd. Een lijst met twintig keer "02 Aug, 19:14" leest slechter dan
 // "3 min" — je wilt zien hoe vers iets is, niet hoe laat het was.
@@ -3482,7 +3594,7 @@ function updateNotifBadge() {
 function renderNotifList() {
   const list = document.getElementById('notif-list');
   if (!notifHistory.length) { list.innerHTML = '<div class="notif-empty">No notifications yet</div>'; return; }
-  const names = { quake:'Earthquake', volcano:'Volcano', storm:'Storm', ice:'Sea ice', wildfire:'Wildfire', aqi:'Air quality', lightning:'Lightning' };
+  const names = { region:'Active region', quake:'Earthquake', volcano:'Volcano', storm:'Storm', ice:'Sea ice', wildfire:'Wildfire', aqi:'Air quality', lightning:'Lightning' };
   list.innerHTML = notifHistory.map((n, i) => {
     const detail = (n.layer === 'quake' && n.value != null ? 'M ' + n.value.toFixed(1) + ' · ' : '') + (n.label || '');
     const tm = new Date(n.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
@@ -3912,6 +4024,9 @@ function applySolarState() {
   // Zonder dit verschijnen verse vlekken pas bij de volgende tick — zie dezelfde
   // reden bij bindCosmosToggle.
   updateSunUniform();
+  // PAS HIERNA de labels: rebuildRegionLabels() leest `userData.dir`, en die wordt
+  // gezet door placeSunspots() binnen update(). Andersom slaat hij elk gebied over.
+  rebuildRegionLabels();
 }
 bindCosmosToggle('leaders-toggle', 'es-leaders', on => sunMoon.setVisible({ leaders: on }));
 bindCosmosToggle('align-toggle', 'es-align', on => sunMoon.setVisible({ alignment: on }));
@@ -4495,7 +4610,7 @@ function showDetail(d) {
     // via de sluitknop van dit venster.
     panelOpenBtn.style.display = 'none';
   }
-  const names = { quake:'Earthquake', volcano:'Volcano', storm:'Storm', ice:'Sea ice', wildfire:'Wildfire', aqi:'Air quality', lightning:'Lightning' };
+  const names = { region:'Active region', quake:'Earthquake', volcano:'Volcano', storm:'Storm', ice:'Sea ice', wildfire:'Wildfire', aqi:'Air quality', lightning:'Lightning' };
   document.getElementById('r-kicker').textContent = names[d.layer].toUpperCase();
   document.getElementById('r-kicker').style.color =
     d.layer === 'aqi' ? aqiHex(d.value) : COLORS[d.layer];
@@ -4511,12 +4626,20 @@ function showDetail(d) {
         (d.depth != null ? ' · ' + Math.round(d.depth) + ' km deep' : '')
       : d.layer === 'aqi' && d.value != null
         ? 'AQI ' + d.value + ' · ' + aqiBand(d.value).label
+      : d.layer === 'region'
+        ? (d.value == null ? 'no spots' : d.value + (d.value === 1 ? ' spot' : ' spots')) +
+          (d.area != null ? ' · ' + d.area + ' millionths' : '')
         : '—';
   // Niet elke bron geeft een tijdstip. Zonder deze controle toont een ontbrekende
   // tijd "01 Jan, 01:00" (epoch), en dat is erger dan eerlijk niets tonen.
   document.getElementById('r-time').textContent = d.time
     ? new Date(d.time).toLocaleString('en-GB', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' })
     : '—';
+  // Vrije regels. Leeg voor alles behalve een zonnegebied — zie de noot bij r-extra.
+  const extraEl = document.getElementById('r-extra');
+  extraEl.innerHTML = (d.extra || []).map(([k, v]) =>
+    '<div class="row"><span class="k">' + k + '</span><span class="v">' + v + '</span></div>').join('');
+
   // Bron-link (homepage) + event-/station-specifieke link wanneer de API die geeft.
   const srcEl = document.getElementById('r-source');
   // EMSC bundelt tientallen instituten; `auth` noemt wie de meting daadwerkelijk
@@ -4826,12 +4949,17 @@ function applyZoomRange() {
 }
 applyZoomRange();
 
-// Op een telefoon begint de aardbevingenlijst dicht: daar is het een bottom sheet
-// die het bedienpaneel zou verdringen zodra je de app opent. Deze aanroep MOET
-// hier staan en niet bij de rest van de lijstcode — zie de noot daar.
+// De lijst begint overal dicht; de knop in de masthead haalt hem op. De beginstand
+// staat in de markup (display:none) én in `listOpen`, zodat er bij het laden geen
+// lijst opflitst. Hier alleen de knop met die stand gelijkzetten.
 document.getElementById('qlist-open').classList.toggle('on', listOpen);
 document.getElementById('qlist-open').setAttribute('aria-pressed', String(listOpen));
-if (isNarrow()) setQuakeListOpen(false);
+
+// Twee overlays staan standaard aan. Via setOverlay() en niet via `overlayOn`,
+// want de GeoJSON wordt pas op dat moment opgehaald — de stand ZET de lading in
+// gang. Landsgrenzen blijven uit: samen met de namen wordt het rommelig.
+setOverlay('plates', true);
+setOverlay('names', true);
 
 // Eerste stand meteen zetten; daarna houdt de setInterval hem bij.
 updateSunUniform();
@@ -4900,8 +5028,12 @@ if (IS_LOCAL) {
   };
 }
 
-// (1) kernlaag binnen — korte adempauze zodat de render af is voor de intro speelt
-if (firstPulls.usgs) firstPulls.usgs.finally(() => setTimeout(dismissBoot, 400));
+// (1) kernlaag binnen — korte adempauze zodat de render af is voor de intro speelt.
+// BEIDE seismische bronnen, want welke er aan staat is een instelling geworden: een
+// uitgezette adapter keert meteen terug uit pull() en zou het bootscherm anders
+// wegnemen vóórdat er ook maar iets geladen is.
+Promise.allSettled([firstPulls.usgs, firstPulls.emsc].filter(Boolean))
+  .then(() => setTimeout(dismissBoot, 400));
 // (3) bovengrens — dit is het vangnet dat een hangende bron onschadelijk maakt
 setTimeout(dismissBoot, BOOT_MAX_MS);
 
