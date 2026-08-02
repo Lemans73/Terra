@@ -90,6 +90,18 @@ NASA content is generally not copyrighted and may be used freely. EONET
 aggregates events from partner sources; those partners are named in the API
 response and shown in the application whenever they are supplied.
 
+### Solar activity
+
+**NOAA Space Weather Prediction Center** &nbsp;·&nbsp;
+[swpc.noaa.gov](https://www.swpc.noaa.gov/) &nbsp;·&nbsp; data via
+[services.swpc.noaa.gov](https://services.swpc.noaa.gov/)
+
+Work of the National Oceanic and Atmospheric Administration, a US government
+agency. Public domain, no restriction on use. Four products are used: the daily
+solar region summary (sunspot groups, their heliographic position, area and
+classification), the flare probabilities, the GOES X-ray flare summary and the
+10.7 cm solar flux.
+
 ### Air quality
 
 **World Air Quality Index Project** &nbsp;·&nbsp; [aqicn.org](https://aqicn.org/)
