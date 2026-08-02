@@ -1933,6 +1933,12 @@ let texQuality = (() => {
   } catch { return DEFAULT_QUALITY; }
 })();
 
+// Hulpobjecten voor de radiale oriëntatie van de indicatoren — zie de lange noot
+// in customThreeObjectUpdate hieronder. Buiten de callback zodat er niet per
+// glyph per update een Matrix4 en een Vector3 worden aangemaakt.
+const _glyphM = new THREE.Matrix4();
+const _glyphLook = new THREE.Vector3();
+
 const world = Globe()
   .backgroundImageUrl(assetsFor(texQuality).stars)
   // lijn-overlays (platen, landgrenzen) — GeoJSON-coördinaten zijn [lng, lat]
@@ -1974,10 +1980,30 @@ const world = Globe()
       : 0.006; // staaf-basis vlak op het oppervlak
     const c = world.getCoords(d.lat, d.lng, alt);
     obj.position.set(c.x, c.y, c.z);
-    // +Z radiaal naar BUITEN. lookAt(0,0,0) zou voor een gewoon Object3D de +Z juist
-    // naar het centrum richten (geometrie de aarde ín); kijk daarom naar een punt
-    // verder langs dezelfde straal → +Z = normalize(2c - c) = naar buiten.
-    obj.lookAt(c.x * 2, c.y * 2, c.z * 2);
+    // +Z radiaal naar BUITEN. Een lookAt naar (0,0,0) zou voor een gewoon Object3D
+    // de +Z juist naar het centrum richten (geometrie de aarde ín); kijk daarom naar
+    // een punt verder langs dezelfde straal → +Z = normalize(2c - c) = naar buiten.
+    //
+    // WAAROM HIER GEEN `obj.lookAt()` STAAT. Die rekent in WERELDRUIMTE: hij leest
+    // zijn eigen positie uit `matrixWorld` en corrigeert daarna voor de ouder met
+    // `parent.matrixWorld`. Beide matrices worden pas bij het renderen bijgewerkt,
+    // en als de eerste data binnenkomt vóórdat globe.gl zijn matrices heeft
+    // ververst, is die ouder-matrix verouderd. GEMETEN in de standalone
+    // (2026-08-02): de ouder had rotation (0,0,0) en quaternion 0 graden, terwijl
+    // zijn matrixWorld nog een draaiing van 95,31 graden bevatte. De compensatie
+    // was daardoor fout en de markers stonden mediaan 11,5 graden scheef — tot je
+    // een filter uit en aan zette, want dán liep de rebuild wél na een render.
+    //
+    // Lokaal viel dat nooit op: de texturen komen daar van schijf en de bol wint de
+    // race. In terra.html komen ze van jsDelivr en verliest hij hem.
+    //
+    // `position` en het doel staan allebei al in de lokale ruimte van de ouder, dus
+    // er valt niets te compenseren. Deze twee regels doen exact wat three intern
+    // doet voor een niet-camera — `_m1.lookAt(doel, positie, up)` — maar dan zonder
+    // ook maar één matrixWorld aan te raken, en dus zonder tijdsafhankelijkheid.
+    _glyphLook.set(c.x * 2, c.y * 2, c.z * 2);
+    _glyphM.lookAt(_glyphLook, obj.position, obj.up);
+    obj.quaternion.setFromRotationMatrix(_glyphM);
   })
   (document.getElementById('globe'));
 
@@ -4538,6 +4564,7 @@ if (IS_LOCAL) {
     sun: () => sunMoon,
     solar: () => solarState,
     world: () => world,
+    glyphs: () => glyphList,
     quakeStats() {
       const q = store.filter(d => d.layer === 'quake');
       const by = (s) => q.filter(d => d.src === s);
