@@ -1837,11 +1837,51 @@ function fitCountryLabels(limit, size) {
   return uit;
 }
 
+// GEMETEN 2026-08-02: three-globe geeft zijn landnamen een MeshLambertMaterial, en
+// dat reageert op licht. De DirectionalLight van globe.gl wijst naar de zon, dus op
+// de nachtzijde kregen de namen alleen nog omgevingslicht en werden ze zo donker
+// dat ze achter de bol leken te vallen. De plaatsing klopte al die tijd; alleen de
+// helderheid liep mee met de dag/nacht-cyclus.
+//
+// Een landnaam is een BIJSCHRIFT, geen oppervlak. Die hoort even leesbaar te zijn
+// waar het nacht is — dat is nu juist waar je hem nodig hebt. Vandaar een
+// MeshBasicMaterial, dat licht volledig negeert.
+//
+// De eigenschappen worden van het oorspronkelijke materiaal OVERGENOMEN in plaats
+// van opnieuw bedacht: three-globe leidt transparantie en zijdigheid af uit
+// `labelColor`, en die afleiding hoeft hier niet nagebouwd te worden.
+let countryLabelMat = null;
+let _labelMatTimers = [];
+function keepCountryLabelsUnlit() {
+  world.scene().traverse(o => {
+    if (!o.isMesh || !o.geometry || o.geometry.type !== 'TextGeometry') return;
+    if (o.material === countryLabelMat) return;
+    const oud = o.material;
+    if (!countryLabelMat) {
+      countryLabelMat = new THREE.MeshBasicMaterial({
+        color: oud.color.clone(), opacity: oud.opacity,
+        transparent: oud.transparent, side: oud.side
+      });
+    }
+    o.material = countryLabelMat;
+    oud.dispose();
+  });
+}
+
 function renderCountryLabels() {
   if (!overlayOn.names || !countryLabels) { world.labelsData([]); return; }
   const size = labelSizeForRank(labelRankLimit);
   world.labelSize(size);
   world.labelsData(fitCountryLabels(labelRankLimit, size));
+  // GEMETEN: twee frames wachten is niet genoeg. three-globe bouwt de labels met
+  // een overgang van een seconde en voegt de tekstgeometrie gaandeweg toe, dus na
+  // twee frames staat er nog niets om om te wisselen. Een handvol pogingen over
+  // twee seconden dekt de hele opbouw; elke poging die niets vindt is een no-op.
+  // Elke rebuild (zoomen verandert de labelgrootte) levert verse Lambert-materialen
+  // op, dus dit hoort na élke aanroep te gebeuren en niet één keer bij de start.
+  _labelMatTimers.forEach(clearTimeout);
+  _labelMatTimers = [0, 120, 350, 800, 1400, 2000]
+    .map(ms => setTimeout(keepCountryLabelsUnlit, ms));
 }
 
 // `force` = de pad-hoogte of -stijl is veranderd (moduswissel). globe.gl leest de
