@@ -28,7 +28,7 @@
 // - It needs an internet connection. "Standalone" means one file, not offline.
 
 import { readFile, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { dirname, join, posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -45,15 +45,50 @@ const OUT = 'terra.html';
 // the wrong behaviour for something people download and keep.
 const CDN = 'https://cdn.jsdelivr.net/gh/Lemans73/Terra@main/';
 
-// Order matters: config first, because the others import from it.
-const MODULES = [
-  './js/config.js',
-  './js/shaders.js',
-  './js/modes/expert.js',
-  './js/symbols-expert.js'
-];
-
 const read = (p) => readFile(join(ROOT, p), 'utf8');
+
+// ---------------------------------------------------------------------------
+// WHICH MODULES GET INLINED IS DERIVED, NOT MAINTAINED BY HAND
+//
+// This used to be a constant list, and that is precisely how the sun and moon
+// got lost: index.html imported them, this file had never heard of them, and
+// the build stripped the imports while inlining nothing. The output kept every
+// call site and lost every definition — and the script reported success. What
+// someone adds to index.html tomorrow has to be picked up without them
+// remembering that this file exists.
+//
+// One import statement, multi-line forms included, with its source captured.
+// The lazy body refuses to cross a line that opens a new `import`, which is
+// what stops a CDN import from swallowing the local one underneath it.
+const IMPORT_RE = /^import\s+(?:(?!^import\b)[\s\S])*?\bfrom\s*['"]([^'"]+)['"];?[ \t]*$/gm;
+const isLocal = (spec) => spec.startsWith('./') || spec.startsWith('../');
+
+const localSpecs = (src) => [...src.matchAll(IMPORT_RE)].map(m => m[1]).filter(isLocal);
+
+// Depth-first over the import graph, a dependency pushed before whatever
+// depends on it. That is what puts sunmoon.js above sunmoon-layer.js: a
+// consequence of what the files declare, not an order to keep right by hand.
+async function collectModules(entrySrc) {
+  const order = [];
+  const state = new Map(); // path -> 'visiting' | 'done'
+
+  async function visit(path, via) {
+    if (state.get(path) === 'done') return;
+    if (state.get(path) === 'visiting') {
+      throw new Error(`build failed: circular import — ${path} via ${via}`);
+    }
+    state.set(path, 'visiting');
+    const src = await read(path);
+    for (const spec of localSpecs(src)) {
+      await visit(posix.join(posix.dirname(path), spec), path);
+    }
+    state.set(path, 'done');
+    order.push(path);
+  }
+
+  for (const spec of localSpecs(entrySrc)) await visit(posix.join('.', spec), 'index.html');
+  return order;
+}
 
 // Strip the module syntax. The inlined result is one script, so imports have
 // nothing left to resolve and exports have nowhere to go — but every name has to
@@ -87,25 +122,45 @@ out = out.replace(
 assertGone(out, 'href="./css/app.css"', 'stylesheet link');
 
 // ---- 2. Modules inline ----------------------------------------------------
-// The import block in index.html spans several statements; replace it wholesale
-// with the concatenated sources, then drop the module type so it runs as one
-// classic script. The CDN imports (three, globe.gl, gsap) stay: those are real
-// URLs and load fine over https, even from a file:// page.
+// Every local import in index.html is replaced by the concatenated sources: the
+// first one becomes the inlined block, the rest fall away.
+//
+// `type="module"` STAYS. The CDN imports (three, globe.gl, gsap) are bare
+// specifiers resolved by the import map in the head, and an import map only
+// applies to a module script. Those imports are real URLs and load fine over
+// https, even from a file:// page.
+const modules = await collectModules(html);
+if (!modules.length) throw new Error('build failed: no local imports found in index.html');
+
 let inlined = '';
-for (const m of MODULES) {
-  inlined += `\n/* ===== inlined from ${m} ===== */\n` + deModule(await read(m)) + '\n';
+for (const m of modules) {
+  inlined += `\n/* ===== inlined from ./${m} ===== */\n` + deModule(await read(m)) + '\n';
 }
 
-const importBlock = out.match(
-  /\/\/ Config & constanten[\s\S]*?from '\.\/js\/symbols-expert\.js';/
-);
-if (!importBlock) throw new Error('build failed: could not locate the local import block');
-out = out.replace(importBlock[0], inlined);
+// The placeholder has to be absent from the document, or the modules land in
+// the wrong spot. It is shaped like a comment so a missed swap is inert rather
+// than a syntax error.
+const MARK = '/*__TERRA_INLINE__*/';
+if (out.includes(MARK)) throw new Error(`build failed: ${MARK} already occurs in index.html`);
+let replaced = 0;
+out = out.replace(IMPORT_RE, (stmt, spec) => {
+  if (!isLocal(spec)) return stmt;
+  return replaced++ === 0 ? MARK : '';
+});
+if (!replaced) throw new Error('build failed: could not locate the local imports');
+out = out.replace(MARK, inlined);
 
-assertGone(out, "from './js/config.js'", 'config import');
-assertGone(out, "from './js/shaders.js'", 'shaders import');
-assertGone(out, "from './js/modes/expert.js'", 'expert import');
-assertGone(out, "from './js/symbols-expert.js'", 'symbols import');
+// Generic where there used to be one assertion per module: nothing local may
+// survive, and everything collected must actually be in there.
+const leftover = [...out.matchAll(IMPORT_RE)].map(m => m[1]).filter(isLocal);
+if (leftover.length) {
+  throw new Error(`build failed: local imports survived — ${leftover.join(', ')}`);
+}
+for (const m of modules) {
+  if (!out.includes(`inlined from ./${m}`)) {
+    throw new Error(`build failed: ${m} was collected but never inlined`);
+  }
+}
 
 // ---- 3. Assets naar het CDN ----------------------------------------------
 if (!out.includes("const ASSET_BASE = '';")) {
