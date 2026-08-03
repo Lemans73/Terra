@@ -7,7 +7,7 @@ earthquakes, volcanoes, wildfires, storms and sea ice, each as its own layer
 with its own 3D indicator.
 
 It is static HTML. No build step, no bundler, no framework. Open the file and
-it runs.
+it runs. **[Download terra.html](https://github.com/Lemans73/Terra/releases/latest/download/terra.html)**
 
 Updates to come!
 
