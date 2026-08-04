@@ -552,7 +552,25 @@
       </button>
       <div class="acc-body">
       <div class="elayer on" id="sound-toggle"><span class="edot"></span>Notification sound<span class="estat" id="es-sound">on</span></div>
-      <div class="elayer on" id="label-toggle"><span class="edot"></span>Quake labels<span class="estat" id="es-label">on</span></div>
+      <!-- Het plafond staat in PARAMS (labelCountMax = beginstand,
+      labelCountCeiling = bovengrens); de JS zet `max` en `value` bij init uit die
+      waarden, zodat de markup ze niet kan tegenspreken. -->
+      <div class="elayer on expandable" id="label-toggle">
+      <span class="edot"></span>Quake labels
+      <button class="row-expand" data-note="label-count" title="Label settings" aria-label="Label settings" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <span class="estat" id="es-label">on</span>
+      </div>
+      <div class="layer-detail" id="label-count">
+      <div class="opt-slider">
+      <div class="ns-label">
+      <span>Maximum labels</span>
+      <span id="lc-val">12</span>
+      </div>
+      <input type="range" id="label-count-slider" class="range" min="0" max="40" step="1" value="12" />
+      </div>
+      </div>
       <div class="elayer on" id="rotate-toggle"><span class="edot"></span>Auto-rotate<span class="estat" id="es-rotate">on</span></div>
       </div>
       </section>
@@ -1551,6 +1569,12 @@ let glyphList = [];
 let hovered = null;        // het 3D-object onder de muis (raycaster-highlight)
 let labelsOn = true;       // leader-line labels voor de zwaarste bevingen tonen
 let labelQuakes = [];      // de top-N bevingen die momenteel een label hebben
+// Plafond voor het aantal beving-labels (Settings → Preferences). Deze declaratie
+// hoort hier te blijven, bij de rest van de scene-state: rebuildLabels() wordt al
+// tijdens de scene-opbouw bereikt, dus een `let` verderop zit in de temporal dead
+// zone en breekt de module — zelfde klasse als setLayerLocked (sessie 11) en
+// timeOffsetMs (sessie 14).
+let labelBudget = PARAMS.labelCountMax;
 
 // toast-meldingen voor nieuwe real-time entries
 const seenIds = new Set(); // reeds geziene event-id's
@@ -3116,6 +3140,9 @@ function nearSide(v3) {
 
 // raycast op schermpositie → het indicator-object (group met userData.d), of null
 const _wp = new THREE.Vector3();
+// Hergebruikt in positionLabels() voor de near-side-toets van de hele labelpool; een
+// verse Vector3 per frame zou daar een allocatie per label betekenen.
+const _camDir = new THREE.Vector3();
 function pickAt(clientX, clientY) {
   const rect = globeEl.getBoundingClientRect();
   ndc.x = ((clientX - rect.left) / rect.width) * 2 - 1;
@@ -3148,6 +3175,13 @@ function updateHover() {
     gsap.to(g.material, { opacity: 0, duration: 0.2, onComplete: () => { if (g.parent) g.parent.remove(g); } });
   }
   hovered = o;
+  // Label voor de beving onder de muis. Alleen aardbevingen: de andere lagen hebben
+  // geen leader-line-labels, dus daar zou het uit de toon vallen. `focusQuake()`
+  // wordt hier bewust NIET aangeroepen — dat verbergt alle ándere quake-glyphs
+  // (zie de per-frame lus), wat klopt bij hover op een vast label maar hinderlijk is
+  // wanneer je met de muis over de bol beweegt.
+  const hd = o && o.userData ? o.userData.d : null;
+  setHoverQuake(hd && hd.layer === 'quake' ? hd : null);
   globeEl.style.cursor = o ? 'pointer' : '';
   if (o) {
     const spr = new THREE.Sprite(new THREE.SpriteMaterial({
@@ -3197,18 +3231,32 @@ function focusQuake(d) {
   focusedQuake = d;
 }
 
+// De opmaak van één beving-label. Gedeeld door de vaste labels en het hover-label,
+// zodat die twee niet uit elkaar kunnen lopen.
+function quakeLabelHTML(q) {
+  const place = (q.label || '').split(',')[0].replace(/^\d+\s*km\s+[\w-]+\s+of\s+/i, '');
+  return '<b>M ' + (q.value != null ? q.value.toFixed(1) : '?') + '</b>' +
+         '<span>' + place + (q.depth != null ? ' · ' + Math.round(q.depth) + ' km' : '') + '</span>';
+}
+
 function rebuildLabels(quakes) {
-  Array.from(labelLayer.querySelectorAll('.qlabel')).forEach(e => e.remove());
-  while (labelSvg.firstChild) labelSvg.removeChild(labelSvg.firstChild);
-  // bouw labels voor de sterkste N bevingen; positionLabels toont er zoom-afhankelijk
-  // een deel van (meer bij inzoomen). Gesorteerd op magnitude → sterkste eerst.
-  labelQuakes = quakes.slice().sort((a, b) => (b.value || 0) - (a.value || 0)).slice(0, PARAMS.labelCountMax);
+  // `:not(.qhover)` — het hover-label is één blijvend element dat buiten deze
+  // opbouw valt; zonder die uitzondering ruimt elke rebuild het op en werkt hover
+  // alleen tot de eerstvolgende poll.
+  Array.from(labelLayer.querySelectorAll('.qlabel:not(.qhover)')).forEach(e => e.remove());
+  Array.from(labelSvg.querySelectorAll(':not(.qhover)')).forEach(e => e.remove());
+  // Gesorteerd op magnitude → sterkste eerst.
+  // Een POOL, geen eindselectie: welke bevingen naar ons toe gekeerd zijn hangt van de
+  // camera af en verandert dus per frame. positionLabels() kiest hieruit de sterkste
+  // `K` die zichtbaar zijn. Vóór sessie 16 was deze lijst de eindselectie, waardoor
+  // labels aan de achterkant van de bol wél van het plafond afgingen maar nooit te
+  // zien waren — bij een halve draai bleven er soms een handvol over.
+  const pool = Math.min(PARAMS.labelPoolMax, Math.round(labelBudget * PARAMS.labelPoolFactor));
+  labelQuakes = quakes.slice().sort((a, b) => (b.value || 0) - (a.value || 0)).slice(0, pool);
   for (const q of labelQuakes) {
     const el = document.createElement('div');
     el.className = 'qlabel';
-    const place = (q.label || '').split(',')[0].replace(/^\d+\s*km\s+[\w-]+\s+of\s+/i, '');
-    el.innerHTML = '<b>M ' + (q.value != null ? q.value.toFixed(1) : '?') + '</b>' +
-                   '<span>' + place + (q.depth != null ? ' · ' + Math.round(q.depth) + ' km' : '') + '</span>';
+    el.innerHTML = quakeLabelHTML(q);
     labelLayer.appendChild(el);
     q.__label = el;
     el.addEventListener('mouseenter', () => focusQuake(q));
@@ -3223,25 +3271,126 @@ function rebuildLabels(quakes) {
     labelSvg.appendChild(line);
     labelSvg.appendChild(dot);
     q.__line = line; q.__dot = dot;
+    // Eenheidsvector naar het epicentrum, één keer berekend. De near-side-test draait
+    // nu voor de hele pool per frame in plaats van voor de eerste K; met een
+    // getCoords() per label per frame zou dat merkbaar worden, met een dot-product niet.
+    const e0 = world.getCoords(q.lat, q.lng, 0.0);
+    q.__dir = new THREE.Vector3(e0.x, e0.y, e0.z).normalize();
   }
 }
 
+// ---- Hover-label ----
+// Elke beving heeft een indicator, maar alleen de zwaarste K krijgen een vast label.
+// Dit is één blijvend element dat de beving onder de muis toont, zodat je van elke
+// indicator magnitude, plaats en diepte kunt aflezen zonder het detailscherm te
+// openen. Klikken doet dat alsnog — net als een klik op de indicator zelf, die al
+// via de pointerup-handler op showDetail() uitkomt.
+let hoverLabelEl = null, hoverLabelLine = null, hoverLabelDot = null;
+let hoverQuake = null;
+// Zonder dit verdwijnt het label zodra de muis van de indicator naar het label
+// beweegt, en is het dus nooit te klikken: de raycaster ziet dan geen glyph meer.
+let hoverLabelSticky = false;
+
+function ensureHoverLabel() {
+  if (hoverLabelEl) return;
+  hoverLabelEl = document.createElement('div');
+  hoverLabelEl.className = 'qlabel qhover';
+  hoverLabelEl.style.display = 'none';
+  hoverLabelEl.addEventListener('mouseenter', () => { hoverLabelSticky = true; });
+  hoverLabelEl.addEventListener('mouseleave', () => { hoverLabelSticky = false; });
+  hoverLabelEl.addEventListener('click', () => { if (hoverQuake) showDetail(hoverQuake); });
+  labelLayer.appendChild(hoverLabelEl);
+  hoverLabelLine = document.createElementNS(SVG_NS, 'line');
+  hoverLabelLine.setAttribute('class', 'qline qhover');
+  hoverLabelDot = document.createElementNS(SVG_NS, 'circle');
+  hoverLabelDot.setAttribute('class', 'qdot qhover');
+  hoverLabelDot.setAttribute('r', '2.5');
+  labelSvg.appendChild(hoverLabelLine);
+  labelSvg.appendChild(hoverLabelDot);
+}
+
+let hoverClearTimer = null;
+function setHoverQuake(d) {
+  clearTimeout(hoverClearTimer);
+  if (!d) {
+    // Muis op het label zelf: laat staan, anders is het niet aan te klikken.
+    if (hoverLabelSticky) return;
+    // En anders met uitstel wissen — zie labelHoverGrace in config.js.
+    hoverClearTimer = setTimeout(() => {
+      if (!hoverLabelSticky) hoverQuake = null;
+    }, PARAMS.labelHoverGrace);
+    return;
+  }
+  if (d === hoverQuake) return;
+  hoverQuake = d;
+  ensureHoverLabel();
+  hoverLabelEl.innerHTML = quakeLabelHTML(d);
+}
+
+function positionHoverLabel(lblScale) {
+  if (!hoverLabelEl) return;
+  const q = hoverQuake;
+  // Heeft deze beving al een eigen zichtbaar label, dan zou dit een tweede kopie
+  // op dezelfde plek zijn.
+  const eigen = q && q.__label && q.__label.style.display !== 'none';
+  let zicht = false, tip = null, base = null;
+  if (q && !eigen) {
+    const epi = world.getCoords(q.lat, q.lng, 0.0);
+    if (nearSide(new THREE.Vector3(epi.x, epi.y, epi.z))) {
+      tip = world.getScreenCoords(q.lat, q.lng, PARAMS.labelAltitude);
+      base = world.getScreenCoords(q.lat, q.lng, 0.0);
+      zicht = true;
+    }
+  }
+  hoverLabelEl.style.display = zicht ? 'block' : 'none';
+  hoverLabelLine.style.display = zicht ? 'block' : 'none';
+  hoverLabelDot.style.display = zicht ? 'block' : 'none';
+  if (!zicht) return;
+  hoverLabelEl.style.transformOrigin = '50% 100%';
+  hoverLabelEl.style.transform = 'translate(' + tip.x + 'px, ' + tip.y + 'px) translate(-50%, -100%) scale(' + lblScale + ')';
+  hoverLabelLine.setAttribute('x1', tip.x); hoverLabelLine.setAttribute('y1', tip.y);
+  hoverLabelLine.setAttribute('x2', base.x); hoverLabelLine.setAttribute('y2', base.y);
+  hoverLabelDot.setAttribute('cx', base.x); hoverLabelDot.setAttribute('cy', base.y);
+}
+
 function positionLabels() {
+  // Het hover-label hangt niet aan labelQuakes en moet ook werken wanneer het
+  // plafond op 0 staat of er nog geen data is — dus vóór de vroege return.
+  {
+    const cam = world.camera().position.length() || 1;
+    const s = Math.min(PARAMS.labelScaleMax, Math.max(PARAMS.labelScaleMin, cam / PARAMS.labelScaleRef));
+    positionHoverLabel(s);
+  }
   if (!labelQuakes.length) return;
   // zoom-afhankelijke label-schaal — leesbaarheid eerst (nauwelijks krimpen) +
   // zoom-afhankelijk aantal (meer labels bij inzoomen).
   const camLen = world.camera().position.length() || 1;
   const lblScale = Math.min(PARAMS.labelScaleMax, Math.max(PARAMS.labelScaleMin, camLen / PARAMS.labelScaleRef));
   const frac = (PARAMS.labelScaleMax - lblScale) / Math.max(0.001, PARAMS.labelScaleMax - PARAMS.labelScaleMin);
-  const K = Math.round(PARAMS.labelCountMin + (PARAMS.labelCountMax - PARAMS.labelCountMin) * frac);
+  // De curve interpoleert naar `labelBudget`, niet naar PARAMS.labelCountMax: anders
+  // bouwt rebuildLabels() er wel meer, maar toont deze lus er nooit meer dan 12 en
+  // doet de slider boven die waarde niets. De vorm van de curve blijft ongewijzigd.
+  // `lo` vangt het randgeval labelBudget < labelCountMin af — zonder die klem komt K
+  // boven het aantal bestaande labels uit; onschadelijk, maar verwarrend bij het meten.
+  const lo = Math.min(PARAMS.labelCountMin, labelBudget);
+  const K = Math.round(lo + (labelBudget - lo) * frac);
   // pass 1: bepaal zichtbare labels + schermposities (tip = labelpunt, base = epicentrum)
+  // VOLGORDE: eerst near-side, DAN pas het budget. Andersom (`idx < K && nearSide`)
+  // gingen labels aan de achterkant van de bol wél van het plafond af terwijl je ze
+  // nooit zag — bij een ongunstige stand bleven er van 25 een handvol over. Nu telt
+  // alleen wat in beeld komt, en is het aantal constant terwijl je draait.
+  const camPos = world.camera().position;
+  const camDir = _camDir.copy(camPos).normalize();
+  const horizon = 100 / camPos.length();   // globe-straal = 100, zelfde toets als nearSide()
   const items = [];
+  let getoond = 0;
   for (let idx = 0; idx < labelQuakes.length; idx++) {
     const q = labelQuakes[idx];
     const el = q.__label, line = q.__line, dot = q.__dot;
     if (!el) continue;
-    const epi = world.getCoords(q.lat, q.lng, 0.0);
-    const visible = labelsOn && idx < K && nearSide(new THREE.Vector3(epi.x, epi.y, epi.z));
+    const near = labelsOn && q.__dir && q.__dir.dot(camDir) > horizon;
+    const visible = near && getoond < K;
+    if (visible) getoond++;
     el.style.display = visible ? 'block' : 'none';
     if (line) line.style.display = visible ? 'block' : 'none';
     if (dot) dot.style.display = visible ? 'block' : 'none';
@@ -3255,18 +3404,34 @@ function positionLabels() {
   const gapY = PARAMS.labelStackGapY, gapX = PARAMS.labelStackGapX;
   items.sort((a, b) => b.y - a.y); // onderste eerst → kolom groeit naar boven
   for (let i = 0; i < items.length; i++) {
+    items[i].diepte = 0;
     let changed = true, guard = 0;
     while (changed && guard++ < items.length + 2) {
       changed = false;
       for (let j = 0; j < i; j++) {
+        if (items[j].weg) continue;   // een verborgen label bezet geen plek in de kolom
         if (Math.abs(items[i].x - items[j].x) < gapX && Math.abs(items[i].ty - items[j].ty) < gapY) {
-          items[i].ty = items[j].ty - gapY; changed = true; // push omhoog
+          items[i].ty = items[j].ty - gapY; // push omhoog
+          // Diepte = hoeveel labels er in deze kolom ONDER dit label staan. Via het
+          // maximum over alle botsingen, want een kolom kan uit meerdere botsende
+          // paren zijn opgebouwd en de hoogste bepaalt hoe ver we van de grond zijn.
+          items[i].diepte = Math.max(items[i].diepte, (items[j].diepte || 0) + 1);
+          changed = true;
         }
       }
+    }
+    // Boven de grens niet verder omhoog duwen maar weglaten: doorstapelen liet de
+    // kolom bij een dicht cluster het scherm uit groeien.
+    if (items[i].diepte >= PARAMS.labelStackMax) {
+      items[i].weg = true;
+      items[i].el.style.display = 'none';
+      if (items[i].line) items[i].line.style.display = 'none';
+      if (items[i].dot) items[i].dot.style.display = 'none';
     }
   }
   // pass 3: plaats labels (op de gestapelde y) + dotted leader-line naar het epicentrum
   for (const it of items) {
+    if (it.weg) continue;
     it.el.style.transformOrigin = '50% 100%';
     it.el.style.transform = 'translate(' + it.x + 'px, ' + it.ty + 'px) translate(-50%, -100%) scale(' + lblScale + ')';
     it.line.setAttribute('x1', it.x); it.line.setAttribute('y1', it.ty);
@@ -3282,6 +3447,29 @@ if (labelToggleEl) {
     labelsOn = !labelsOn;
     labelToggleEl.classList.toggle('on', labelsOn);
     document.getElementById('es-label').textContent = labelsOn ? 'on' : 'off';
+  });
+}
+
+// Plafond voor het aantal beving-labels. PARAMS is hier de enige bron van waarheid:
+// `max` en `value` komen daaruit, zodat de markup ze niet kan tegenspreken.
+const labelCountEl = document.getElementById('label-count-slider');
+const labelCountVal = document.getElementById('lc-val');
+let labelCountTimer = null;
+if (labelCountEl) {
+  labelCountEl.max = String(PARAMS.labelCountCeiling);
+  labelCountEl.value = String(labelBudget);
+  if (labelCountVal) labelCountVal.textContent = String(labelBudget);
+  labelCountEl.addEventListener('input', () => {
+    const n = Number(labelCountEl.value);
+    if (labelCountVal) labelCountVal.textContent = String(n);
+    // Gesmoord: render() bouwt via rebuildLabels() alle label-elementen opnieuw, en
+    // dat mag niet per sleepstap gebeuren. Zelfde patroon en dezelfde reden als
+    // countryLabelRankDebounce (sessie 9) en buildTrack (sessie 14).
+    clearTimeout(labelCountTimer);
+    labelCountTimer = setTimeout(() => {
+      labelBudget = n;
+      render();
+    }, PARAMS.labelCountDebounce);
   });
 }
 

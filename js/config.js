@@ -228,8 +228,45 @@ export const PARAMS = {
   labelScaleRef: 350,  // camDist waarbij label-schaal = 1
   labelScaleMin: 0.95, // ondergrens — leesbaarheid eerst, dus nauwelijks krimpen
   labelScaleMax: 1.1,  // bovengrens (uitgezoomd)
-  labelCountMin: 4,    // aantal beving-labels ver uitgezoomd
+  // Sinds sessie 16 tellen alleen labels aan de NAAR-ONS-GEKEERDE kant mee voor het
+  // plafond (positionLabels filtert op nearSide vóór het budget, niet erna). Daardoor
+  // is het aantal in beeld constant terwijl je de bol draait, en mocht dit bereik
+  // omhoog: 4 zichtbare labels op een halve aardbol is te weinig.
+  labelCountMin: 8,    // aantal beving-labels ver uitgezoomd
+  // labelCountMax is sinds sessie 16 de BEGINSTAND van een instelling (Settings →
+  // Preferences → Maximum labels), niet langer een harde grens. De lopende waarde
+  // staat in `labelBudget` in index.html; rebuildLabels() bouwt er zoveel, en
+  // positionLabels() interpoleert ernaartoe. Wie hier een grens zoekt: die is
+  // labelCountCeiling.
   labelCountMax: 12,   // aantal beving-labels diep ingezoomd (meer detail)
+  labelCountCeiling: 40, // bovengrens van de slider — zie de meting hieronder
+  // De pool die rebuildLabels() opbouwt, als veelvoud van het plafond. Groter dan het
+  // plafond omdat de selectie pas per frame gebeurt: welke bevingen naar ons toe
+  // gekeerd zijn hangt van de camera af, dus er moeten genoeg kandidaten klaarstaan
+  // om er ook na het draaien nog `K` over te houden.
+  //
+  // Waarom de factor zo hoog is — gemeten met 339 EMSC-events.
+  // Aantal near-side labels per poolgrootte, per camerastand:
+  //                    pool 54   pool 108   pool 216
+  //   Afrika               6        12         23
+  //   Egeische Zee         7        14         23
+  //   Japan               25        49         90
+  //   Chili               25        50         90
+  // De reden voor het verschil: EMSC is Euro-Med-gericht, dus zodra je van Europa
+  // wegdraait ligt het gros van de sterkste events achter de bol. Bij het plafond van
+  // 12 komt de pool op 144 en haalt elke stand het ruim; de tabel staat erbij omdat
+  // een hoger plafond de pool meeschaalt en de krapste stand (Afrika, Egeische Zee)
+  // dan de maat is. Met USGS erbij is de spreiding gelijkmatiger en is dit ruimer dan
+  // nodig — wat niets kost, want een verborgen label is één dot-product per frame.
+  labelPoolFactor: 12,
+  labelPoolMax: 220,   // dak op de pool — elk element is een div plus twee SVG-nodes
+  // De stapellus in positionLabels() is O(n²) in het aantal ZICHTBARE labels en
+  // draait elk frame; 40 is de grens waar dat nog ruim binnen de begroting valt.
+  labelCountDebounce: 120, // ms — slepen mag de DOM niet per stap laten herbouwen
+  // Het hover-label staat op labelAltitude (0,42 straal) bóven het epicentrum, dus
+  // de muis moet een flink stuk scherm afleggen om er te komen — en onderweg ligt er
+  // geen glyph onder de cursor. Zonder dit uitstel is het label nooit aan te klikken.
+  labelHoverGrace: 350, // ms dat het hover-label blijft staan na het verlaten van de indicator
   // ---- Geografische overlays (tektonische platen, landgrenzen) ----
   // Werken in béíde weergavemodi. In realistisch dun en halftransparant, want harde
   // vectorlijnen over een gefotografeerde aarde ogen goedkoop; in deskundig mogen ze
@@ -447,6 +484,11 @@ export const PARAMS = {
   // indicatoren op de kaart.
   labelStackGapY: 30,  // min verticale tussenruimte (px) tussen gestapelde labels
   labelStackGapX: 80,  // labels gelden als 'nabij' binnen deze horizontale afstand (px)
+  // Hoeveel labels er maximaal in ÉÉN kolom mogen staan. De stapeling duwt botsende
+  // labels omhoog en kende geen grens: bij een dicht cluster groeide de kolom door tot
+  // buiten het scherm (6 x 30 = 180 px, tegen 40 x 30 = 1200 px op een viewport van
+  // 860). Wie er boven uitkomt wordt verborgen, niet verder omhoog geduwd.
+  labelStackMax: 6,
   labelAltitude: 0.42, // hoogte (fractie straal) van het labelpunt — hoger = vrij van de indicatoren
   // deskundig (schematische) modus — vlakke kaart-kleuren
   expertOcean: '#0e1b2a',   // effen oceaan-bol
