@@ -683,6 +683,40 @@
               </button>
             </div>
             <div class="texq-note" id="texq-note">8K is sharper up close, but downloads about 29 MB extra.</div>
+
+            <!-- EIGEN TEXTUREN. Staat hier en niet bij de tekenlaag, om twee redenen:
+                 dit gaat over de aarde en niet over annoteren, en alles in díé tab
+                 wordt uit de standalone geknipt — terwijl juist dít daar werkt. Een
+                 lokaal gekozen bestand levert een blob-URL op, en die kent geen CORS
+                 en geen server.
+
+                 (Schrijf hier niet het Engelse woord voor tekenlaag: de bouw
+                 controleert daarop en kan een vermelding niet van een restant
+                 onderscheiden. Dat is terecht streng en heeft deze regel gevangen.)
+
+                 Alleen dag en nacht: de normal map en de specular map blijven van
+                 ons. Zie de noot bij `customTex` in het script. -->
+            <h3>Your own textures</h3>
+            <div class="ctex" id="ctex">
+              <div class="ctex-slot" data-slot="day">
+                <span class="ctex-label">Day map</span>
+                <span class="ctex-value" id="ctex-day-value">default</span>
+                <button class="ctex-pick" data-pick="day" type="button">Choose&#8230;</button>
+                <button class="ctex-clear" data-clear="day" type="button" title="Back to the default day map" aria-label="Remove custom day map" hidden>&#215;</button>
+              </div>
+              <div class="ctex-slot" data-slot="night">
+                <span class="ctex-label">Night map</span>
+                <span class="ctex-value" id="ctex-night-value">default</span>
+                <button class="ctex-pick" data-pick="night" type="button">Choose&#8230;</button>
+                <button class="ctex-clear" data-clear="night" type="button" title="Back to the default night map" aria-label="Remove custom night map" hidden>&#215;</button>
+              </div>
+            </div>
+            <button class="apply ctex-reset" id="ctex-reset" hidden>Remove all custom textures</button>
+            <div class="ctex-note" id="ctex-note">
+              Equirectangular images, 2:1. Relief and water reflection keep using
+              Terra's own maps, so they line up with a real Earth texture but not
+              with an invented one. Kept for this session only.
+            </div>
           </div>
           <div class="aarde-empty" id="aarde-empty">The Earth textures only apply in <b>Realistic</b> mode. Switch mode at the top to control them.</div>
         </div>
@@ -888,6 +922,9 @@
   </section>
   <input type="file" id="sketch-file" accept="application/json" hidden>
 <!-- SKETCH:END -->
+  <!-- Eén kiezer voor beide sleuven; welke sleuf hij vult staat in `dataset.slot`.
+       Twee losse inputs zouden hetzelfde doen met dubbele bedrading. -->
+  <input type="file" id="ctex-file" accept="image/*" hidden>
 
   <div class="readout" id="readout">
     <button class="readout-close" id="r-close" title="Close" aria-label="Close detail panel">×</button>
@@ -2158,11 +2195,37 @@ let oceanFloorOn = (() => {
   } catch { return true; }
 })();
 
-// Eén plek die bepaalt welke dagtextuur geldt. Valt terug op `day` wanneer een set
-// geen bathy-variant heeft, zodat een onvolledige set nooit een zwarte bol geeft.
+// ---- Eigen texturen -------------------------------------------------------
+//
+// Alleen de DAG- en NACHTkaart zijn te vervangen. De normal map en de specular
+// map blijven van ons, en dat is een bewuste beperking met een prijs: die twee
+// horen bij ónze aarde, dus bij een eigen kaart klopt het reliëf en het
+// watermasker alleen als die kaart dezelfde equirectangulaire projectie en
+// dezelfde kustlijnen heeft. Bij een echte aardtextuur is dat zo; bij een
+// fantasiekaart glinstert het water op de verkeerde plek. Dat staat zo in de
+// uitleg bij de knoppen.
+//
+// GEEN PERSISTENTIE, en dat is een keuze. Een blob-URL overleeft een herlaadbeurt
+// niet, en de bestanden in localStorage bewaren zou megabytes aan dataURL kosten
+// op een quotum van ongeveer 5 MB. IndexedDB zou het kunnen, maar juist in de
+// standalone — waar dit het meeste nut heeft — draait de app onder `file:` en is
+// die opslag vaak afgeschermd. Eén sessie is eerlijker dan iets dat soms werkt.
+const customTex = { day: null, night: null };   // { url, naam, bytes } of null
+
+// Eén plek die bepaalt welke dagtextuur geldt. Volgorde: eigen kaart wint van de
+// oceaanbodem, die wint van de gewone dagtextuur. Valt terug op `day` wanneer een
+// set geen bathy-variant heeft, zodat een onvolledige set nooit een zwarte bol geeft.
 function dayUrlFor(quality, bathy = oceanFloorOn) {
+  if (customTex.day) return customTex.day.url;
   const A = assetsFor(quality);
   return (bathy && A.bathyDay) ? A.bathyDay : A.day;
+}
+
+// Idem voor de nachtzijde. Bestond nog niet omdat er tot nu toe niets te kiezen
+// viel; nu er wél iets te kiezen valt, hoort het langs dezelfde ene plek te gaan.
+function nightUrlFor(quality) {
+  if (customTex.night) return customTex.night.url;
+  return assetsFor(quality).night;
 }
 
 // De glinster moet zachter zodra er iets onder het water te zien is — zie de noot
@@ -2428,7 +2491,7 @@ function buildRealisticMaterial() {
   const A = assetsFor(texQuality);
   return Promise.all([
     load(dayUrlFor(texQuality)),
-    load(A.night),
+    load(nightUrlFor(texQuality)),
     load(A.clouds).catch(() => null),
     load(A.specular).catch(() => null),
     load(A.normal).catch(() => null)
@@ -3121,7 +3184,7 @@ async function setTextureQuality(q) {
   const load = url => loader.loadAsync(url);
   try {
     const [day, night, clouds, spec, normal] = await Promise.all([
-      load(dayUrlFor(q)), load(A.night),
+      load(dayUrlFor(q)), load(nightUrlFor(q)),
       load(A.clouds).catch(() => null),
       load(A.specular).catch(() => null),
       load(A.normal).catch(() => null)
@@ -3218,6 +3281,148 @@ async function setOceanFloor(on) {
 
 oceanToggleEl?.addEventListener('click', () => setOceanFloor(!oceanFloorOn));
 updateOceanUI();
+
+// ---- Eigen texturen: kiezen, toepassen en weer weghalen --------------------
+// Zie de noot bij `customTex` bovenaan voor het waarom van alleen dag/nacht en
+// van het ontbreken van persistentie.
+const ctexFile = document.getElementById('ctex-file');
+const ctexResetBtn = document.getElementById('ctex-reset');
+const ctexNoteEl = document.getElementById('ctex-note');
+const CTEX_NOTE_IDLE = ctexNoteEl?.textContent.replace(/\s+/g, ' ').trim() || '';
+let ctexBusy = false;
+
+function ctexKort(naam) {
+  // Lange bestandsnamen duwen de rij uit elkaar; de staart zegt meestal het meeste.
+  return naam.length <= 22 ? naam : naam.slice(0, 10) + '…' + naam.slice(-10);
+}
+
+function updateCtexUI() {
+  for (const slot of ['day', 'night']) {
+    const gekozen = customTex[slot];
+    const val = document.getElementById('ctex-' + slot + '-value');
+    const clr = document.querySelector('.ctex-clear[data-clear="' + slot + '"]');
+    if (val) {
+      val.textContent = gekozen ? ctexKort(gekozen.naam) : 'default';
+      val.classList.toggle('custom', !!gekozen);
+      val.title = gekozen ? gekozen.naam + ' · ' + Math.round(gekozen.bytes / 1024) + ' KB' : '';
+    }
+    if (clr) clr.hidden = !gekozen;
+  }
+  const iets = !!(customTex.day || customTex.night);
+  if (ctexResetBtn) ctexResetBtn.hidden = !iets;
+  document.querySelectorAll('.ctex-pick').forEach(b => b.disabled = ctexBusy);
+
+  // De oceaanbodem gaat over ÓNZE dagtextuur. Ligt er een eigen kaart overheen,
+  // dan doet die schakelaar niets zichtbaars meer — dus zetten we hem op slot in
+  // plaats van hem stilletjes te laten falen. `oceanFloorOn` blijft ondertussen
+  // gewoon staan, zodat de stand terugkomt zodra de eigen kaart weg is.
+  if (oceanToggleEl) {
+    const overruled = !!customTex.day;
+    oceanToggleEl.classList.toggle('disabled', overruled);
+    oceanToggleEl.title = overruled ? 'A custom day map is active' : '';
+    if (oceanStatEl && !oceanBusy) oceanStatEl.textContent = overruled ? 'n/a' : (oceanFloorOn ? 'on' : 'off');
+  }
+}
+
+function ctexMelding(tekst) {
+  if (!ctexNoteEl) return;
+  ctexNoteEl.textContent = tekst;
+  clearTimeout(ctexMelding._t);
+  ctexMelding._t = setTimeout(() => { ctexNoteEl.textContent = CTEX_NOTE_IDLE; }, 7000);
+}
+
+// Zet één sleuf en laadt de bijbehorende uniform opnieuw. `bron` is null om terug
+// te vallen op onze eigen kaart.
+async function setCustomTexture(slot, bron) {
+  const T = findThree();
+  if (!T || !shaderMaterial) return;
+  ctexBusy = true; updateCtexUI();
+
+  const vorige = customTex[slot];
+  customTex[slot] = bron;
+  const url = slot === 'day' ? dayUrlFor(texQuality) : nightUrlFor(texQuality);
+  const loader = new T.TextureLoader();
+  loader.setCrossOrigin('anonymous');   // zie de toelichting bij de andere loaders
+  try {
+    const tex = await loader.loadAsync(url);
+    tex.colorSpace = T.SRGBColorSpace;  // kleurtextuur, geen datamap
+    const u = shaderMaterial.uniforms;
+    const doel = slot === 'day' ? u.dayTexture : u.nightTexture;
+    const oud = doel.value;
+    doel.value = tex;
+    // De dagtextuur dient ook als terugval voor ontbrekende maps; alleen weggooien
+    // als hij nergens anders meer aan hangt. Zelfde toets als bij de oceaanbodem.
+    const nogInGebruik = [u.cloudsTexture, u.specularTexture, u.normalTexture, u.dayTexture, u.nightTexture]
+      .some(sl => sl.value === oud);
+    if (oud && oud !== tex && !nogInGebruik && oud.dispose) oud.dispose();
+
+    // Pas hier de oude blob vrijgeven: eerder zou de loader hem nog nodig hebben.
+    if (vorige && vorige.url.startsWith('blob:')) URL.revokeObjectURL(vorige.url);
+    if (bron) {
+      ctexMelding('Loaded ' + bron.naam + (bron.waarschuwing ? ' — ' + bron.waarschuwing : ''));
+    } else {
+      ctexMelding('Back to Terra\'s own ' + slot + ' map.');
+    }
+  } catch {
+    // Terugdraaien: de vorige keuze blijft staan én zichtbaar.
+    customTex[slot] = vorige;
+    if (bron && bron.url.startsWith('blob:')) URL.revokeObjectURL(bron.url);
+    ctexMelding('That image could not be loaded.');
+  } finally {
+    ctexBusy = false;
+    updateCtexUI();
+  }
+}
+
+// Meet de afmetingen vóór we hem als textuur aanbieden. Niet om te blokkeren —
+// iemand mag best een rare verhouding proberen — maar om te kunnen zeggen wat
+// eraan scheelt wanneer het er vreemd uitziet.
+function meetAfbeelding(url) {
+  return new Promise((res) => {
+    const img = new Image();
+    img.onload = () => res({ w: img.naturalWidth, h: img.naturalHeight });
+    img.onerror = () => res(null);
+    img.src = url;
+  });
+}
+
+document.querySelectorAll('.ctex-pick').forEach(btn => {
+  btn.addEventListener('click', () => {
+    ctexFile.dataset.slot = btn.dataset.pick;
+    ctexFile.click();
+  });
+});
+
+ctexFile?.addEventListener('change', async () => {
+  const f = ctexFile.files[0];
+  const slot = ctexFile.dataset.slot;
+  ctexFile.value = '';                   // hetzelfde bestand nog eens kiezen moet vuren
+  if (!f || !slot) return;
+  if (!f.type.startsWith('image/')) { ctexMelding('That is not an image.'); return; }
+
+  const url = URL.createObjectURL(f);
+  const maat = await meetAfbeelding(url);
+  if (!maat) { URL.revokeObjectURL(url); ctexMelding('That image could not be read.'); return; }
+  // 2:1 is de equirectangulaire verhouding waar de hele bol op rekent. Een kleine
+  // afwijking is onschuldig; een grote betekent dat de kaart uitgerekt op de bol komt.
+  const verhouding = maat.w / maat.h;
+  const waarschuwing = Math.abs(verhouding - 2) > 0.02
+    ? maat.w + '×' + maat.h + ' is not 2:1, so it will be stretched'
+    : null;
+  await setCustomTexture(slot, { url, naam: f.name, bytes: f.size, waarschuwing });
+});
+
+document.querySelectorAll('.ctex-clear').forEach(btn => {
+  btn.addEventListener('click', () => setCustomTexture(btn.dataset.clear, null));
+});
+
+ctexResetBtn?.addEventListener('click', async () => {
+  if (customTex.day) await setCustomTexture('day', null);
+  if (customTex.night) await setCustomTexture('night', null);
+  ctexMelding('All custom textures removed.');
+});
+
+updateCtexUI();
 
 // ---- Nachtzijde-helderheid ----
 const nightSliderEl = document.getElementById('night-slider');

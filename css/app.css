@@ -1523,6 +1523,40 @@
     }
   }
 
+  /* ---- Eigen texturen (Settings > Earth textures) ---- */
+  .ctex { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+  .ctex-slot {
+    display: grid;
+    grid-template-columns: auto 1fr auto auto;
+    align-items: center; gap: 8px;
+    padding: 7px 10px;
+    border: 1px solid var(--hair); border-radius: 8px;
+  }
+  .ctex-label { font-size: 12px; font-weight: 600; color: var(--ink); white-space: nowrap; }
+  /* De bestandsnaam mag krimpen, de rest niet — anders duwt een lange naam de
+     knoppen uit de rij. */
+  .ctex-value {
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    text-align: right; font-size: 11px; color: var(--ink-faint);
+  }
+  .ctex-value.custom { color: var(--accent); }
+  .ctex-pick, .ctex-clear {
+    background: transparent; border: 1px solid var(--hair); border-radius: 6px;
+    color: var(--ink-dim); font-family: inherit; cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .ctex-pick { padding: 4px 9px; font-size: 11px; white-space: nowrap; }
+  .ctex-pick:hover:not(:disabled) { border-color: var(--ink-dim); color: var(--ink); }
+  .ctex-pick:disabled { opacity: 0.4; cursor: default; }
+  .ctex-clear { width: 22px; height: 22px; padding: 0; font-size: 14px; line-height: 1; }
+  .ctex-clear:hover { border-color: var(--quake); color: var(--quake); }
+  /* Een expliciete regel naast de eigen display-declaraties: `hidden` is niets
+     anders dan een user-agent-regel en verliest daarvan (sessie 14). */
+  .ctex-clear[hidden], .ctex-reset[hidden] { display: none; }
+  .ctex-reset { margin-bottom: 10px; }
+  .ctex-note { font-size: 11px; line-height: 1.5; color: var(--ink-faint); }
+  @media (prefers-reduced-motion: reduce) { .ctex-pick, .ctex-clear { transition: none; } }
+
   /* SKETCH:START — tekenlaag. Dit hele blok wordt uit de standalone gestript;
      zie tools/build-standalone.mjs. */
 
