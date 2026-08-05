@@ -538,3 +538,11 @@ export function openEditor(imgSrc, onClose) {
   UI.onClose = onClose || null;
   UI.open(imgSrc);
 }
+
+// Van buitenaf sluiten, voor wanneer het scherm te klein wordt of draait.
+// Bewaart standaard — draaien is geen reden om werk kwijt te raken.
+export function closeEditor(keep = true) {
+  if (document.getElementById('sketch-editor')?.hidden) return false;
+  UI.close(keep);
+  return true;
+}

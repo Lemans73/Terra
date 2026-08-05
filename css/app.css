@@ -1753,4 +1753,12 @@
     .sk-bar { flex-wrap: wrap; height: auto; padding: 10px 14px; }
     .sk-bar-note { display: none; }
   }
+  /* Tekenen alleen op een groot liggend scherm; smaller dekt de inspector de
+     sluitknoppen van de editor af. Omgekeerde vorm van SKETCH_VIEWPORT in
+     index.html — wijzig ze samen. */
+  @media (max-width: 1023px), (orientation: portrait) {
+    .panel .tab[data-tab="sketch"],
+    .panel .tabpanel[data-panel="sketch"],
+    .sketch-editor { display: none !important; }
+  }
   /* SKETCH:END */

@@ -5696,6 +5696,13 @@ Promise.allSettled(Object.values(firstPulls)).finally(() => {
     Gevolg van die dynamische import die óók in de gewone app telt: wie nooit
     tekent laadt de twee modules nooit, en betaalt er dus geen parse-tijd voor.
    ============================================================ */
+// Tekenen kan alleen op een groot liggend scherm: smaller legt de zwevende
+// inspector zich over de sluitknoppen van de editor. Dezelfde voorwaarde staat
+// omgekeerd in css/app.css (die haalt de tab weg) — wijzig ze samen.
+const SKETCH_VIEWPORT = '(min-width: 1024px) and (orientation: landscape)';
+const sketchMQ = window.matchMedia(SKETCH_VIEWPORT);
+const sketchMogelijk = () => sketchMQ.matches;
+
 let sketch = null;          // js/sketch.js zodra geladen
 let sketchOn = false;
 let sketchLoading = null;   // in-flight import, zodat twee kliks niet twee keer laden
@@ -5836,10 +5843,40 @@ document.getElementById('sketch-clear-all')?.addEventListener('click', async () 
 // Bij het opstarten alleen laden als er iets te tonen is. `hasStored()` kijkt naar
 // het bestaan van de sleutel en parseert niets — deze beslissing mag niets kosten
 // voor de meeste bezoekers, die nooit getekend hebben.
+// Vangrail voor draaien of verkleinen tijdens het tekenen: sluit de editor met
+// behoud van werk, verlaat de tab en dooft de laag.
+function handhaafSketchViewport() {
+  if (sketchMogelijk()) return;
+
+  // Op de verdwenen tab blijven staan geeft een leeg paneel.
+  const tab = document.querySelector('.panel .tab[data-tab="sketch"]');
+  if (tab?.classList.contains('active')) {
+    document.querySelector('.panel .tab[data-tab="lagen"]')?.click();
+  }
+
+  // De schakelaar zit in de verborgen tab, dus de laag mag niet aan blijven.
+  // Doven moet ná closeEditor(): diens onClose zet hem juist aan.
+  const doofDeLaag = () => { if (sketchOn) setSketchVisible(false); };
+  const scherm = document.getElementById('sketch-editor');
+  if (scherm && !scherm.hidden) {
+    import('./js/sketch-editor.js')
+      .then(ed => { ed.closeEditor(true); doofDeLaag(); })
+      .catch(doofDeLaag);
+  } else {
+    doofDeLaag();
+  }
+}
+// Drie ingangen, want niet elke omgeving vuurt matchMedia's `change`.
+sketchMQ.addEventListener('change', handhaafSketchViewport);
+window.addEventListener('resize', handhaafSketchViewport);
+window.addEventListener('orientationchange', handhaafSketchViewport);
+handhaafSketchViewport();
+
 {
   let stored = false;
   try { stored = !!localStorage.getItem('terra-sketch'); } catch {}
-  if (stored) {
+  // Niets terugzetten waar de schakelaar om het weg te halen onbereikbaar is.
+  if (stored && sketchMogelijk()) {
     loadSketch().then(m => {
       if (m.restore()) { m.bake(); setSketchVisible(true); }
     }).catch(() => {});
