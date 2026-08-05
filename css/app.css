@@ -208,14 +208,17 @@
     left: 28px;
     bottom: 28px;
     z-index: 10;
-    width: 248px;
+    /* Breder en iets lager sinds sessie 17: de tabs dragen meer bediening dan bij
+       248 px comfortabel paste. Alleen desktop — de query op 640 px zet `width: auto`
+       en een eigen max-height, dus die blijft ongemoeid. */
+    width: 280px;
     /* GEMETEN op een iPhone (iOS 18.7, landscape, 2026-07-31): `100vh` gaf daar 402 px
        terwijl de zichtbare hoogte 292 px was. Met `bottom: 28px` groeide het paneel dus
        tot 82 px BOVEN de schermrand, en daarmee stond de hele `.panel-head` (tabs plus
        inklappijl) buiten beeld. Vandaar `dvh`, dat de balken van de browser wél meetelt.
        De `vh`-regel blijft eronder staan als fallback voor browsers zonder `dvh`. */
-    max-height: calc(100vh - 56px);
-    max-height: calc(100dvh - 56px);
+    max-height: calc(100vh - 66px);
+    max-height: calc(100dvh - 66px);
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -455,6 +458,37 @@
   .layer-detail { display: none; margin: 2px 0 10px; padding: 11px 12px;
     background: rgba(255,255,255,0.03); border: 1px solid var(--hair); border-radius: 8px; }
   .layer-detail.show { display: block; }
+  /* Bronkeuze achter een uitklap. De ruime marges zijn er met opzet: dit blok zit
+     tussen de laagnaam en de magnitudefilters in, en zonder lucht leest het als
+     een derde filter in plaats van als een instelling die je zelden aanraakt. */
+  .srcs-block { margin: 12px 0 18px; }
+  .srcs-toggle {
+    display: flex; align-items: center; gap: 7px; width: 100%;
+    padding: 7px 2px;
+    background: none; border: 0; cursor: pointer;
+    font-family: inherit; font-size: 11px; color: var(--ink-dim);
+    -webkit-user-select: none; user-select: none;
+  }
+  .srcs-toggle:hover { color: var(--ink); }
+  .srcs-chev {
+    width: 12px; height: 12px; flex-shrink: 0;
+    transform: rotate(-90deg);            /* dicht: chevron wijst naar rechts */
+    transition: transform 0.18s;
+  }
+  .srcs-toggle.open .srcs-chev { transform: rotate(0deg); }
+  /* De actieve bron rechts in de kop, zodat je hem ziet zonder uit te klappen. */
+  .srcs-current {
+    margin-left: auto;
+    font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em;
+    color: var(--accent);
+  }
+  .srcs-panel { display: none; padding-top: 4px; }
+  .srcs-panel.show { display: block; }
+  .srcs-note {
+    margin-top: 10px;
+    font-size: 11px; line-height: 1.55; color: var(--ink-faint);
+  }
+  @media (prefers-reduced-motion: reduce) { .srcs-chev { transition: none; } }
   /* Subkop binnen een tabpanel of een uitgeklapt filterblok. De Cosmos-tab gebruikt
      hem buiten `.layer-detail`, vandaar de tweede selector — zonder die regel viel
      hij terug op de browser-default van 18,72px en schreeuwde "Track window" over
@@ -1488,3 +1522,201 @@
       max-height: none;
     }
   }
+
+  /* SKETCH:START — tekenlaag. Dit hele blok wordt uit de standalone gestript;
+     zie tools/build-standalone.mjs. */
+
+  /* ---- Sketch-tab (in het paneel) ---- */
+  .sk-lead {
+    font-size: 11.5px; line-height: 1.55; color: var(--ink-dim); margin-bottom: 12px;
+  }
+  .sk-note {
+    font-size: 11px; line-height: 1.5; color: var(--ink-faint); margin-top: 10px;
+  }
+  .sk-stat {
+    display: flex; justify-content: space-between; gap: 14px;
+    font-size: 11.5px; color: var(--ink-dim); padding: 4px 0;
+  }
+  .sk-stat b { color: var(--ink); font-weight: 500; font-variant-numeric: tabular-nums; }
+  /* Terugkoppeling op de knop waarop je drukte. `[hidden]` heeft hier een eigen
+     regel nodig omdat de display-declaratie eronder anders wint (sessie 14). */
+  .sk-msg[hidden] { display: none; }
+  .sk-msg {
+    display: block; margin-top: 10px; padding: 8px 10px;
+    background: rgba(255,107,61,0.08); border: 1px solid var(--hair); border-radius: 6px;
+    font-size: 11px; line-height: 1.5; color: var(--ink-dim);
+  }
+  .sk-buttons { display: flex; gap: 8px; }
+  .sk-buttons .sk-btn { flex: 1 1 0; }
+
+  /* Knop in Terra's stijl. Deelt de vorm met `.apply` maar niet de volle breedte:
+     in de editor staan er drie naast elkaar in een balk. */
+  .sk-btn {
+    background: transparent;
+    border: 1px solid var(--hair);
+    border-radius: 8px;
+    padding: 7px 12px;
+    color: var(--ink-dim);
+    font-family: inherit; font-size: 12px; font-weight: 500;
+    cursor: pointer; white-space: nowrap;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+  }
+  .sk-btn:hover { border-color: var(--ink-dim); color: var(--ink); }
+  .sk-btn.wide { width: 100%; margin-top: 10px; }
+  .sk-btn.primary { border-color: var(--accent); color: var(--accent); }
+  .sk-btn.primary:hover { background: rgba(255,107,61,0.12); }
+  .sk-btn.danger:hover { border-color: var(--quake); color: var(--quake); background: rgba(255,107,61,0.08); }
+  @media (prefers-reduced-motion: reduce) { .sk-btn { transition: none; } }
+
+  /* ---- Bewerkscherm ---- */
+  /* Het `hidden`-attribuut is niets anders dan een user-agent-regel
+     `display: none`, en de eigen `display: flex` hieronder wint daarvan. Zonder
+     deze regel staat de editor dus meteen open — exact de val uit sessie 14. */
+  .sketch-editor[hidden] { display: none; }
+  .sketch-editor {
+    position: fixed; inset: 0; z-index: 60;
+    display: flex; background: var(--void);
+  }
+  .sk-tools {
+    flex: 0 0 52px;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 10px 0;
+    background: var(--void-2); border-right: 1px solid var(--hair);
+  }
+  .sk-tools .tool {
+    width: 36px; height: 36px;
+    display: grid; place-items: center;
+    background: transparent; border: 1px solid transparent; border-radius: 6px;
+    color: var(--ink-dim); cursor: pointer;
+  }
+  .sk-tools .tool:hover { background: rgba(255,255,255,0.06); color: var(--ink); }
+  .sk-tools .tool[aria-pressed="true"] {
+    color: var(--accent); border-color: var(--accent); background: rgba(255,107,61,0.10);
+  }
+  .sk-tools .tool svg {
+    width: 19px; height: 19px;
+    fill: none; stroke: currentColor; stroke-width: 1.6;
+    stroke-linecap: round; stroke-linejoin: round;
+  }
+  .sk-tools .tool-sep { width: 22px; height: 1px; background: var(--hair); margin: 6px 0; }
+
+  .sk-stage { flex: 1; position: relative; min-width: 0; }
+  /* `touch-action: none` mag hier omdat er op het canvas niets te scrollen valt.
+     Op een voorouder zou het het scrollen in het paneel breken (sessie 9). */
+  #sketch-map {
+    width: 100%; height: 100%; display: block;
+    touch-action: none; cursor: crosshair;
+  }
+  #sketch-map.tool-select { cursor: default; }
+  #sketch-map.panning { cursor: grabbing; }
+
+  .sk-bar {
+    position: absolute; left: 0; right: 0; top: 0;
+    display: flex; align-items: center; gap: 10px;
+    height: 52px; padding: 0 14px;
+    background: linear-gradient(var(--void), rgba(5,7,13,0));
+    pointer-events: none;
+  }
+  .sk-bar > * { pointer-events: auto; }
+  .sk-bar-note { margin-right: auto; font-size: 11px; color: var(--ink-faint); }
+
+  .sk-toggle {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-size: 11.5px; color: var(--ink-dim); cursor: pointer;
+    -webkit-user-select: none; user-select: none;
+    /* Zonder dit breekt "Dim map" over twee regels zodra de balk krap wordt, en
+       dan groeit de balk in hoogte in plaats van dat er iets wijkt. */
+    white-space: nowrap;
+  }
+  .sk-toggle input {
+    -webkit-appearance: none; appearance: none; margin: 0;
+    width: 30px; height: 16px; border-radius: 9px;
+    background: var(--void-2); border: 1px solid var(--hair);
+    position: relative; cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .sk-toggle input::after {
+    content: ""; position: absolute; top: 2px; left: 2px;
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--ink-dim); transition: transform 0.15s, background 0.15s;
+  }
+  .sk-toggle input:checked { border-color: var(--accent); background: rgba(255,107,61,0.15); }
+  .sk-toggle input:checked::after { transform: translateX(14px); background: var(--accent); }
+  @media (prefers-reduced-motion: reduce) {
+    .sk-toggle input, .sk-toggle input::after { transition: none; }
+  }
+
+  .sk-coords {
+    position: absolute; left: 14px; bottom: 14px;
+    padding: 10px 14px;
+    background: rgba(11,16,24,0.82); border: 1px solid var(--hair); border-radius: 8px;
+    backdrop-filter: blur(6px);
+    font-variant-numeric: tabular-nums;
+  }
+  .sk-coords .lbl {
+    display: block; margin-bottom: 4px;
+    font-size: 9.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent);
+  }
+  .sk-coords .val { font-size: 15px; color: var(--ink); }
+  .sk-coords .val i { color: var(--ink-dim); font-style: normal; }
+
+  .sk-inspector {
+    flex: 0 0 232px;
+    padding: 14px; overflow-y: auto;
+    background: var(--void-2); border-left: 1px solid var(--hair);
+  }
+  .sk-inspector h2 {
+    margin-bottom: 12px;
+    font-size: 10px; font-weight: 500; letter-spacing: 0.16em;
+    text-transform: uppercase; color: var(--accent);
+  }
+  .sk-field { margin-bottom: 13px; }
+  .sk-field > label {
+    display: block; margin-bottom: 6px;
+    font-size: 9.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-dim);
+  }
+  .sk-row { display: flex; align-items: center; gap: 9px; }
+  .sk-row .range { flex: 1; }
+  .sk-row output {
+    min-width: 40px; text-align: right;
+    font-size: 11px; color: var(--ink); font-variant-numeric: tabular-nums;
+  }
+  .sk-inspector input[type="color"] {
+    width: 100%; height: 30px; padding: 2px;
+    background: var(--void); border: 1px solid var(--hair); border-radius: 6px; cursor: pointer;
+  }
+  .sk-swatches { display: flex; gap: 5px; margin-top: 6px; }
+  .sk-swatch {
+    width: 22px; height: 22px; padding: 0;
+    border: 1px solid rgba(255,255,255,0.18); border-radius: 4px; cursor: pointer;
+  }
+  .sk-swatch[aria-pressed="true"] {
+    box-shadow: 0 0 0 2px var(--void-2), 0 0 0 3px var(--accent);
+  }
+  .sk-empty { font-size: 11.5px; line-height: 1.55; color: var(--ink-dim); }
+  .sk-empty code { font-size: 11px; color: var(--accent); }
+  .sk-stack {
+    display: flex; flex-direction: column; gap: 6px;
+    margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--hair);
+  }
+  .sk-keys {
+    margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--hair);
+    font-size: 10.5px; line-height: 1.9; color: var(--ink-faint);
+  }
+  .sk-keys b {
+    display: inline-block; min-width: 58px;
+    color: var(--ink-dim); font-weight: 500;
+  }
+
+  /* Op een smal scherm gaat de inspector zweven: de kaart heeft de breedte harder
+     nodig dan de bediening, en anders houdt het canvas een strook van 100px over. */
+  @media (max-width: 820px) {
+    .sk-inspector {
+      position: absolute; right: 0; top: 0; bottom: 0; z-index: 5;
+      box-shadow: -14px 0 30px rgba(0,0,0,0.5);
+    }
+    .sk-coords { left: auto; right: 246px; }
+    .sk-bar { flex-wrap: wrap; height: auto; padding: 10px 14px; }
+    .sk-bar-note { display: none; }
+  }
+  /* SKETCH:END */

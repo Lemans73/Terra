@@ -302,6 +302,106 @@ out = out.replace(
   'const ANALYTICS_HOSTS = [];   // standalone: never on Vercel'
 );
 
+// ---- 4b. Cut the sketch layer out -----------------------------------------
+//
+// The drawing layer is deliberately absent from this file. It is a browser-local
+// feature: it keeps work in localStorage and exchanges JSON files, and neither
+// belongs in something people download once and keep. Terry's call, and this is
+// where it is enforced rather than hoped for.
+//
+// Two locks, either one sufficient on its own:
+//
+//   1. index.html reaches the modules through `await import()`, never a static
+//      import statement — so collectModules() above cannot see them and they are
+//      never inlined. That covers js/sketch.js and js/sketch-editor.js entirely.
+//   2. Everything else — markup, CSS, PARAMS, the wiring — sits between
+//      SKETCH:START and SKETCH:END markers, and this step removes those blocks.
+//
+// This runs BEFORE the comment stripper. Afterwards the markers are gone, and
+// with them any chance of finding the blocks they delimited.
+// NOT one spanning regex. That was the first version and it is quietly dangerous:
+// drop a single SKETCH:END and `START …lazy… END` runs on to the NEXT block's end
+// marker, so the cut swallows every line between two blocks — real, unrelated code
+// — and the word `sketch` is gone either way, so the check below passes and the
+// build reports success. Measured: removing one end marker cut 177 KB and exited 0.
+//
+// So: find the markers, insist they alternate, and only then cut. A missing or
+// doubled marker is a build failure, which is the whole point of having them.
+function cutMarked(src) {
+  const regelVan = (i) => src.slice(0, i).split('\n').length;
+
+  // Find the word, then grow outwards to the comment that holds it. Matching the
+  // whole comment with one pattern does not work: two of these markers open a
+  // block comment that runs for many lines before its `*/`, and a pattern that
+  // demands the closer on the same line silently finds neither.
+  const marks = [];
+  const WOORD = /SKETCH:(START|END)/g;
+  let m;
+  while ((m = WOORD.exec(src)) !== null) {
+    const i = m.index;
+    const htmlOpen = src.lastIndexOf('<!--', i);
+    const jsOpen   = src.lastIndexOf('/*', i);
+    const isHtml   = htmlOpen > jsOpen;
+    const open     = isHtml ? htmlOpen : jsOpen;
+    const sluiter  = isHtml ? '-->' : '*/';
+    if (open === -1) throw new Error(`build failed: SKETCH:${m[1]} on line ${regelVan(i)} is not inside a comment`);
+    const eind = src.indexOf(sluiter, i);
+    if (eind === -1) throw new Error(`build failed: the comment holding SKETCH:${m[1]} on line ${regelVan(i)} is never closed`);
+    // Voorloopwitruimte en de afsluitende newline mee, anders blijven er lege
+    // regels en losse inspringingen achter.
+    let van = open;
+    while (van > 0 && (src[van - 1] === ' ' || src[van - 1] === '\t')) van--;
+    let tot = eind + sluiter.length;
+    while (tot < src.length && (src[tot] === ' ' || src[tot] === '\t')) tot++;
+    if (src[tot] === '\n') tot++;
+    marks.push({ soort: m[1], van, tot, regel: regelVan(i) });
+    WOORD.lastIndex = eind;   // niet nog eens binnen dezelfde commentaar zoeken
+  }
+  if (!marks.length) throw new Error('build failed: no SKETCH markers found — did they move or get renamed?');
+
+  // Strikt om en om. Ontbreekt er één, dan zou een naïeve knip alles tussen twee
+  // blokken opslokken — echte, niet-sketch code — en omdat het woord daarna toch
+  // weg is, zou de controle hieronder groen geven. Gemeten: één END weghalen sneed
+  // 177 KB weg en gaf exitcode 0. Vandaar dat dit een bouwfout is.
+  const stukken = [];
+  let laatst = 0;
+  for (let i = 0; i < marks.length; i += 2) {
+    const open = marks[i], sluit = marks[i + 1];
+    if (open.soort !== 'START') {
+      throw new Error(`build failed: SKETCH:END without a matching START on line ${open.regel}`);
+    }
+    if (!sluit) {
+      throw new Error(`build failed: SKETCH:START on line ${open.regel} is never closed`);
+    }
+    if (sluit.soort !== 'END') {
+      throw new Error(
+        `build failed: SKETCH:START on line ${open.regel} is followed by another START on line ${sluit.regel} ` +
+        '— the END in between is missing, and cutting anyway would swallow everything between the two blocks'
+      );
+    }
+    stukken.push(src.slice(laatst, open.van));
+    laatst = sluit.tot;
+  }
+  stukken.push(src.slice(laatst));
+  return stukken.join('');
+}
+
+const voorKnip = Buffer.byteLength(out, 'utf8');
+out = cutMarked(out);
+console.log(`sketch layer cut — ${Math.round((voorKnip - Buffer.byteLength(out, 'utf8')) / 1024)} KB removed`);
+
+// The check that makes the next person's mistake loud instead of silent. A static
+// import, a forgotten marker, a stray id — any of them leaves the word behind,
+// and then this throws rather than shipping half a feature.
+if (/sketch/i.test(out)) {
+  const regel = out.split('\n').findIndex(l => /sketch/i.test(l)) + 1;
+  throw new Error(
+    `build failed: the sketch layer survived into the standalone (first hit on line ${regel}). ` +
+    'Check that every block is wrapped in SKETCH:START/SKETCH:END and that the modules ' +
+    'are only ever reached through await import().'
+  );
+}
+
 // ---- 5. Strip the comments ------------------------------------------------
 // Measured before this step existed: 118 KB of 296 KB was comment — 40%. The
 // repository keeps every word of it; only this derived file is stripped.

@@ -215,6 +215,22 @@ export const PARAMS = {
   // wolken — zwevende transparante schil + schaduw op het oppervlak
   cloudAltitude: 0.02,  // hoogte van de wolkenschil (fractie van de straal)
   cloudOpacity: 1.0, cloudShadow: 1.0, cloudSpeed: 0.001,
+  /* SKETCH:START — de tekenlaag zit niet in de standalone; zie tools/build-standalone.mjs */
+  // Tekenlaag. De hoogte zit klem tussen twee grenzen: boven de land-polygons van
+  // de schematische weergave (die liggen op 0,010 = straal 101) en onder de
+  // schemeringslijnen (0,014). Zakt hij naar 0,010 of lager, dan verdwijnt de
+  // tekening in die weergave onder het land — dezelfde val als in sessie 14.
+  sketchAltitude: 0.012,
+  sketchOpacity: 1.0,
+  /* SKETCH:END */
+  // Zonneglinster op het water. De tweede waarde geldt zodra de oceaanbodem aan
+  // staat, en dat is geen smaakkwestie maar een meting: bij 0,7 legt de brede
+  // `sheen` (macht 14) een lichtwaas over de halve dagzijde, en daar verdwijnt het
+  // hele bodemreliëf onder. Bij 0,7 was er van de Mid-Atlantische Rug niets te
+  // zien; bij 0,3 tekent hij zich af terwijl de fonkeling blijft. Op de vlakke
+  // oceaan van de gewone dagtextuur valt er niets te verbergen — daar mag hij vol.
+  glintStrength: 0.7,
+  glintStrengthOcean: 0.3,
   // schermvaste icoongrootte (app-breed, beide modi): iconen schalen mee met de
   // camera-afstand. Power-curve (pow>1) = agressievere zoom-respons, vooral diep
   // ingezoomd kleiner. camDist-bereik in de praktijk ≈ 169 (diep in) → 438 (uit).
@@ -540,11 +556,21 @@ export function asset(path) {
 // ongevraagd laten downloaden; op een telefoon is dat pijnlijk. Wie hem wil, zet
 // hem aan in de Aarde-tab en krijgt eerst te zien hoeveel dat kost.
 // De sterrenhemel hoort bij de set: die is als achtergrond net zo zwaar.
+// `bathyDay` is een VARIANT van `day`, geen extra laag: hij vervangt de dagtextuur
+// en kost dus niets extra aan downloads of textuureenheden. In het bestand zit
+// Terra's eigen land (Solar System Scope) met NASA's zeebodem eronder vandaan,
+// samengevoegd langs de specular map. Dat samenvoegen gebeurt één keer bij het
+// maken van de asset en niet in de shader — het masker verandert immers nooit.
+// Zie logs/bathy/build-bathy-daymap.py (wordt niet meegeleverd).
 export const TEXTURE_SETS = {
   '2k': {
     label: 'Standard (2K)',
-    bytes: 2_476_000,
+    // Nagemeten op 2026-08-05: som van de zes bestanden die een wissel ophaalt
+    // (day, night, clouds, normal, specular, sterrenhemel). Stond op 2.476.000 en
+    // 29.675.000, allebei te laag — de 8K-set is sindsdien 31,2 MB.
+    bytes: 2_536_000,
     day:      asset('assets/earth/2k_earth_daymap.jpg'),
+    bathyDay: asset('assets/earth/2k_earth_daymap_bathy.jpg'),
     night:    asset('assets/earth/2k_earth_nightmap.jpg'),
     clouds:   asset('assets/earth/2k_earth_clouds.jpg'),
     normal:   asset('assets/earth/2k_earth_normal_map.png'),
@@ -553,8 +579,9 @@ export const TEXTURE_SETS = {
   },
   '8k': {
     label: 'High resolution (8K)',
-    bytes: 29_675_000,
+    bytes: 31_151_000,
     day:      asset('assets/earth/8k_earth_daymap.jpg'),
+    bathyDay: asset('assets/earth/8k_earth_daymap_bathy.jpg'),
     night:    asset('assets/earth/8k_earth_nightmap.jpg'),
     clouds:   asset('assets/earth/8k_earth_clouds.jpg'),
     normal:   asset('assets/earth/8k_earth_normal_map.png'),

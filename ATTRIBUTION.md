@@ -19,9 +19,8 @@ Verified on 2026-07-30.
 > Textures by [Solar System Scope](https://www.solarsystemscope.com/textures/),
 > licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 
-Every texture the application loads comes from this source, in both the 2K and
-the 8K set: day map, night map, clouds, normal map, specular map and the Milky
-Way starfield.
+In both the 2K and the 8K set: day map, night map, clouds, normal map, specular
+map and the Milky Way starfield. Everything except the ocean floor variant below.
 
 The normal and specular maps in `assets/earth/` are format conversions (TIFF to
 PNG) of the originals, which are distributed as TIFF. The source TIFFs are not
@@ -29,6 +28,32 @@ included in this repository — browsers cannot display them, so shipping them
 would add roughly 11 MB that no visitor would ever load. They remain available
 from Solar System Scope at the link above. CC BY 4.0 permits adaptation as long
 as attribution is given, which it is here and in the application interface.
+
+### Ocean floor
+
+**NASA Earth Observatory** &nbsp;·&nbsp; Blue Marble Next Generation
+&nbsp;·&nbsp; [visibleearth.nasa.gov](https://visibleearth.nasa.gov/)
+
+> Blue Marble Next Generation, NASA Earth Observatory (Reto Stöckli).
+> Ocean bathymetry from [GEBCO](https://www.gebco.net/).
+
+Turning on **Ocean floor** in Settings replaces the day map with
+`*_earth_daymap_bathy.jpg`. Those two files are composites, not NASA's image as
+published: the land is the Solar System Scope day map above, unchanged, and only
+the ocean comes from NASA's topography-and-bathymetry release
+(`world.topo.bathy.200409`, September 2004). The two are joined along the
+specular map, which already serves as the land/sea mask in the shader.
+
+The reason for compositing rather than substituting: NASA's image is a different
+month than the Solar System Scope one, so using it whole would also change snow
+line, vegetation and colour balance across every continent — a setting called
+"Ocean floor" should change the ocean floor. Alignment was verified before
+compositing: the best-fitting offset between the two sources is zero pixels at
+8192×4096.
+
+NASA imagery is free to use with attribution. The source images are not in this
+repository — they are 27 MB and 23 MB, and only the derived composites are ever
+loaded.
 
 ---
 
