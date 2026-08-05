@@ -282,10 +282,10 @@
       dubbels toe die we daarna weer moeten wegstrepen. Het punt kwam van @LastQuake,
       EMSC zelf. Vandaar radio's en geen vinkjes.
 
-      Gevolg voor de code: de ontdubbeling tussen bronnen (markQuakeDuplicates) is
-      hiermee dode logica geworden. Ze blijft voorlopig staan — opruimen is een
-      aparte opdracht — maar ze kan bij een volgende opschoning weg, en dan scheelt
-      dat ook events die nu voor niets worden afgevuurd.
+      Gevolg voor de code: de ontdubbeling tussen bronnen is hiermee dode logica
+      geworden en in dezelfde sessie verwijderd — het rasterzoek, de voorkeursbron
+      per gebied en de `dup`-vlag door render en toasts heen. Ze staat in de
+      historie als er ooit weer twee bronnen tegelijk moeten kunnen.
 
       De keuze zit achter een uitklap en staat standaard DICHT: EMSC is de bron, en
       wie daar niets aan wil veranderen hoort er niet overheen te hoeven scrollen om
@@ -1315,76 +1315,13 @@ const QUAKE_FLOOR_MAG = 1;
 // niet vast.
 const solarState = { date: null, regions: [], ssn: null, prob: null, xray: null, flux: null };
 
-// Twee adapters delen de laag `quake`. De standaard-merge vervangt álle events
-// van de eigen lagen, dus zouden ze elkaar om beurten wissen: USGS haalt op en
-// gooit EMSC weg, EMSC haalt op en gooit USGS weg. Elke bron vervangt daarom
-// alleen zijn eigen `src`.
+// Twee adapters delen de laag `quake`, maar er staat er sinds 2026-08-05 altijd
+// maar één aan. Deze merge blijft toch: hij vervangt alleen de events van zijn
+// eigen `src`, en dat is precies wat een bronwissel veilig maakt. Zonder hem zou
+// een pull die nog onderweg was toen je wisselde, de zojuist opgehaalde events
+// van de nieuwe bron wegvegen.
 function quakeMerge(prev, fresh, src) {
   return prev.filter(d => !(d.layer === 'quake' && d.src === src)).concat(fresh);
-}
-
-// Twee records zijn hetzelfde event als tijd, plaats ÉN kracht dicht genoeg bij
-// elkaar liggen. Die derde eis is er om een échte naschok binnen een minuut en
-// een graad NIET op te slokken: bij de 222 gemeten dubbels was het
-// magnitudeverschil gemiddeld 0,03 en maximaal 0,50, dus 1,0 laat elke dubbel
-// door en houdt een los event apart.
-const DUP_MS = 60_000, DUP_DEG = 1.0, DUP_MAG = 1.0;
-
-// Binnen Europa en de Middellandse Zee meet EMSC fijner, daarbuiten USGS. Dit
-// bepaalt uitsluitend WELK record een dubbel paar overleeft. Unieke events van
-// beide bronnen blijven altijd staan — ook de 99 Mexicaanse en 37 Indonesische
-// die alleen EMSC heeft.
-const EMSC_HOME = { latMin: 30, latMax: 75, lonMin: -30, lonMax: 50 };
-const preferredSrc = (d) =>
-  (d.lat >= EMSC_HOME.latMin && d.lat <= EMSC_HOME.latMax &&
-   d.lng >= EMSC_HOME.lonMin && d.lng <= EMSC_HOME.lonMax) ? 'emsc' : 'usgs';
-
-// Lengteverschil over de datumgrens heen. Zonder dit staan twee metingen van
-// dezelfde beving op 179,9 en -179,9 volgens de rekensom 359,8 graden uit
-// elkaar — precies in de Koerilen- en Fiji-troggen, waar het hard genoeg beeft
-// om dat te merken.
-function lonDelta(a, b) {
-  const d = Math.abs(a - b) % 360;
-  return d > 180 ? 360 - d : d;
-}
-
-// Rasterzoek in plaats van elk paar vergelijken: op ~5000 events zou paarsgewijs
-// ruim 12 miljoen vergelijkingen kosten, en dat bij elke pull. Cellen zijn
-// DUP_DEG breed en DUP_MS lang, en alleen de 27 buurcellen worden nagelopen.
-// De lengtecel wordt naar 0..359 gevouwen zodat de datumgrens geen naad is.
-function markQuakeDuplicates(list) {
-  const grid = new Map();
-  const cellT = (t) => Math.floor(t / DUP_MS);
-  const cellLa = (la) => Math.floor(la / DUP_DEG);
-  const cellLo = (lo) => ((Math.floor(lo / DUP_DEG) % 360) + 360) % 360;
-
-  for (const d of list) if (d.layer === 'quake') d.dup = false;
-
-  for (const d of list) {
-    if (d.layer !== 'quake') continue;
-    const t = cellT(d.time), la = cellLa(d.lat), lo = cellLo(d.lng);
-    let twin = null;
-    for (let dt = -1; dt <= 1 && !twin; dt++) {
-      for (let dla = -1; dla <= 1 && !twin; dla++) {
-        for (let dlo = -1; dlo <= 1 && !twin; dlo++) {
-          const cell = grid.get((t + dt) + '|' + (la + dla) + '|' + (((lo + dlo) % 360) + 360) % 360);
-          if (!cell) continue;
-          for (const o of cell) {
-            if (o.src === d.src) continue;           // binnen één bron niet ontdubbelen
-            if (Math.abs(o.time - d.time) < DUP_MS &&
-                Math.abs(o.lat - d.lat) < DUP_DEG &&
-                lonDelta(o.lng, d.lng) < DUP_DEG &&
-                Math.abs((o.value || 0) - (d.value || 0)) < DUP_MAG) { twin = o; break; }
-          }
-        }
-      }
-    }
-    if (twin) (d.src === preferredSrc(d) ? twin : d).dup = true;
-    const k = t + '|' + la + '|' + lo;
-    if (!grid.has(k)) grid.set(k, []);
-    grid.get(k).push(d);
-  }
-  return list;
 }
 
 const Adapters = {
@@ -1424,8 +1361,7 @@ const Adapters = {
         };
       });
     },
-    merge: (prev, fresh) => quakeMerge(prev, fresh, 'usgs'),
-    afterMerge: markQuakeDuplicates
+    merge: (prev, fresh) => quakeMerge(prev, fresh, 'usgs')
   },
 
   // EMSC / seismicportal.eu — tweede seismische bron naast USGS.
@@ -1452,8 +1388,8 @@ const Adapters = {
   // 1,75 MB. In ruil werkt het magnitudefilter direct, zonder opnieuw op te halen.
   //
   // EMSC ontdubbelt zichzelf al: over dezelfde 431 events zat er precies één
-  // intern dubbel paar. De ontdubbeling die wij bouwen is dus alleen nodig tussen
-  // de twee bronnen — zie markQuakeDuplicates().
+  // intern dubbel paar. Wij ontdubbelen daarom niets meer — sinds 2026-08-05 staat
+  // er maar één bron tegelijk aan en is de ontdubbeling tussen bronnen verwijderd.
   emsc: {
     layers: ['quake'],
     interval: 60_000,
@@ -1499,8 +1435,7 @@ const Adapters = {
       }).filter(d => Number.isFinite(d.time) && Number.isFinite(d.value) &&
                      Number.isFinite(d.lat) && Number.isFinite(d.lng));
     },
-    merge: (prev, fresh) => quakeMerge(prev, fresh, 'emsc'),
-    afterMerge: markQuakeDuplicates
+    merge: (prev, fresh) => quakeMerge(prev, fresh, 'emsc')
   },
 
   // NOAA SWPC — de zon. DRIE BESTANDEN, ÉÉN REGEL in het verbindingenpaneel.
@@ -2848,11 +2783,11 @@ function render() {
   const visible = store.filter(d =>
     active[d.layer] && (!TIME_FILTERED.has(d.layer) || d.time >= cutoff)
   );
-  // Aardbevingen ook op kracht filteren, en de dubbels eruit. Dit is de ENIGE
-  // plek waar dat gebeurt: markers, labels, tellers en de lijst eten allemaal
-  // uit `quakes`, dus ze kunnen per constructie niet uiteenlopen.
+  // Aardbevingen ook op kracht filteren. Dit is de ENIGE plek waar dat gebeurt:
+  // markers, labels, tellers en de lijst eten allemaal uit `quakes`, dus ze
+  // kunnen per constructie niet uiteenlopen.
   const quakes = visible.filter(d =>
-    d.layer === 'quake' && !d.dup &&
+    d.layer === 'quake' &&
     (d.value || 0) >= magMin &&
     (magMax === null || (d.value || 0) <= magMax)
   );
@@ -5199,6 +5134,13 @@ async function pull(adapter) {
     finally { clearTimeout(timer); }
     if (!res.ok) throw new Error(res.status);
     const json = await res.json();
+    // NOG EEN KEER TOETSEN, en dit is geen overdaad. De toets bovenaan draaide vóór
+    // het netwerkverkeer; wie ondertussen van seismische bron wisselt, heeft die
+    // adapter dus al uitgezet terwijl zijn antwoord nog onderweg is. Zonder deze
+    // regel schrijft dat antwoord de zojuist verwijderde events gewoon terug, en zie
+    // je na het wisselen een fractie van de oude bron terugkomen. Zichtbaar geworden
+    // op 2026-08-05: tot dan mochten beide bronnen aan staan en viel het niet op.
+    if (adapter.enabled === false) return;
     const fresh = adapter.normalize(json);
     // Een adapter mag zelf bepalen wat "gezond" betekent. De bliksemrelay is het
     // voorbeeld: bereikbaar zijn en data leveren zijn daar twee verschillende dingen.
@@ -5221,22 +5163,16 @@ async function pull(adapter) {
     store = adapter.merge
       ? adapter.merge(store, fresh)
       : store.filter(d => !owned.has(d.layer)).concat(fresh);
-    // Nabewerking over de SAMENGEVOEGDE verzameling. Alleen de twee
-    // aardbevingsbronnen gebruiken dit, om elkaars dubbels te merken; adapters
-    // zonder deze haak merken er niets van.
-    if (adapter.afterMerge) adapter.afterMerge(store);
-
     // detecteer echt nieuwe, recente entries → toast-melding (na de eerste lading).
     // Lagen uit NO_TOAST_LAYERS blijven hier volledig buiten, ook bij `seenIds`: die
     // verzameling dient alleen om toasts te ontdubbelen en zou anders eindeloos groeien.
     //
-    // DIT STAAT BEWUST NÁ DE MERGE. Een nieuwe beving komt vaak eerst via EMSC en
-    // een halve minuut later via USGS binnen; vóór de merge kent geen van beide de
-    // ander en meldde Terra dezelfde beving twee keer. De `dup`-vlag die
-    // afterMerge zet, is precies wat dat tegenhoudt — en `fresh` bevat dezelfde
-    // objecten als de store, dus de vlag staat er al op.
+    // DIT STAAT BEWUST NÁ DE MERGE. Tot 2026-08-05 kon dezelfde beving via twee
+    // bronnen binnenkomen en twee keer melden; dat werd hier tegengehouden met een
+    // `dup`-vlag. Met één bron tegelijk kan het niet meer gebeuren, maar de volgorde
+    // blijft: `seenIds` hoort de stand ná de merge te weerspiegelen.
     const now = Date.now();
-    const newItems = fresh.filter(d => !NO_TOAST_LAYERS.has(d.layer) && !d.dup && !seenIds.has(d.id));
+    const newItems = fresh.filter(d => !NO_TOAST_LAYERS.has(d.layer) && !seenIds.has(d.id));
     newItems.forEach(d => seenIds.add(d.id));
     if (initialLoadDone) {
       newItems
@@ -5502,27 +5438,12 @@ if (IS_LOCAL) {
       return {
         total: q.length,
         usgs: by('usgs').length,
-        emsc: by('emsc').length,
-        dup: q.filter(d => d.dup).length,
-        dupUsgs: by('usgs').filter(d => d.dup).length,
-        dupEmsc: by('emsc').filter(d => d.dup).length,
-        shown: q.filter(d => !d.dup).length
+        emsc: by('emsc').length
       };
     },
     // De readout hangt aan een raycast op een 3D-marker en is daardoor niet te
     // beproeven zonder de juiste pixel te raken. Deze ingang doet dat wel.
-    showDetail: (d) => showDetail(d),
-    // Kosten van de ontdubbeling zelf, om de O(n)-claim af te kunnen rekenen.
-    dedupMs(runs = 20) {
-      const t = [];
-      for (let i = 0; i < runs; i++) {
-        const t0 = performance.now();
-        markQuakeDuplicates(store);
-        t.push(performance.now() - t0);
-      }
-      t.sort((a, b) => a - b);
-      return { n: store.length, median: +t[runs >> 1].toFixed(2), max: +t[runs - 1].toFixed(2) };
-    }
+    showDetail: (d) => showDetail(d)
   };
 }
 
