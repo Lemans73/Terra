@@ -647,12 +647,12 @@
                  downloads of textuureenheden. Vandaar dat hij hier staat en niet
                  bij de kwaliteitskeuze eronder — je kiest wát er op de bol ligt,
                  niet hoe scherp. -->
-            <div class="elayer expandable" id="ocean-toggle">
+            <div class="elayer expandable on" id="ocean-toggle">
               <span class="edot"></span>Ocean floor
               <button class="row-expand" data-note="ocean-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
               </button>
-              <span class="estat" id="es-ocean">off</span>
+              <span class="estat" id="es-ocean">on</span>
             </div>
             <div class="layer-detail" id="ocean-note">
               The ocean in the standard texture is one flat colour &#8212; the Mariana
@@ -2143,8 +2143,19 @@ let texQuality = (() => {
 // verderop. `dayUrlFor()` wordt al tijdens het opbouwen van het materiaal gelezen
 // en een `let` verderop zou dus in de temporal dead zone zitten — dezelfde val als
 // bij setLayerLocked() in sessie 11 en bij timeOffsetMs in sessie 14.
+// AAN bij een eerste bezoek. De zeebodem is het verschil tussen een oceaan die
+// iets vertelt en een vlak blauw vlak — gemeten was 87,4% van al het diepe water
+// in de gewone dagtextuur exact dezelfde pixel — en niemand gaat daarvoor eerst
+// een instelling zoeken. Het kost ook niets: de variant vervángt de dagtextuur en
+// is op 2K zelfs kleiner (384 KB tegen 452 KB).
+//
+// `null` en `'0'` zijn hier bewust niet hetzelfde. Nooit iets gekozen betekent de
+// standaard; expliciet uitgezet blijft uit, ook na een herbezoek.
 let oceanFloorOn = (() => {
-  try { return localStorage.getItem('terra-ocean-floor') === '1'; } catch { return false; }
+  try {
+    const bewaard = localStorage.getItem('terra-ocean-floor');
+    return bewaard === null ? true : bewaard === '1';
+  } catch { return true; }
 })();
 
 // Eén plek die bepaalt welke dagtextuur geldt. Valt terug op `day` wanneer een set
