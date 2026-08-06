@@ -326,7 +326,14 @@ export function createGeomagLayer(THREE, opts = {}) {
   return {
     group, update, setVisible, dispose, config: cfg,
     get last() { return laatste; },
+    // Levende referenties, geen kopieën: `dipAxis` wordt in update() ter plekke
+    // bijgewerkt, en wie de N/S-labels plaatst wil de stand van dit moment.
     dipoleAxisVector: dipAxis,
+    rotationAxisVector: rotAxis,
+    // Waar het uiteinde van een as ligt. Staat hier zodat index.html die rekensom
+    // niet hoeft over te schrijven; verandert `stubLength`, dan schuiven de labels
+    // vanzelf mee.
+    axisTipRadius: R + stubLen,
     meshes: { rotGroup, dipGroup, trailGroup, equatorLine, rotChord, dipChord }
   };
 }

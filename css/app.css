@@ -654,6 +654,14 @@
   .cosmos-readout .phase-row canvas {
     width: 34px; height: 34px; flex-shrink: 0; display: block;
   }
+  /* Bovenaanzicht op de noordpool. Zelfde opzet als de fase-indicator, maar iets
+     groter: er staan een raster, een spoor en twee polen in en op 34px valt het
+     verschil tussen die twee polen weg — en dat verschil is precies het punt. */
+  .cosmos-readout .polar-row { display: flex; align-items: center; gap: 10px; }
+  .cosmos-readout .polar-row canvas {
+    width: 52px; height: 52px; flex-shrink: 0; display: block;
+  }
+  .cosmos-readout .polar-row span { color: var(--ink-dim); }
   /* De tijdkiezer. `.shifted` is de niet te missen markering dat de scene een ander
      moment toont dan het heden — de live datalagen doen dat namelijk niet. */
   #time-val { font-variant-numeric: tabular-nums; }
@@ -1345,6 +1353,23 @@
   .rlabel span { color: var(--ink-dim); margin-left: 6px; }
   .rlabel:hover { border-color: #ffb347; background: rgba(11,16,24,0.92); }
   .rline { stroke: #ffb347; stroke-width: 1; stroke-dasharray: 2 3; opacity: 0.55; }
+
+  /* N en S bij de uiteinden van de assen. Delen dezelfde overlay-laag als .qlabel
+     en .rlabel, maar zonder kader, zonder leader-line en zonder muisinteractie:
+     het is een aanduiding bij een lijn, geen kaartje met inhoud. De kleur komt
+     inline mee en onderscheidt de rotatie-as van de magnetische. */
+  .alabel {
+    position: absolute;
+    top: 0; left: 0;
+    display: none;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.06em;
+    line-height: 1;
+    padding: 3px 5px;
+    border-radius: 5px;
+    background: rgba(5,7,13,0.6);
+    pointer-events: none;
+    text-shadow: 0 0 5px rgba(0,0,0,0.95);
+  }
 
   #label-lines {
     position: absolute;

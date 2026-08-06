@@ -489,6 +489,14 @@
       <dd id="gm-tilt">&#8212;</dd>
       <dt>Dipole strength</dt>
       <dd id="gm-strength">&#8212;</dd>
+      <!-- Bovenaanzicht op de noordpool. Zelfde bouw als de maanfase-indicator:
+      een vast canvas van 128 px dat klein wordt getoond, met één teken-functie
+      die volledig hertekent. -->
+      <dt>Seen from above the pole</dt>
+      <dd class="polar-row">
+      <canvas id="polar-canvas" width="128" height="128" aria-hidden="true"></canvas>
+      <span id="gm-gap">&#8212;</span>
+      </dd>
       </dl>
       </div>
       </section>
@@ -1042,6 +1050,7 @@ import { createSunMoonLayer } from './js/sunmoon-layer.js';
 // standalone leest alleen die — een dynamische import verdwijnt er geruisloos uit.
 // (`toGeodeticLat` in js/geomag.js is er alleen voor de toets tegen gepubliceerde
 // tabellen; de app tekent en toont geocentrisch en heeft hem dus niet nodig.)
+import { poleDriftTrack } from './js/geomag.js';
 import { createGeomagLayer } from './js/geomag-layer.js';
 // Deskundig (schematische) weergavemodus (Fase 1).
 import { enterExpertMode, exitExpertMode } from './js/modes/expert.js';
@@ -2471,6 +2480,11 @@ let sunMoon = null;
 // Geomagnetische assen (sessie 18). Zelfde afspraak als sunMoon hierboven: blijft
 // null tot het init-blok onderaan hem maakt, dus overal op null controleren.
 let geomag = null;
+// Het driftspoor voor het bovenaanzicht. Verandert nooit, dus één keer berekend.
+// Staat hier en niet bij drawPolarView(): die wordt bereikt vanuit
+// updateSunUniform(), en dat is precies het pad dat al tijdens de opbouw van de
+// scene loopt. Een `let` verderop zou daar in de temporal dead zone zitten.
+let _polarSpoor = null;
 let sunLight = null;        // globe.gl's eigen DirectionalLight, opgezocht bij init
 let lastEphemeris = null;   // laatste efemeride, voor de readout
 // Verschuiving van de tijdkiezer, in ms ten opzichte van nu. 0 = het heden.
@@ -3638,6 +3652,7 @@ function animateShader() {
   }
 
   positionRegionLabels(_cam);   // labels bij de actieve gebieden op de zon
+  positionAxisLabels(_cam);     // N en S bij de uiteinden van de assen
   updateHover();      // raycaster-highlight bijwerken
   positionLabels();   // leader-line labels herpositioneren
   requestAnimationFrame(animateShader);
@@ -4434,7 +4449,10 @@ function updateGeomagReadout() {
     const el = document.getElementById(id);
     if (el) el.textContent = tekst;
   };
-  if (!d) { ['gm-north','gm-south','gm-tilt','gm-strength'].forEach(i => zet(i, '—')); return; }
+  if (!d) {
+    ['gm-north','gm-south','gm-tilt','gm-strength','gm-gap'].forEach(i => zet(i, '—'));
+    return;
+  }
   // De coördinaten zijn GEOCENTRISCH, gelijk aan waar de markering staat. Het
   // verschil met de gepubliceerde geodetische waarde staat in de uitleg bij de rij.
   zet('gm-north', formatLatLon(d.north.lat, d.north.lon));
@@ -4444,6 +4462,70 @@ function updateGeomagReadout() {
   // dat de as überhaupt beweegt. Buiten het modelbereik zeggen we dat erbij.
   zet('gm-strength', Math.round(d.B0).toLocaleString('en-GB') + ' nT · ' +
     (d.buitenBereik ? 'clamped to ' : '') + d.jaar.toFixed(1));
+  // De kanteling in kilometers over het oppervlak. Een hoek van negen graden zegt
+  // weinig; duizend kilometer wel.
+  zet('gm-gap', Math.round(d.tilt * Math.PI / 180 * 6371).toLocaleString('en-GB') +
+    ' km apart');
+  drawPolarView(d);
+}
+
+// Bovenaanzicht op de noordpool, recht van boven gezien. Het raster loopt tot 15
+// graden vanaf de pool; de geografische pool staat per definitie in het midden en
+// de geomagnetische ligt er op `tilt` vandaan.
+//
+// Oriëntatie: kijkend langs -Y omlaag ligt lengte 0 ONDERAAN en 90 oost rechts,
+// wat de gebruikelijke stand van een poolkaart is. Vandaar sin voor x en cos voor y
+// en niet andersom.
+const POLAR_GRID = 15;              // graden vanaf de pool die de rand voorstelt
+function drawPolarView(d) {
+  const c = document.getElementById('polar-canvas');
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  const S = c.width, cx = S / 2, cy = S / 2, R = S / 2 - 6;
+  const naarXY = (lat, lon) => {
+    const r = ((90 - lat) / POLAR_GRID) * R;
+    const a = lon * Math.PI / 180;
+    return [cx + r * Math.sin(a), cy + r * Math.cos(a)];
+  };
+  ctx.clearRect(0, 0, S, S);
+
+  ctx.fillStyle = '#111823';
+  ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.fill();
+
+  // Raster: de rand op 15 graden, een ring op 10, en vier meridianen.
+  ctx.strokeStyle = 'rgba(125,138,160,0.30)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.stroke();
+  ctx.strokeStyle = 'rgba(125,138,160,0.16)';
+  ctx.beginPath(); ctx.arc(cx, cy, R * 10 / POLAR_GRID, 0, Math.PI * 2); ctx.stroke();
+  ctx.beginPath();
+  for (let k = 0; k < 4; k++) {
+    const a = k * Math.PI / 2;
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + R * Math.sin(a), cy + R * Math.cos(a));
+  }
+  ctx.stroke();
+
+  // Het driftspoor 1900 tot 2030. Punten buiten het raster worden weggelaten in
+  // plaats van geklemd, anders ontstaat er een valse lijn langs de rand.
+  if (!_polarSpoor) _polarSpoor = poleDriftTrack();
+  ctx.strokeStyle = 'rgba(255,176,138,0.55)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  let neer = true;
+  for (const p of _polarSpoor) {
+    if (90 - p.lat > POLAR_GRID) { neer = true; continue; }
+    const [x, y] = naarXY(p.lat, p.lon);
+    if (neer) { ctx.moveTo(x, y); neer = false; } else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+
+  // De twee polen, in dezelfde kleuren als de assen in de scene.
+  ctx.fillStyle = '#8fa3bd';
+  ctx.beginPath(); ctx.arc(cx, cy, 4, 0, Math.PI * 2); ctx.fill();
+  const [mx, my] = naarXY(d.north.lat, d.north.lon);
+  ctx.fillStyle = '#ff7a4d';
+  ctx.beginPath(); ctx.arc(mx, my, 5, 0, Math.PI * 2); ctx.fill();
 }
 
 const geomagToggles = [
@@ -4470,6 +4552,113 @@ geomagToggles.forEach(([id, statId, apply]) => {
     updateSunUniform();
   });
 });
+
+// ---- N en S bij de uiteinden van de assen --------------------
+//
+// HTML-labels in de bestaande overlay-laag, niet three-globe's `labelsData`: die
+// bouwt echte tekstgeometrie en herbouwt bij elke aanroep óók alle landnamen, wat
+// in sessie 9 gemeten is op p90 357 ms. Het patroon hier is dat van de
+// zonnevlek-labels, die al een punt projecteren dat NIET op het aardoppervlak ligt.
+const axisLabels = [
+  { as: 'rot', teken:  1, tekst: 'N', kleur: '#8fa3bd' },
+  { as: 'rot', teken: -1, tekst: 'S', kleur: '#8fa3bd' },
+  { as: 'dip', teken:  1, tekst: 'N', kleur: '#ff7a4d' },
+  { as: 'dip', teken: -1, tekst: 'S', kleur: '#ff7a4d' }
+].map(l => {
+  const el = document.createElement('div');
+  el.className = 'alabel';
+  el.textContent = l.tekst;
+  el.style.color = l.kleur;
+  labelLayer.appendChild(el);
+  return Object.assign(l, { el });
+});
+
+const _axDir = new THREE.Vector3(), _axPos = new THREE.Vector3(), _axCam = new THREE.Vector3();
+const _axMid = new THREE.Vector3();
+
+// DE PUNT VAN DE AS VALT VAAK BUITEN BEELD, en dat is geen randgeval. De stompjes
+// steken 34% van de straal uit, dus bij een bol die het scherm vult ligt de punt
+// tegen de rand — gemeten op 13 px van de bovenkant bij een viewport van 1200x900.
+// Daar liggen de masthead (z-index 10) en de weergave-wissel (z-index 11) overheen,
+// dus een label daar is niet klein maar onzichtbaar.
+//
+// Oplossing: het label schuift langs de AS-LIJN naar binnen tot het in het veilige
+// vlak valt. Het blijft daarmee op de as staan in plaats van ergens los te zweven,
+// en het verdwijnt niet zodra je inzoomt. De bovenrand is ruimer dan de rest omdat
+// de wissel tot y = 49 reikt.
+const AXIS_LABEL_INSET = { top: 60, side: 12, bottom: 12 };
+let _axLabelsUit = false;
+function clampNaarVlak(cx, cy, tx, ty) {
+  const l = AXIS_LABEL_INSET.side, r = window.innerWidth - AXIS_LABEL_INSET.side;
+  const t = AXIS_LABEL_INSET.top, b = window.innerHeight - AXIS_LABEL_INSET.bottom;
+  if (cx < l || cx > r || cy < t || cy > b) return null;   // middelpunt zelf al weg
+  let f = 1;
+  const grens = (waarde, van, naar) => {
+    if (naar === van) return;
+    const k = (waarde - van) / (naar - van);
+    if (k >= 0 && k < f) f = k;
+  };
+  if (tx < l) grens(l, cx, tx); else if (tx > r) grens(r, cx, tx);
+  if (ty < t) grens(t, cy, ty); else if (ty > b) grens(b, cy, ty);
+  return [cx + (tx - cx) * f, cy + (ty - cy) * f];
+}
+
+function positionAxisLabels(cam) {
+  // Deze guard beschermt óók `axisLabels` hierboven: die const staat vóór het
+  // init-blok dat `geomag` vult, dus zolang geomag null is bestaat de lijst al.
+  if (!geomag) return;
+  const rotAan = geomag.meshes.rotGroup.visible;
+  const dipAan = geomag.meshes.dipGroup.visible;
+  // Beide assen staan standaard uit, en dan hoort deze functie per frame niets te
+  // kosten. Zonder deze uitgang doet hij nog altijd een project() voor het
+  // ankerpunt. `_uit` onthoudt of de labels al verborgen zijn, zodat we niet elke
+  // frame naar de DOM schrijven.
+  if (!rotAan && !dipAan) {
+    if (!_axLabelsUit) {
+      axisLabels.forEach(l => { l.el.style.display = 'none'; });
+      _axLabelsUit = true;
+    }
+    return;
+  }
+  _axLabelsUit = false;
+  const camLen = cam.position.length();
+  const R = geomag.config.earthRadius;
+  const tipR = geomag.axisTipRadius;
+
+  // DE HORIZON LIGT HIER VERDER DAN BIJ nearSide(). Die toets (dot > R/|cam|) geldt
+  // voor een punt ÓP de bol; een punt op straal 134 steekt over de horizon heen en
+  // blijft dus langer zichtbaar. De exacte grens is de som van twee raakhoeken:
+  //   zichtbaar  <=>  hoek(P, cam) < acos(R/|P|) + acos(R/|cam|)
+  // De oude toets is daar het bijzondere geval van met |P| = R, waar de eerste term
+  // nul wordt. |P| ligt vast, dus die acos kost per frame niets.
+  const drempel = camLen > R
+    ? Math.cos(Math.acos(R / tipR) + Math.acos(R / camLen))
+    : 1;   // camera binnen de bol: niets tonen
+  _axCam.copy(cam.position).divideScalar(camLen || 1);
+
+  // Het aardmiddelpunt op het scherm: het ankerpunt waar het label naartoe schuift
+  // als de punt buiten beeld valt. Elke as-lijn loopt hier doorheen.
+  _axMid.set(0, 0, 0).project(cam);
+  const midX = (_axMid.x * 0.5 + 0.5) * window.innerWidth;
+  const midY = (-_axMid.y * 0.5 + 0.5) * window.innerHeight;
+
+  for (const l of axisLabels) {
+    const aan = l.as === 'rot' ? rotAan : dipAan;
+    if (!aan) { l.el.style.display = 'none'; continue; }
+    _axDir.copy(l.as === 'rot' ? geomag.rotationAxisVector : geomag.dipoleAxisVector)
+          .multiplyScalar(l.teken);
+    if (_axDir.dot(_axCam) <= drempel) { l.el.style.display = 'none'; continue; }
+    _axPos.copy(_axDir).multiplyScalar(tipR).project(cam);
+    const x = (_axPos.x * 0.5 + 0.5) * window.innerWidth;
+    const y = (-_axPos.y * 0.5 + 0.5) * window.innerHeight;
+    const p = clampNaarVlak(midX, midY, x, y);
+    if (!p) { l.el.style.display = 'none'; continue; }
+    l.el.style.display = 'block';
+    // Geen zoom-schaling: .rlabel doet die ook niet, en labelScaleMin/Max staan op
+    // 0,95 en 1,1, dus er valt niets te winnen.
+    l.el.style.transform = 'translate(' + p[0] + 'px, ' + p[1] + 'px) translate(-50%, -50%)';
+  }
+}
 
 // ============================================================
 //  Cosmos-tab — zon en maan (sessie 14, deel 1)
