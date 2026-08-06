@@ -665,6 +665,16 @@
   /* Een readout-waarde die een voorbehoud draagt. Zelfde geel als #time-val.shifted
      en om dezelfde reden: het zegt "wat je ziet is niet het gemetene". Die regel zat
      aan een id vast en was dus niet herbruikbaar; dit is de gedeelde vorm. */
+  /* Conditioneel paneel. De klasse staat op `body` en niet op de sectie, zodat
+     later ook andere plekken op de state kunnen reageren zonder een tweede vlag. */
+  .magneto-only { display: none; }
+  body.magneto-on .magneto-only { display: block; }
+  body.magneto-on .earth-only { display: none; }
+  .magneto-uitleg {
+    margin: 10px 0 0; font-size: 11px; line-height: 1.5; color: var(--ink-faint);
+  }
+  #magneto-btn { margin-top: 2px; }
+  body.magneto-on #magneto-btn { border-color: var(--quake); color: var(--ink); }
   .readout-warn { color: #ffd166; }
   .readout-note { display: block; color: var(--ink-faint); margin-top: 2px; }
   /* De tijdkiezer. `.shifted` is de niet te missen markering dat de scene een ander

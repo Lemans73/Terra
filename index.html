@@ -457,6 +457,22 @@
       <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
       <div class="acc-body">
+      <!-- CONDITIONEEL PANEEL. `body.magneto-on` schakelt tussen twee sets: buiten
+      de state de laagschakelaars, binnen de state de camerastanden. Wat in een
+      stand niets doet hoort er ook niet te staan. De knop naar buiten staat
+      bovenaan en valt buiten beide sets, zodat hij altijd zichtbaar is. -->
+      <button class="apply" id="magneto-btn">Enter magneto view</button>
+      <div class="magneto-only">
+      <p class="magneto-uitleg">The Earth in space, tilted by its real 23.4&#176; obliquity.
+      Panning only moves your viewpoint; the timeline drives the motion.</p>
+      <h3>View</h3>
+      <div class="presets" id="magneto-views">
+      <button class="preset active" data-view="meridian">Meridian</button>
+      <button class="preset" data-view="top">Top</button>
+      <button class="preset" data-view="3d">3D</button>
+      </div>
+      </div>
+      <div class="earth-only">
       <div class="elayer" id="rotaxis-toggle"><span class="edot"></span>Rotation axis<span class="estat" id="es-rotaxis">off</span></div>
       <div class="elayer expandable" id="magaxis-toggle">
       <span class="edot"></span>Magnetic axis
@@ -480,6 +496,7 @@
       geocentric value shown here.
       </div>
       <div class="elayer" id="magdrift-toggle"><span class="edot"></span>Pole drift 1900&#8211;2030<span class="estat" id="es-magdrift">off</span></div>
+      </div>
       <dl class="cosmos-readout">
       <dt>Geomagnetic north</dt>
       <dd id="gm-north">&#8212;</dd>
@@ -1058,6 +1075,9 @@ import { createSunMoonLayer } from './js/sunmoon-layer.js';
 import { poleDriftTrack, driftSindsEpoche, MODEL_NAAM, MODEL_VASTGESTELD,
          MODEL_HERZIENING, LAATSTE_EPOCHE } from './js/geomag.js';
 import { createGeomagLayer } from './js/geomag-layer.js';
+// Het magneto-perspectief. Eigen module met dependency-injection, zoals
+// modes/expert.js: de state hoort niet inline in dit bestand thuis.
+import { createMagnetoMode } from './js/modes/magneto.js';
 // Deskundig (schematische) weergavemodus (Fase 1).
 import { enterExpertMode, exitExpertMode } from './js/modes/expert.js';
 // Schematische datalaag-symbolen voor de deskundig-modus (Fase 2).
@@ -2491,6 +2511,9 @@ let geomag = null;
 // updateSunUniform(), en dat is precies het pad dat al tijdens de opbouw van de
 // scene loopt. Een `let` verderop zou daar in de temporal dead zone zitten.
 let _polarSpoor = null;
+// Het magneto-perspectief. Zelfde TDZ-afspraak als sunMoon en geomag.
+let magneto = null;
+let magnetoView = false;
 let sunLight = null;        // globe.gl's eigen DirectionalLight, opgezocht bij init
 let lastEphemeris = null;   // laatste efemeride, voor de readout
 // Verschuiving van de tijdkiezer, in ms ten opzichte van nu. 0 = het heden.
@@ -2882,6 +2905,10 @@ function updateSunUniform() {
   // De geomagnetische assen hangen aan dezelfde tick, dezelfde tijdkiezer en
   // dezelfde afspeellus als zon en maan; ze hoeven daarvoor niets eigens.
   if (geomag) geomag.update(now);
+  // De oriëntatie van het magneto-perspectief hangt aan gast en de scheefstand, en
+  // die zitten allebei in deze efemeride. Bijwerken ook als de state uit staat is
+  // goedkoop (één quaternion) en houdt de camerastanden meteen klopend.
+  if (magneto) magneto.update(eph);
   updateGeomagReadout();
 
   updateCosmosReadout();
@@ -4600,6 +4627,88 @@ geomagToggles.forEach(([id, statId, apply]) => {
   });
 });
 
+// ---- Het magneto-perspectief ---------------------------------
+//
+// Boekhouding naar het model van setSunView(): bewaar wat je overneemt, zet het
+// uit, en geef het bij het verlaten exact terug. Twee plekken die hetzelfde
+// bewaren lopen gegarandeerd uiteen, dus de scene-inhoud zit in
+// js/modes/magneto.js en de camera en het paneel blijven hier.
+const _magnetoPrev = { pos: null, target: null, min: 0, max: 0,
+                       labels: true, autoRotate: false, mode: 'realistic' };
+const MAGNETO_AFSTAND = 340;      // ruim genoeg voor de as-stompjes op 134
+
+function magnetoAfstandNu() {
+  const ctl = world.controls();
+  return Math.min(Math.max(world.camera().position.length(), ctl.minDistance), ctl.maxDistance);
+}
+
+function setMagnetoView(on, opties) {
+  if (!magneto || !geomag || on === magnetoView) return;
+  const vlieg = !opties || opties.vlieg !== false;
+  const ctl = world.controls(), cam = world.camera();
+  if (on) {
+    _magnetoPrev.pos = cam.position.clone();
+    _magnetoPrev.target = ctl.target.clone();
+    _magnetoPrev.min = ctl.minDistance;
+    _magnetoPrev.max = ctl.maxDistance;
+    _magnetoPrev.labels = labelsOn;
+    _magnetoPrev.autoRotate = autoRotateWanted;
+    _magnetoPrev.mode = globeMode;
+    // De bevingslabels wijzen naar plekken op een aarde die hier niet staat. Alleen
+    // de WEERGAVE gaat uit; de adapters blijven gewoon pollen.
+    labelsOn = false;
+    // Auto-rotate draait om wereld-omhoog. Met een gekantelde aarde is dat geen
+    // draaiing maar een TOLBEWEGING, precies het tegenovergestelde van wat deze
+    // state laat zien. De dagelijkse draaiing komt hier uit de tijd, niet uit de
+    // besturing.
+    setAutoRotate(false);
+    syncViewToggles();
+    magneto.enter({ world, extraGroups: [geomag.group, sunMoon && sunMoon.group] });
+    // De zon/maan-laag gaat in zijn geheel mee en blijft zoals de bezoeker hem had
+    // staan. Bewust NIET selectief uitzetten: die laag heeft zijn eigen schakelaars
+    // met hun eigen stand, en die hier overschrijven vraagt om een tweede
+    // boekhouding die vanzelf uit de pas gaat lopen met de eerste.
+    ctl.minDistance = 180;
+    ctl.maxDistance = 1400;
+    const v = magneto.viewFor('meridian', geomag.dipoleAxisVector, MAGNETO_AFSTAND);
+    if (vlieg) flyCamera(cam, ctl, v.pos, v.doel, { min: 180, max: 1400 });
+  } else {
+    magneto.exit({ world, scene: world.scene(),
+                   extraGroups: [geomag.group, sunMoon && sunMoon.group] });
+    labelsOn = _magnetoPrev.labels;
+    setAutoRotate(_magnetoPrev.autoRotate);
+    syncViewToggles();
+    if (vlieg) {
+      flyCamera(cam, ctl, _magnetoPrev.pos, _magnetoPrev.target,
+                { min: _magnetoPrev.min, max: _magnetoPrev.max });
+    } else {
+      sunFlight.actief = false;
+      ctl.minDistance = _magnetoPrev.min;
+      ctl.maxDistance = _magnetoPrev.max;
+      ctl.target.x = 0; ctl.target.y = 0; ctl.target.z = 0;
+    }
+  }
+  magnetoView = on;
+  document.body.classList.toggle('magneto-on', on);
+  const btn = document.getElementById('magneto-btn');
+  if (btn) btn.textContent = on ? 'Back to Earth' : 'Enter magneto view';
+}
+
+function magnetoGaNaar(naam) {
+  if (!magnetoView || !magneto || !geomag) return;
+  const v = magneto.viewFor(naam, geomag.dipoleAxisVector, magnetoAfstandNu());
+  const ctl = world.controls();
+  flyCamera(world.camera(), ctl, v.pos, v.doel,
+            { min: ctl.minDistance, max: ctl.maxDistance });
+  document.querySelectorAll('#magneto-views .preset').forEach(b =>
+    b.classList.toggle('active', b.dataset.view === naam));
+}
+
+document.getElementById('magneto-btn')?.addEventListener('click',
+  () => setMagnetoView(!magnetoView));
+document.querySelectorAll('#magneto-views .preset').forEach(b =>
+  b.addEventListener('click', () => magnetoGaNaar(b.dataset.view)));
+
 // ---- N en S bij de uiteinden van de assen --------------------
 //
 // HTML-labels in de bestaande overlay-laag, niet three-globe's `labelsData`: die
@@ -5971,6 +6080,12 @@ world.scene().add(sunMoon.group);
 // hierboven, en niet omdat de volgorde toevallig zo uitkwam.
 geomag = createGeomagLayer(THREE, { earthRadius: 100 });
 world.scene().add(geomag.group);
+
+// Het magneto-perspectief. De groep hangt altijd in de scene maar staat op
+// `visible = false` tot de state aangaat; zo hoeft er bij het instappen niets
+// gebouwd te worden.
+magneto = createMagnetoMode(THREE, { earthRadius: 100 });
+world.scene().add(magneto.group);
 
 // globe.gl's eigen DirectionalLight opzoeken. Terra's code voegt geen enkel licht
 // toe; globe.gl zet er twee neer (AmbientLight PI en DirectionalLight 0,6·PI op

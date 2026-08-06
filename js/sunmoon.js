@@ -425,4 +425,4 @@ export function latLonToUnit(lat, lon) {
 }
 
 export { norm180, norm360, gmstDeg, gastDeg, sunPosition, moonPosition,
-         julianDay, deltaTSeconds, DEG };
+         julianDay, deltaTSeconds, meanObliquity, DEG };
