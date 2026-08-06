@@ -669,7 +669,6 @@
      later ook andere plekken op de state kunnen reageren zonder een tweede vlag. */
   .magneto-only { display: none; }
   body.magneto-on .magneto-only { display: block; }
-  body.magneto-on .earth-only { display: none; }
   .magneto-uitleg {
     margin: 10px 0 0; font-size: 11px; line-height: 1.5; color: var(--ink-faint);
   }

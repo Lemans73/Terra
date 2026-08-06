@@ -464,15 +464,19 @@
       <button class="apply" id="magneto-btn">Enter magneto view</button>
       <div class="magneto-only">
       <p class="magneto-uitleg">The Earth in space, tilted by its real 23.4&#176; obliquity.
-      Panning only moves your viewpoint; the timeline drives the motion.</p>
+      Meridian and Top are locked to the Earth&#8211;Sun plane, so the Earth turns
+      beneath a Sun that stays put.</p>
       <h3>View</h3>
       <div class="presets" id="magneto-views">
       <button class="preset active" data-view="meridian">Meridian</button>
       <button class="preset" data-view="top">Top</button>
       <button class="preset" data-view="3d">3D</button>
       </div>
+      <p class="magneto-uitleg" id="magneto-lock"></p>
       </div>
-      <div class="earth-only">
+      <!-- De laagschakelaars staan BUITEN de state-wissel: ze horen in beide
+      standen te werken. Ze eerst uitzetten en dan de state in moeten is geen
+      keuze maar een omweg. -->
       <div class="elayer" id="rotaxis-toggle"><span class="edot"></span>Rotation axis<span class="estat" id="es-rotaxis">off</span></div>
       <div class="elayer expandable" id="magaxis-toggle">
       <span class="edot"></span>Magnetic axis
@@ -496,7 +500,6 @@
       geocentric value shown here.
       </div>
       <div class="elayer" id="magdrift-toggle"><span class="edot"></span>Pole drift 1900&#8211;2030<span class="estat" id="es-magdrift">off</span></div>
-      </div>
       <dl class="cosmos-readout">
       <dt>Geomagnetic north</dt>
       <dd id="gm-north">&#8212;</dd>
@@ -2909,6 +2912,10 @@ function updateSunUniform() {
   // die zitten allebei in deze efemeride. Bijwerken ook als de state uit staat is
   // goedkoop (één quaternion) en houdt de camerastanden meteen klopend.
   if (magneto) magneto.update(eph);
+  // In een vastgezette stand loopt de camera mee: het meridiaanvlak volgt de zon,
+  // en die schuift bijna een graad per dag op. Zonder dit klopt de doorsnede na een
+  // paar dagen afspelen niet meer, terwijl hij er nog wel zo uitziet.
+  if (typeof magnetoHerplaats === 'function') magnetoHerplaats();
   updateGeomagReadout();
 
   updateCosmosReadout();
@@ -4642,6 +4649,42 @@ function magnetoAfstandNu() {
   return Math.min(Math.max(world.camera().position.length(), ctl.minDistance), ctl.maxDistance);
 }
 
+// De richting naar de zon in WERELDruimte. Uit de mesh zelf en niet opnieuw
+// afgeleid uit de efemeride: dan kan wat de camera aanhoudt per constructie niet
+// uiteenlopen met wat er te zien is.
+const _magZon = new THREE.Vector3();
+function magnetoZonWereld() {
+  if (!sunMoon) return _magZon.set(1, 0, 0);
+  sunMoon.meshes.sunGroup.getWorldPosition(_magZon);
+  return _magZon.lengthSq() > 1e-9 ? _magZon.normalize() : _magZon.set(1, 0, 0);
+}
+
+// Welke stand er gekozen is. `meridian` en `top` zijn VASTGEZET ten opzichte van de
+// aarde en de zon: daar mag je alleen zoomen, niet om de bol heen draaien, en de
+// camera wordt bij elke tijdstap opnieuw op zijn plek gezet. In 3D is de camera van
+// de bezoeker en laten we hem met rust.
+let magnetoStand = 'meridian';
+const MAGNETO_VAST = { meridian: true, top: true, '3d': false };
+
+// Zet de camera terug op de stand die bij `magnetoStand` hoort, met behoud van de
+// afstand die de bezoeker heeft ingezoomd. Draait mee met de tijd, want het
+// meridiaanvlak volgt de zon en die schuift bijna een graad per dag op.
+function magnetoHerplaats() {
+  if (!magnetoView || !magneto || !MAGNETO_VAST[magnetoStand] || sunFlight.actief) return;
+  const cam = world.camera(), ctl = world.controls();
+  const v = magneto.viewFor(magnetoStand, magnetoZonWereld(), magnetoAfstandNu());
+  cam.position.copy(v.pos);
+  ctl.target.x = 0; ctl.target.y = 0; ctl.target.z = 0;
+}
+
+// De besturing hoort bij de stand: in een vastgezette doorsnede is ronddraaien
+// precies wat je niet wilt, want dan is het geen doorsnede meer.
+function magnetoControls() {
+  const ctl = world.controls();
+  if (!ctl) return;
+  ctl.enableRotate = !magnetoView || !MAGNETO_VAST[magnetoStand];
+}
+
 function setMagnetoView(on, opties) {
   if (!magneto || !geomag || on === magnetoView) return;
   const vlieg = !opties || opties.vlieg !== false;
@@ -4670,8 +4713,10 @@ function setMagnetoView(on, opties) {
     // boekhouding die vanzelf uit de pas gaat lopen met de eerste.
     ctl.minDistance = 180;
     ctl.maxDistance = 1400;
-    const v = magneto.viewFor('meridian', geomag.dipoleAxisVector, MAGNETO_AFSTAND);
+    magnetoStand = 'meridian';
+    const v = magneto.viewFor(magnetoStand, magnetoZonWereld(), MAGNETO_AFSTAND);
     if (vlieg) flyCamera(cam, ctl, v.pos, v.doel, { min: 180, max: 1400 });
+    else cam.position.copy(v.pos);
   } else {
     magneto.exit({ world, scene: world.scene(),
                    extraGroups: [geomag.group, sunMoon && sunMoon.group] });
@@ -4690,18 +4735,37 @@ function setMagnetoView(on, opties) {
   }
   magnetoView = on;
   document.body.classList.toggle('magneto-on', on);
+  magnetoControls();
+  markeerMagnetoStand();
   const btn = document.getElementById('magneto-btn');
   if (btn) btn.textContent = on ? 'Back to Earth' : 'Enter magneto view';
 }
 
-function magnetoGaNaar(naam) {
-  if (!magnetoView || !magneto || !geomag) return;
-  const v = magneto.viewFor(naam, geomag.dipoleAxisVector, magnetoAfstandNu());
-  const ctl = world.controls();
-  flyCamera(world.camera(), ctl, v.pos, v.doel,
-            { min: ctl.minDistance, max: ctl.maxDistance });
+function markeerMagnetoStand() {
   document.querySelectorAll('#magneto-views .preset').forEach(b =>
-    b.classList.toggle('active', b.dataset.view === naam));
+    b.classList.toggle('active', b.dataset.view === magnetoStand));
+  const noot = document.getElementById('magneto-lock');
+  if (noot) noot.textContent = MAGNETO_VAST[magnetoStand]
+    ? 'Locked to the Earth–Sun plane — zoom only.'
+    : 'Free orbit.';
+}
+
+function magnetoGaNaar(naam, opties) {
+  if (!magnetoView || !magneto) return;
+  magnetoStand = naam;
+  const v = magneto.viewFor(naam, magnetoZonWereld(), magnetoAfstandNu());
+  const ctl = world.controls(), cam = world.camera();
+  if (opties && opties.vlieg === false) {
+    // Zonder vlucht: meteen neerzetten. Nodig zodra iets anders de camera al
+    // stuurt, en het houdt deze functie symmetrisch met setMagnetoView().
+    sunFlight.actief = false;
+    cam.position.copy(v.pos);
+    ctl.target.x = 0; ctl.target.y = 0; ctl.target.z = 0;
+  } else {
+    flyCamera(cam, ctl, v.pos, v.doel, { min: ctl.minDistance, max: ctl.maxDistance });
+  }
+  magnetoControls();
+  markeerMagnetoStand();
 }
 
 document.getElementById('magneto-btn')?.addEventListener('click',
@@ -4801,7 +4865,13 @@ function positionAxisLabels(cam) {
   for (const l of axisLabels) {
     const aan = l.as === 'rot' ? rotAan : dipAan;
     if (!aan) { l.el.style.display = 'none'; continue; }
+    // DOOR DE WERELDMATRIX, niet de kale vector. Beide assen zijn LOKAAL aan
+    // geomag.group, en die groep hangt in het magneto-perspectief onder een
+    // gekantelde, meedraaiende ouder. Zonder deze omrekening bleven de letters op
+    // hun ongekantelde plek staan terwijl de assen wel meebewogen.
+    // `transformDirection` neemt alleen de rotatie mee en normaliseert.
     _axDir.copy(l.as === 'rot' ? geomag.rotationAxisVector : geomag.dipoleAxisVector)
+          .transformDirection(geomag.group.matrixWorld)
           .multiplyScalar(l.teken);
     if (_axDir.dot(_axCam) <= drempel) { l.el.style.display = 'none'; continue; }
     _axPos.copy(_axDir).multiplyScalar(tipR).project(cam);

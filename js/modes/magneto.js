@@ -149,26 +149,41 @@ export function createMagnetoMode(THREE, opts = {}) {
      niet het sleepgedrag, wat een scheve besturing oplevert. En het is hier
      overbodig: de hoek tussen twee lijnen op het scherm verandert niet door een
      rol, dus voor het aflezen maakt de stand van "boven" niets uit. */
-  const _v = new THREE.Vector3(), _n = new THREE.Vector3();
+  const _v = new THREE.Vector3(), _n = new THREE.Vector3(), _as = new THREE.Vector3();
 
-  function viewFor(naam, dipoolAsLokaal, afstand) {
+  // De rotatie-as in WERELDruimte. Die verandert niet met de dagelijkse draaiing:
+  // rotY(gast) laat +Y met rust en alleen de kanteling werkt erop. Daarom is elke
+  // stand die hierop steunt vanzelf stabiel over een etmaal.
+  function rotatieAsWereld(target = _as) {
+    return target.set(0, 1, 0).applyQuaternion(group.quaternion);
+  }
+
+  /* `zonWereld` is de richting naar de zon in wereldruimte, genormaliseerd.
+     Hij hoort er voor `meridian` bij en niet optioneel: zonder hem valt die stand
+     terug op iets dat met de aarde meedraait. */
+  function viewFor(naam, zonWereld, afstand) {
     const doel = new THREE.Vector3(0, 0, 0);
     if (naam === 'top') {
-      // Recht langs de rotatie-as van boven. De dipool wijkt daar zichtbaar van af
-      // en het driftspoor ligt op ware grootte in beeld.
-      const pos = _v.set(0, 1, 0).applyQuaternion(group.quaternion)
-        .multiplyScalar(afstand).clone();
-      return { pos, doel };
+      // Recht langs de rotatie-as van boven. Die as staat stil in wereldruimte,
+      // dus deze stand blijft vanzelf staan terwijl de aarde eronder doordraait.
+      return { pos: rotatieAsWereld().multiplyScalar(afstand).clone(), doel };
     }
     if (naam === 'meridian') {
-      // Loodrecht op het vlak waarin beide assen liggen. Dán, en alleen dan, is de
-      // hoek tussen de assen op het scherm de ECHTE hoek — in elke andere stand
-      // kijk je er schuin tegenaan en lees je hem te klein af.
-      _n.crossVectors(_v.set(0, 1, 0), dipoolAsLokaal);
-      if (_n.lengthSq() < 1e-12) _n.set(1, 0, 0);      // assen samenvallend: kies iets
-      const pos = _n.normalize().applyQuaternion(group.quaternion)
-        .multiplyScalar(afstand).clone();
-      return { pos, doel };
+      /* HET NOON-MIDNIGHT MERIDIAANVLAK, oftewel GSM X-Z: het vlak door de
+         aarde-zonlijn en de rotatie-as. Dat is de standaard doorsnede in
+         magnetosfeerwerk, en het is de enige die stil blijft staan: beide
+         richtingen liggen vast in wereldruimte, dus de aarde draait erin rond
+         terwijl de zon links of rechts blijft hangen.
+
+         NIET het vlak door de twee ASSEN, wat de eerste versie deed. De dipoolas
+         ligt vast in het aardvaste frame en zwaait dus in wereldruimte een kegel
+         rond per etmaal; een camera daarop draait mee en dan beweegt de zon. */
+      rotatieAsWereld();
+      _n.crossVectors(_as, zonWereld);
+      // Zon pal boven de pool bestaat niet, maar bij een lege of ontaarde richting
+      // moet er toch iets bruikbaars uitkomen.
+      if (_n.lengthSq() < 1e-12) _n.set(1, 0, 0);
+      return { pos: _n.normalize().multiplyScalar(afstand).clone(), doel };
     }
     // 3D: schuin van opzij en iets van boven, zodat je meteen ziet dat het ruimte is.
     const pos = _v.set(0.72, 0.45, 0.53).normalize()
