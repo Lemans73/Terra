@@ -446,14 +446,22 @@
       </div>
       </section>
 
-      <!-- ---------- MAGNETISCH VELD ----------
+      <!-- ---------- DE ASSEN VAN DE AARDE ----------
            Eigen sectie en geen rij bij Earth overlays: dat zijn statische
            kaartlagen zonder teller, terwijl deze berekend zijn, met het moment
            meebewegen en een readout dragen. Een eigen tab kan niet, de tabrij zit
-           vol op vier (gemeten sessie 17). -->
-      <section class="acc" data-acc="geomag-layers">
+           vol op vier (gemeten sessie 17).
+
+           TWEE SECTIES sinds sessie 19, en dat is geen cosmetica: de rotatie-as
+           stond in een blok dat "Magnetic field" heet, en polar motion — de
+           wiebeling van juist die as — maakte dat onhoudbaar. Wat hier staat is de
+           DRAAIING; het magnetische veld staat in de sectie eronder.
+
+           De magneto-knop hoort hier omdat die state de scheefstand van 23,4 graden
+           toont, en dat is een eigenschap van de rotatie-as. -->
+      <section class="acc" data-acc="rot-axis">
       <button class="acc-head" type="button" aria-expanded="false">
-      <span>Magnetic field</span>
+      <span>Earth&#8217;s axis</span>
       <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
       <div class="acc-body">
@@ -478,6 +486,70 @@
       standen te werken. Ze eerst uitzetten en dan de state in moeten is geen
       keuze maar een omweg. -->
       <div class="elayer" id="rotaxis-toggle"><span class="edot"></span>Rotation axis<span class="estat" id="es-rotaxis">off</span></div>
+      <div class="elayer expandable" id="polarmotion-toggle">
+      <span class="edot"></span>Polar motion
+      <button class="row-expand" data-note="polarmotion-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <span class="estat" id="es-polarmotion">off</span>
+      </div>
+      <div class="layer-detail" id="polarmotion-note">
+      The rotation axis does not sit still in the crust. It spirals around a mean
+      position: the <b>Chandler wobble</b>, a free nutation with a period of about
+      1.19 years, plus an annual term driven by water, snow and air moving around
+      the planet.
+      <br /><br />
+      The scale is the whole story. The pole travels roughly <b>25 metres a year</b>
+      but never gets further than about <b>20 metres</b> from home &#8212; a spiral
+      inside a circle 40 m across. That is why this is a plot and not a correction
+      to the globe: at maximum zoom one pixel is 8.5 km, so the full wobble is
+      1/1055th of a pixel.
+      <br /><br />
+      Measured, not modelled. Values before 1962 carry an uncertainty of roughly
+      30&#160;mas &#8212; about a metre &#8212; so the early part of the long track
+      is rougher than it looks.
+      </div>
+      <!-- Alles hieronder hangt aan de schakelaar, en dat is niet cosmetisch: de
+      reeks is 225 KB en wordt pas opgehaald als de laag aangaat. Staat de rij uit,
+      dan raakt de app CelesTrak niet aan. `hidden` op een kale div is veilig — er
+      staat geen eigen `display` op, dus de user-agent-regel wint (les sessie 14). -->
+      <div id="pm-block" hidden>
+      <!-- Vensterkeuze. Het venster is een PLOTINSTELLING en geen app-staat: het
+      raakt de tijdkiezer niet en de scene niet. Vandaar losse knoppen in het
+      idioom van de trackvensters, en geen tweede tijdmachine. -->
+      <div class="presets" id="pm-windows">
+      <button class="preset" data-pm="51">51 d</button>
+      <button class="preset active" data-pm="365">1 yr</button>
+      <button class="preset" data-pm="1825">5 yr</button>
+      <button class="preset" data-pm="long">1900&#8211;</button>
+      </div>
+      <dl class="cosmos-readout">
+      <!-- De plot. Zelfde bouw als de maanfase en het poolbovenaanzicht: een vast
+      canvas dat klein wordt getoond, met één functie die volledig hertekent. Hij
+      is wél groter, want er moet een schaalbalk in — zonder die balk is een plot
+      van dit verschijnsel een leugen. -->
+      <dt id="pm-title">Path of the pole</dt>
+      <dd class="pm-row"><canvas id="pm-canvas" width="256" height="256" aria-hidden="true"></canvas></dd>
+      <dt>Pole offset</dt>
+      <dd id="pm-offset">&#8212;</dd>
+      <dt id="pm-travel-label">Travelled</dt>
+      <dd id="pm-travel">&#8212;</dd>
+      <dt>Length of day</dt>
+      <dd id="pm-lod">&#8212;</dd>
+      <dt>Data</dt>
+      <dd id="pm-source">&#8212;</dd>
+      </dl>
+      </div>
+      </div>
+      </section>
+
+      <!-- ---------- MAGNETISCH VELD ---------- -->
+      <section class="acc" data-acc="geomag-layers">
+      <button class="acc-head" type="button" aria-expanded="false">
+      <span>Magnetic field</span>
+      <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="acc-body">
       <div class="elayer expandable" id="magaxis-toggle">
       <span class="edot"></span>Magnetic axis
       <button class="row-expand" data-note="magaxis-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
@@ -1078,6 +1150,16 @@ import { createSunMoonLayer } from './js/sunmoon-layer.js';
 import { poleDriftTrack, driftSindsEpoche, MODEL_NAAM, MODEL_VASTGESTELD,
          MODEL_HERZIENING, LAATSTE_EPOCHE } from './js/geomag.js';
 import { createGeomagLayer } from './js/geomag-layer.js';
+// Earth Orientation Parameters: waar de rotatie-as werkelijk staat. Anders dan
+// geomag.js is dit géén model maar een METING, en dus de enige module hier met een
+// netwerkbron. Die wordt lui geladen — pas als de laag aangaat.
+//
+// LET OP: geen `import { x as y }`. Het buildscript strípt de importregels en plakt
+// de modules aan elkaar, dus een alias verwijst in de standalone naar niets. Vandaar
+// dat de exports hierin al `laadEOP`/`eopStatus`/`eopReeks` heten.
+import { laadEOP, eopStatus, eopReeks, eopPadLengte, polarMotionAt,
+         laadLangSpoor, langSpoorNu, langSpoorDrift, daglengteMs,
+         M_PER_ARCSEC } from './js/eop.js';
 // Het magneto-perspectief. Eigen module met dependency-injection, zoals
 // modes/expert.js: de state hoort niet inline in dit bestand thuis.
 import { createMagnetoMode } from './js/modes/magneto.js';
@@ -2514,6 +2596,13 @@ let geomag = null;
 // updateSunUniform(), en dat is precies het pad dat al tijdens de opbouw van de
 // scene loopt. Een `let` verderop zou daar in de temporal dead zone zitten.
 let _polarSpoor = null;
+// Polar motion. Exact dezelfde TDZ-afspraak, en om exact dezelfde reden: de plot
+// hangt aan updateSunUniform() zodat het rode punt de tijdkiezer volgt, en die
+// functie draait al tijdens de scene-opbouw. Stonden deze twee bij hun eigen code
+// 2000 regels lager, dan brak de module bij de eerste aanroep — de bug van sessie 11
+// en 14, voor de derde keer.
+let pmAan = false;
+let pmVenster = 365;          // dagen, of 'long' voor de jaargemiddelden sinds 1900
 // Het magneto-perspectief. Zelfde TDZ-afspraak als sunMoon en geomag.
 let magneto = null;
 let magnetoView = false;
@@ -2917,6 +3006,9 @@ function updateSunUniform() {
   // paar dagen afspelen niet meer, terwijl hij er nog wel zo uitziet.
   if (typeof magnetoHerplaats === 'function') magnetoHerplaats();
   updateGeomagReadout();
+  // Hangt aan dezelfde aanroep, zodat het rode punt de tijdkiezer volgt. Doet niets
+  // zolang de laag uit staat, en dat is de normale stand.
+  updatePolarMotion();
 
   updateCosmosReadout();
 }
@@ -4607,6 +4699,256 @@ function drawPolarView(d) {
   const [mx, my] = naarXY(d.north.lat, d.north.lon);
   ctx.fillStyle = '#ff7a4d';
   ctx.beginPath(); ctx.arc(mx, my, 5, 0, Math.PI * 2); ctx.fill();
+}
+
+// ============================================================
+//  Polar motion — de wiebeling van de rotatie-as (sessie 19)
+// ------------------------------------------------------------
+//  DIT IS DE ENIGE LAAG ZONDER GEOMETRIE, en dat is de kern van het ontwerp. De
+//  volle wobble is 8 meter aan het oppervlak; bij maximale inzoom is één pixel
+//  8527 m, dus er valt letterlijk niets te tekenen op de bol. Wat er wél is, is
+//  een plot op zijn eigen schaal — precies zoals IERS en USNO die publiceren.
+//
+//  ORIËNTATIE, en die volgt bewust de gepubliceerde plots en NIET drawPolarView()
+//  hierboven: x naar rechts (richting Greenwich), y naar BENEDEN (richting 90 graden
+//  west). Zo is deze plot één op één te leggen naast de figuren van USNO en IERS,
+//  en dat is meer waard dan interne consistentie met het poolbovenaanzicht — dat
+//  laatste is een kaart, dit is een grafiek.
+// ============================================================
+
+// `pmAan` en `pmVenster` staan bovenaan bij de scene-state — zie de TDZ-noot daar.
+
+function pmZet(id, tekst) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = tekst;
+}
+
+// De ronde getallen voor de schaalbalk. Zonder balk zegt een spiraal niets: het
+// verschil tussen deze plot en die van de geomagnetische drift is een factor
+// honderdduizend, en dat zie je aan de vorm niet af.
+const PM_BALK_M = [0.5, 1, 2, 5, 10, 20, 50, 100];
+
+function drawPolarMotion(punten, huidig, lang) {
+  const c = document.getElementById('pm-canvas');
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  const W = c.width, H = c.height;
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#111823';
+  ctx.fillRect(0, 0, W, H);
+  ctx.font = '11px ui-monospace, SFMono-Regular, Menlo, monospace';
+  ctx.textBaseline = 'alphabetic';
+
+  if (!punten || punten.length < 2) {
+    ctx.fillStyle = 'rgba(125,138,160,0.7)';
+    ctx.textAlign = 'center';
+    ctx.fillText('no data for this window', W / 2, H / 2);
+    ctx.textAlign = 'left';
+    return;
+  }
+
+  // Omhullende, GELIJK geschaald in x en y. Een grafiek die beide assen apart
+  // uitrekt maakt van een cirkel een ellips, en juist de rondheid van de
+  // Chandler-wobble is wat er te zien valt.
+  const xs = punten.map(p => p.x), ys = punten.map(p => p.y);
+  const midX = (Math.min(...xs) + Math.max(...xs)) / 2;
+  const midY = (Math.min(...ys) + Math.max(...ys)) / 2;
+  const halve = Math.max(
+    (Math.max(...xs) - Math.min(...xs)) / 2,
+    (Math.max(...ys) - Math.min(...ys)) / 2,
+    1e-6
+  ) * 1.15;
+  const rand = 30;
+  const k = (Math.min(W, H) - 2 * rand) / 2 / halve;
+  const cx = W / 2, cy = H / 2;
+  const naarX = v => cx + (v - midX) * k;
+  const naarY = v => cy + (v - midY) * k;   // y naar BENEDEN, zie de kop
+
+  // Assenkruis door het midden van de wolk. Geen absoluut nulpunt: dat ligt bij een
+  // venster van 51 dagen ver buiten beeld en zou de hele plot samendrukken.
+  ctx.strokeStyle = 'rgba(125,138,160,0.14)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(rand, cy); ctx.lineTo(W - rand, cy);
+  ctx.moveTo(cx, rand); ctx.lineTo(cx, H - rand);
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(125,138,160,0.55)';
+  ctx.fillText('0°', W - rand + 4, cy - 4);
+  // Boven het einde van de verticale as en niet eronder: daar ligt de schaalbalk,
+  // en die twee stonden over elkaar heen.
+  ctx.fillText('90°W', cx + 5, H - rand - 4);
+
+  // Het spoor. Voorspelde punten gestippeld: de reeks loopt een half jaar vooruit en
+  // een voorspelling hoort niet als meting te lezen.
+  const teken = (van, tot, gestippeld) => {
+    if (tot - van < 1) return;
+    ctx.setLineDash(gestippeld ? [3, 3] : []);
+    ctx.strokeStyle = gestippeld ? 'rgba(126,212,255,0.45)' : 'rgba(126,212,255,0.85)';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(naarX(punten[van].x), naarY(punten[van].y));
+    for (let i = van + 1; i <= tot; i++) ctx.lineTo(naarX(punten[i].x), naarY(punten[i].y));
+    ctx.stroke();
+  };
+  let start = 0;
+  for (let i = 1; i < punten.length; i++) {
+    if (punten[i].type !== punten[start].type) {
+      // Eén punt overlap, anders zit er een gat tussen de twee stukken.
+      teken(start, i, punten[start].type === 'predicted');
+      start = i;
+    }
+  }
+  teken(start, punten.length - 1, punten[start].type === 'predicted');
+  ctx.setLineDash([]);
+
+  // Jaartallen op het lange spoor. Zonder die ankers is het een kronkel zonder
+  // richting; mét zie je in welke kant hij wegdrijft.
+  if (lang) {
+    ctx.fillStyle = 'rgba(125,138,160,0.8)';
+    for (const p of punten) {
+      if (p.jaar % 25) continue;
+      const x = naarX(p.x), y = naarY(p.y);
+      ctx.beginPath(); ctx.arc(x, y, 2.5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillText(String(p.jaar), x + 5, y + 4);
+    }
+  }
+
+  // Begin groen, gekozen moment rood — dezelfde codering als de USNO-plot.
+  const stip = (p, kleur, straal) => {
+    ctx.fillStyle = kleur;
+    ctx.beginPath(); ctx.arc(naarX(p.x), naarY(p.y), straal, 0, Math.PI * 2); ctx.fill();
+  };
+  stip(punten[0], '#4ade80', 3.5);
+  stip(huidig || punten[punten.length - 1], '#ff6b3d', 4);
+
+  // De schaalbalk. Kies de grootste ronde lengte die onder een derde van de
+  // plotbreedte blijft, zodat hij nooit met het spoor vecht.
+  const pxPerMeter = k / M_PER_ARCSEC;
+  const meters = [...PM_BALK_M].reverse().find(m => m * pxPerMeter < (W - 2 * rand) / 3)
+    || PM_BALK_M[0];
+  const lengte = meters * pxPerMeter;
+  const bx = rand, by = H - 12;
+  ctx.strokeStyle = 'rgba(200,210,225,0.75)';
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.moveTo(bx, by); ctx.lineTo(bx + lengte, by);
+  ctx.moveTo(bx, by - 3); ctx.lineTo(bx, by + 3);
+  ctx.moveTo(bx + lengte, by - 3); ctx.lineTo(bx + lengte, by + 3);
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(200,210,225,0.85)';
+  ctx.fillText(meters + ' m  ·  ' + Math.round(meters / M_PER_ARCSEC * 1000) + ' mas',
+               bx + lengte + 6, by + 4);
+}
+
+// De readout plus de plot. Wordt aangeroepen vanuit updateSunUniform(), dus hij
+// volgt de tijdkiezer: het rode punt schuift mee met het gekozen moment.
+function updatePolarMotion() {
+  if (!pmAan) return;
+  const st = eopStatus();
+  if (st.staat !== 'ok') {
+    drawPolarMotion(null);
+    pmZet('pm-offset', '—');
+    pmZet('pm-travel', '—');
+    pmZet('pm-lod', '—');
+    pmZet('pm-source', st.staat === 'laden' ? 'Loading…' : 'Unavailable — could not reach CelesTrak.');
+    return;
+  }
+  const nu = typeof momentNow === 'function' ? momentNow() : new Date();
+
+  if (pmVenster === 'long') {
+    const spoor = langSpoorNu();
+    // `type` erbij zodat de tekenlus dezelfde vorm ziet als bij de live reeks.
+    drawPolarMotion(spoor ? spoor.map(p => ({ ...p, type: 'observed' })) : null, null, true);
+    const d = langSpoorDrift();
+    pmZet('pm-title', 'Mean pole, yearly averages');
+    pmZet('pm-travel-label', 'Drift since ' + (d ? d.vanJaar : 1900));
+    pmZet('pm-travel', d
+      ? d.meter.toFixed(1) + ' m towards ' + Math.abs(Math.round(d.richting)) +
+        '°' + (d.richting < 0 ? 'W' : 'E') + ' — decade mean to decade mean'
+      : '—');
+  } else {
+    const van = new Date(nu.getTime() - pmVenster * 86400000);
+    const punten = eopReeks(van, nu);
+    const huidig = polarMotionAt(nu);
+    drawPolarMotion(punten, huidig, false);
+    pmZet('pm-title', 'Path of the pole, last ' +
+      (pmVenster === 51 ? '51 days' : pmVenster === 365 ? 'year' : '5 years'));
+    pmZet('pm-travel-label', 'Travelled in that window');
+    const weg = eopPadLengte(punten);
+    pmZet('pm-travel', weg
+      ? (weg * M_PER_ARCSEC).toFixed(1) + ' m  ·  ' + Math.round(weg * 1000) + ' mas'
+      : '—');
+  }
+
+  // De stand zelf, altijd op het gekozen moment — ook in het lange venster, want de
+  // vraag "waar staat hij nu" hoort niet van een plotinstelling af te hangen.
+  const p = polarMotionAt(nu);
+  if (p) {
+    const afstand = Math.hypot(p.x, p.y) * M_PER_ARCSEC;
+    pmZet('pm-offset', 'x ' + (p.x * 1000).toFixed(0) + ' mas · y ' +
+      (p.y * 1000).toFixed(0) + ' mas  (' + afstand.toFixed(1) + ' m from the origin)');
+    const lod = daglengteMs(nu);
+    pmZet('pm-lod', lod === null ? '—' : (lod >= 0 ? '+' : '−') +
+      Math.abs(lod).toFixed(3) + ' ms on 86,400 s');
+    pmHerkomst(p, st);
+  } else {
+    pmZet('pm-offset', 'outside the range of the series');
+    pmZet('pm-lod', '—');
+    pmHerkomst(null, st);
+  }
+}
+
+// Herkomst, zelfde vorm als toonHerkomst() bij het magnetische veld maar met de
+// omgekeerde betekenis: daar is alles model en is de meting er niet, hier is alles
+// meting behalve het stuk dat vooruit loopt.
+function pmHerkomst(p, st) {
+  const el = document.getElementById('pm-source');
+  if (!el) return;
+  el.innerHTML = '';
+  const voorspeld = p && p.type === 'predicted';
+  const kop = document.createElement('span');
+  kop.textContent = voorspeld
+    ? 'Predicted — beyond the last observation'
+    : 'Observed through ' + (st.laatsteObservatie || '—');
+  if (voorspeld) kop.className = 'readout-warn';
+  const noot = document.createElement('span');
+  noot.className = 'readout-note';
+  noot.textContent = 'IERS/USNO Earth orientation parameters, distributed by CelesTrak. ' +
+    'Daily values ' + st.van + ' to ' + st.tot + '. Not applied to the globe: at ' +
+    'maximum zoom the full wobble is about 1/1000th of a pixel.';
+  el.append(kop, noot);
+}
+
+// De schakelaar. Hij hoort NIET bij geomagToggles hieronder: die zetten
+// three.js-objecten aan of uit, deze haalt data op en toont een paneelblok. De
+// 225 KB van CelesTrak wordt pas hier opgehaald, niet bij het opstarten.
+{
+  const rij = document.getElementById('polarmotion-toggle');
+  const blok = document.getElementById('pm-block');
+  if (rij && blok) {
+    rij.addEventListener('click', async () => {
+      pmAan = !pmAan;
+      rij.classList.toggle('on', pmAan);
+      pmZet('es-polarmotion', pmAan ? 'on' : 'off');
+      blok.hidden = !pmAan;
+      if (!pmAan) return;
+      pmZet('pm-source', 'Loading…');
+      await laadEOP();
+      if (pmVenster === 'long') await laadLangSpoor();
+      updatePolarMotion();
+    });
+  }
+  document.querySelectorAll('#pm-windows .preset').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      document.querySelectorAll('#pm-windows .preset')
+        .forEach(b => b.classList.toggle('active', b === btn));
+      pmVenster = btn.dataset.pm === 'long' ? 'long' : +btn.dataset.pm;
+      // Het lange spoor is een apart bestand en wordt pas opgehaald als iemand er
+      // ook echt naar kijkt.
+      if (pmVenster === 'long') await laadLangSpoor();
+      updatePolarMotion();
+    });
+  });
 }
 
 const geomagToggles = [

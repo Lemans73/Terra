@@ -77,7 +77,7 @@ let lopend = null;         // de lopende fetch, zodat er nooit twee tegelijk zij
 let langSpoor = null;      // jaargemiddelden 1900-nu
 let langLopend = null;
 
-export function status() {
+export function eopStatus() {
   return {
     staat,
     punten: rijen ? rijen.length : 0,
@@ -92,7 +92,7 @@ export function status() {
 // LUI, en dat is een ontwerpkeuze: 225 KB hoort niet in de opstartkost van een app
 // die al 2,5 MB aan texturen laadt. Deze functie wordt aangeroepen als de sectie
 // opengaat of de laag aangaat, niet bij init.
-export async function laad() {
+export async function laadEOP() {
   const nu = Date.now();
   if (staat === 'ok' && nu - opgehaaldOp < VERVERS_MS) return true;
   if (staat === 'fout' && nu - mislukteOp < OPNIEUW_NA_FOUT_MS) return false;
@@ -191,16 +191,20 @@ export function polarMotionAt(date) {
     y: a.y + f * (b.y - a.y),
     lod: a.lod + f * (b.lod - a.lod),
     ut1utc: a.ut1utc + f * (b.ut1utc - a.ut1utc),
-    // Ligt het interval op de grens tussen waarneming en voorspelling, dan telt de
-    // zwakste van de twee. Een half voorspeld punt is voorspeld.
-    type: a.type === 'predicted' || b.type === 'predicted' ? 'predicted' : 'observed',
+    // WAAROM NIET "een van beide punten is voorspeld, dus voorspeld": de laatste
+    // waarneming draagt de datum van vandaag 00:00 UT, dus élk moment later op de
+    // dag interpoleert al deels naar het eerste voorspelde punt. Met die strenge
+    // regel staat de melding voor het HEDEN permanent op amber, en dan zegt hij
+    // niets meer. De grens ligt daarom een etmaal na de laatste waarneming: tot dan
+    // is er een meting die deze dag dekt.
+    type: laatsteObs && mjd > laatsteObs.mjd + 1 ? 'predicted' : 'observed',
     binnenBereik: true
   };
 }
 
 // De punten tussen twee momenten, voor de plot. Geeft de rijen zelf terug en geen
 // kopieën: de plot leest alleen.
-export function reeks(vanDate, totDate) {
+export function eopReeks(vanDate, totDate) {
   if (!rijen) return [];
   const a = toMJD(vanDate), b = toMJD(totDate);
   return rijen.filter(p => p.mjd >= a && p.mjd <= b);
@@ -208,7 +212,7 @@ export function reeks(vanDate, totDate) {
 
 // De afgelegde weg langs het spoor, in boogseconden. Dit is het getal dat het
 // verschijnsel echt uitlegt: de verplaatsing is klein, de weg is dat niet.
-export function padLengte(punten) {
+export function eopPadLengte(punten) {
   let som = 0;
   for (let i = 1; i < punten.length; i++) {
     som += Math.hypot(punten[i].x - punten[i - 1].x, punten[i].y - punten[i - 1].y);
