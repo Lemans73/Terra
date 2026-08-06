@@ -116,6 +116,7 @@ export function dipole(date) {
   const lonN = Math.atan2(-h11, -g11) / DEG;
   return {
     jaar, buitenBereik: jaarRuw !== jaar,
+    herkomst: herkomstVan(jaar),
     g10, g11, h11, B0,
     // Twee exact antipodale punten; voor een gecentreerde dipool kan het niet
     // anders, en die identiteit is meteen de goedkoopste zelftoets.
@@ -124,6 +125,50 @@ export function dipole(date) {
     // Hoek met de rotatie-as. Ongeveer 9,4 graden, en dát is de wobble.
     tilt: 90 - latN
   };
+}
+
+// ---- Waar een waarde vandaan komt ------------------------------------------
+//
+// ER IS GEEN "LAATSTE METING" VAN DE DIPOOLAS, en dat is de kern van deze functie.
+// IGRF is een MODEL dat IAGA-werkgroep V-MOD elke vijf jaar vaststelt uit
+// grondobservatoria en de Swarm-satellieten. Wat de app voor vandaag toont is
+// bovendien geen vastgestelde waarde: onze tabel eindigt op epoche 2025,0 en alles
+// daarna komt uit de voorspelde seculaire variatie.
+//
+// Drie standen, en die zijn niet cosmetisch: 'definitive' is nagerekend en
+// vastgesteld, 'extrapolated' is een voorspelling die verder van de epoche af
+// slechter wordt. Wie dat verschil niet ziet leest een prognose als een meting.
+export const LAATSTE_EPOCHE = IGRF14_DIPOLE.epochs[IGRF14_DIPOLE.epochs.length - 1];
+export const LAATSTE_DEFINITIEF = IGRF14_DIPOLE.epochs[IGRF14_DIPOLE.epochs.length - 2];
+export const MODEL_NAAM = 'IGRF-14';
+export const MODEL_VASTGESTELD = 2024;   // IAGA V-MOD, eind 2024, voor epoche 2025,0
+export const MODEL_HERZIENING = 2030;    // volgende generatie
+
+export function herkomstVan(jaar) {
+  if (jaar <= LAATSTE_DEFINITIEF) {
+    return { soort: 'definitive', jarenVoorbij: 0 };
+  }
+  if (jaar <= LAATSTE_EPOCHE) {
+    return { soort: 'interpolated', jarenVoorbij: 0 };
+  }
+  return { soort: 'extrapolated', jarenVoorbij: jaar - LAATSTE_EPOCHE };
+}
+
+// Hoeveel kilometer de geomagnetische noordpool is opgeschoven sinds de laatste
+// epoche. Een hoek zegt weinig; deze afstand maakt tastbaar hoe ver we voorbij het
+// vastgestelde model rekenen. Grootcirkelafstand over een bol van 6371 km.
+export function driftSindsEpoche(jaar) {
+  if (jaar <= LAATSTE_EPOCHE) return 0;
+  const a = poolOpJaar(LAATSTE_EPOCHE), b = poolOpJaar(jaar);
+  const la = a.lat * DEG, lb = b.lat * DEG, dl = (b.lon - a.lon) * DEG;
+  const c = Math.sin(la) * Math.sin(lb) + Math.cos(la) * Math.cos(lb) * Math.cos(dl);
+  return Math.acos(Math.min(1, Math.max(-1, c))) * 6371;
+}
+
+function poolOpJaar(jaar) {
+  const [g10, g11, h11] = interpolate(IGRF14_DIPOLE, jaar);
+  const B0 = Math.hypot(g10, g11, h11);
+  return { lat: Math.asin(-g10 / B0) / DEG, lon: Math.atan2(-h11, -g11) / DEG };
 }
 
 // GEOCENTRISCH VERSUS GEODETISCH — gemeten, niet aangenomen (sessie 18).

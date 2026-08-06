@@ -662,6 +662,11 @@
     width: 52px; height: 52px; flex-shrink: 0; display: block;
   }
   .cosmos-readout .polar-row span { color: var(--ink-dim); }
+  /* Een readout-waarde die een voorbehoud draagt. Zelfde geel als #time-val.shifted
+     en om dezelfde reden: het zegt "wat je ziet is niet het gemetene". Die regel zat
+     aan een id vast en was dus niet herbruikbaar; dit is de gedeelde vorm. */
+  .readout-warn { color: #ffd166; }
+  .readout-note { display: block; color: var(--ink-faint); margin-top: 2px; }
   /* De tijdkiezer. `.shifted` is de niet te missen markering dat de scene een ander
      moment toont dan het heden — de live datalagen doen dat namelijk niet. */
   #time-val { font-variant-numeric: tabular-nums; }

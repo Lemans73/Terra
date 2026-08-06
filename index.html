@@ -497,6 +497,11 @@
       <canvas id="polar-canvas" width="128" height="128" aria-hidden="true"></canvas>
       <span id="gm-gap">&#8212;</span>
       </dd>
+      <!-- Herkomst. Staat er omdat deze laag niet visueel te controleren is: je
+      kunt een magnetische as niet zien liggen, dus moet de app zeggen waar hij
+      vandaan komt en hoe hard de waarde is. -->
+      <dt>Model</dt>
+      <dd id="gm-source">&#8212;</dd>
       </dl>
       </div>
       </section>
@@ -1050,7 +1055,8 @@ import { createSunMoonLayer } from './js/sunmoon-layer.js';
 // standalone leest alleen die — een dynamische import verdwijnt er geruisloos uit.
 // (`toGeodeticLat` in js/geomag.js is er alleen voor de toets tegen gepubliceerde
 // tabellen; de app tekent en toont geocentrisch en heeft hem dus niet nodig.)
-import { poleDriftTrack } from './js/geomag.js';
+import { poleDriftTrack, driftSindsEpoche, MODEL_NAAM, MODEL_VASTGESTELD,
+         MODEL_HERZIENING, LAATSTE_EPOCHE } from './js/geomag.js';
 import { createGeomagLayer } from './js/geomag-layer.js';
 // Deskundig (schematische) weergavemodus (Fase 1).
 import { enterExpertMode, exitExpertMode } from './js/modes/expert.js';
@@ -4450,7 +4456,8 @@ function updateGeomagReadout() {
     if (el) el.textContent = tekst;
   };
   if (!d) {
-    ['gm-north','gm-south','gm-tilt','gm-strength','gm-gap'].forEach(i => zet(i, '—'));
+    ['gm-north','gm-south','gm-tilt','gm-strength','gm-gap','gm-source']
+      .forEach(i => zet(i, '—'));
     return;
   }
   // De coördinaten zijn GEOCENTRISCH, gelijk aan waar de markering staat. Het
@@ -4460,13 +4467,53 @@ function updateGeomagReadout() {
   zet('gm-tilt', d.tilt.toFixed(2) + '°');
   // De sterkte hoort bij een jaartal: hij zakt al een eeuw, en dat is de reden
   // dat de as überhaupt beweegt. Buiten het modelbereik zeggen we dat erbij.
-  zet('gm-strength', Math.round(d.B0).toLocaleString('en-GB') + ' nT · ' +
-    (d.buitenBereik ? 'clamped to ' : '') + d.jaar.toFixed(1));
+  zet('gm-strength', Math.round(d.B0).toLocaleString('en-GB') + ' nT');
+  toonHerkomst(d);
   // De kanteling in kilometers over het oppervlak. Een hoek van negen graden zegt
   // weinig; duizend kilometer wel.
   zet('gm-gap', Math.round(d.tilt * Math.PI / 180 * 6371).toLocaleString('en-GB') +
     ' km apart');
   drawPolarView(d);
+}
+
+// De herkomstregel. Drie standen, en alleen de derde krijgt de gele markering: dat
+// is de enige waarin je naar een voorspelling kijkt in plaats van naar een
+// vastgestelde waarde.
+function toonHerkomst(d) {
+  const el = document.getElementById('gm-source');
+  if (!el) return;
+  const h = d.herkomst;
+  const geel = h.soort === 'extrapolated';
+  let kop, noot;
+  if (h.soort === 'definitive') {
+    kop = MODEL_NAAM + ' · definitive epoch';
+    noot = 'Fitted to observations and finalised.';
+  } else if (h.soort === 'interpolated') {
+    kop = MODEL_NAAM + ' · between definitive epochs';
+    noot = 'Linear in the coefficients, as the model prescribes.';
+  } else {
+    kop = MODEL_NAAM + ' · extrapolated ' + h.jarenVoorbij.toFixed(1) +
+          ' yr past epoch ' + LAATSTE_EPOCHE.toFixed(1);
+    // Een concreet getal maakt tastbaar hoe ver de voorspelling reikt. Een hoek
+    // zegt niets; kilometers wel.
+    noot = 'Predicted from the secular variation — the pole has moved ' +
+           Math.round(driftSindsEpoche(d.jaar)) + ' km since that epoch.';
+  }
+  el.innerHTML = '';
+  const b = document.createElement('span');
+  b.textContent = kop;
+  if (geel) b.className = 'readout-warn';
+  const n = document.createElement('span');
+  n.className = 'readout-note';
+  n.textContent = noot + ' ' + MODEL_NAAM + ' was set by IAGA Working Group V-MOD in ' +
+                  MODEL_VASTGESTELD + '; next revision due around ' + MODEL_HERZIENING + '.';
+  el.append(b, n);
+  if (d.buitenBereik) {
+    const c = document.createElement('span');
+    c.className = 'readout-note readout-warn';
+    c.textContent = 'Date outside the model range — clamped to ' + d.jaar.toFixed(1) + '.';
+    el.append(c);
+  }
 }
 
 // Bovenaanzicht op de noordpool, recht van boven gezien. Het raster loopt tot 15
