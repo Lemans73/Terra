@@ -180,6 +180,27 @@ Terra allows.
 No network request and no API key is involved: the positions are calculated in
 the browser.
 
+### The geomagnetic dipole
+
+**IGRF-14**, the 14th generation International Geomagnetic Reference Field,
+produced by IAGA Working Group V-MOD and distributed by NOAA NCEI:
+<https://www.ngdc.noaa.gov/IAGA/vmod/igrf.html>
+
+The IGRF is released into the public domain and may be used freely, including
+commercially. `js/geomag.js` carries the first three Gauss coefficients
+(g₁⁰, g₁¹, h₁¹) for the 26 epochs from 1900.0 to 2025.0, plus the secular
+variation for 2025 to 2030, taken verbatim from `igrf14coeffs.txt`. That is
+enough for the dipole axis and the geomagnetic poles; the full model of 195
+coefficients is not included.
+
+Verified against the geomagnetic pole positions published by the World Data
+Center for Geomagnetism, Kyoto, for 35 years between 1900 and 2030: agreement
+within 0.05°, which is the rounding step of that table. Note that published pole
+tables give **geodetic** latitude while Terra draws and reports **geocentric**
+latitude, a difference of roughly 0.06° at polar latitudes.
+
+No network request and no API key is involved here either.
+
 ---
 
 ## Libraries

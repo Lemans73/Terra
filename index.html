@@ -445,6 +445,53 @@
 
       </div>
       </section>
+
+      <!-- ---------- MAGNETISCH VELD ----------
+           Eigen sectie en geen rij bij Earth overlays: dat zijn statische
+           kaartlagen zonder teller, terwijl deze berekend zijn, met het moment
+           meebewegen en een readout dragen. Een eigen tab kan niet, de tabrij zit
+           vol op vier (gemeten sessie 17). -->
+      <section class="acc" data-acc="geomag-layers">
+      <button class="acc-head" type="button" aria-expanded="false">
+      <span>Magnetic field</span>
+      <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="acc-body">
+      <div class="elayer" id="rotaxis-toggle"><span class="edot"></span>Rotation axis<span class="estat" id="es-rotaxis">off</span></div>
+      <div class="elayer expandable" id="magaxis-toggle">
+      <span class="edot"></span>Magnetic axis
+      <button class="row-expand" data-note="magaxis-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <span class="estat" id="es-magaxis">off</span>
+      </div>
+      <div class="layer-detail" id="magaxis-note">
+      The axis of the dipole that best fits Earth&#8217;s magnetic field, from the
+      first three IGRF&#8209;14 coefficients. Where it meets the surface are the
+      <b>geomagnetic poles</b> &#8212; exactly opposite each other, and about 9&#176;
+      from the rotation axis.
+      <br /><br />
+      These are <b>not</b> the magnetic dip poles, where a compass needle points
+      straight down. Those come from the full field, do not sit opposite each
+      other, and are the ones racing towards Siberia. In 2025 the geomagnetic
+      north pole is at 80.8&#176; N 72.8&#176; W; the dip pole at 85.8&#176; N 138.1&#176; E.
+      <br /><br />
+      Published tables quote geodetic latitude, roughly 0.06&#176; higher than the
+      geocentric value shown here.
+      </div>
+      <div class="elayer" id="magdrift-toggle"><span class="edot"></span>Pole drift 1900&#8211;2030<span class="estat" id="es-magdrift">off</span></div>
+      <dl class="cosmos-readout">
+      <dt>Geomagnetic north</dt>
+      <dd id="gm-north">&#8212;</dd>
+      <dt>Geomagnetic south</dt>
+      <dd id="gm-south">&#8212;</dd>
+      <dt>Tilt from rotation axis</dt>
+      <dd id="gm-tilt">&#8212;</dd>
+      <dt>Dipole strength</dt>
+      <dd id="gm-strength">&#8212;</dd>
+      </dl>
+      </div>
+      </section>
     </div>
 
     <div class="tabpanel" data-panel="cosmos">
@@ -755,6 +802,8 @@
           <dt>Live data</dt>
           <dd><a href="https://earthquake.usgs.gov" target="_blank" rel="noopener">USGS</a> · <a href="https://www.emsc-csem.org" target="_blank" rel="noopener">EMSC-CSEM</a> and the reporting institute per event · <a href="https://eonet.gsfc.nasa.gov" target="_blank" rel="noopener">NASA EONET</a> · <a href="https://www.swpc.noaa.gov" target="_blank" rel="noopener">NOAA SWPC</a> · <a href="https://aqicn.org" target="_blank" rel="noopener">World Air Quality Index Project</a> and the measuring authority per station · <a href="https://www.blitzortung.org" target="_blank" rel="noopener">Blitzortung.org</a>. The last three: non-commercial use only</dd>
 
+          <dt>Magnetic field</dt>
+          <dd><a href="https://www.ngdc.noaa.gov/IAGA/vmod/igrf.html" target="_blank" rel="noopener">IGRF&#8209;14</a>, IAGA Working Group V&#8209;MOD via NOAA NCEI &#183; public domain</dd>
           <dt>Built with</dt>
           <dd><a href="https://threejs.org/" target="_blank" rel="noopener">three.js</a>, <a href="https://github.com/vasturiano/globe.gl" target="_blank" rel="noopener">globe.gl</a> · MIT · <a href="https://gsap.com/" target="_blank" rel="noopener">GSAP</a></dd>
         </dl>
@@ -988,6 +1037,12 @@ import {
 import { ephemeris as sunMoonEphemeris, latLonToUnit, eclipseShadow,
          nextSolarEclipse, previousSolarEclipse, eclipsePath } from './js/sunmoon.js';
 import { createSunMoonLayer } from './js/sunmoon-layer.js';
+// De geomagnetische dipool (IGRF-14). Ook puur JS, ook geen netwerk: de
+// coëfficiënten staan in de module. STATISCHE import, want het buildscript voor de
+// standalone leest alleen die — een dynamische import verdwijnt er geruisloos uit.
+// (`toGeodeticLat` in js/geomag.js is er alleen voor de toets tegen gepubliceerde
+// tabellen; de app tekent en toont geocentrisch en heeft hem dus niet nodig.)
+import { createGeomagLayer } from './js/geomag-layer.js';
 // Deskundig (schematische) weergavemodus (Fase 1).
 import { enterExpertMode, exitExpertMode } from './js/modes/expert.js';
 // Schematische datalaag-symbolen voor de deskundig-modus (Fase 2).
@@ -2413,6 +2468,9 @@ let shaderRotation = { lng: 0, lat: 0 };
 // Zon/maan-laag (sessie 14). Blijft null tot het init-blok onderaan hem maakt —
 // zie de TDZ-noot daar. Alles wat hem gebruikt moet daarom op null controleren.
 let sunMoon = null;
+// Geomagnetische assen (sessie 18). Zelfde afspraak als sunMoon hierboven: blijft
+// null tot het init-blok onderaan hem maakt, dus overal op null controleren.
+let geomag = null;
 let sunLight = null;        // globe.gl's eigen DirectionalLight, opgezocht bij init
 let lastEphemeris = null;   // laatste efemeride, voor de readout
 // Verschuiving van de tijdkiezer, in ms ten opzichte van nu. 0 = het heden.
@@ -2800,6 +2858,11 @@ function updateSunUniform() {
     sunLight.target.position.set(0, 0, 0);
     sunLight.target.updateMatrixWorld();
   }
+
+  // De geomagnetische assen hangen aan dezelfde tick, dezelfde tijdkiezer en
+  // dezelfde afspeellus als zon en maan; ze hoeven daarvoor niets eigens.
+  if (geomag) geomag.update(now);
+  updateGeomagReadout();
 
   updateCosmosReadout();
 }
@@ -4360,6 +4423,55 @@ if (utcToggleEl) {
 }
 
 // ============================================================
+//  Magnetisch veld — de twee assen (sessie 18)
+// ============================================================
+
+// Een functiedeclaratie en geen const: updateSunUniform() roept hem aan, en die
+// draait al tijdens de opbouw van de scene. Zelfde reden als bij momentNow().
+function updateGeomagReadout() {
+  const d = geomag && geomag.last;
+  const zet = (id, tekst) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = tekst;
+  };
+  if (!d) { ['gm-north','gm-south','gm-tilt','gm-strength'].forEach(i => zet(i, '—')); return; }
+  // De coördinaten zijn GEOCENTRISCH, gelijk aan waar de markering staat. Het
+  // verschil met de gepubliceerde geodetische waarde staat in de uitleg bij de rij.
+  zet('gm-north', formatLatLon(d.north.lat, d.north.lon));
+  zet('gm-south', formatLatLon(d.south.lat, d.south.lon));
+  zet('gm-tilt', d.tilt.toFixed(2) + '°');
+  // De sterkte hoort bij een jaartal: hij zakt al een eeuw, en dat is de reden
+  // dat de as überhaupt beweegt. Buiten het modelbereik zeggen we dat erbij.
+  zet('gm-strength', Math.round(d.B0).toLocaleString('en-GB') + ' nT · ' +
+    (d.buitenBereik ? 'clamped to ' : '') + d.jaar.toFixed(1));
+}
+
+const geomagToggles = [
+  ['rotaxis-toggle', 'es-rotaxis', on => geomag.setVisible({ rotation: on })],
+  ['magaxis-toggle', 'es-magaxis', on => geomag.setVisible({ dipole: on })],
+  ['magdrift-toggle', 'es-magdrift', on => geomag.setVisible({ trail: on })]
+];
+geomagToggles.forEach(([id, statId, apply]) => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  // Alle drie beginnen UIT. Die stand staat op drie plekken en die moeten
+  // hetzelfde zeggen: hier, de ontbrekende klasse `on` in de markup, en de
+  // setVisible() onderaan js/geomag-layer.js.
+  let on = false;
+  el.addEventListener('click', () => {
+    on = !on;
+    el.classList.toggle('on', on);
+    document.getElementById(statId).textContent = on ? 'on' : 'off';
+    if (!geomag) return;
+    apply(on);
+    // setVisible() zet alleen vlaggen; de geometrie wordt in update() gebouwd, en
+    // die slaat het tekenwerk over zolang de laag verborgen is. Zonder deze
+    // aanroep gebeurt er dus niets tot de volgende 30-secondentick.
+    updateSunUniform();
+  });
+});
+
+// ============================================================
 //  Cosmos-tab — zon en maan (sessie 14, deel 1)
 // ============================================================
 
@@ -5618,6 +5730,11 @@ sunMoon = createSunMoonLayer(THREE, {
   addLights:         false          // globe.gl zet er zelf al twee neer
 });
 world.scene().add(sunMoon.group);
+
+// Geomagnetische assen. Staat hier om dezelfde TDZ-reden als de zon/maan-laag
+// hierboven, en niet omdat de volgorde toevallig zo uitkwam.
+geomag = createGeomagLayer(THREE, { earthRadius: 100 });
+world.scene().add(geomag.group);
 
 // globe.gl's eigen DirectionalLight opzoeken. Terra's code voegt geen enkel licht
 // toe; globe.gl zet er twee neer (AmbientLight PI en DirectionalLight 0,6·PI op
