@@ -199,6 +199,36 @@ within 0.05°, which is the rounding step of that table. Note that published pol
 tables give **geodetic** latitude while Terra draws and reports **geocentric**
 latitude, a difference of roughly 0.06° at polar latitudes.
 
+### Earth orientation parameters
+
+Polar motion — where the rotation axis actually meets the crust — comes from the
+**International Earth Rotation and Reference Systems Service (IERS)** and the
+**United States Naval Observatory (USNO)**. Both publish the same underlying
+series; Terra reads it through **CelesTrak** (Dr. T.S. Kelso), which is the only
+one of the three that serves it with a cross-origin header a browser will
+accept:
+
+- Daily values, five years back and roughly six months ahead:
+  <https://celestrak.org/SpaceData/> (`EOP-Last5Years.csv`)
+- The long track in `assets/geo/pole-mean-1900.csv` holds yearly means derived
+  from **IERS EOP C01**, Earth Orientation Centre, Observatoire de Paris:
+  <https://hpiers.obspm.fr/iers/eop/eopc01/>
+
+Earth orientation parameters are published as a public service and carry no
+licence restriction. The derived file is a plain average of the published
+values; the source, the retrieval date and the unit convention are recorded in
+its header.
+
+Verified against two published figures rather than against itself: over the 51
+days to 6 August 2026 the series gives a path length of 54.3 mas against USNO's
+53.7 and a net displacement of 49.79 against 49.7, and all seven labelled points
+on the IERS annual plot for 2025–2026 fall within 0.6 mas — about 17 mm on the
+ground.
+
+Polar motion is **not** applied to the geometry of the globe, and that is a
+deliberate choice rather than an omission. The full wobble is roughly 8 m at the
+surface, while one screen pixel at maximum zoom covers 8.5 km.
+
 No network request and no API key is involved here either.
 
 ---

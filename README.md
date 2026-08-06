@@ -32,6 +32,7 @@ Optional layers below.
 | Sea ice | NASA EONET | |
 | Air quality | [WAQI](https://waqi.info/) | needs a key, follows the camera |
 | Lightning | [Blitzortung](https://www.blitzortung.org/) | needs a relay you run yourself |
+| Polar motion | IERS/USNO via [CelesTrak](https://celestrak.org/SpaceData/) | a plot, not geometry — the wobble is 8 m across |
 
 Plus three vector overlays: tectonic plate boundaries, country borders and
 country labels.
