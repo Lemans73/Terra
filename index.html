@@ -467,7 +467,10 @@
       always show the present, whatever moment you pick here.
       </div>
 
-      <h3>Date &amp; time</h3>
+      <!-- De zone staat in de kop en niet naast het veld: een datetime-local toont
+           nergens zelf in welke zone hij staat, en zonder dat label is de
+           UTC-schakelaar in Settings hier onzichtbaar. -->
+      <h3>Date &amp; time <span class="h3-zone" id="time-zone-label"></span></h3>
       <input type="datetime-local" id="time-input" class="time-input"
       aria-label="Date and time for Sun and Moon" />
 
@@ -620,6 +623,7 @@
       </div>
       </div>
       <div class="elayer on" id="rotate-toggle"><span class="edot"></span>Auto-rotate<span class="estat" id="es-rotate">on</span></div>
+      <div class="elayer" id="utc-toggle"><span class="edot"></span>Show times in UTC<span class="estat" id="es-utc">off</span></div>
       </div>
       </section>
 
@@ -1433,6 +1437,8 @@ const Adapters = {
     days: { hour: 1 / 24, day: 1, week: 7 },
     get url() {
       const back = (this.days[timeWindow] ?? 1) * 86_400_000;
+      // BLIJFT UTC, ongeacht de UTC-schakelaar in Settings: dit is een FDSN-parameter
+      // en geen weergave. Niet door fmtStamp halen.
       const start = new Date(Date.now() - back).toISOString().slice(0, 19);
       return 'https://www.seismicportal.eu/fdsnws/event/1/query' +
              '?format=json&limit=2000&minmag=' + QUAKE_FLOOR_MAG +
@@ -2422,6 +2428,23 @@ let timeOffsetMs = 0;
 // Gekozen tijdstip uit het datumveld. `null` = nu, en dan loopt de scene mee met de
 // echte klok; staat er een moment, dan staat de scene daar stil.
 let baseMoment = null;
+// Toont de app tijden in UTC of in de zone van het apparaat? Staat hier om dezelfde
+// TDZ-reden: fmtTime/fmtStamp lezen hem, en die draaien al bij de eerste klok-tick.
+// `null` betekent nooit iets gekozen en dus de standaard (lokaal, het oude gedrag);
+// '0' is een expliciete keuze en blijft uit. Zelfde onderscheid als terra-ocean-floor.
+let useUTC = (() => {
+  try {
+    const bewaard = localStorage.getItem('terra-utc');
+    return bewaard === null ? false : bewaard === '1';
+  } catch { return false; }
+})();
+// De enige twee plekken waar de app een tijdstip naar tekst brengt. Voorheen stonden
+// er zes losse toLocale*-aanroepen verspreid door het bestand, elk met hun eigen
+// optie-object; dan mist een schakelaar er gegarandeerd één. `timeZone: undefined` is
+// spec-geldig en betekent "de zone van het apparaat", dus één object dekt beide standen.
+const tzOpt    = () => (useUTC ? { timeZone: 'UTC' } : {});
+const fmtTime  = (d, o) => d.toLocaleTimeString('en-GB', { ...o, ...tzOpt() });
+const fmtStamp = (d, o) => d.toLocaleString('en-GB', { ...o, ...tzOpt() });
 // Wordt de eclipsschaduw getekend? Staat hier en niet bij de Cosmos-code, want
 // updateSunUniform() leest hem tijdens de opbouw van de scene (zie de TDZ-noot).
 let eclipseWanted = true;
@@ -4221,7 +4244,7 @@ function renderNotifList() {
   const names = { region:'Active region', quake:'Earthquake', volcano:'Volcano', storm:'Storm', ice:'Sea ice', wildfire:'Wildfire', aqi:'Air quality', lightning:'Lightning' };
   list.innerHTML = notifHistory.map((n, i) => {
     const detail = (n.layer === 'quake' && n.value != null ? 'M ' + n.value.toFixed(1) + ' · ' : '') + (n.label || '');
-    const tm = new Date(n.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    const tm = fmtTime(new Date(n.time), { hour: '2-digit', minute: '2-digit' });
     const c = COLORS[n.layer] || '#fff';
     return '<div class="notif-item" data-idx="' + i + '"><span class="nd" style="color:' + c + ';background:' + c + '"></span>' +
            '<div class="nt"><b>' + (names[n.layer] || 'Event') + '</b><span>' + detail + '</span></div>' +
@@ -4298,6 +4321,41 @@ if (rotateToggleEl) {
     setAutoRotate(!autoRotateWanted);
     rotateToggleEl.classList.toggle('on', autoRotateWanted);
     document.getElementById('es-rotate').textContent = autoRotateWanted ? 'on' : 'off';
+  });
+}
+
+// De zone-aanduiding bij het datumveld in de Sun & Moon-tab. Eén functie, want hij
+// wordt op twee momenten gezet: bij het opstarten (de bewaarde stand) en bij de wissel.
+function updateZoneLabel() {
+  const el = document.getElementById('time-zone-label');
+  if (el) el.textContent = utcOffsetLabel(new Date());
+}
+
+const utcToggleEl = document.getElementById('utc-toggle');
+if (utcToggleEl) {
+  // De markup staat op 'uit'; een bewaarde keuze kan dat tegenspreken, dus eerst
+  // gelijktrekken en pas daarna binden — zelfde volgorde als bij Auto-rotate.
+  utcToggleEl.classList.toggle('on', useUTC);
+  document.getElementById('es-utc').textContent = useUTC ? 'on' : 'off';
+  updateZoneLabel();
+  utcToggleEl.addEventListener('click', () => {
+    useUTC = !useUTC;
+    try { localStorage.setItem('terra-utc', useUTC ? '1' : '0'); } catch {}
+    utcToggleEl.classList.toggle('on', useUTC);
+    document.getElementById('es-utc').textContent = useUTC ? 'on' : 'off';
+    updateZoneLabel();
+    // Alles wat een tijd toont en NIET vanzelf herrendert, moet hier expliciet langs.
+    // refreshTimeUI() trekt onderaan een volledige efemeride-herberekening; op een
+    // klik is dat prima, en het houdt de tijd-UI op één pad.
+    if (timeInputEl && timeInputEl.value) {
+      timeInputEl.value = naarVeldWaarde(baseMoment ?? momentNow());
+    }
+    refreshTimeUI();
+    tick();
+    renderNotifList();
+    // #r-time en #status blijven tot hun volgende update op de oude notatie staan:
+    // #status herstelt zich bij de eerstvolgende poll, #r-time bij de volgende
+    // selectie. Die twee achternalopen kost meer dan het oplevert.
   });
 }
 
@@ -4639,6 +4697,9 @@ function applySolarState() {
   // niemand kan ze zien — dat hoort er eerlijk bij te staan in plaats van dat de
   // teller en het beeld onverklaarbaar uiteenlopen.
   const far = s.regions.filter(r => Math.abs(r.lon || 0) > 90).length;
+  // Ruwe datumstring van NOAA, die al in UTC publiceert. Gaat daarom niet door
+  // fmtStamp: er valt niets te converteren en een Date eromheen zou de dag kunnen
+  // verschuiven bij een bezoeker ten westen van Greenwich.
   set('sa-note', s.date
     ? 'NOAA SWPC · ' + String(s.date).slice(0, 10) +
       (far ? ' · ' + far + (far > 1 ? ' regions' : ' region') + ' past the limb' : '')
@@ -4792,11 +4853,29 @@ function herschaalSlider() {
   if (span) span.textContent = `± ${formatOffset(grens).replace('+', '')}`;
 }
 
-// Het datumveld verwacht lokale tijd zonder tijdzone-achtervoegsel.
+// Het datumveld draagt een string ZONDER tijdzone-achtervoegsel, dus de zone zit
+// alleen in de afspraak tussen schrijven en lezen. Deze functie en de change-handler
+// verderop zijn daarmee elkaars spiegel en moeten ALTIJD samen omgaan: schrijft de een
+// UTC-componenten terwijl de ander lokaal parseert, dan verspringt het gekozen moment
+// bij elke ronde met de offset van de bezoeker.
 function naarVeldWaarde(d) {
   const p = n => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}` +
-         `T${p(d.getHours())}:${p(d.getMinutes())}`;
+  const jaar = useUTC ? d.getUTCFullYear() : d.getFullYear();
+  const maand = useUTC ? d.getUTCMonth() : d.getMonth();
+  const dag = useUTC ? d.getUTCDate() : d.getDate();
+  const uur = useUTC ? d.getUTCHours() : d.getHours();
+  const min = useUTC ? d.getUTCMinutes() : d.getMinutes();
+  return `${jaar}-${p(maand + 1)}-${p(dag)}T${p(uur)}:${p(min)}`;
+}
+
+// De tegenhanger van naarVeldWaarde. In UTC-modus expliciet via Date.UTC en niet door
+// een 'Z' aan te plakken: dat laatste werkt alleen zolang de browser de string precies
+// zo teruggeeft als wij hem schreven, en een veld met seconden erin breekt het stil.
+function uitVeldWaarde(waarde) {
+  if (!useUTC) return new Date(waarde);
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(waarde);
+  if (!m) return new Date(NaN);
+  return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]));
 }
 
 function refreshTimeUI() {
@@ -4804,7 +4883,7 @@ function refreshTimeUI() {
   const val = document.getElementById('time-val');
   const reset = document.getElementById('time-reset');
   const head = document.getElementById('readout-head');
-  const stamp = momentNow().toLocaleString('en-GB',
+  const stamp = fmtStamp(momentNow(),
     { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
   if (val) {
     const off = formatOffset(timeOffsetMs);
@@ -4835,7 +4914,7 @@ timeSliderEl?.addEventListener('input', () => {
 const timeInputEl = document.getElementById('time-input');
 timeInputEl?.addEventListener('change', () => {
   if (!timeInputEl.value) { terugNaarNu(); return; }
-  const d = new Date(timeInputEl.value);
+  const d = uitVeldWaarde(timeInputEl.value);
   if (isNaN(d)) return;
   baseMoment = d;
   timeOffsetMs = 0;
@@ -5282,7 +5361,7 @@ function showDetail(d) {
   // Niet elke bron geeft een tijdstip. Zonder deze controle toont een ontbrekende
   // tijd "01 Jan, 01:00" (epoch), en dat is erger dan eerlijk niets tonen.
   document.getElementById('r-time').textContent = d.time
-    ? new Date(d.time).toLocaleString('en-GB', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' })
+    ? fmtStamp(new Date(d.time), { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' })
     : '—';
   // Vrije regels. Leeg voor alles behalve een zonnegebied — zie de noot bij r-extra.
   const extraEl = document.getElementById('r-extra');
@@ -5370,7 +5449,7 @@ async function pull(adapter) {
     // met `keepOnEmpty` houden hun vorige data vast, omdat leeg daar eerder op een
     // hapering wijst dan op stilte.
     if (fresh.length === 0 && adapter.keepOnEmpty && store.some(d => owned.has(d.layer))) {
-      setStatus('live · last ' + new Date().toLocaleTimeString('en-GB'));
+      setStatus('live · last ' + fmtTime(new Date()));
       return;
     }
     // Standaard vervangt een adapter de events van zijn eigen lagen. Een adapter die
@@ -5397,7 +5476,7 @@ async function pull(adapter) {
         .forEach(d => showToast(d.layer, d));
     }
     render();
-    setStatus('live · last ' + new Date().toLocaleTimeString('en-GB'));
+    setStatus('live · last ' + fmtTime(new Date()));
   } catch (e) {
     const reason = e && e.name === 'AbortError' ? 'too slow (timeout)'
                  : adapter.offlineNote || 'network/CORS';
@@ -5423,16 +5502,19 @@ function startAdapter(adapter) {
 
 // ---- Clock ---------------------------------------------------
 
-// De klok volgt de SYSTEEMTIJD van de bezoeker: `toLocaleTimeString` zonder
+// De klok volgt standaard de SYSTEEMTIJD van de bezoeker: `toLocaleTimeString` zonder
 // timeZone-optie gebruikt de zone van het apparaat. Iemand in Tokio ziet dus zijn
 // eigen tijd met UTC+9, zonder dat hij iets hoeft in te stellen. De 'en-GB' hierin
-// bepaalt alléén het formaat (24-uurs), niet de zone.
+// bepaalt alléén het formaat (24-uurs), niet de zone. Staat de UTC-schakelaar in
+// Settings aan, dan gaan zowel de tijd als het label hieronder om.
 //
 // De offset stond tot 2026-08-01 als kale deling in de tekst, en dat brak op drie
 // plaatsen: UTC+0 werd "UTC0", en elke zone met een half of driekwart uur werd een
 // decimale breuk — India kreeg "UTC+5.5" in plaats van "UTC+5:30", Nepal "UTC+5.75".
 // Dat zijn geen zeldzame uithoeken.
 function utcOffsetLabel(d) {
+  // In UTC-modus is er geen offset om te tonen; de zone ís het label.
+  if (useUTC) return 'UTC';
   // getTimezoneOffset telt minuten WESTwaarts; wij willen oostwaarts positief.
   const min = -d.getTimezoneOffset();
   if (min === 0) return 'UTC';
@@ -5447,7 +5529,7 @@ function tick() {
   // middernacht een tijd en een offset van verschillende momenten combineren.
   const nu = new Date();
   document.getElementById('clock').textContent =
-    nu.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit', second:'2-digit' }) +
+    fmtTime(nu, { hour:'2-digit', minute:'2-digit', second:'2-digit' }) +
     ' ' + utcOffsetLabel(nu);
 }
 setInterval(tick, 1000); tick();

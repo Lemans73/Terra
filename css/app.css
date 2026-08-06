@@ -502,6 +502,10 @@
   .layer-detail h3:not(:first-child),
   .tabpanel > h3:not(:first-child),
   .acc-body h3:not(:first-child) { margin-top: 12px; }
+  /* De zone naast een kop. Geen hoofdletter-spatiëring van de kop overnemen: dit is
+     een waarde en geen label, en "U T C + 1" leest niet. */
+  .h3-zone { margin-left: 6px; letter-spacing: 0; text-transform: none;
+    color: var(--ink-faint); font-weight: 500; }
   .aarde-empty { display: none; font-size: 11px; color: var(--ink-faint); line-height: 1.55; }
   .aarde-empty b { color: var(--ink-dim); }
 
