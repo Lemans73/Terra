@@ -4865,10 +4865,13 @@ function updatePolarMotion() {
     const d = langSpoorDrift();
     pmZet('pm-title', 'Mean pole, yearly averages');
     pmZet('pm-travel-label', 'Drift since ' + (d ? d.vanJaar : 1900));
+    // Zonder spoor NIET een streepje: dit bestand komt in de standalone van
+    // jsDelivr, en dat is precies de plek waar iemand zich afvraagt of er iets
+    // stuk is. Zeg dan wat er ontbreekt.
     pmZet('pm-travel', d
       ? d.meter.toFixed(1) + ' m towards ' + Math.abs(Math.round(d.richting)) +
         '°' + (d.richting < 0 ? 'W' : 'E') + ' — decade mean to decade mean'
-      : '—');
+      : spoor ? '—' : 'The long track could not be loaded.');
   } else {
     const van = new Date(nu.getTime() - pmVenster * 86400000);
     const punten = eopReeks(van, nu);
