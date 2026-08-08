@@ -918,6 +918,10 @@
     font-variant-numeric: tabular-nums;
   }
   .sunstat h3 { margin-top: 12px; }
+  /* Verschijnt zodra de tijdkiezer ergens anders staat. De waarden zelf blijven staan
+     — weghalen zou lezen als een storing, terwijl er niets mis is: deze bron kent
+     alleen het heden. Zelfde amber taal als .cosmos-warn en .src-switch. */
+  .sa-stale { border-top-color: rgba(255,209,102,0.22) !important; color: #e4cd9a !important; }
   .sunstat-note {
     margin-top: 10px;
     padding-top: 10px;
@@ -956,6 +960,20 @@
   /* De regel die verschijnt als de app zelf van bron wisselde. Zelfde amber taal als
      .cosmos-warn bij polar motion — en met opzet dezelfde waarden, niet een eigen
      tint: dit is geen fout, maar wel iets waarvan je moet weten dat het gebeurd is. */
+  /* Het voorbehoud bij een historisch tijdvak: hoeveel bevingen deze catalogus in dat
+     jaar wist te zien, tegen vandaag. Geen waarschuwing maar context — vandaar de
+     gedempte tint en niet het amber van .src-switch. */
+  .quake-era {
+    margin: 10px 0 0;
+    padding: 7px 9px;
+    border-radius: 6px;
+    background: rgba(125,138,160,0.07);
+    border: 1px solid var(--hair);
+    font-size: 10px;
+    line-height: 1.55;
+    color: var(--ink-dim);
+  }
+  .quake-era b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
   .src-switch {
     margin: -6px 0 12px;
     padding: 7px 9px;

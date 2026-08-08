@@ -359,6 +359,7 @@
       <span id="slider-val">full window</span>
       </div>
       </div>
+      <p class="quake-era" id="quake-era" hidden></p>
       <h3>Depth</h3>
       <div class="depth-scale"></div>
       <div class="depth-label"><span>shallow</span><span>deep</span></div>
@@ -741,6 +742,8 @@
       <div class="sunstat-row"><span>M class</span><b id="sa-pm">&#8212;</b></div>
       <div class="sunstat-row"><span>X class</span><b id="sa-px">&#8212;</b></div>
       <div class="sunstat-note" id="sa-note">&#8212;</div>
+      <div class="sunstat-note sa-stale" id="sa-stale" hidden>Current conditions &#8212; solar
+      activity is a snapshot from NOAA and does not follow the time picker.</div>
       </div>
       <button class="apply" id="sunview-btn">Observe the Sun</button>
       </div>
@@ -5948,6 +5951,7 @@ function refreshTimeUI() {
   // Wat niet mee terug kan, gaat op slot. Staat vóór render() zodat de kaart in één
   // keer klopt in plaats van een frame lang lagen te tonen die er niet horen.
   borgTijdsloten();
+  borgZonneNoot();
   // NIETS OPHALEN IS NIET HETZELFDE ALS NIETS TEKENEN. Schuift het moment binnen de
   // voorraad, dan is er geen verzoek nodig, maar het GETOONDE venster is wel degelijk
   // opgeschoven — zonder deze regel blijven de bevingen staan waar ze stonden terwijl
@@ -6664,6 +6668,65 @@ function startAdapter(adapter) {
 // (`vensterTimer` staat bovenaan bij de scene-state — zie de TDZ-noot daar.)
 const VENSTER_SMOOR_MS = 600;
 
+// ---- Hoe volledig is de catalogus in dit tijdvak ------------------------------
+// Een dunnere kaart in 1960 betekent niet dat de aarde rustiger was; er stonden
+// minder seismometers. Dat verschil hoort de app te zeggen in plaats van het stil te
+// laten. Het count-endpoint kost 32 bytes en ~435 ms (gemeten 2026-08-08), en het is
+// bewust ALTIJD de USGS-catalogus: 'toen' en 'nu' moeten uit hetzelfde archief komen,
+// anders vergelijk je twee meetnetten in plaats van twee tijdvakken.
+const DEKKING_KANTELT = 1980;         // vóór dit jaar hoort het voorbehoud erbij
+let dekkingNuCache = null;            // aantal in de referentieweek van nu
+let dekkingRonde = 0;                 // alleen het laatste antwoord mag op het scherm
+
+async function usgsWeekCount(totMs) {
+  const u = 'https://earthquake.usgs.gov/fdsnws/event/1/count?format=geojson' +
+            '&starttime=' + fdsnTijd(totMs - 7 * 86_400_000) +
+            '&endtime=' + fdsnTijd(totMs) + '&minmagnitude=1';
+  const res = await fetch(u);
+  if (!res.ok) throw new Error(res.status);
+  return (await res.json()).count;
+}
+
+async function toonTijdvakNoot() {
+  const el = document.getElementById('quake-era');
+  if (!el) return;
+  const ronde = ++dekkingRonde;
+  if (bijNu()) { el.hidden = true; return; }
+
+  const m = momentNow().getTime();
+  if (m > Date.now()) {
+    el.hidden = false;
+    el.textContent = 'No earthquakes recorded after now — the catalogue ends at the present.';
+    return;
+  }
+
+  const jaar = momentNow().getUTCFullYear();
+  try {
+    const [toen, nu] = await Promise.all([
+      usgsWeekCount(m),
+      dekkingNuCache != null ? Promise.resolve(dekkingNuCache) : usgsWeekCount(Date.now())
+    ]);
+    dekkingNuCache = nu;
+    if (ronde !== dekkingRonde) return;   // er is intussen ergens anders heen gesprongen
+    el.hidden = false;
+    el.innerHTML = `${jaar}: <b>${toen}</b> earthquakes that week, against <b>${nu}</b> today.` +
+      (jaar < DEKKING_KANTELT
+        ? ' Fewer here means fewer seismometers, not a quieter Earth.'
+        : '');
+  } catch {
+    // Een bijzaak die faalt hoort geen storing te melden; de kaart klopt gewoon.
+    if (ronde === dekkingRonde) el.hidden = true;
+  }
+}
+
+// De zonneactiviteit is een momentopname van NOAA en reist niet mee. De waarden laten
+// staan en het voorbehoud erbij zetten is eerlijker dan ze weghalen: weg zou lezen als
+// een storing, terwijl er niets mis is.
+function borgZonneNoot() {
+  const el = document.getElementById('sa-stale');
+  if (el) el.hidden = bijNu();
+}
+
 function vensterGedekt(adapter) {
   const l = adapter.geladen;
   if (!l) return false;
@@ -6675,6 +6738,9 @@ function plandataVerversing() {
   if (playDir) return;                     // regel 3
   clearTimeout(vensterTimer);
   vensterTimer = setTimeout(() => {
+    // Staat vóór de vroege terugkeer hieronder: het voorbehoud hoort er te staan, ook
+    // wanneer de bronwissel de rest van deze ronde overneemt.
+    toonTijdvakNoot();
     // Eerst de bron: heeft de actieve catalogus dit tijdvak überhaupt? Zo niet, dan
     // wisselt hij zichtbaar en haalt die wissel zelf al op — dan is de ronde hieronder
     // dubbel werk.
