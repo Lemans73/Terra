@@ -1557,6 +1557,17 @@ function eventWindow(dagen) {
   return { van: tot - dagen * 86_400_000, tot };
 }
 
+// Wat er OPGEHAALD wordt is ruimer dan wat er getoond wordt: het venster plus 25% aan
+// beide kanten. Zonder die marge valt elk duwtje aan de slider meteen buiten het
+// geladen bereik en kost het een netwerkronde. Het getoonde venster blijft
+// eventWindow() — de marge zit alleen in de voorraad, niet in de weergave.
+const HAAL_MARGE = 0.25;
+function fetchWindow(dagen) {
+  const w = eventWindow(dagen);
+  const marge = (w.tot - w.van) * HAAL_MARGE;
+  return { van: w.van - marge, tot: w.tot + marge };
+}
+
 // Een tijdstip als FDSN-parameter: seconden, geen zone-achtervoegsel. BLIJFT UTC,
 // ongeacht de UTC-schakelaar in Settings — dit is een parameter en geen weergave.
 // Niet door fmtStamp halen.
@@ -1593,8 +1604,12 @@ const Adapters = {
     // de tabblad-pauze in pull(), niet in een traag interval.
     interval: 60_000,
     days: { hour: 1 / 24, day: 1, week: 7 },
+    // De haak die deze bron aan het haal-beleid koppelt (zie plandataVerversing).
+    // Een adapter mét `venster()` doet aan tijdreizen; een adapter zonder merkt er
+    // niets van. Dat is hoe EONET er in spoor 2 bij komt.
+    venster() { return fetchWindow(this.days[timeWindow] ?? 1); },
     get url() {
-      const w = eventWindow(this.days[timeWindow] ?? 1);
+      const w = this.venster();
       // Vanaf M1 ophalen, ongeacht het filter: dat is de laagste stand die de
       // interface kent, en het magnitudefilter werkt daarmee zonder nieuwe ronde.
       // De feeds droegen ook alles onder M1 mee (108 van de 279 op een gewone dag);
@@ -1656,8 +1671,9 @@ const Adapters = {
     layers: ['quake'],
     interval: 60_000,
     days: { hour: 1 / 24, day: 1, week: 7 },
+    venster() { return fetchWindow(this.days[timeWindow] ?? 1); },
     get url() {
-      const w = eventWindow(this.days[timeWindow] ?? 1);
+      const w = this.venster();
       return 'https://www.seismicportal.eu/fdsnws/event/1/query' +
              '?format=json&limit=2000&minmag=' + QUAKE_FLOOR_MAG +
              '&start=' + fdsnTijd(w.van) +
@@ -2665,6 +2681,11 @@ let timeOffsetMs = 0;
 // Gekozen tijdstip uit het datumveld. `null` = nu, en dan loopt de scene mee met de
 // echte klok; staat er een moment, dan staat de scene daar stil.
 let baseMoment = null;
+// De smoortimer van het haal-beleid (zie plandataVerversing, onderaan). Staat hier om
+// exact dezelfde TDZ-reden als de twee hierboven: refreshTimeUI() raakt hem, en die
+// draait al vanaf de eerste tijdkiezer-interactie — ruim voordat het adapterblok
+// onderaan geëvalueerd is. Vierde keer dat dit patroon in dit project telt.
+let vensterTimer = null;
 // Toont de app tijden in UTC of in de zone van het apparaat? Staat hier om dezelfde
 // TDZ-reden: fmtTime/fmtStamp lezen hem, en die draaien al bij de eerste klok-tick.
 // `null` betekent nooit iets gekozen en dus de standaard (lokaal, het oude gedrag);
@@ -5825,6 +5846,16 @@ function refreshTimeUI() {
     head.classList.toggle('shifted', verschoven);
   }
   updateSunUniform();
+  // NIETS OPHALEN IS NIET HETZELFDE ALS NIETS TEKENEN. Schuift het moment binnen de
+  // voorraad, dan is er geen verzoek nodig, maar het GETOONDE venster is wel degelijk
+  // opgeschoven — zonder deze regel blijven de bevingen staan waar ze stonden terwijl
+  // de zon verder trekt. Gemeten: render() kost 0,31 ms bij ~300 events, dus dit mag
+  // gewoon elke stap, ook tijdens het afspelen.
+  render();
+  // Elke weg naar een ander moment loopt hier langs — de slider, het datumveld, de
+  // reset, de eclipssprong en elke stap van het afspelen. Eén aanroep dekt ze dus
+  // allemaal, en de smoring binnenin bepaalt of er werkelijk iets opgehaald wordt.
+  plandataVerversing();
 }
 
 const timeSliderEl = document.getElementById('time-slider');
@@ -5972,6 +6003,10 @@ function setPlay(dir) {
   if (dir !== 0) {
     playVorigeTijd = performance.now();
     playRaf = requestAnimationFrame(playStap);
+  } else {
+    // Tijdens het afspelen wordt er niets opgehaald (zie plandataVerversing). Bij het
+    // stoppen halen we in één keer in waar we geëindigd zijn.
+    plandataVerversing();
   }
 }
 function stopPlay() { setPlay(0); }
@@ -6328,7 +6363,7 @@ function showDetail(d) {
 
 // ---- Fetch loop ----------------------------------------------
 
-async function pull(adapter) {
+async function pull(adapter, opties = {}) {
   // Meerdere adapters kunnen één regel in het verbindingspaneel delen (de vier
   // EONET-categorieën tonen samen als "NASA EONET").
   const hid = adapter.healthId || adapter.id;
@@ -6338,11 +6373,20 @@ async function pull(adapter) {
     if (hid) setHealth(hid, 'warn', 'switched off');
     return;
   }
+  // EEN VAST TIJDVAK IN HET VERLEDEN VERANDERT NIET MEER. De interval-aanroep slaan
+  // we dan over — doorpollen zou alleen verkeer kosten en de status elke minuut een
+  // nieuwe tijdstempel geven die niets nieuws zegt. Een expliciete pull (bronwissel,
+  // venstersprong, andere preset) gaat wél gewoon door; alleen de klok wordt genegeerd.
+  if (opties.vanInterval && adapter.venster && !bijNu()) return;
   if (!adapter.url) { // bron uit (bv. bliksem-relay niet geconfigureerd op de server)
     if (hid) setHealth(hid, 'warn', 'off (no relay)');
     adapter.layers.forEach(l => setLayerLocked(l, true));
     return;
   }
+  // Het venster dat deze ronde ophaalt. Staat hier, synchroon met het opvragen van
+  // `adapter.url` hieronder, zodat beide hetzelfde moment lezen — er zit geen `await`
+  // tussen, dus verschuiven kan niet.
+  const gevraagdVenster = adapter.venster ? adapter.venster() : null;
   try {
     // Harde timeout per bron. Een hangende verbinding mag nooit een adapter
     // blijvend bezet houden; GDACS deed precies dat op 2026-07-30.
@@ -6364,6 +6408,12 @@ async function pull(adapter) {
     // je na het wisselen een fractie van de oude bron terugkomen. Zichtbaar geworden
     // op 2026-08-05: tot dan mochten beide bronnen aan staan en viel het niet op.
     if (adapter.enabled === false) return;
+    // Wat er nu in huis is. Zolang het getoonde venster hierbinnen valt, hoeft er
+    // niets opgehaald te worden — zie plandataVerversing(). Het venster is hierboven
+    // vastgelegd, vóór het verzoek: pas ná de `await` uitrekenen zou het venster van
+    // NU registreren terwijl het antwoord bij een ouder moment hoort. En pas hier
+    // toekennen, want een antwoord dat we weggooien mag geen voorraad claimen.
+    if (gevraagdVenster) adapter.geladen = gevraagdVenster;
     const fresh = adapter.normalize(json);
     // Een adapter mag zelf bepalen wat "gezond" betekent. De bliksemrelay is het
     // voorbeeld: bereikbaar zijn en data leveren zijn daar twee verschillende dingen.
@@ -6394,14 +6444,22 @@ async function pull(adapter) {
     // bronnen binnenkomen en twee keer melden; dat werd hier tegengehouden met een
     // `dup`-vlag. Met één bron tegelijk kan het niet meer gebeuren, maar de volgorde
     // blijft: `seenIds` hoort de stand ná de merge te weerspiegelen.
-    const now = Date.now();
-    const newItems = fresh.filter(d => !NO_TOAST_LAYERS.has(d.layer) && !seenIds.has(d.id));
-    newItems.forEach(d => seenIds.add(d.id));
-    if (initialLoadDone) {
-      newItems
-        .filter(d => active[d.layer] && d.time && (now - d.time) < 15 * 60 * 1000)
-        .slice(0, 4) // niet spammen bij een grote refresh
-        .forEach(d => showToast(d.layer, d));
+    //
+    // EN MELDINGEN HOREN BIJ HET HEDEN. Bij een verschoven venster is elke
+    // gebeurtenis "nieuw", dus dit hele blok blijft dan dicht. Dat scheelt twee
+    // dingen tegelijk: geen golf van meldingen bij een sprong in de tijd, en
+    // `seenIds` loopt niet vol met id's uit 1985 — waarna de eerste terugkeer naar
+    // nu alles opnieuw zou melden omdat de verzameling was leeggegooid.
+    if (bijNu()) {
+      const now = Date.now();
+      const newItems = fresh.filter(d => !NO_TOAST_LAYERS.has(d.layer) && !seenIds.has(d.id));
+      newItems.forEach(d => seenIds.add(d.id));
+      if (initialLoadDone) {
+        newItems
+          .filter(d => active[d.layer] && d.time && (now - d.time) < 15 * 60 * 1000)
+          .slice(0, 4) // niet spammen bij een grote refresh
+          .forEach(d => showToast(d.layer, d));
+      }
     }
     render();
     setStatus('live · last ' + fmtTime(new Date()));
@@ -6425,7 +6483,43 @@ function setStatus(msg) { document.getElementById('status').textContent = msg; }
 
 function startAdapter(adapter) {
   pull(adapter);
-  setInterval(() => pull(adapter), adapter.interval);
+  // `vanInterval` maakt het onderscheid tussen "de klok tikte" en "er is iets
+  // veranderd". Alleen de eerste soort wordt overgeslagen bij een vast tijdvak.
+  setInterval(() => pull(adapter, { vanInterval: true }), adapter.interval);
+}
+
+// ---- Wanneer wordt er opnieuw opgehaald --------------------------------------
+// Het gekozen moment kan honderden keren per minuut verschuiven: de slider stapt per
+// 10 minuten en `play` loopt tot 48 uur per seconde. Bij elke verandering ophalen zou
+// een verzoekenregen geven. Drie regels houden dat tegen, van goedkoop naar duur:
+//
+//   1. valt het getoonde venster binnen wat er al geladen is → niets doen;
+//   2. valt het erbuiten → één verzoek, en pas als de beweging voorbij is;
+//   3. tijdens `play` → nooit, want afspelen is per definitie sneller dan een
+//      netwerkronde. Bij het stoppen haalt regel 2 het in.
+//
+// De smoring is dezelfde techniek als countryLabelRankDebounce (sessie 9) en om
+// dezelfde reden: tijdens de beweging niets doen.
+// (`vensterTimer` staat bovenaan bij de scene-state — zie de TDZ-noot daar.)
+const VENSTER_SMOOR_MS = 600;
+
+function vensterGedekt(adapter) {
+  const l = adapter.geladen;
+  if (!l) return false;
+  const w = eventWindow(adapter.days[timeWindow] ?? 1);
+  return w.van >= l.van && w.tot <= l.tot;
+}
+
+function plandataVerversing() {
+  if (playDir) return;                     // regel 3
+  clearTimeout(vensterTimer);
+  vensterTimer = setTimeout(() => {
+    // Geen enkele laag bij naam: een adapter met `venster()` doet mee, de rest niet.
+    // Zo komt EONET er in spoor 2 bij zonder dat hier iets verandert.
+    for (const a of Object.values(Adapters)) {
+      if (a.venster && a.enabled !== false && !vensterGedekt(a)) pull(a);
+    }
+  }, VENSTER_SMOOR_MS);
 }
 
 // ---- Clock ---------------------------------------------------
