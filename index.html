@@ -1543,6 +1543,30 @@ function quakeMerge(prev, fresh, src) {
   return prev.filter(d => !(d.layer === 'quake' && d.src === src)).concat(fresh);
 }
 
+// ---- Het datavenster ligt om het GEKOZEN moment, niet om de wandklok ----------
+// Terugkijkend, niet gecentreerd: "past day" bij een moment in 1985 zijn de 24 uur
+// vóór dat moment. Gecentreerd zou bij `nu` half in de toekomst liggen en dus half
+// leeg zijn, en de labels ("past day") zouden niet meer kloppen.
+//
+// TDZ: deze functie leest via momentNow() de variabelen `baseMoment` en
+// `timeOffsetMs`, die verderop bij de scene-state staan. Dat mag, want hij draait
+// pas als een adapter zijn `url` opvraagt — en dat gebeurt in het init-blok
+// onderaan. Roep hem niet aan op top-level hierboven.
+function eventWindow(dagen) {
+  const tot = momentNow().getTime();
+  return { van: tot - dagen * 86_400_000, tot };
+}
+
+// Een tijdstip als FDSN-parameter: seconden, geen zone-achtervoegsel. BLIJFT UTC,
+// ongeacht de UTC-schakelaar in Settings — dit is een parameter en geen weergave.
+// Niet door fmtStamp halen.
+const fdsnTijd = (ms) => new Date(ms).toISOString().slice(0, 19);
+
+// Staat het venster op `nu`, dan sturen we geen bovengrens mee: een `end` van
+// precies nu zou bij het geringste klokverschil de nieuwste events afkappen, en
+// gebeurtenissen ná nu bestaan toch niet.
+const bijNu = () => baseMoment === null && timeOffsetMs === 0;
+
 const Adapters = {
   // USGS — aardbevingen, via het query-endpoint van dezelfde catalogus.
   // ---------------------------------------------------------------------------
@@ -1570,10 +1594,7 @@ const Adapters = {
     interval: 60_000,
     days: { hour: 1 / 24, day: 1, week: 7 },
     get url() {
-      const back = (this.days[timeWindow] ?? 1) * 86_400_000;
-      // BLIJFT UTC, ongeacht de UTC-schakelaar in Settings — dit is een parameter,
-      // geen weergave. Niet door fmtStamp halen. Zelfde afspraak als bij EMSC.
-      const start = new Date(Date.now() - back).toISOString().slice(0, 19);
+      const w = eventWindow(this.days[timeWindow] ?? 1);
       // Vanaf M1 ophalen, ongeacht het filter: dat is de laagste stand die de
       // interface kent, en het magnitudefilter werkt daarmee zonder nieuwe ronde.
       // De feeds droegen ook alles onder M1 mee (108 van de 279 op een gewone dag);
@@ -1582,7 +1603,8 @@ const Adapters = {
       // uitzonderlijk drukke week vallen de OUDSTE events weg, niet willekeurige.
       return 'https://earthquake.usgs.gov/fdsnws/event/1/query' +
              '?format=geojson&limit=2000&orderby=time&minmagnitude=' + QUAKE_FLOOR_MAG +
-             '&starttime=' + start;
+             '&starttime=' + fdsnTijd(w.van) +
+             (bijNu() ? '' : '&endtime=' + fdsnTijd(w.tot));
     },
     normalize(json) {
       return (json.features || []).map(f => {
@@ -1635,13 +1657,11 @@ const Adapters = {
     interval: 60_000,
     days: { hour: 1 / 24, day: 1, week: 7 },
     get url() {
-      const back = (this.days[timeWindow] ?? 1) * 86_400_000;
-      // BLIJFT UTC, ongeacht de UTC-schakelaar in Settings: dit is een FDSN-parameter
-      // en geen weergave. Niet door fmtStamp halen.
-      const start = new Date(Date.now() - back).toISOString().slice(0, 19);
+      const w = eventWindow(this.days[timeWindow] ?? 1);
       return 'https://www.seismicportal.eu/fdsnws/event/1/query' +
              '?format=json&limit=2000&minmag=' + QUAKE_FLOOR_MAG +
-             '&start=' + start;
+             '&start=' + fdsnTijd(w.van) +
+             (bijNu() ? '' : '&end=' + fdsnTijd(w.tot));
     },
     normalize(json) {
       return (json.features || []).map(f => {
@@ -3105,13 +3125,21 @@ function setAutoRotate(on) {
 world.controls().addEventListener('start', pauseAutoRotate);
 
 function render() {
-  const now = Date.now();
+  // HET GEKOZEN MOMENT, niet de wandklok. Deze regel hoort onlosmakelijk bij de
+  // vensters in de adapters (zie eventWindow): laat je hier `Date.now()` staan, dan
+  // komen de events van 1985 keurig binnen en filtert deze regel ze allemaal weg —
+  // een lege kaart die eruitziet alsof de bron niets heeft.
+  const now = momentNow().getTime();
   const windowMs = WINDOW_MS[timeWindow];
   // slider: toon alleen events binnen het ingestelde deel van het venster.
   // sliderFrac 1 = volledige venster, 0.25 = alleen het meest recente kwart.
   const cutoff = now - windowMs * sliderFrac;
+  // Ook een BOVENgrens, zodat de weergave niet afhangt van wat er toevallig nog in
+  // de store staat: spring je van 2020 naar 1985, dan hoort 2020 meteen weg te zijn,
+  // ook in het venstertje tussen de sprong en het antwoord van de bron.
   const visible = store.filter(d =>
-    active[d.layer] && (!TIME_FILTERED.has(d.layer) || d.time >= cutoff)
+    active[d.layer] &&
+    (!TIME_FILTERED.has(d.layer) || (d.time >= cutoff && d.time <= now))
   );
   // Aardbevingen ook op kracht filteren. Dit is de ENIGE plek waar dat gebeurt:
   // markers, labels, tellers en de lijst eten allemaal uit `quakes`, dus ze
@@ -6324,7 +6352,11 @@ async function pull(adapter) {
     try { res = await fetch(adapter.url, { signal: ctl.signal }); }
     finally { clearTimeout(timer); }
     if (!res.ok) throw new Error(res.status);
-    const json = await res.json();
+    // 204 IS EEN GELDIG ANTWOORD MET EEN LEGE BODY, en `res.ok` is waar voor elke
+    // 2xx. Gemeten 2026-08-08: EMSC antwoordt zo voor elk tijdvak vóór 1998. Zonder
+    // deze regel gooit `res.json()` op een lege body, valt de fout in de catch en
+    // meldt de app "network/CORS" — een leeg tijdvak dat zich voordoet als storing.
+    const json = res.status === 204 ? { features: [] } : await res.json();
     // NOG EEN KEER TOETSEN, en dit is geen overdaad. De toets bovenaan draaide vóór
     // het netwerkverkeer; wie ondertussen van seismische bron wisselt, heeft die
     // adapter dus al uitgezet terwijl zijn antwoord nog onderweg is. Zonder deze
