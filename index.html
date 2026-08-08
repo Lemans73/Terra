@@ -310,14 +310,15 @@
       <div class="srcs" id="quake-sources">
       <label class="src">
       <input type="radio" name="quake-src" data-src="emsc" checked>
-      <span>EMSC</span><em>global &#183; 120 networks</em>
+      <span>EMSC</span><em>global &#183; 120 networks<b>1998 &#8211; now</b></em>
       </label>
       <label class="src">
       <input type="radio" name="quake-src" data-src="usgs">
-      <span>USGS</span><em>global &#183; Unified</em>
+      <span>USGS</span><em>global &#183; Unified<b>1900 &#8211; now</b></em>
       </label>
       </div>
       <button class="apply" id="src-apply" disabled>Apply</button>
+      <p class="src-switch" id="src-switch" hidden></p>
       <p class="srcs-note">
       USGS publishes a global catalogue from its own network and contributing
       stations. EMSC aggregates solutions from around 120 monitoring networks,
@@ -1603,6 +1604,11 @@ const Adapters = {
     // vraagt niet meer van de server dan hij aanbiedt. De beleefdheid zit verder in
     // de tabblad-pauze in pull(), niet in een traag interval.
     interval: 60_000,
+    // GEMETEN dekking, niet wat de documentatie belooft (2026-08-08, één week juni,
+    // M1+): 1960 → 22 · 1985 → 767 · 1995 → 924 · 2026 → 1590. De catalogus reikt tot
+    // 1900. Vóór ongeveer 1980 betekent minder events minder seismometers en niet een
+    // rustiger aarde — dat voorbehoud hoort de app te tonen, zie de teller.
+    dekkingVanaf: 1900,
     days: { hour: 1 / 24, day: 1, week: 7 },
     // De haak die deze bron aan het haal-beleid koppelt (zie plandataVerversing).
     // Een adapter mét `venster()` doet aan tijdreizen; een adapter zonder merkt er
@@ -1670,6 +1676,11 @@ const Adapters = {
   emsc: {
     layers: ['quake'],
     interval: 60_000,
+    // GEMETEN grens (2026-08-08, één week juni, M1+): t/m 1997 antwoordt EMSC met
+    // HTTP 204 en een lege body; 1998 → 135 · 2001 → 145 · 2004 → 247 · 2010 → 1294 ·
+    // 2020 → 1679. De groei is netwerkuitbreiding, niet meer aardbevingen. Onder deze
+    // grens wisselt de app zichtbaar naar USGS — zie borgBrondekking().
+    dekkingVanaf: 1998,
     days: { hour: 1 / 24, day: 1, week: 7 },
     venster() { return fetchWindow(this.days[timeWindow] ?? 1); },
     get url() {
@@ -6185,8 +6196,11 @@ srcRadios.forEach(r => {
   r.addEventListener('change', () => { srcApplyBtn.disabled = srcGekozen() === srcActief(); });
 });
 
-srcApplyBtn.addEventListener('click', () => {
-  const kies = srcGekozen();
+// Eén weg naar een bronwissel, of de aanleiding nu de knop is of de dekkingstoets
+// hieronder. Dat is belangrijker dan het lijkt: `syncSrcUI()` laat de radio's de
+// WERKELIJKE stand van de adapters volgen, dus een automatische wissel verspringt
+// zichtbaar in de interface in plaats van er stilletjes naast te gaan staan.
+function kiesBron(kies) {
   if (!kies) return;
   for (const r of srcRadios) {
     const id = r.dataset.src, adapter = Adapters[id];
@@ -6195,14 +6209,70 @@ srcApplyBtn.addEventListener('click', () => {
     } else if (srcIsOn(id)) {
       adapter.enabled = false;
       store = store.filter(d => !(d.layer === 'quake' && d.src === id));
+      // De voorraad van een uitgezette bron is niets meer waard: zet hem terug op
+      // niets, anders denkt het haal-beleid bij het weer aanzetten dat er al data is.
+      adapter.geladen = null;
       setHealth(id, 'warn', 'switched off');
     }
   }
   syncSrcUI();
   resetQuakeList();
   render();
-});
+}
+
+srcApplyBtn.addEventListener('click', () => kiesBron(srcGekozen()));
 syncSrcUI();
+
+// ---- De bron moet het gekozen tijdvak wél hebben -----------------------------
+// De grens is de GEMETEN dekking van de catalogus (`dekkingVanaf`), geen vast aantal
+// dagen: een maand terug wisselt dus niets, want EMSC dekt 1998 tot nu.
+//
+// Een automatische ingreep mag de keuze van de bezoeker LENEN, niet overschrijven.
+// Vandaar `bronVoorWissel`: zodra het moment weer binnen bereik komt, gaat de keuze
+// terug naar wat er zelf gekozen was. Zelfde patroon als `activeVoorSlot` bij de
+// lagen, en om dezelfde reden — de app mag niet blijven zitten op een stand die zij
+// zelf heeft afgedwongen.
+let bronVoorWissel = null;
+const srcSwitchEl = document.getElementById('src-switch');
+
+function dektMoment(adapter) {
+  if (!adapter.dekkingVanaf) return true;
+  return momentNow().getUTCFullYear() >= adapter.dekkingVanaf;
+}
+
+function toonBronwissel(van, naar) {
+  if (!srcSwitchEl) return;
+  srcSwitchEl.hidden = !van;
+  if (van) {
+    srcSwitchEl.textContent =
+      `${van.toUpperCase()} starts in ${Adapters[van].dekkingVanaf} — switched to ${naar.toUpperCase()}.`;
+  }
+}
+
+// Geeft terug of er gewisseld is. De aanroeper slaat zijn eigen ophaalronde dan over,
+// want kiesBron() heeft er al een gestart.
+function borgBrondekking() {
+  const actief = srcActief();
+  if (!actief) return false;
+  if (!dektMoment(Adapters[actief])) {
+    const vervanger = srcRadios.map(r => r.dataset.src)
+      .find(id => id !== actief && dektMoment(Adapters[id]));
+    if (!vervanger) return false;         // niemand dekt dit; laat staan en toon leeg
+    bronVoorWissel = bronVoorWissel || actief;
+    kiesBron(vervanger);
+    toonBronwissel(actief, vervanger);
+    return true;
+  }
+  // Terug binnen bereik: de eigen keuze herstellen.
+  if (bronVoorWissel && dektMoment(Adapters[bronVoorWissel]) && bronVoorWissel !== actief) {
+    const terug = bronVoorWissel;
+    bronVoorWissel = null;
+    kiesBron(terug);
+    toonBronwissel(null);
+    return true;
+  }
+  return false;
+}
 
 // De uitklap zelf. Staat dicht bij het opstarten: EMSC is de bron, en wie daar
 // niets aan wil veranderen hoort er niet langs te moeten om bij de filters te komen.
@@ -6514,6 +6584,10 @@ function plandataVerversing() {
   if (playDir) return;                     // regel 3
   clearTimeout(vensterTimer);
   vensterTimer = setTimeout(() => {
+    // Eerst de bron: heeft de actieve catalogus dit tijdvak überhaupt? Zo niet, dan
+    // wisselt hij zichtbaar en haalt die wissel zelf al op — dan is de ronde hieronder
+    // dubbel werk.
+    if (borgBrondekking()) return;
     // Geen enkele laag bij naam: een adapter met `venster()` doet mee, de rest niet.
     // Zo komt EONET er in spoor 2 bij zonder dat hier iets verandert.
     for (const a of Object.values(Adapters)) {

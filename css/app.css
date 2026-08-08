@@ -944,6 +944,28 @@
   .src input { accent-color: var(--accent); width: 14px; height: 14px; cursor: pointer; }
   .src span { font-size: 12px; font-weight: 600; color: var(--ink); }
   .src em { font-style: normal; font-size: 11px; color: var(--ink-faint); text-align: right; }
+  /* Het tijdvak dat deze catalogus werkelijk dekt — GEMETEN, niet wat de
+     documentatie belooft. Staat onder de omschrijving omdat het pas telt zodra je
+     met de tijdkiezer terug gaat; bij `nu` is het achtergrondinformatie. */
+  .src em b {
+    display: block;
+    font-weight: 500;
+    color: var(--ink-dim);
+    font-variant-numeric: tabular-nums;
+  }
+  /* De regel die verschijnt als de app zelf van bron wisselde. Zelfde amber taal als
+     .cosmos-warn bij polar motion — en met opzet dezelfde waarden, niet een eigen
+     tint: dit is geen fout, maar wel iets waarvan je moet weten dat het gebeurd is. */
+  .src-switch {
+    margin: -6px 0 12px;
+    padding: 7px 9px;
+    border-radius: 6px;
+    background: rgba(255,209,102,0.08);
+    border: 1px solid rgba(255,209,102,0.22);
+    font-size: 10px;
+    line-height: 1.5;
+    color: #e4cd9a;
+  }
   .apply {
     width: 100%;
     background: transparent;
