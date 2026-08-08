@@ -1988,6 +1988,12 @@ const active = { quake:true, volcano:true, storm:true, ice:true, wildfire:true, 
 // venster zou die ten onrechte verbergen. Zie PLAN-terra-publicatie.md.
 const TIME_FILTERED = new Set(['quake']);
 
+// Lagen die het gekozen moment NIET kunnen volgen. Twee soorten, en het verschil is
+// tijdelijk: WAQI en Blitzortung kennen alleen het heden en zullen dat altijd doen;
+// de vier EONET-lagen hébben historie (gemeten: terug tot 1990) maar Terra leest die
+// nog niet — die vallen hier weg zodra spoor 2 er is.
+const TIJDREIS_ONMOGELIJK = ['aqi', 'lightning', 'volcano', 'wildfire', 'storm', 'ice'];
+
 // referenties naar de actieve 3D-glyph-objecten (voor per-frame animatie)
 let glyphList = [];
 let hovered = null;        // het 3D-object onder de muis (raycaster-highlight)
@@ -3233,37 +3239,89 @@ document.querySelectorAll('.layer').forEach(el => {
 //
 // Het paneeltje is uitklapbaar en niet zomaar een icoon, omdat het invoerveld voor
 // een eigen sleutel hier later in komt (beslissing 25 en 26).
+//
+// TWEE REDENEN, en ze kunnen tegelijk gelden. 'source' = de bron doet het niet;
+// 'time' = dit tijdvak bestaat niet voor deze laag. Dat onderscheid is nodig sinds de
+// tijdkiezer de gebeurtenissen stuurt: valt WAQI uit, ga je naar 1985 en komt WAQI
+// terug, dan haalde pull() vroeger het slot eraf en stond de luchtkwaliteit van
+// vandaag boven een kaart uit 1985. `time` weegt zwaarder dan `source` — een tijdvak
+// dat niet bestaat is de fundamentelere reden.
 const LOCK_INFO = {
-  aqi: {
-    kop: 'Your own key required',
-    tekst: 'Air quality comes from WAQI and needs a free token. This demo runs ' +
-           'without one; deploy your own copy to add it.',
-    href: 'https://aqicn.org/data-platform/token/',
-    linkTekst: 'Request a free token'
+  source: {
+    aqi: {
+      kop: 'Your own key required',
+      tekst: 'Air quality comes from WAQI and needs a free token. This demo runs ' +
+             'without one; deploy your own copy to add it.',
+      href: 'https://aqicn.org/data-platform/token/',
+      linkTekst: 'Request a free token'
+    },
+    lightning: {
+      kop: 'Your own relay required',
+      tekst: 'Lightning comes from Blitzortung over a permanently open WebSocket. That ' +
+             'cannot run on serverless hosting, so this layer needs your own relay.',
+      href: REPO_URL,
+      linkTekst: 'How to set one up'
+    }
   },
-  lightning: {
-    kop: 'Your own relay required',
-    tekst: 'Lightning comes from Blitzortung over a permanently open WebSocket. That ' +
-           'cannot run on serverless hosting, so this layer needs your own relay.',
-    href: REPO_URL,
-    linkTekst: 'How to set one up'
+  // Vergrendelen en niet waarschuwen: een kaart die deels 1985 en deels vandaag toont
+  // is niet onvolledig maar onwaar.
+  time: {
+    aqi: {
+      kop: 'The present only',
+      tekst: 'WAQI reports what its stations measure right now. There is no archive ' +
+             'to travel back through.'
+    },
+    lightning: {
+      kop: 'The present only',
+      tekst: 'Lightning arrives over a live stream from Blitzortung. Strikes that ' +
+             'were not observed while it ran cannot be recovered.'
+    },
+    // TIJDELIJK — verdwijnt met spoor 2, wanneer EONET zijn `start`/`end` krijgt.
+    // De bron heeft de historie wél (gemeten: terug tot 1990, bruikbaar vanaf ~2000).
+    volcano:  { kop: 'Not travelling yet', tekst: 'NASA EONET keeps this history, but Terra does not read it yet.' },
+    wildfire: { kop: 'Not travelling yet', tekst: 'NASA EONET keeps this history, but Terra does not read it yet.' },
+    storm:    { kop: 'Not travelling yet', tekst: 'NASA EONET keeps this history, but Terra does not read it yet.' },
+    ice:      { kop: 'Not travelling yet', tekst: 'NASA EONET keeps this history, but Terra does not read it yet.' }
   }
 };
 
-const lockedLayers = new Set();
+// Laag → verzameling redenen. Leeg (of afwezig) betekent open. Een Set en geen vlag,
+// juist omdat het slot pas weg mag als de LAATSTE reden weg is.
+const lockedLayers = new Map();
+const LOCK_PRIO = ['time', 'source'];
+const lockRedenen = (layer) => lockedLayers.get(layer) || new Set();
+// De tekst hoort bij de zwaarste reden die op dit moment geldt.
+function lockInfoVoor(layer) {
+  const redenen = lockRedenen(layer);
+  for (const r of LOCK_PRIO) if (redenen.has(r)) return LOCK_INFO[r]?.[layer] || null;
+  return null;
+}
 // Stond de laag aan voordat het slot erop ging? Zo ja, dan zetten we hem bij herstel
 // weer aan. Zonder dit blijft een laag na het terugkomen van zijn bron op nul staan,
 // terwijl de bezoeker hem nooit zelf heeft uitgezet.
 const activeVoorSlot = {};
 
-function setLayerLocked(layer, vergrendeld) {
+function setLayerLocked(layer, vergrendeld, reden = 'source') {
   const rij = document.querySelector('.layer[data-layer="' + layer + '"]');
-  const info = LOCK_INFO[layer];
-  if (!rij || !info) return;
-  if (vergrendeld === lockedLayers.has(layer)) return;   // niets veranderd
+  // Geen tekst voor deze combinatie van laag en reden? Dan kent de app dit slot niet
+  // en doet ze niets — beter dan een slotje zonder uitleg.
+  if (!rij || (vergrendeld && !LOCK_INFO[reden]?.[layer])) return;
 
-  if (!vergrendeld) {
-    lockedLayers.delete(layer);
+  const redenen = lockRedenen(layer);
+  const wasOpSlot = redenen.size > 0;
+  if (vergrendeld) redenen.add(reden); else redenen.delete(reden);
+  if (redenen.size) lockedLayers.set(layer, redenen); else lockedLayers.delete(layer);
+  const opSlot = redenen.size > 0;
+
+  // Er is een reden bij gekomen of weggevallen terwijl het slot blijft staan: alleen
+  // de uitleg kan veranderd zijn. Dit is het geval waar de oude vlag op stukliep — hij
+  // zag "vergrendeld → vergrendeld" als "niets veranderd" en opende het slot.
+  if (wasOpSlot === opSlot) {
+    if (opSlot) werkSlotUitlegBij(rij, layer);
+    return;
+  }
+
+  if (!opSlot) {
     rij.classList.remove('locked');
     rij.querySelector('.lock-btn')?.remove();
     document.querySelector('.layer-detail[data-detail="lock-' + layer + '"]')?.remove();
@@ -3275,7 +3333,7 @@ function setLayerLocked(layer, vergrendeld) {
     return;
   }
 
-  lockedLayers.add(layer);
+  const info = lockInfoVoor(layer);
   activeVoorSlot[layer] = active[layer];
   rij.classList.add('locked', 'off');
   active[layer] = false;
@@ -3304,8 +3362,11 @@ function setLayerLocked(layer, vergrendeld) {
   const paneel = document.createElement('div');
   paneel.className = 'layer-detail lock-detail';
   paneel.dataset.detail = 'lock-' + layer;
+  // Niet elke reden wijst ergens heen: een tijdvak dat niet bestaat heeft geen link
+  // waar je iets kunt regelen. De link is daarom optioneel.
   paneel.innerHTML = '<h3>' + info.kop + '</h3><p>' + info.tekst + '</p>' +
-    '<a href="' + info.href + '" target="_blank" rel="noopener">' + info.linkTekst + ' ↗</a>';
+    (info.href ? '<a href="' + info.href + '" target="_blank" rel="noopener">' +
+                 info.linkTekst + ' ↗</a>' : '');
   rij.insertAdjacentElement('afterend', paneel);
 
   knop.addEventListener('click', e => {
@@ -3313,6 +3374,33 @@ function setLayerLocked(layer, vergrendeld) {
     paneel.classList.toggle('show');
     knop.classList.toggle('open');
   });
+}
+
+// Staat het moment ergens anders dan nu, dan gaan de lagen op slot die daar niet
+// mee kunnen. Bij terugkeer naar nu gaat het slot eraf en herstelt elke laag de stand
+// waarin de bezoeker hem achterliet (activeVoorSlot).
+function borgTijdsloten() {
+  const verschoven = !bijNu();
+  for (const l of TIJDREIS_ONMOGELIJK) setLayerLocked(l, verschoven, 'time');
+}
+
+// Het slot blijft staan, maar de zwaarste reden is een andere geworden — dan hoort de
+// uitleg mee te veranderen. Zonder dit zou een laag die om twee redenen dicht zit de
+// tekst van de eerste reden houden, ook nadat die reden weg was.
+function werkSlotUitlegBij(rij, layer) {
+  const info = lockInfoVoor(layer);
+  if (!info) return;
+  const knop = rij.querySelector('.lock-btn');
+  if (knop) {
+    knop.title = LOCK_DETAILS ? info.kop : info.kop + ' — ' + info.tekst;
+    knop.setAttribute('aria-label', knop.title);
+  }
+  const paneel = document.querySelector('.layer-detail[data-detail="lock-' + layer + '"]');
+  if (paneel) {
+    paneel.innerHTML = '<h3>' + info.kop + '</h3><p>' + info.tekst + '</p>' +
+      (info.href ? '<a href="' + info.href + '" target="_blank" rel="noopener">' +
+                   info.linkTekst + ' ↗</a>' : '');
+  }
 }
 
 // Bliksem draait volledig via de relay (relay/relay.mjs). Is er geen relay-adres, dan
@@ -5857,6 +5945,9 @@ function refreshTimeUI() {
     head.classList.toggle('shifted', verschoven);
   }
   updateSunUniform();
+  // Wat niet mee terug kan, gaat op slot. Staat vóór render() zodat de kaart in één
+  // keer klopt in plaats van een frame lang lagen te tonen die er niet horen.
+  borgTijdsloten();
   // NIETS OPHALEN IS NIET HETZELFDE ALS NIETS TEKENEN. Schuift het moment binnen de
   // voorraad, dan is er geen verzoek nodig, maar het GETOONDE venster is wel degelijk
   // opgeschoven — zonder deze regel blijven de bevingen staan waar ze stonden terwijl
@@ -6450,7 +6541,7 @@ async function pull(adapter, opties = {}) {
   if (opties.vanInterval && adapter.venster && !bijNu()) return;
   if (!adapter.url) { // bron uit (bv. bliksem-relay niet geconfigureerd op de server)
     if (hid) setHealth(hid, 'warn', 'off (no relay)');
-    adapter.layers.forEach(l => setLayerLocked(l, true));
+    adapter.layers.forEach(l => setLayerLocked(l, true, 'source'));
     return;
   }
   // Het venster dat deze ronde ophaalt. Staat hier, synchroon met het opvragen van
@@ -6490,7 +6581,7 @@ async function pull(adapter, opties = {}) {
     const h = adapter.health ? adapter.health(json) : { state: 'live' };
     setHealth(hid, h.state, h.note);
     // De bron antwoordt weer: een slotje dat er nog staat kan eraf.
-    adapter.layers.forEach(l => setLayerLocked(l, false));
+    adapter.layers.forEach(l => setLayerLocked(l, false, 'source'));
     const owned = new Set(adapter.layers);
     // Een leeg antwoord is voor de meeste bronnen een geldig antwoord: een rustige
     // week zonder stormen hoort de stormlaag ook echt leeg te maken. Alleen adapters
@@ -6541,7 +6632,7 @@ async function pull(adapter, opties = {}) {
     // sleutel). Die valt stil weg in plaats van de hele app als "beperkt" te melden,
     // en zijn lagen gaan op slot met uitleg hoe je er zelf een achterkant onder zet.
     if (adapter.optional) {
-      adapter.layers.forEach(l => setLayerLocked(l, true));
+      adapter.layers.forEach(l => setLayerLocked(l, true, 'source'));
       return;
     }
     console.warn('Fetch failed for adapter:', e);
@@ -6686,7 +6777,7 @@ function dismissBoot() {
 // hier staat en niet daar: de aanroep raakt via render() → rebuildLabels() de const
 // `labelLayer`, en die bestaat pas na dit punt. Alles wat setLayerLocked() nodig heeft,
 // is hier geïnitialiseerd.
-if (!RELAY_BASE) setLayerLocked('lightning', true);
+if (!RELAY_BASE) setLayerLocked('lightning', true, 'source');
 
 // ============================================================
 //  Zon en maan (sessie 14)
