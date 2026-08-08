@@ -1146,7 +1146,7 @@ import {
   dayNightShader, CLOUD_VERT, CLOUD_FRAG, FOG_VERT, FOG_FRAG
 } from './js/shaders.js';
 // Efemeriden voor zon en maan (Meeus). Puur JS, geen netwerk, geen sleutel.
-import { ephemeris as sunMoonEphemeris, latLonToUnit, eclipseShadow,
+import { ephemeris, latLonToUnit, eclipseShadow,
          nextSolarEclipse, previousSolarEclipse, eclipsePath } from './js/sunmoon.js';
 import { createSunMoonLayer } from './js/sunmoon-layer.js';
 // De geomagnetische dipool (IGRF-14). Ook puur JS, ook geen netwerk: de
@@ -2651,7 +2651,11 @@ function findThree() { return THREE; }
 // De signatuur blijft [lng, lat], zodat de aanroepende code en de shader-uniform
 // ongemoeid blijven.
 function sunPositionAt(dt) {
-  const { lat, lon } = sunMoonEphemeris(new Date(dt)).subSolar;
+  // GEEN ALIAS bij de import hierboven: het buildscript stript importregels en plakt
+  // de modules aan elkaar, dus een `as`-naam verwijst in de standalone naar niets.
+  // Stond hier tot 2026-08-08 als `sunMoonEphemeris` en was daar een latente
+  // ReferenceError. Het buildscript weigert nu een alias, zie tools/build-standalone.mjs.
+  const { lat, lon } = ephemeris(new Date(dt)).subSolar;
   return [lon, lat]; // [lng, lat]
 }
 

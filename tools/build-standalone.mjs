@@ -255,6 +255,29 @@ assertGone(out, 'href="./css/app.css"', 'stylesheet link');
 const modules = await collectModules(html);
 if (!modules.length) throw new Error('build failed: no local imports found in index.html');
 
+// ---- No aliases in local imports ------------------------------------------
+// `import { ephemeris as sunMoonEphemeris } from './js/sunmoon.js'` reads fine as a
+// module and is a landmine here: the import line is stripped and the modules are
+// concatenated, so the alias never gets declared and every call site refers to a name
+// that does not exist. It was in index.html from session 14 and only surfaced in
+// session 19, because the one call site happened to sit behind a guard that had not
+// fired yet.
+//
+// REFUSED, NOT REPAIRED. Emitting `const alias = original;` would work, but it makes
+// this script responsible for a piece of module semantics — and that responsibility is
+// exactly where the bug came from. A build that stops with a name in the message costs
+// one minute; a standalone that throws at an arbitrary moment costs an afternoon.
+const ALIAS_RE = /\b([A-Za-z_$][\w$]*)\s+as\s+([A-Za-z_$][\w$]*)/;
+for (const stmt of [...html.matchAll(IMPORT_RE)]) {
+  if (!isLocal(stmt[1])) continue;                       // CDN imports are untouched
+  const alias = ALIAS_RE.exec(stmt[0]);
+  if (alias) {
+    throw new Error(
+      `build failed: aliased local import — "${alias[1]} as ${alias[2]}" from ${stmt[1]}.\n` +
+      `  The alias does not survive inlining. Import the original name and use that.`);
+  }
+}
+
 let inlined = '';
 for (const m of modules) {
   inlined += `\n/* ===== inlined from ./${m} ===== */\n` + deModule(await read(m)) + '\n';
