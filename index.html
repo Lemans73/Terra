@@ -296,11 +296,17 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
           <span class="tab-label">Layers</span>
         </button>
-        <button class="tab" data-tab="cosmos" title="Sun &amp; Moon" aria-label="Sun and Moon">
+        <!-- ALMANAC sinds sessie 20 (was "Sun & Moon"). De tab draagt nu ook de
+             rotatie-as, de poolbeweging en het magnetische veld, en die vallen niet
+             onder zon en maan. De sleutel blijft `cosmos` — die zit op tientallen
+             plekken in vier bestanden, en hij is nergens zichtbaar. Zelfde afweging
+             als bij `expert` voor "Schematic" (sessie 9). -->
+        <button class="tab" data-tab="cosmos" title="Almanac" aria-label="Almanac">
           <!-- Halfgevulde cirkel: de ene helft licht, de andere donker. Leest als
-               dag en nacht én als maanfase, wat precies is wat deze tab regelt. -->
+               dag en nacht én als maanfase, en blijft kloppen voor een tab die de
+               berekende stand van hemel en aardas draagt. -->
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20z" fill="currentColor" stroke="none"/></svg>
-          <span class="tab-label">Sun &amp; Moon</span>
+          <span class="tab-label">Almanac</span>
         </button>
 <!-- SKETCH:START — derde tab, vóór Settings.
 
@@ -309,7 +315,8 @@
      standen — krapste geval "Sun & Moon" met een label van 67,7px in een tab van
      67px, dezelfde uitkomst als sessie 14 toen er ook vier tabs waren. Sinds het
      paneel 280px is, is de rij 212px en is er ruim marge. Geen enkel label wordt
-     afgekapt. -->
+     afgekapt. (Dat krapste geval heet sinds sessie 20 "Almanac" en is korter, dus
+     de marge is alleen groter geworden.) -->
         <button class="tab" data-tab="sketch" title="Sketch" aria-label="Sketch">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
           <span class="tab-label">Sketch</span>
@@ -518,11 +525,20 @@
       </div>
       </section>
 
+    </div>
+
+    <div class="tabpanel" data-panel="cosmos">
       <!-- ---------- DE ASSEN VAN DE AARDE ----------
-           Eigen sectie en geen rij bij Earth overlays: dat zijn statische
-           kaartlagen zonder teller, terwijl deze berekend zijn, met het moment
-           meebewegen en een readout dragen. Een eigen tab kan niet, de tabrij zit
-           vol op vier (gemeten sessie 17).
+           STAAT SINDS SESSIE 20 IN DE ALMANAC-TAB en niet meer bij Layers. Wat deze
+           tab bindt is dat alles erin BEREKEND is in plaats van waargenomen: zon,
+           maan, rotatie-as, dipoolas, poolbeweging. Layers is waarneming, dit is
+           model — en de as hoorde nooit tussen de datalagen, want hij heeft geen
+           teller en geen bron die kan uitvallen.
+
+           "Statics" is bewust afgewezen: in het Engels is dat de tak van de mechanica
+           over lichamen in rust, niet "de statische dingen". Een almanak gaf
+           historisch zon- en maanstanden, tijd én de magnetische variatie voor
+           navigatie, en dekt dus letterlijk wat hier staat.
 
            TWEE SECTIES sinds sessie 19, en dat is geen cosmetica: de rotatie-as
            stond in een blok dat "Magnetic field" heet, en polar motion — de
@@ -669,9 +685,6 @@
       </dl>
       </div>
       </section>
-    </div>
-
-    <div class="tabpanel" data-panel="cosmos">
 
 <section class="acc" data-acc="cosmos-eclipse">
       <button class="acc-head" type="button" aria-expanded="false">
@@ -4726,7 +4739,7 @@ if (rotateToggleEl) {
   });
 }
 
-// De zone-aanduiding bij het datumveld in de Sun & Moon-tab. Eén functie, want hij
+// De zone-aanduiding bij het datumveld in het tijdeiland. Eén functie, want hij
 // wordt op twee momenten gezet: bij het opstarten (de bewaarde stand) en bij de wissel.
 function updateZoneLabel() {
   const el = document.getElementById('time-zone-label');
