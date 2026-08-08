@@ -1544,8 +1544,19 @@ function quakeMerge(prev, fresh, src) {
 }
 
 const Adapters = {
-  // USGS — aardbevingen. Feed-keuze volgt het actieve tijdvenster:
-  // 'hour' → all_hour, 'day' → all_day, 'week' → all_week.
+  // USGS — aardbevingen, via het query-endpoint van dezelfde catalogus.
+  // ---------------------------------------------------------------------------
+  // WAAROM NIET MEER DE SAMENVATTINGSFEEDS. `all_day.geojson` en zijn broertjes zijn
+  // kant-en-klare bestanden achter een CDN: snel (gemeten 124 ms tegen 589 ms), maar
+  // ze kennen maar één tijdvak — het heden. Een venster om een gekozen moment kan er
+  // per constructie niet uit. Het query-endpoint hieronder is DEZELFDE catalogus,
+  // hetzelfde instituut en dezelfde events, alleen langs een weg die parameters
+  // aanneemt. Gemeten 2026-08-08 over 24 uur: feed en query leverden allebei 171
+  // events op M1+, met nul verschil in beide richtingen.
+  //
+  // Eén codepad, ook voor `nu`. De feeds ernaast houden zou 400 ms schelen voor wie
+  // USGS aanzet, maar het kost een tweede pad dat apart getest moet worden — en de
+  // paginastart raakt het niet, want deze adapter staat standaard uit.
   usgs: {
     layers: ['quake'],
     // STANDAARD UIT. EMSC dekt Europa en de Middellandse Zee onvergelijkbaar veel
@@ -1553,16 +1564,26 @@ const Adapters = {
     // bijna een superset. USGS staat één vinkje ver weg voor wie de mondiale
     // catalogus erbij wil; zie de bronkeuze in de aardbevingsfilters.
     enabled: false,
-    // USGS ververst per minuut en publiceert deze feeds juist om gepold te worden
-    // (statische bestanden achter een CDN). 60 s houdt de globe levendig; de
-    // beleefdheid zit in de tabblad-pauze in pull(), niet in een traag interval.
+    // Het endpoint zet zelf `cache-control: max-age=60`, dus pollen op dit tempo
+    // vraagt niet meer van de server dan hij aanbiedt. De beleefdheid zit verder in
+    // de tabblad-pauze in pull(), niet in een traag interval.
     interval: 60_000,
-    feeds: {
-      hour: 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson',
-      day:  'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson',
-      week: 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson'
+    days: { hour: 1 / 24, day: 1, week: 7 },
+    get url() {
+      const back = (this.days[timeWindow] ?? 1) * 86_400_000;
+      // BLIJFT UTC, ongeacht de UTC-schakelaar in Settings — dit is een parameter,
+      // geen weergave. Niet door fmtStamp halen. Zelfde afspraak als bij EMSC.
+      const start = new Date(Date.now() - back).toISOString().slice(0, 19);
+      // Vanaf M1 ophalen, ongeacht het filter: dat is de laagste stand die de
+      // interface kent, en het magnitudefilter werkt daarmee zonder nieuwe ronde.
+      // De feeds droegen ook alles onder M1 mee (108 van de 279 op een gewone dag);
+      // die vielen in de weergave toch al weg.
+      // `orderby=time` maakt het afkappen op `limit` voorspelbaar: bij een
+      // uitzonderlijk drukke week vallen de OUDSTE events weg, niet willekeurige.
+      return 'https://earthquake.usgs.gov/fdsnws/event/1/query' +
+             '?format=geojson&limit=2000&orderby=time&minmagnitude=' + QUAKE_FLOOR_MAG +
+             '&starttime=' + start;
     },
-    get url() { return this.feeds[timeWindow] || this.feeds.day; },
     normalize(json) {
       return (json.features || []).map(f => {
         const [lng, lat, depth] = f.geometry.coordinates;
