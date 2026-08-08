@@ -183,6 +183,76 @@
     </button>
   </div>
 
+  <!-- ==== Het tijdeiland ====================================================
+       Zwevend eiland onderaan het midden, tegenover de mode-switch bovenaan. Het
+       gekozen moment stuurt sinds 2026-08-08 de hele scene — zon, maan, dag/nacht,
+       de rotatie-as, de poolbeweging én het venster waarin gebeurtenissen getoond
+       worden — en dan hoort de bediening niet meer weggestopt in een tab.
+
+       DE BEDIENING IS VERHUISD, NIET GEKOPIEERD. Twee plekken om dezelfde tijd te
+       zetten lopen onvermijdelijk uit de pas. Wat in de Almanac-tab achterblijft is
+       wat state-specifiek is en geen tijd zet: de eclipssprongen.
+
+       Het uitklappaneel staat in de DOM VÓÓR de rij en de kolom is `column`, zodat
+       het naar BOVEN opent. Onder het eiland is geen ruimte — daar is het scherm op. -->
+  <div class="time-island" id="time-island">
+    <div class="ti-panel" id="ti-panel" hidden>
+      <div class="ti-note">
+        The moment drives the whole scene: the Sun and Moon, the day/night line, the
+        axis and the window that events are shown in. Layers that only know the
+        present are locked while you travel.
+      </div>
+      <!-- De zone staat in het label en niet naast het veld: een datetime-local toont
+           nergens zelf in welke zone hij staat, en zonder dat label is de
+           UTC-schakelaar in Settings hier onzichtbaar. -->
+      <label class="ti-field">
+        <span>Date &amp; time <i class="h3-zone" id="time-zone-label"></i></span>
+        <input type="datetime-local" id="time-input" class="time-input"
+        aria-label="Date and time" />
+      </label>
+      <!-- Het trackvenster is de SCHAAL van de slider, niet het datavenster van de
+           lagen. Die twee horen gescheiden te blijven: de maanmaand hieronder heeft
+           nog nooit één gebeurtenis opgehaald, en dat moet zo blijven. -->
+      <label class="ti-field">
+        <span>Track window</span>
+        <div class="presets" id="track-presets">
+          <button class="preset" data-days="1">1 d</button>
+          <button class="preset active" data-days="3">3 d</button>
+          <button class="preset" data-days="7">7 d</button>
+          <button class="preset" data-days="27.32">Month</button>
+        </div>
+      </label>
+      <label class="ti-field">
+        <span>Playback speed <i class="play-speed-val" id="play-speed-val">6 h/s</i></span>
+        <input type="range" id="play-speed" class="range" min="0" max="100" step="1" value="50"
+        aria-label="Playback speed" />
+      </label>
+    </div>
+
+    <div class="ti-row">
+      <div class="ti-play">
+        <button class="play-btn" id="play-back" title="Play backwards" aria-label="Play backwards">&#9664;</button>
+        <button class="play-btn" id="play-pause" title="Pause" aria-label="Pause" disabled>&#10073;&#10073;</button>
+        <button class="play-btn" id="play-fwd" title="Play forwards" aria-label="Play forwards">&#9654;</button>
+      </div>
+      <div class="ti-slider">
+        <input type="range" id="time-slider" class="range" min="-216" max="216" step="1" value="0"
+        aria-label="Shift the moment within the track window" />
+        <span class="ti-span" id="time-span">&#177; 1 d 12 h</span>
+      </div>
+      <div class="ti-now">
+        <span class="ti-val" id="time-val">now</span>
+        <button class="ti-reset" id="time-reset" hidden title="Back to now"
+        aria-label="Back to now">&#10005;</button>
+      </div>
+      <button class="ti-more" id="ti-more" type="button" aria-expanded="false"
+      title="More time controls" aria-label="More time controls">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+        stroke-linecap="round" stroke-linejoin="round"><polyline points="6 15 12 9 18 15"/></svg>
+      </button>
+    </div>
+  </div>
+
   <div class="masthead">
     <div class="brand">
       <div class="brand-row">
@@ -602,63 +672,6 @@
     </div>
 
     <div class="tabpanel" data-panel="cosmos">
-
-<section class="acc open" data-acc="cosmos-moment">
-      <button class="acc-head" type="button" aria-expanded="true">
-      <span>Moment</span>
-      <!-- De i-knop zit IN de kop maar buiten de klik die in- en uitklapt:
-      daarom een eigen element met stopPropagation, niet genest in de
-      head-knop zelf (een button in een button is bovendien ongeldig). -->
-      <span class="acc-info" role="button" tabindex="0" id="moment-info-btn"
-      aria-expanded="false" title="What does this affect?"
-      aria-label="What does this affect?">i</span>
-      <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-      </button>
-      <div class="acc-body">
-      <div class="cosmos-note" id="moment-info" hidden>
-      These controls move the Sun, the Moon and the day/night cycle only.
-      The live layers &#8212; earthquakes, volcanoes, wildfires and the rest &#8212;
-      always show the present, whatever moment you pick here.
-      </div>
-
-      <!-- De zone staat in de kop en niet naast het veld: een datetime-local toont
-           nergens zelf in welke zone hij staat, en zonder dat label is de
-           UTC-schakelaar in Settings hier onzichtbaar. -->
-      <h3>Date &amp; time <span class="h3-zone" id="time-zone-label"></span></h3>
-      <input type="datetime-local" id="time-input" class="time-input"
-      aria-label="Date and time for Sun and Moon" />
-
-      <!-- Het venster staat v&#243;&#243;r de slider omdat het de schaal ervan bepaalt. -->
-      <h3>Track window</h3>
-      <div class="presets" id="track-presets">
-      <button class="preset" data-days="1">1 d</button>
-      <button class="preset active" data-days="3">3 d</button>
-      <button class="preset" data-days="7">7 d</button>
-      <button class="preset" data-days="27.32">Month</button>
-      </div>
-
-      <h3>Shift within window</h3>
-      <div class="slider-wrap">
-      <input type="range" id="time-slider" class="range" min="-216" max="216" step="1" value="0"
-      aria-label="Shift the moment within the track window" />
-      <div class="slider-label">
-      <span id="time-span">&#177; 1 d 12 h</span>
-      <span id="time-val">now</span>
-      </div>
-      </div>
-
-      <h3>Playback</h3>
-      <div class="play-row">
-      <button class="play-btn" id="play-back" title="Play backwards" aria-label="Play backwards">&#9664;</button>
-      <button class="play-btn" id="play-pause" title="Pause" aria-label="Pause" disabled>&#10073;&#10073;</button>
-      <button class="play-btn" id="play-fwd" title="Play forwards" aria-label="Play forwards">&#9654;</button>
-      <span class="play-speed-val" id="play-speed-val">6 h/s</span>
-      </div>
-      <input type="range" id="play-speed" class="range" min="0" max="100" step="1" value="50"
-      aria-label="Playback speed" />
-      <button class="time-reset" id="time-reset" hidden>Back to now</button>
-      </div>
-      </section>
 
 <section class="acc" data-acc="cosmos-eclipse">
       <button class="acc-head" type="button" aria-expanded="false">
@@ -5632,6 +5645,11 @@ function setSunView(on, opties) {
   }
   sunView = on;
   if (btn) btn.textContent = on ? 'Back to Earth' : 'Observe the Sun';
+  // Op <body> en niet op een element, precies zoals `magneto-on`: zo kan CSS per
+  // weergave verbergen wat er niet van toepassing is, zonder dat elke nieuwe state
+  // daar eigen machinerie voor hoeft te bedenken. Het tijdeiland verdwijnt hier,
+  // want de zonnevlekken zijn een momentopname van NOAA.
+  document.body.classList.toggle('sun-view', on);
 }
 
 // De sprong van de aarde naar de zon is 400 eenheden; ineens is dat een harde
@@ -5820,7 +5838,8 @@ function bindNoteToggle(btn, noteId) {
     if (ev.key === 'Enter' || ev.key === ' ') wissel(ev);
   });
 }
-bindNoteToggle(document.getElementById('moment-info-btn'), 'moment-info');
+// (De i-knop bij "Moment" is met het blok mee naar het tijdeiland verhuisd; de uitleg
+//  staat daar vast in het uitklappaneel in plaats van achter een knop.)
 
 // Uitklap-chevrons binnen een laagrij (nu: Twilight bands). Ze gebruiken dezelfde
 // `.row-expand` + `.layer-detail` als de aardbeving-filters, zodat het overal
@@ -5997,6 +6016,20 @@ function terugNaarNu() {
 }
 document.getElementById('time-reset')?.addEventListener('click', terugNaarNu);
 
+// ---- Het uitklappaneel van het tijdeiland ----
+// Datumveld, sliderschaal en afspeelsnelheid zitten hierachter omdat ze zelden nodig
+// zijn; wat je tijdens het kijken gebruikt — schuiven, afspelen, terug naar nu — staat
+// altijd in de rij zelf.
+{
+  const knop = document.getElementById('ti-more');
+  const paneel = document.getElementById('ti-panel');
+  knop?.addEventListener('click', () => {
+    const open = paneel.hidden;
+    paneel.hidden = !open;
+    knop.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+}
+
 // ---- Eclips ----
 const eclipseToggleEl = document.getElementById('eclipse-toggle');
 eclipseToggleEl?.addEventListener('click', () => {
@@ -6166,6 +6199,11 @@ const isNarrow = () => narrowMQ.matches;
 // De gewenste toestand, los van wat er op het scherm staat. Tijdens de sluitanimatie
 // is `display` nog `flex`, dus die kun je niet als bron van waarheid gebruiken.
 let panelOpenWanted = true;
+// Staat hier en niet bij showDetail/hideDetail verderop: borgSheetKlasse() leest hem
+// vanuit setPanelOpen(), en dat is honderden regels eerder. Vandaag gaat dat goed
+// omdat elke aanroep uit een event handler komt, maar één top-level aanroep zou er
+// een temporal dead zone van maken — de vierde in dit project.
+let detailVisible = false;
 
 // Eindtoestand forceren. GSAP hangt aan requestAnimationFrame, en dat staat stil
 // zodra het tabblad naar de achtergrond gaat. Zonder vangnet blijft het paneel dan
@@ -6183,11 +6221,20 @@ function finishPanelOpen() {
   panelOpenBtn.style.display = 'none';
 }
 
+// Op een smal scherm liggen paneel en readout als bottom sheet over de volle breedte
+// en dus over het tijdeiland heen. De klasse wordt altijd gezet; alleen de media query
+// op 640 px doet er iets mee, zodat er geen tweede breedtegrens in JS ontstaat die uit
+// de pas kan lopen met de CSS.
+function borgSheetKlasse() {
+  document.body.classList.toggle('sheet-open', panelOpenWanted || detailVisible);
+}
+
 function setPanelOpen(open) {
   // Niets te doen: scheelt een overbodige animatie wanneer showDetail() op een
   // smal scherm sluit terwijl het paneel al dicht is.
   if (open === panelOpenWanted) return;
   panelOpenWanted = open;
+  borgSheetKlasse();
   // Op een smal scherm is er ruimte voor precies één venster.
   if (open && isNarrow()) hideDetail();
   if (open) {
@@ -6207,6 +6254,10 @@ function setPanelOpen(open) {
 }
 document.getElementById('panel-collapse').addEventListener('click', () => setPanelOpen(false));
 panelOpenBtn.addEventListener('click', () => setPanelOpen(true));
+// Ook de BEGINSTAND moet kloppen. setPanelOpen() keert vroeg terug wanneer de gevraagde
+// stand al geldt, dus bij het opstarten komt hij daar nooit langs — en op een telefoon
+// staat het paneel open, waardoor het eiland eronder verdween.
+borgSheetKlasse();
 document.getElementById('r-close').addEventListener('click', hideDetail);
 
 // ---- Tijdvenster: presets ----
@@ -6434,11 +6485,12 @@ modeOptEls.forEach(btn => {
 // (opacity 0, geen pointer-events). GSAP mag hier alleen opacity en y aanraken;
 // de plaatsing komt uit left/right/bottom, niet uit een transform. Zou de plaatsing
 // ooit een transform worden, dan schiet dit venster net zo weg als de mode-switch.
-let detailVisible = false;
+// (`detailVisible` staat bovenaan bij `panelOpenWanted` — zie de TDZ-noot daar.)
 
 function hideDetail() {
   if (!detailVisible) return;
   detailVisible = false;
+  borgSheetKlasse();
   const r = document.getElementById('readout');
   r.style.pointerEvents = 'none';   // meteen, wacht niet op de animatie
   // De knop om het paneel terug te halen mag weer, mits het paneel dicht staat.
@@ -6515,6 +6567,7 @@ function showDetail(d) {
   }
   r.style.pointerEvents = 'auto'; // readout klikbaar maken voor de links
   detailVisible = true;
+  borgSheetKlasse();
   // GSAP: dialoogvenster soepel in beeld (pop met lichte overshoot). Bij
   // minder-beweging alleen invaden, zonder verschuiven of overshoot.
   if (REDUCED_MOTION) {

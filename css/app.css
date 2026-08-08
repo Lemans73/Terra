@@ -1462,6 +1462,134 @@
     letter-spacing: 0.02em;
   }
 
+  /* ---- Het tijdeiland (sessie 20, 2026-08-08) ----------------------------------
+     Tegenhanger van .mode-switch bovenaan: zelfde taal (dun kader, blur, ingedrukte
+     staat lichter), andere kant van het scherm.
+
+     GEEN `transform: translateX(-50%)`, en dat is bewust. Die truc is bij .mode-switch
+     en #toasts twee keer misgegaan zodra een media query `left`/`right` zette — het
+     element werd schermbreed en schoof daarna nog een halve schermbreedte weg. Hier
+     doen `left`/`right` + `margin: 0 auto` het centreren, en dan is er geen transform
+     die opgeheven moet worden.
+
+     De marges van 316 px zijn niet willekeurig: het paneel staat op `left: 28px` en is
+     280 px breed, de readout net zo aan de rechterkant. Het eiland centreert zich dus
+     in de RUIMTE ERTUSSEN in plaats van op het scherm, en kan per constructie niet
+     botsen — ook niet op een smal venster, waar het gewoon meekrimpt. */
+  .time-island {
+    position: fixed;
+    bottom: 28px;
+    left: 316px;
+    right: 316px;
+    margin: 0 auto;
+    max-width: 560px;
+    z-index: 11;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: auto;
+  }
+  .ti-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 8px 6px 6px;
+    background: rgba(11,16,24,0.72);
+    backdrop-filter: blur(14px);
+    border: 1px solid var(--hair);
+    border-radius: 12px;
+  }
+  .ti-play { display: flex; gap: 2px; flex-shrink: 0; }
+  .ti-play .play-btn { padding: 5px 9px; font-size: 11px; }
+
+  /* De slider krijgt de rek. `min-width: 0` is nodig omdat een flex-item anders niet
+     onder zijn inhoudsbreedte krimpt en de rij op smalle vensters uitbreekt. */
+  /* De gap is 7 px en niet 1: de sliderBAAN is maar 3 px hoog, maar de THUMB is 14 px
+     en steekt er dus 7 px onder uit. Met een kleinere gap loopt hij over het label. */
+  .ti-slider { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 7px; }
+  .ti-slider .range { width: 100%; margin: 0; }
+  .ti-span {
+    font-size: 9px;
+    color: var(--ink-faint);
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+
+  .ti-now { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  .ti-val {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--ink-dim);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  /* Verschoven moment: dezelfde accentkleur die de app overal voor "dit is niet de
+     standaardstand" gebruikt. */
+  .ti-val.shifted { color: var(--accent); }
+  .ti-reset {
+    display: flex; align-items: center; justify-content: center;
+    width: 20px; height: 20px; padding: 0;
+    background: transparent;
+    border: 1px solid var(--hair);
+    border-radius: 6px;
+    color: var(--ink-dim);
+    font-family: inherit; font-size: 10px; line-height: 1;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .ti-reset:hover { border-color: var(--accent); color: var(--accent); }
+  /* Zie .ti-panel[hidden]: een `display` uit een klasse wint van het attribuut, en dan
+     staat "terug naar nu" er ook als de tijd al op nu staat. */
+  .ti-reset[hidden] { display: none; }
+
+  .ti-more {
+    display: flex; align-items: center; justify-content: center;
+    width: 26px; height: 26px; padding: 0;
+    flex-shrink: 0;
+    background: transparent;
+    border: none;
+    border-radius: 7px;
+    color: var(--ink-faint);
+    cursor: pointer;
+    transition: color 0.15s, transform 0.2s;
+  }
+  .ti-more:hover { color: var(--ink); }
+  .ti-more svg { width: 15px; height: 15px; }
+  .ti-more[aria-expanded="true"] { color: var(--ink); transform: rotate(180deg); }
+
+  .ti-panel {
+    padding: 13px 14px;
+    background: rgba(11,16,24,0.82);
+    backdrop-filter: blur(14px);
+    border: 1px solid var(--hair);
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+  }
+  /* `display` uit een klasse wint van het `hidden`-attribuut, dat alleen een
+     user-agent-stijl is. Zonder deze regel staat het paneel altijd open. Dezelfde val
+     als bij .time-reset[hidden] hierboven. */
+  .ti-panel[hidden] { display: none; }
+  .ti-note { font-size: 10px; line-height: 1.55; color: var(--ink-faint); }
+  .ti-field { display: flex; flex-direction: column; gap: 6px; }
+  .ti-field > span {
+    display: flex; align-items: baseline; justify-content: space-between;
+    font-size: 10px; font-weight: 600; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--ink-dim);
+  }
+  .ti-field > span i { font-style: normal; letter-spacing: 0; text-transform: none; color: var(--ink-faint); }
+  .ti-field .time-input { margin: 0; }
+  .ti-field .presets { margin: 0; }
+
+  /* Wat in een weergave niet van toepassing is, wordt niet getoond — niet uitgegrijsd.
+     De klasse staat met opzet op <body> en niet op de sectie, precies zoals
+     body.magneto-on, zodat een volgende state hier niets nieuws voor hoeft te bedenken.
+     In het zonaanzicht zijn de zonnevlekken een momentopname van NOAA; een tijdslider
+     erbij zou iets beloven wat er niet is. */
+  body.sun-view .time-island { display: none; }
+
   /* ---- Toast-meldingen (nieuwe real-time entries) ---- */
   #toasts {
     position: fixed;
@@ -1515,7 +1643,30 @@
     font-variant-numeric: tabular-nums;
   }
 
+  /* Het eiland houdt zich aan de vrije ruimte tussen paneel en readout. Zodra die
+     ruimte op raakt, gaan eerst de losse onderdelen eruit en pas daarna de breedte:
+     het bereik onder de slider is de eerste die valt, want de slider zelf zegt al
+     hoe ver hij reikt. */
+  @media (max-width: 1100px) {
+    .time-island { left: 316px; right: 44px; }   /* readout is hier meestal dicht */
+    .ti-span { display: none; }
+  }
+
   @media (max-width: 640px) {
+    /* Volle breedte, en GEEN transform die opgeheven moet worden — zie de noot bij
+       .time-island. Bij een open bottom sheet (paneel of readout) verdwijnt het
+       eiland; naast elkaar passen ze hier niet, dezelfde afspraak die paneel en
+       readout onderling al hebben. */
+    .time-island {
+      left: 10px; right: 10px; max-width: none;
+      /* BOVEN de knop "Layers & filters", niet erop. Die staat hier op `bottom: 12px`
+         en is 39 px hoog (gemeten); zonder deze verhoging lag hij over de
+         afspeelknoppen heen en waren die onbereikbaar. */
+      bottom: calc(61px + env(safe-area-inset-bottom, 0px));
+    }
+    body.sheet-open .time-island { display: none; }
+    .ti-val { font-size: 10px; }
+
     .panel {
       left: 10px; right: 10px; width: auto;
       /* De home-indicator van een iPhone is 20 px hoog en zat over de onderrand van het
