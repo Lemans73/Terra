@@ -1489,8 +1489,17 @@
     gap: 8px;
     pointer-events: auto;
   }
+  /* EEN GRID EN GEEN FLEXBOX, en dat is de kern van de sleep-fix. Met flexbox bepaalde
+     de BREEDTE VAN HET MOMENTLABEL hoeveel ruimte de slider overhield: dat label groeit
+     van 22 px ("now") tot 145 px, dus de baan sprong tijdens het slepen van 375 naar
+     214 px en de knop schoof onder de cursor weg. Een `min-width` op het label is geen
+     oplossing — "minstens" betekent dat een breder label alsnog duwt (gemeten: 240 vs
+     214 px). Met een VASTE kolom voor het moment kan de inhoud de slider per constructie
+     niet meer raken; `minmax(0, 1fr)` houdt de sliderkolom krimpbaar. */
   .ti-row {
-    display: flex;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) 190px auto;
+    grid-template-areas: "play slider now more";
     align-items: center;
     gap: 10px;
     padding: 6px 8px 6px 6px;
@@ -1499,25 +1508,29 @@
     border: 1px solid var(--hair);
     border-radius: 12px;
   }
-  .ti-play { display: flex; gap: 2px; flex-shrink: 0; }
+  .ti-play { grid-area: play; display: flex; gap: 2px; }
   .ti-play .play-btn { padding: 5px 9px; font-size: 11px; }
 
   /* De slider krijgt de rek. `min-width: 0` is nodig omdat een flex-item anders niet
      onder zijn inhoudsbreedte krimpt en de rij op smalle vensters uitbreekt. */
-  /* De gap is 7 px en niet 1: de sliderBAAN is maar 3 px hoog, maar de THUMB is 14 px
-     en steekt er dus 7 px onder uit. Met een kleinere gap loopt hij over het label. */
-  .ti-slider { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 7px; }
+  /* Eén rij, geen kolom. Het bereiklabel stond hier onder de slider en maakte deze
+     kolom hoger dan de knoppen ernaast; `align-items: center` op de rij centreert dan
+     de KOLOM, waardoor de sliderbaan zelf boven het midden uitkwam. Het label is naar
+     het uitklappaneel verhuisd, bij het trackvenster waar het thuishoort. */
+  .ti-slider { grid-area: slider; display: flex; align-items: center; }
   .ti-slider .range { width: 100%; margin: 0; }
-  .ti-span {
-    font-size: 9px;
-    color: var(--ink-faint);
-    text-align: center;
-    font-variant-numeric: tabular-nums;
-    line-height: 1;
-  }
+  .ti-span { font-style: normal; letter-spacing: 0; text-transform: none; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
 
-  .ti-now { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  /* `justify-content: flex-end` houdt het moment tegen de rechterkant van zijn vaste
+     kolom, zodat de tekst naar links uitgroeit en de ✕ altijd op dezelfde plek staat. */
+  .ti-now { grid-area: now; display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+  /* Geen eigen breedte: de kolom in .ti-row is al vast, dus dit label mag groeien en
+     krimpen zonder dat de slider het merkt. Loopt het ooit over zijn kolom (een andere
+     taal, een ander lettertype), dan kapt het netjes af in plaats van de rij te breken —
+     layout-stabiliteit gaat hier voor de laatste letters van een uiterste geval. */
   .ti-val {
+    overflow: hidden;
+    text-overflow: ellipsis;
     font-size: 11px;
     font-weight: 600;
     color: var(--ink-dim);
@@ -1544,9 +1557,9 @@
   .ti-reset[hidden] { display: none; }
 
   .ti-more {
+    grid-area: more;
     display: flex; align-items: center; justify-content: center;
     width: 26px; height: 26px; padding: 0;
-    flex-shrink: 0;
     background: transparent;
     border: none;
     border-radius: 7px;
@@ -1665,6 +1678,16 @@
       bottom: calc(61px + env(safe-area-inset-bottom, 0px));
     }
     body.sheet-open .time-island { display: none; }
+    /* Een vaste kolom van 190 px laat op 355 px breed te weinig over voor de slider, en
+       een kortere notatie van het moment zou de offset kwijtraken. Hier gaat het moment
+       dus op een eigen regel onder de bediening — verticaal is er ruimte, horizontaal
+       niet. De slider houdt daarmee ook op een telefoon zijn volle breedte. */
+    .ti-row {
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      grid-template-areas: "play slider more" "now now now";
+      row-gap: 7px;
+    }
+    .ti-now { justify-content: center; }
     .ti-val { font-size: 10px; }
 
     .panel {

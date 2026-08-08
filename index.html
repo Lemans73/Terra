@@ -210,11 +210,24 @@
         <input type="datetime-local" id="time-input" class="time-input"
         aria-label="Date and time" />
       </label>
+      <!-- Tweede schakelaar voor dezelfde stand als die in Settings. Hij staat hier
+           omdat de zone bepaalt hoe je het veld hierboven moet lezen, en dat is precies
+           de plek waar je het nodig hebt. `data-utc` bindt hem: één functie past de
+           stand toe en trekt ALLE schakelaars gelijk, zodat een tweede besturing geen
+           tweede waarheid wordt. -->
+      <div class="elayer ti-utc" data-utc role="button" tabindex="0">
+        <span class="edot"></span>Show times in UTC<span class="estat">off</span>
+      </div>
       <!-- Het trackvenster is de SCHAAL van de slider, niet het datavenster van de
            lagen. Die twee horen gescheiden te blijven: de maanmaand hieronder heeft
-           nog nooit één gebeurtenis opgehaald, en dat moet zo blijven. -->
+           nog nooit één gebeurtenis opgehaald, en dat moet zo blijven.
+
+           Het bereik (`± 1 d 12 h`) staat hier en niet meer onder de slider in de rij:
+           daar maakte het de kolom hoger dan de knoppen, waardoor de sliderbaan boven
+           het midden van de rij uitkwam. En het is een eigenschap van dít venster, dus
+           hier staat het ook inhoudelijk beter. -->
       <label class="ti-field">
-        <span>Track window</span>
+        <span>Track window <i class="ti-span" id="time-span">&#177; 1 d 12 h</i></span>
         <div class="presets" id="track-presets">
           <button class="preset" data-days="1">1 d</button>
           <button class="preset active" data-days="3">3 d</button>
@@ -238,7 +251,6 @@
       <div class="ti-slider">
         <input type="range" id="time-slider" class="range" min="-216" max="216" step="1" value="0"
         aria-label="Shift the moment within the track window" />
-        <span class="ti-span" id="time-span">&#177; 1 d 12 h</span>
       </div>
       <div class="ti-now">
         <span class="ti-val" id="time-val">now</span>
@@ -805,7 +817,7 @@
       </div>
       </div>
       <div class="elayer on" id="rotate-toggle"><span class="edot"></span>Auto-rotate<span class="estat" id="es-rotate">on</span></div>
-      <div class="elayer" id="utc-toggle"><span class="edot"></span>Show times in UTC<span class="estat" id="es-utc">off</span></div>
+      <div class="elayer" id="utc-toggle" data-utc><span class="edot"></span>Show times in UTC<span class="estat" id="es-utc">off</span></div>
       </div>
       </section>
 
@@ -4746,31 +4758,49 @@ function updateZoneLabel() {
   if (el) el.textContent = utcOffsetLabel(new Date());
 }
 
-const utcToggleEl = document.getElementById('utc-toggle');
-if (utcToggleEl) {
-  // De markup staat op 'uit'; een bewaarde keuze kan dat tegenspreken, dus eerst
-  // gelijktrekken en pas daarna binden — zelfde volgorde als bij Auto-rotate.
-  utcToggleEl.classList.toggle('on', useUTC);
-  document.getElementById('es-utc').textContent = useUTC ? 'on' : 'off';
+// TWEE SCHAKELAARS, ÉÉN STAND. Er staat er een in Settings en een in het tijdeiland,
+// waar de zone bepaalt hoe je het datumveld moet lezen. Ze delen `data-utc` en lopen
+// allemaal via zetUTC(), dat de stand toepast en daarna ALLE schakelaars gelijktrekt.
+// Dat is dezelfde afweging als bij de tijdbediening zelf: een tweede besturing mag
+// nooit een tweede waarheid worden. Wie een derde plek wil, zet er `data-utc` op.
+const utcToggles = [...document.querySelectorAll('[data-utc]')];
+
+function syncUTCUI() {
+  for (const el of utcToggles) {
+    el.classList.toggle('on', useUTC);
+    const stat = el.querySelector('.estat');
+    if (stat) stat.textContent = useUTC ? 'on' : 'off';
+  }
   updateZoneLabel();
-  utcToggleEl.addEventListener('click', () => {
-    useUTC = !useUTC;
-    try { localStorage.setItem('terra-utc', useUTC ? '1' : '0'); } catch {}
-    utcToggleEl.classList.toggle('on', useUTC);
-    document.getElementById('es-utc').textContent = useUTC ? 'on' : 'off';
-    updateZoneLabel();
-    // Alles wat een tijd toont en NIET vanzelf herrendert, moet hier expliciet langs.
-    // refreshTimeUI() trekt onderaan een volledige efemeride-herberekening; op een
-    // klik is dat prima, en het houdt de tijd-UI op één pad.
-    if (timeInputEl && timeInputEl.value) {
-      timeInputEl.value = naarVeldWaarde(baseMoment ?? momentNow());
-    }
-    refreshTimeUI();
-    tick();
-    renderNotifList();
-    // #r-time en #status blijven tot hun volgende update op de oude notatie staan:
-    // #status herstelt zich bij de eerstvolgende poll, #r-time bij de volgende
-    // selectie. Die twee achternalopen kost meer dan het oplevert.
+}
+
+function zetUTC(on) {
+  useUTC = on;
+  try { localStorage.setItem('terra-utc', useUTC ? '1' : '0'); } catch {}
+  syncUTCUI();
+  // Alles wat een tijd toont en NIET vanzelf herrendert, moet hier expliciet langs.
+  // refreshTimeUI() trekt onderaan een volledige efemeride-herberekening; op een
+  // klik is dat prima, en het houdt de tijd-UI op één pad.
+  if (timeInputEl && timeInputEl.value) {
+    timeInputEl.value = naarVeldWaarde(baseMoment ?? momentNow());
+  }
+  refreshTimeUI();
+  tick();
+  renderNotifList();
+  // #r-time en #status blijven tot hun volgende update op de oude notatie staan:
+  // #status herstelt zich bij de eerstvolgende poll, #r-time bij de volgende
+  // selectie. Die twee achternalopen kost meer dan het oplevert.
+}
+
+// De markup staat op 'uit'; een bewaarde keuze kan dat tegenspreken, dus eerst
+// gelijktrekken en pas daarna binden — zelfde volgorde als bij Auto-rotate.
+syncUTCUI();
+for (const el of utcToggles) {
+  el.addEventListener('click', () => zetUTC(!useUTC));
+  // De schakelaar in het eiland is geen <button> maar een `.elayer`-rij, net als zijn
+  // tegenhanger in Settings. Toetsenbordbediening moet er dan zelf bij.
+  el.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); zetUTC(!useUTC); }
   });
 }
 
