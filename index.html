@@ -6170,6 +6170,11 @@ function refreshTimeUI() {
   // keer klopt in plaats van een frame lang lagen te tonen die er niet horen.
   borgTijdsloten();
   borgZonneNoot();
+  // Om dezelfde reden vóór render(): voorraad die bij een ander tijdvak hoort is geen
+  // achterstand maar een onwaarheid. Hier en niet in plandataVerversing(), want die
+  // draait hieronder ná render() — dan zou de kaart eerst nog een frame lang de
+  // bosbranden van 2016 tonen alsof het die van vandaag zijn.
+  ruimVerouderdeVoorraad();
   // NIETS OPHALEN IS NIET HETZELFDE ALS NIETS TEKENEN. Schuift het moment binnen de
   // voorraad, dan is er geen verzoek nodig, maar het GETOONDE venster is wel degelijk
   // opgeschoven — zonder deze regel blijven de bevingen staan waar ze stonden terwijl
@@ -6594,19 +6599,24 @@ function toonBronwissel(van, naar) {
   }
 }
 
-// Geeft terug of er gewisseld is. De aanroeper slaat zijn eigen ophaalronde dan over,
-// want kiesBron() heeft er al een gestart.
+// Geeft de adapter-id terug waarvoor kiesBron() al een ophaalronde startte, of null.
+// GEEN boolean meer, en dat verschil is een bug geweest: zolang alleen de twee
+// seismische bronnen een `venster()` hadden, betekende "er is gewisseld" ook "er valt
+// verder niets op te halen", en sloeg de aanroeper zijn hele ronde over. Sinds de vier
+// EONET-adapters meereizen klopt dat niet meer — die kregen bij elke bronwissel geen
+// enkel verzoek en bleven met data van het vórige moment staan. Nu slaat de aanroeper
+// alleen déze ene adapter over.
 function borgBrondekking() {
   const actief = srcActief();
-  if (!actief) return false;
+  if (!actief) return null;
   if (!dektMoment(Adapters[actief])) {
     const vervanger = srcRadios.map(r => r.dataset.src)
       .find(id => id !== actief && dektMoment(Adapters[id]));
-    if (!vervanger) return false;         // niemand dekt dit; laat staan en toon leeg
+    if (!vervanger) return null;          // niemand dekt dit; laat staan en toon leeg
     bronVoorWissel = bronVoorWissel || actief;
     kiesBron(vervanger);
     toonBronwissel(actief, vervanger);
-    return true;
+    return vervanger;
   }
   // Terug binnen bereik: de eigen keuze herstellen.
   if (bronVoorWissel && dektMoment(Adapters[bronVoorWissel]) && bronVoorWissel !== actief) {
@@ -6614,9 +6624,9 @@ function borgBrondekking() {
     bronVoorWissel = null;
     kiesBron(terug);
     toonBronwissel(null);
-    return true;
+    return terug;
   }
-  return false;
+  return null;
 }
 
 // De uitklap zelf. Staat dicht bij het opstarten: EMSC is de bron, en wie daar
@@ -7011,6 +7021,34 @@ function vensterGedekt(adapter) {
   return w.van >= l.van && w.tot <= l.tot;
 }
 
+// Wat een adapter in huis heeft, hoort bij het venster waarin het is opgehaald. Ligt
+// het getoonde venster daar niet meer in, dan is die voorraad geen achterstand maar een
+// ONWAARHEID: springt de bezoeker van 2016 naar nu, dan zijn de bosbranden van 2016 een
+// seconde lang te zien alsof het die van vandaag zijn. Beter een tel leeg dan een tel
+// verkeerd — dat is dezelfde afweging als vergrendelen in plaats van waarschuwen.
+//
+// Alleen adapters met een `venster()`: bronnen die het heden tonen (bliksem met zijn
+// merge, luchtkwaliteit) mogen hun geschiedenis houden. Staat los van de smoring
+// hieronder, want opruimen moet meteen en ophalen juist niet.
+//
+// En NIET de lagen uit TIME_FILTERED: die klemt render() al aan twee kanten tegen het
+// gekozen moment, dus daar kan geen enkel event uit een ander tijdvak doorheen komen.
+// Ze hier ook legen zou alleen een flikkering opleveren bij elke vensterwissel — het
+// oude gedrag van de bevingen (laten staan tot het nieuwe antwoord er is) klopt.
+function ruimVerouderdeVoorraad() {
+  for (const a of Object.values(Adapters)) {
+    if (!a.venster || !a.geladen || vensterGedekt(a)) continue;
+    const eigen = new Set(a.layers.filter(l => !TIME_FILTERED.has(l)));
+    if (!eigen.size) continue;
+    store = store.filter(d => !eigen.has(d.layer));
+    // ONMISBAAR, en het ontbreken ervan koste een lege kaart die er gezond uitzag:
+    // `geladen` is de belofte dat die voorraad er is. Laat je hem staan terwijl je de
+    // events weggooit, dan zegt vensterGedekt() bij terugkeer naar hetzelfde venster
+    // dat er niets te halen valt — en blijft de laag leeg zonder één verzoek of fout.
+    a.geladen = null;
+  }
+}
+
 function plandataVerversing() {
   if (playDir) return;                     // regel 3
   clearTimeout(vensterTimer);
@@ -7019,9 +7057,9 @@ function plandataVerversing() {
     // wanneer de bronwissel de rest van deze ronde overneemt.
     toonTijdvakNoot();
     // Eerst de bron: heeft de actieve catalogus dit tijdvak überhaupt? Zo niet, dan
-    // wisselt hij zichtbaar en haalt die wissel zelf al op — dan is de ronde hieronder
-    // dubbel werk.
-    if (borgBrondekking()) return;
+    // wisselt hij zichtbaar en haalt die wissel zelf al op. Alleen DIE ene adapter is
+    // dubbel werk — de rest hieronder moet gewoon doorgaan.
+    const alGehaald = borgBrondekking();
     // Geen enkele laag bij naam: een adapter met `venster()` doet mee, de rest niet.
     // Zo kwam EONET er in sessie 21 bij zonder dat hier iets veranderde.
     //
@@ -7029,6 +7067,7 @@ function plandataVerversing() {
     // er in 1990 vier verzoeken naar EONET die per definitie leeg terugkomen, terwijl
     // de lagen op datzelfde moment al op slot staan.
     for (const a of Object.values(Adapters)) {
+      if (a.id === alGehaald) continue;
       if (a.venster && a.enabled !== false && dektMoment(a) && !vensterGedekt(a)) pull(a);
     }
   }, VENSTER_SMOOR_MS);
