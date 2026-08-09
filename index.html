@@ -1542,20 +1542,47 @@ function geoOpMoment(geos, totMs) {
   return gekozen;
 }
 
+// BESTOND DEZE GEBEURTENIS OP HET GEKOZEN MOMENT? Een positie tonen is niet genoeg:
+// `geoOpMoment` hierboven geeft altijd wél een punt, ook voor een storm die drie weken
+// eerder is uitgedoofd — en die stond dan op de kaart alsof hij nog raasde. Gemeten bij
+// `nu` vóór deze toets: 10 stormen waar er 2 actief waren, 281 bosbranden waar er 27
+// brandden. Terry zag het aan `Tropical Storm Douglas`, die van 3 juli was.
+//
+// Twee grenzen. Begin: het eerste meetpunt. Eind: `closed` als EONET het event heeft
+// afgesloten, en anders het laatste meetpunt plus een respijt — want een bron die stopt
+// met melden zegt niet dat het voorbij is, alleen dat er niets nieuws is. Dat respijt
+// verschilt per soort en is precies waarom `dagen` per categorie is gezet: een brand
+// waarvan tien dagen niets is gehoord is uit, een vulkaan niet.
+//
+// VULKANEN ZIJN DE UITZONDERING: die blijven bij EONET jaren "open" staan zonder nieuw
+// meetpunt, dus daar telt `closed` en niet het respijt (`respijtEindeloos`). Gemeten:
+// van de 32 open vulkanen liggen er 17 met hun laatste meetpunt buiten een venster van
+// 456 dagen — een venster dat ze állemaal vangt vraagt 20 jaar en 558 KB.
+function leefdeOpMoment(ev, geos, momentMs, respijtDagen, respijtEindeloos) {
+  if (!geos.length) return false;
+  if (new Date(geos[0].date).getTime() > momentMs) return false;
+  if (ev.closed) return new Date(ev.closed).getTime() >= momentMs;
+  if (respijtEindeloos) return true;                   // open blijft open
+  const laatste = new Date(geos[geos.length - 1].date).getTime();
+  return laatste + respijtDagen * 86_400_000 >= momentMs;
+}
+
 // Bouwt één EONET-adapter per categorie. Ze delen `healthId: 'eonet'`, zodat het
 // verbindingspaneel één regel "NASA EONET" houdt in plaats van vier.
 //
-// Elke categorie brengt twee eigen getallen mee, allebei gemeten en geen van beide te
-// raden: `dagen` (hoe ver het venster terugkijkt) en `dekkingVanaf` (vanaf welk jaar
-// deze categorie überhaupt gevuld is). Zie de spec onderaan bij `Adapters`.
+// Elke categorie brengt drie eigen waarden mee, alle drie gemeten en geen ervan te
+// raden: `dagen` (hoe ver het venster terugkijkt én hoe lang een stille gebeurtenis nog
+// meetelt), `dekkingVanaf` (vanaf welk jaar deze categorie gevuld is) en `blijftOpen`
+// (of "geen einddatum" hier betekent: nog steeds bezig). Zie de spec bij `Adapters`.
 function eonetAdapters(spec) {
   const out = {};
-  for (const [layer, { category, dagen, dekkingVanaf }] of Object.entries(spec)) {
+  for (const [layer, { category, dagen, dekkingVanaf, blijftOpen }] of Object.entries(spec)) {
     out['eonet_' + layer] = {
       healthId: 'eonet',
       layers: [layer],
       dagen,
       dekkingVanaf,
+      blijftOpen: !!blijftOpen,
       // De haak die deze bron aan het haal-beleid koppelt — zie plandataVerversing.
       // Anders dan bij de bevingen hangt het venster hier NIET aan `timeWindow`: een
       // vulkaan die maanden loopt heeft niets te maken met "past hour".
@@ -1570,34 +1597,49 @@ function eonetAdapters(spec) {
                  tot: Math.ceil(w.tot / 86_400_000) * 86_400_000 };
       },
       get url() {
+        const basis = 'https://eonet.gsfc.nasa.gov/api/v3/events?category=' + category;
+        // GEEN `limit` in beide takken: die is een DEFAULT van 500, geen plafond.
+        // Weglaten geeft alles (gemeten: heel 2024 aan bosbranden = 5636, met limit=500
+        // → 500, met limit=20000 → 5636). De rem hoort in het venster te zitten, niet in
+        // een afkapping die je niet ziet gebeuren.
+        //
+        // TWEE WEGEN, en dat is hier geen slordigheid maar het verschil tussen twee
+        // vragen. "Wat is er NU open" beantwoordt EONET rechtstreeks; een venster kan
+        // dat per definitie niet, want een open gebeurtenis hoeft geen recent meetpunt
+        // te hebben. Gemeten voor de vulkanen: van de 32 open exemplaren vallen er 17
+        // buiten een venster van 456 dagen, en pas bij 20 jaar (558 KB, 2,4 s tegen
+        // 25 KB nu) vangt een venster ze allemaal. Voor de andere drie maakt het bij
+        // `nu` niets uit — daar is een stille gebeurtenis ook echt voorbij — maar één
+        // regel voor alle vier is eerlijker dan een uitzondering die je moet onthouden.
+        //
+        // Het `days=`-voorfilter blijft daarbij staan, want `status=open` alléén levert
+        // voor bosbranden 6963 events (~4,5 MB) waarvan er 27 daadwerkelijk branden —
+        // EONET sluit een brand vrijwel nooit af. Juist de laag die `blijftOpen` is
+        // moet er ZONDER: bij de vulkanen zou `days=` precies de 17 wegfilteren die al
+        // jaren open staan zonder nieuw bericht. Dat is dezelfde meting als hierboven,
+        // van de andere kant bekeken.
+        if (bijNu()) return basis + '&status=open' + (this.blijftOpen ? '' : '&days=' + this.dagen);
         const w = this.venster();
-        return 'https://eonet.gsfc.nasa.gov/api/v3/events?category=' + category +
-               // `status=all` en niet `open`: in een venster in het verleden hoort een
-               // afgesloten gebeurtenis er per definitie bij. Status weglaten geeft
-               // mét start/end nul events (gemeten). Bij `nu` telt daardoor ook vuur
-               // mee dat net geblust is — 165 bosbranden tegen 30 met `status=open`.
-               '&status=all' +
+        // Verschoven: `status=all`, want in een venster in het verleden hoort een
+        // afgesloten gebeurtenis er per definitie bij. Status weglaten geeft mét
+        // start/end nul events (gemeten). Wat er te véél binnenkomt zeeft
+        // `leefdeOpMoment` eruit.
+        return basis + '&status=all' +
                '&start=' + eonetDatum(w.van) + '&end=' + eonetDatum(w.tot);
-               // GEEN `limit`: die is een DEFAULT van 500, geen plafond. Weglaten geeft
-               // alles (gemeten: heel 2024 aan bosbranden = 5636, met limit=500 → 500,
-               // met limit=20000 → 5636). De rem hoort in het venster te zitten, niet
-               // in een afkapping die je niet ziet gebeuren.
       },
       interval: 600_000, // 10 min volstaat ruim; alerts veranderen traag
       normalize(json) {
         const out = [];
-        // Hoeveel de catalogus in dit venster hééft, vóór onze eigen zeef. Kost niets —
-        // het staat in een antwoord dat we toch al ophaalden — en het is wat de
-        // volledigheidsnoot vergelijkt. `aantalNu` wordt alleen bij `nu` bijgewerkt en
-        // blijft daarna staan als ijkpunt om het verleden tegen af te zetten.
-        this.laatsteAantal = (json.events || []).length;
-        if (bijNu()) this.aantalNu = this.laatsteAantal;
         // Het MOMENT, niet de bovenkant van het opgehaalde venster — dat laatste ligt
         // door de marge en de dagafronding tot ruim een dag verder, en zou dus een
         // meetpunt kunnen kiezen dat op het gekozen moment nog niet bestond.
         const moment = momentNow().getTime();
         for (const ev of (json.events || [])) {
-          const g = geoOpMoment(ev.geometry || [], moment);
+          const punten = (ev.geometry || []).filter(p => p.type === 'Point'); // polygonen later
+          // Eerst bestáán, dan pas plaatsen. Andersom levert een kaart vol gebeurtenissen
+          // die op het gekozen moment allang voorbij waren.
+          if (!leefdeOpMoment(ev, punten, moment, this.dagen, this.blijftOpen)) continue;
+          const g = geoOpMoment(punten, moment);
           if (!g) continue;
           const [lng, lat] = g.coordinates;
           out.push({
@@ -1611,6 +1653,13 @@ function eonetAdapters(spec) {
             url: (ev.sources && ev.sources[0] && ev.sources[0].url) || null // externe bron-melding
           });
         }
+        // Wat de volledigheidsnoot vergelijkt: het aantal dat op dit moment LEEFDE, niet
+        // wat de catalogus toevallig in het venster had staan. Die twee liepen uiteen
+        // zodra de levensduur-toets erbij kwam, en dan zou de noot 23 tegen 27 zetten
+        // waar 16 tegen 27 hoort. `aantalNu` wordt alleen bij `nu` bijgewerkt en blijft
+        // daarna staan als ijkpunt om het verleden tegen af te zetten.
+        this.laatsteAantal = out.length;
+        if (bijNu()) this.aantalNu = out.length;
         return out;
       }
     };
@@ -1946,8 +1995,14 @@ const Adapters = {
   //   ice      2011 → 11 · 2012 →  6 · 2015 →  11 · 2024 → 43
   //   wildfire 2014 →  1 · 2015 → 159 · 2020 → 429 · 2024 → 5636 (meetnet, geen aarde)
   // Onder die grens gaat de laag op slot — zie borgTijdsloten().
+  //
+  // `blijftOpen` staat alleen bij de vulkanen, en dat is een uitspraak over de BRON:
+  // EONET laat een vulkaan jaren open staan zonder nieuw meetpunt, dus "al een tijd
+  // niets gehoord" betekent daar niet "voorbij". Bij een storm en een brand betekent
+  // het dat wél. Gemeten bij `nu` toen die toets er nog niet was: 10 stormen waar er 2
+  // raasden, 281 bosbranden waar er 27 brandden.
   ...eonetAdapters({
-    volcano:  { category: 'volcanoes',    dagen: 365, dekkingVanaf: 1980 },
+    volcano:  { category: 'volcanoes',    dagen: 365, dekkingVanaf: 1980, blijftOpen: true },
     storm:    { category: 'severeStorms', dagen:  30, dekkingVanaf: 2000 },
     ice:      { category: 'seaLakeIce',   dagen:  30, dekkingVanaf: 2011 },
     wildfire: { category: 'wildfires',    dagen:  10, dekkingVanaf: 2015 }
