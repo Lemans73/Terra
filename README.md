@@ -112,10 +112,31 @@ itself.
 | `keepOnEmpty` | treat an empty response as a hiccup rather than as truth |
 | `optional` | on failure, padlock the layer instead of reporting the whole app degraded |
 | `offlineNote` | the text shown inside that padlock |
+| `venster()` | the time span this source should fetch — see below |
+| `dagen` / `days` | how far back that span reaches: a fixed number of days, or one per time-window preset |
+| `dekkingVanaf` | the first year this source actually holds data |
 
 An adapter marked `optional` that fails puts its layers behind a padlock with
 an expandable panel explaining how to connect a backend. When the source comes
 back, the padlock lifts and the layer restores its previous state.
+
+### Following the chosen moment
+
+Terra's time control can move the whole scene to any moment within ±7 days of a
+chosen date. An adapter that defines `venster()` travels with it; one that does
+not simply keeps showing the present. Nothing else is needed — the fetch policy,
+the coverage check and the padlocks all key off that one hook.
+
+The policy is deliberately stingy, because the slider steps every 10 minutes and
+playback runs up to 48 hours per second: if the visible span still falls inside
+what was last loaded, nothing is fetched; if it falls outside, one request goes
+out 600 ms after the movement stops; during playback, none at all. Each request
+covers the visible span plus 25% on both sides.
+
+`dekkingVanaf` is what a source *has*, not what it claims. Below it the layer is
+padlocked rather than shown empty — a map that is half 1985 and half today is not
+incomplete, it is untrue. Where two sources feed the same layer (earthquakes), the
+app switches to whichever one covers the moment and switches back afterwards.
 
 `normalize` returning `[]` is a valid answer meaning "nothing to show" — unless
 `keepOnEmpty` says otherwise.

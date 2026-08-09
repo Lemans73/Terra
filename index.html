@@ -1524,24 +1524,74 @@ if (ANALYTICS_HOSTS.includes(location.hostname)) {
 // adapter onbeperkt bezet houden (en daarmee het laadscherm laten staan).
 const ADAPTER_TIMEOUT_MS = 15_000;
 
+// Het meetpunt op of vóór het gekozen moment. Een EONET-event is geen momentopname
+// maar een spoor: `Iceberg B09F` draagt 169 punten over zeven jaar mee (2012→2019).
+// De oude code pakte simpelweg het laatste punt — bij `nu` is dat hetzelfde antwoord,
+// maar bij een moment in 2015 zette dat die ijsberg op zijn positie van 2019.
+// Terugval op het eerste punt: een event kan het venster aan de late kant raken en
+// dan ligt zijn hele spoor ná het moment.
+function geoOpMoment(geos, totMs) {
+  let gekozen = null;
+  for (const g of geos) {
+    if (g.type !== 'Point') continue;          // polygonen later
+    if (new Date(g.date).getTime() <= totMs) gekozen = g;
+    else if (!gekozen) gekozen = g;            // alles ligt ná het moment
+    else break;                                // geos zijn oplopend in tijd
+  }
+  return gekozen;
+}
+
 // Bouwt één EONET-adapter per categorie. Ze delen `healthId: 'eonet'`, zodat het
 // verbindingspaneel één regel "NASA EONET" houdt in plaats van vier.
+//
+// Elke categorie brengt twee eigen getallen mee, allebei gemeten en geen van beide te
+// raden: `dagen` (hoe ver het venster terugkijkt) en `dekkingVanaf` (vanaf welk jaar
+// deze categorie überhaupt gevuld is). Zie de spec onderaan bij `Adapters`.
 function eonetAdapters(spec) {
   const out = {};
-  for (const [layer, { category, days }] of Object.entries(spec)) {
+  for (const [layer, { category, dagen, dekkingVanaf }] of Object.entries(spec)) {
     out['eonet_' + layer] = {
       healthId: 'eonet',
       layers: [layer],
-      url: 'https://eonet.gsfc.nasa.gov/api/v3/events?status=open&category=' + category +
-           (days ? '&days=' + days : ''),
+      dagen,
+      dekkingVanaf,
+      // De haak die deze bron aan het haal-beleid koppelt — zie plandataVerversing.
+      // Anders dan bij de bevingen hangt het venster hier NIET aan `timeWindow`: een
+      // vulkaan die maanden loopt heeft niets te maken met "past hour".
+      //
+      // Op hele dagen AFGEROND, naar buiten toe. EONET kent geen fijner raster dan een
+      // datum (zie eonetDatum), en wat we als `geladen` bijhouden hoort exact te zijn
+      // wat we ook echt gevraagd hebben — anders denkt vensterGedekt() dat er iets in
+      // huis is wat er net niet is.
+      venster() {
+        const w = fetchWindow(adapterDagen(this));
+        return { van: Math.floor(w.van / 86_400_000) * 86_400_000,
+                 tot: Math.ceil(w.tot / 86_400_000) * 86_400_000 };
+      },
+      get url() {
+        const w = this.venster();
+        return 'https://eonet.gsfc.nasa.gov/api/v3/events?category=' + category +
+               // `status=all` en niet `open`: in een venster in het verleden hoort een
+               // afgesloten gebeurtenis er per definitie bij. Status weglaten geeft
+               // mét start/end nul events (gemeten). Bij `nu` telt daardoor ook vuur
+               // mee dat net geblust is — 165 bosbranden tegen 30 met `status=open`.
+               '&status=all' +
+               '&start=' + eonetDatum(w.van) + '&end=' + eonetDatum(w.tot);
+               // GEEN `limit`: die is een DEFAULT van 500, geen plafond. Weglaten geeft
+               // alles (gemeten: heel 2024 aan bosbranden = 5636, met limit=500 → 500,
+               // met limit=20000 → 5636). De rem hoort in het venster te zitten, niet
+               // in een afkapping die je niet ziet gebeuren.
+      },
       interval: 600_000, // 10 min volstaat ruim; alerts veranderen traag
       normalize(json) {
         const out = [];
+        // Het MOMENT, niet de bovenkant van het opgehaalde venster — dat laatste ligt
+        // door de marge en de dagafronding tot ruim een dag verder, en zou dus een
+        // meetpunt kunnen kiezen dat op het gekozen moment nog niet bestond.
+        const moment = momentNow().getTime();
         for (const ev of (json.events || [])) {
-          // pak de meest recente geometrie van het event
-          const geos = ev.geometry || [];
-          const g = geos[geos.length - 1];
-          if (!g || g.type !== 'Point') continue; // polygonen later
+          const g = geoOpMoment(ev.geometry || [], moment);
+          if (!g) continue;
           const [lng, lat] = g.coordinates;
           out.push({
             id: ev.id,
@@ -1615,10 +1665,31 @@ function fetchWindow(dagen) {
 // Niet door fmtStamp halen.
 const fdsnTijd = (ms) => new Date(ms).toISOString().slice(0, 19);
 
+// EONET is GEEN FDSN en wil een KALE DATUM. Dit is de gemeenste val van deze bron:
+// een tijdstempel wordt niet geweigerd maar STIL GENEGEERD, en dan valt het hele
+// filter weg. Gemeten 2026-08-08 over hetzelfde venster van tien dagen:
+//   start=2026-07-29T14:06:13&end=2026-08-08T14:06:13 → 17.371 events · 11,9 MB · 38 s
+//   start=2026-07-29&end=2026-08-08                   →     165 events ·  115 KB ·  1 s
+// Het eerste antwoord is de hele catalogus (events van 2003 tot 2026), zonder één
+// waarschuwing dat er iets anders geleverd werd dan er gevraagd is. Zelfde klasse als
+// de HTTP 204 hieronder: een geldig ogend antwoord op een andere vraag.
+// Haal `fdsnTijd` en `eonetDatum` niet door elkaar.
+const eonetDatum = (ms) => new Date(ms).toISOString().slice(0, 10);
+
 // Staat het venster op `nu`, dan sturen we geen bovengrens mee: een `end` van
 // precies nu zou bij het geringste klokverschil de nieuwste events afkappen, en
 // gebeurtenissen ná nu bestaan toch niet.
 const bijNu = () => baseMoment === null && timeOffsetMs === 0;
+
+// Hoe ver een adapter terugkijkt. TWEE SOORTEN, en ze zijn niet inwisselbaar: de
+// bevingen volgen `timeWindow` (de bezoeker kiest hour/day/week), de EONET-lagen
+// hebben een vaste spanne per categorie — een vulkaan die maanden loopt heeft niets
+// te maken met "past hour". Eén helper, zodat `venster()` en `vensterGedekt()` niet
+// uit elkaar kunnen lopen: zonder dit las die laatste `adapter.days[timeWindow]` op
+// een adapter zonder `days`-object, en dat gooit — waarna het hele haal-beleid
+// stilvalt. Staat hier bij de andere venster-helpers en niet bij vensterGedekt(),
+// want de url-getters hierónder lezen hem ook.
+const adapterDagen = (a) => a.days ? (a.days[timeWindow] ?? 1) : a.dagen;
 
 const Adapters = {
   // USGS — aardbevingen, via het query-endpoint van dezelfde catalogus.
@@ -1654,7 +1725,7 @@ const Adapters = {
     // De haak die deze bron aan het haal-beleid koppelt (zie plandataVerversing).
     // Een adapter mét `venster()` doet aan tijdreizen; een adapter zonder merkt er
     // niets van. Dat is hoe EONET er in spoor 2 bij komt.
-    venster() { return fetchWindow(this.days[timeWindow] ?? 1); },
+    venster() { return fetchWindow(adapterDagen(this)); },
     get url() {
       const w = this.venster();
       // Vanaf M1 ophalen, ongeacht het filter: dat is de laagste stand die de
@@ -1723,7 +1794,7 @@ const Adapters = {
     // grens wisselt de app zichtbaar naar USGS — zie borgBrondekking().
     dekkingVanaf: 1998,
     days: { hour: 1 / 24, day: 1, week: 7 },
-    venster() { return fetchWindow(this.days[timeWindow] ?? 1); },
+    venster() { return fetchWindow(adapterDagen(this)); },
     get url() {
       const w = this.venster();
       return 'https://www.seismicportal.eu/fdsnws/event/1/query' +
@@ -1848,20 +1919,31 @@ const Adapters = {
     }
   },
 
-  // NASA EONET — open natural events, ÉÉN AANROEP PER CATEGORIE.
+  // NASA EONET — natural events, ÉÉN AANROEP PER CATEGORIE.
   // ---------------------------------------------------------------------------
-  // Niet terugdraaien naar één gedeelde aanroep met `days=30`. EONET's `days=`
-  // telt niet hoe oud een gebeurtenis is, maar wanneer er voor het laatst een
-  // meetpunt aan is toegevoegd. Vulkanen krijgen alleen bij een noemenswaardige
-  // melding een meetpunt, dus met days=30 vielen ze állemaal buiten de zeef
-  // (gemeten 2026-07-30: 0 vulkanen, terwijl er 32 open stonden). Bosbranden zijn
-  // precies andersom: zónder venster levert EONET er ~6900. Eén venster kan hier
-  // dus per definitie niet voor alle categorieën kloppen.
+  // Niet terugdraaien naar één gedeeld venster. EONET's venster telt niet hoe oud een
+  // gebeurtenis is, maar wanneer er voor het laatst een meetpunt aan is toegevoegd.
+  // Vulkanen krijgen alleen bij een noemenswaardige melding een meetpunt, dus met een
+  // maand vielen ze állemaal buiten de zeef (gemeten 2026-07-30: 0 vulkanen, terwijl er
+  // 32 open stonden). Bosbranden zijn precies andersom: zónder venster levert EONET er
+  // duizenden. Eén venster kan hier per definitie niet voor alle categorieën kloppen.
+  //
+  // TWEEDE BEWIJS VOOR DEZELFDE LES, gemeten 2026-08-08 met start/end op de vulkanen:
+  //   180 d → 13 events · 365 d → 33 · 730 d → 72 · 1825 d → 238
+  // De kaart toont er nu 32, dus 365 dagen herstelt precies wat er staat. Korter en de
+  // helft van de vulkanen verdwijnt zonder dat er iets stukgaat — de stilste soort fout.
+  //
+  // `dekkingVanaf` is GEMETEN, niet geraden (events per jaar, 2026-08-08):
+  //   volcano  1980 → 20 · 1995 → 15 · 2015 → 32 · 2024 → 46
+  //   storm    1999 →  5 · 2000 → 100 · 2015 → 102 · 2024 → 85   (begint abrupt in 2000)
+  //   ice      2011 → 11 · 2012 →  6 · 2015 →  11 · 2024 → 43
+  //   wildfire 2014 →  1 · 2015 → 159 · 2020 → 429 · 2024 → 5636 (meetnet, geen aarde)
+  // Onder die grens gaat de laag op slot — zie borgTijdsloten().
   ...eonetAdapters({
-    volcano:  { category: 'volcanoes',    days: 0  },  // 0 = geen venster
-    storm:    { category: 'severeStorms', days: 30 },
-    ice:      { category: 'seaLakeIce',   days: 30 },
-    wildfire: { category: 'wildfires',    days: 10 }
+    volcano:  { category: 'volcanoes',    dagen: 365, dekkingVanaf: 1980 },
+    storm:    { category: 'severeStorms', dagen:  30, dekkingVanaf: 2000 },
+    ice:      { category: 'seaLakeIce',   dagen:  30, dekkingVanaf: 2011 },
+    wildfire: { category: 'wildfires',    dagen:  10, dekkingVanaf: 2015 }
   }),
 
   // WAQI / aqicn.org — luchtkwaliteit (AQI). Aparte, in-/uitschakelbare laag.
@@ -2029,11 +2111,20 @@ const active = { quake:true, volcano:true, storm:true, ice:true, wildfire:true, 
 // venster zou die ten onrechte verbergen. Zie PLAN-terra-publicatie.md.
 const TIME_FILTERED = new Set(['quake']);
 
-// Lagen die het gekozen moment NIET kunnen volgen. Twee soorten, en het verschil is
-// tijdelijk: WAQI en Blitzortung kennen alleen het heden en zullen dat altijd doen;
-// de vier EONET-lagen hébben historie (gemeten: terug tot 1990) maar Terra leest die
-// nog niet — die vallen hier weg zodra spoor 2 er is.
-const TIJDREIS_ONMOGELIJK = ['aqi', 'lightning', 'volcano', 'wildfire', 'storm', 'ice'];
+// Lagen waarvoor alleen de BOVENgrens geldt: nooit iets tonen van ná het gekozen
+// moment. De EONET-lagen horen bewust niet in TIME_FILTERED hierboven — hun events
+// hebben een duur, dus de ondergrens van de slider zou een vulkaan die maanden loopt
+// ten onrechte verbergen. De bovengrens is een ander verhaal: spring je van 2024 naar
+// 2016, dan staan de events van 2024 nog in de store tot het antwoord binnen is, en
+// die horen meteen weg. Vers genormaliseerde data voldoet er per constructie al aan
+// (geoOpMoment kiest niets van later) — deze regel ruimt alleen de restanten op.
+const TIJD_BOVENGRENS = new Set(['volcano', 'storm', 'ice', 'wildfire']);
+
+// Lagen die het gekozen moment NIET kunnen volgen: WAQI en Blitzortung kennen alleen
+// het heden en zullen dat altijd doen. De EONET-lagen stonden hier tot sessie 21 ook
+// in; die volgen het moment nu wél, maar gaan per laag op slot zodra het moment vóór
+// hun gemeten dekking valt — zie borgTijdsloten().
+const TIJDREIS_ONMOGELIJK = ['aqi', 'lightning'];
 
 // referenties naar de actieve 3D-glyph-objecten (voor per-frame animatie)
 let glyphList = [];
@@ -3222,7 +3313,8 @@ function render() {
   // ook in het venstertje tussen de sprong en het antwoord van de bron.
   const visible = store.filter(d =>
     active[d.layer] &&
-    (!TIME_FILTERED.has(d.layer) || (d.time >= cutoff && d.time <= now))
+    (!TIME_FILTERED.has(d.layer) || (d.time >= cutoff && d.time <= now)) &&
+    (!TIJD_BOVENGRENS.has(d.layer) || d.time <= now)
   );
   // Aardbevingen ook op kracht filteren. Dit is de ENIGE plek waar dat gebeurt:
   // markers, labels, tellers en de lijst eten allemaal uit `quakes`, dus ze
@@ -6823,7 +6915,7 @@ function borgZonneNoot() {
 function vensterGedekt(adapter) {
   const l = adapter.geladen;
   if (!l) return false;
-  const w = eventWindow(adapter.days[timeWindow] ?? 1);
+  const w = eventWindow(adapterDagen(adapter));
   return w.van >= l.van && w.tot <= l.tot;
 }
 
