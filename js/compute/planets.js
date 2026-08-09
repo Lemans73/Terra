@@ -33,7 +33,7 @@
    ============================================================ */
 
 import { DEG, sind, cosd, norm360, norm180, julianDay, deltaTSeconds,
-         meanObliquity, gastDeg } from '../sunmoon.js';
+         meanObliquity, gastDeg, sunPosition } from '../sunmoon.js';
 
 /* ------------------------------------------------------------
    BAANELEMENTEN — Meeus tabel 31.A, gemiddelde equinox van de datum.
@@ -266,6 +266,27 @@ export function planeetPositie(date, sleutel) {
   const cosFase = (p.r * p.r + delta * delta - R * R) / (2 * p.r * delta);
   const fase = Math.acos(Math.max(-1, Math.min(1, cosFase))) / DEG;
 
+  /* ELONGATIE — de hoek tussen de planeet en de zon, aan de hemel gezien.
+
+     Dit is het getal dat verraadt dat het zonnestelsel niet om ons
+     draait. Mercurius komt nooit verder dan 28 graden van de zon en
+     Venus niet verder dan 47: ze zitten aan de zon vastgeklonken, want
+     hun banen liggen BINNEN die van de aarde. Mars, Jupiter en Saturnus
+     halen wel 180 graden — die kunnen in oppositie staan, recht
+     tegenover de zon, en dat kan alleen als wij tussen hen en de zon
+     door gaan. Een echt geocentrisch stelsel kan geen van beide
+     verklaren.
+
+     Berekend als de ware hoekafstand en niet als het verschil in
+     ecliptische lengte: dat scheelt bij Mercurius tot een halve graad,
+     want zijn baan staat 7 graden schuin. */
+  const zon = sunPosition(jdTT);
+  const cosElong = sind(dec) * sind(zon.dec)
+                 + cosd(dec) * cosd(zon.dec) * cosd(ra - zon.ra);
+  const elongatie = Math.acos(Math.max(-1, Math.min(1, cosElong))) / DEG;
+  // Oost of west van de zon: avondster tegenover ochtendster.
+  const oostelijk = norm180(lambda - zon.lambda) > 0;
+
   const gast = gastDeg(jdUT, T);
   return {
     sleutel, ra, dec, lambda, beta,
@@ -274,6 +295,7 @@ export function planeetPositie(date, sleutel) {
     faseHoek: fase,
     verlicht: (1 + cosd(fase)) / 2,
     magnitude: magnitude(sleutel, p.r, delta, fase),
+    elongatie, oostelijk,
     sub: { lat: dec, lon: norm180(ra - gast) }
   };
 }
