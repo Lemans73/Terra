@@ -6746,13 +6746,6 @@ async function pull(adapter, opties = {}) {
 
 function setStatus(msg) { document.getElementById('status').textContent = msg; }
 
-function startAdapter(adapter) {
-  pull(adapter);
-  // `vanInterval` maakt het onderscheid tussen "de klok tikte" en "er is iets
-  // veranderd". Alleen de eerste soort wordt overgeslagen bij een vast tijdvak.
-  setInterval(() => pull(adapter, { vanInterval: true }), adapter.interval);
-}
-
 // ---- Wanneer wordt er opnieuw opgehaald --------------------------------------
 // Het gekozen moment kan honderden keren per minuut verschuiven: de slider stapt per
 // 10 minuten en `play` loopt tot 48 uur per seconde. Bij elke verandering ophalen zou
@@ -7065,10 +7058,18 @@ updateSunUniform();
 // publieke feeds zit (en het scheelt accu op mobiel): een demo die iemand in een
 // achtergrondtabblad laat staan, bleef anders eeuwig doorvragen. De eerste ronde
 // gaat wél altijd door, ook bij laden in de achtergrond.
+//
+// `vanInterval` gaat alléén mee op de klok-tak, en dat is het verschil tussen "de
+// klok tikte" en "er is iets veranderd". Staat het moment op een vast tijdvak in het
+// verleden, dan verandert dat tijdvak niet meer en slaat pull() de ronde over (zie de
+// vroege terugkeer daar). De eerste ronde hieronder, de verbindingstest en de
+// inhaalronde na een pauze gaan wél altijd door — die zijn geen klok.
 const firstPulls = {};
 for (const [id, adapter] of Object.entries(Adapters)) {
   firstPulls[id] = pull(adapter);
-  setInterval(() => { if (!document.hidden) pull(adapter); }, adapter.interval);
+  setInterval(() => {
+    if (!document.hidden) pull(adapter, { vanInterval: true });
+  }, adapter.interval);
 }
 
 // Bij terugkeer naar het tabblad één inhaalronde, maar alleen na een echte pauze —
