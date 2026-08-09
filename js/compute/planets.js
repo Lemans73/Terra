@@ -337,6 +337,127 @@ export function hemelspoor(date, sleutel, dagen = 90, punten = 120) {
   return uit;
 }
 
+/* ============================================================
+   CONJUNCTIES — wanneer staan twee planeten naast elkaar?
+
+   WAAROM DIT EEN KNOP MOET WORDEN. Een conjunctie duurt een dag of
+   twee en er zitten maanden tussen. Wie de tijdslider met de hand
+   verschuift komt er nooit een tegen, precies zoals niemand ooit een
+   eclips vond voordat daar een knop voor kwam. Wat je niet kunt
+   vinden, bestaat niet in een interface.
+
+   DE ZOEKOPZET, met dezelfde vorm als nextSolarEclipse(): grof
+   scannen, en alleen nauwkeurig kijken waar het de moeite is. De
+   winst zit hier in de VOLGORDE van de lussen — bereken per dag de
+   zeven posities EEN keer en lees daar de 21 paren uit af, in plaats
+   van per paar twee posities te berekenen. Dat scheelt een factor
+   zes, en het verschil tussen 30 ms en 200 ms is het verschil tussen
+   een knop die reageert en een knop die hapert.
+============================================================ */
+
+/* Hoekafstand tussen twee posities, in graden. */
+function scheiding(a, b) {
+  const c = sind(a.dec) * sind(b.dec)
+          + cosd(a.dec) * cosd(b.dec) * cosd(a.ra - b.ra);
+  return Math.acos(Math.max(-1, Math.min(1, c))) / DEG;
+}
+
+/* Een conjunctie telt pas als de twee dichter dan dit bij elkaar staan.
+   Drie graden is ruim zes maandiameters: dicht genoeg om als paar op te
+   vallen, ruim genoeg om er een handvol per jaar te hebben. */
+const CONJUNCTIE_DREMPEL = 3;
+
+/* ------------------------------------------------------------
+   De eerstvolgende (of vorige) conjunctie vanaf een moment.
+
+   `richting` +1 vooruit, -1 terug. Geeft null als er binnen
+   `maxDagen` niets is.
+
+   LET OP DE ZON-UITSLUITING. Twee planeten kunnen ook samenvallen
+   doordat ze allebei achter de zon staan; dat is meetkundig een
+   conjunctie maar aan de hemel is er niets te zien, want ze staan in
+   het daglicht. Paren met een elongatie onder 15 graden vallen daarom
+   af — dat is geen kunstgreep maar het verschil tussen een berekening
+   en een waarneming.
+------------------------------------------------------------ */
+export function volgendeConjunctie(from, maxDagen = 900, richting = 1) {
+  const stapGrof = 1;                       // dagen
+  const t0 = from.getTime();
+  let kandidaat = null;
+
+  /* PER PAAR bijhouden of het nadert of wijkt. Eén gedeelde "vorige stap"
+     volstaat niet, en dat kostte de eerste versie een fout: die zag elke
+     oplopende reeks als minimum en meldde 16 en 20 november als twee
+     verschillende Mars-Jupiter-conjuncties, terwijl het één nadering was.
+
+     Een minimum vraagt DRIE waarnemingen: eerst dalen, dan stijgen. Een
+     paar dat al wijkt op het moment dat je begint te kijken, hoort dus
+     overgeslagen te worden tot het opnieuw nadert — anders vind je een
+     conjunctie die net achter je ligt. */
+  const staat = {};                         // paarsleutel -> { vorige, dalend }
+
+  for (let d = 0; d <= maxDagen && !kandidaat; d += stapGrof) {
+    const t = new Date(t0 + richting * d * 86400000);
+    const eph = planeetEfemeriden(t);
+
+    for (let i = 0; i < PLANETEN.length && !kandidaat; i++) {
+      for (let j = i + 1; j < PLANETEN.length && !kandidaat; j++) {
+        const A = PLANETEN[i], B = PLANETEN[j], sleutel = A + '|' + B;
+        const a = eph[A], b = eph[B];
+        // In het daglicht: meetkundig een conjunctie, maar niets te zien.
+        if (a.elongatie < 15 || b.elongatie < 15) { delete staat[sleutel]; continue; }
+        const s = scheiding(a, b);
+        if (s > CONJUNCTIE_DREMPEL) { delete staat[sleutel]; continue; }
+
+        const st = staat[sleutel];
+        if (st) {
+          if (s < st.sep) {
+            staat[sleutel] = { sep: s, t: t.getTime(), dalend: true };
+          } else if (st.dalend) {
+            // Gedaald en nu weer stijgend: het minimum lag bij de vorige stap.
+            kandidaat = { t: st.t, paar: { a: A, b: B } };
+          } else {
+            staat[sleutel] = { sep: s, t: t.getTime(), dalend: false };
+          }
+        } else {
+          staat[sleutel] = { sep: s, t: t.getTime(), dalend: false };
+        }
+      }
+    }
+  }
+
+  // Niets gevonden binnen het venster, of het liep nog steeds op toen we
+  // stopten: dan is er geen conjunctie om naartoe te springen.
+  if (!kandidaat) return null;
+
+  /* Fijn zoeken rond het grove minimum: een uur per stap over twee dagen.
+     Verder verfijnen heeft geen zin — de scheiding verandert bij een
+     conjunctie met hooguit enkele boogminuten per uur, en het model zelf
+     is een boogminuut waard. */
+  let best = null;
+  for (let u = -24; u <= 24; u++) {
+    const t = new Date(kandidaat.t + u * 3600000);
+    const eph = planeetEfemeriden(t);
+    const s = scheiding(eph[kandidaat.paar.a], eph[kandidaat.paar.b]);
+    if (!best || s < best.sep) best = { sep: s, t };
+  }
+
+  const eph = planeetEfemeriden(best.t);
+  return {
+    moment: best.t,
+    a: kandidaat.paar.a,
+    b: kandidaat.paar.b,
+    scheiding: best.sep,
+    // Waar aan de hemel, zodat de camera erheen kan draaien.
+    sub: eph[kandidaat.paar.a].sub,
+    elongatie: Math.min(eph[kandidaat.paar.a].elongatie, eph[kandidaat.paar.b].elongatie)
+  };
+}
+
+export function vorigeConjunctie(from, maxDagen = 900) {
+  return volgendeConjunctie(from, maxDagen, -1);
+}
+
 /* ------------------------------------------------------------
    GELDIGHEID — GEMETEN, en de uitkomst was gunstiger dan aangenomen.
 

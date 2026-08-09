@@ -920,6 +920,18 @@
       Around opposition a planet appears to reverse for weeks &#8212; that
       backwards loop is the reason a Sun-centred solar system had to replace
       an Earth-centred one.</p>
+      <!-- CONJUNCTIES. De knoppen staan hier en niet bij het spoor, omdat ze
+      het moment verzetten en niet de weergave. Ze zetten wél het spoor mee
+      goed: een sprong die je op het juiste moment in het verkeerde beeld
+      achterlaat is geen sprong. -->
+      <h3>Conjunctions</h3>
+      <div class="presets" id="conj-knoppen">
+      <button class="preset" id="conj-prev">&#8592; previous</button>
+      <button class="preset" id="conj-next">next &#8594;</button>
+      </div>
+      <p class="space-uitleg" id="conj-uitkomst">Two planets passing within three
+      degrees of each other, close enough to see as a pair. Sunlit pairings are
+      skipped &#8212; geometrically a conjunction, but nothing to see.</p>
       <h3>Lagrange points</h3>
       <div class="elayer off" id="lagrange-toggle">
       <span class="edot"></span>Sun&#8211;Earth L-points
@@ -1384,7 +1396,8 @@ import { createEclipticLayer } from './js/layers/ecliptic-layer.js';
 import { createLagrangeLayer, LAGRANGE_PUNTEN } from './js/layers/lagrange-layer.js';
 import { createSpaceState } from './js/states/space.js';
 import { maakViewStates } from './js/core/view-state.js';
-import { PLANETEN, PLANEET_INFO } from './js/compute/planets.js';
+import { PLANETEN, PLANEET_INFO, volgendeConjunctie,
+         vorigeConjunctie } from './js/compute/planets.js';
 // Deskundig (schematische) weergavemodus (Fase 1).
 import { enterExpertMode, exitExpertMode } from './js/modes/expert.js';
 // Schematische datalaag-symbolen voor de deskundig-modus (Fase 2).
@@ -6720,6 +6733,65 @@ document.getElementById('eclipse-jump')?.addEventListener('click',
   (ev) => springNaarEclips(1, ev.currentTarget));
 document.getElementById('eclipse-prev')?.addEventListener('click',
   (ev) => springNaarEclips(-1, ev.currentTarget));
+
+/* ---- Conjuncties ------------------------------------------------
+   Zelfde vorm als de eclips-sprong hierboven, en om dezelfde reden: een
+   conjunctie duurt een dag of twee en er zitten maanden tussen. Wie de
+   slider met de hand verschuift komt er nooit een tegen. Wat je niet
+   kunt vinden bestaat niet in een interface.
+
+   DIT ZET OOK DE STATE GOED NEER in plaats van alleen de klok: Space
+   aan als hij uit stond, focus op de dichtstbijzijnde van de twee, en
+   het hemelspoor op 30 dagen zodat je ziet hoe ze naar elkaar toe
+   lopen. Een sprong die je op het juiste moment maar in het verkeerde
+   beeld achterlaat, is geen sprong. */
+function springNaarConjunctie(richting, btn) {
+  const label = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '…';
+  setTimeout(() => {
+    // Vijf dagen marge: anders vindt hij de conjunctie waar we al op staan.
+    const vanaf = new Date(momentNow().getTime() + richting * 5 * 86400000);
+    const gevonden = richting > 0 ? volgendeConjunctie(vanaf) : vorigeConjunctie(vanaf);
+    btn.disabled = false;
+    btn.textContent = label;
+    if (!gevonden) { btn.textContent = 'none within 900 days';
+                     setTimeout(() => btn.textContent = label, 2000); return; }
+
+    if (!inSpaceAanzicht()) { bouwPlanetenLijst(); setSpaceView(true); }
+    stopPlay();
+    baseMoment = gevonden.moment;
+    timeOffsetMs = 0;
+    herschaalSlider();
+    if (timeInputEl) timeInputEl.value = naarVeldWaarde(gevonden.moment);
+    refreshTimeUI();
+    updateSunUniform();
+
+    // Het spoor van de dichtstbijzijnde: die beweegt het snelst en maakt
+    // dus zichtbaar wie er naar wie toe loopt.
+    const eph = planets.efemeriden();
+    const dichtste = (eph && eph[gevonden.a].distanceAU <= eph[gevonden.b].distanceAU)
+                     ? gevonden.a : gevonden.b;
+    planets.setSpoorVenster(30, momentNow());
+    document.querySelectorAll('#spoor-venster .preset').forEach(x =>
+      x.classList.toggle('active', x.dataset.dagen === '30'));
+    planets.setFocus(dichtste, momentNow());
+    markeerPlaneetFocus();
+    updateSpaceReadout();
+    werkSpoorNootBij();
+
+    const noot = document.getElementById('conj-uitkomst');
+    if (noot) noot.textContent =
+      PLANEET_INFO[gevonden.a].naam + ' and ' + PLANEET_INFO[gevonden.b].naam +
+      ' — ' + gevonden.scheiding.toFixed(2) + '° apart on ' +
+      gevonden.moment.toLocaleDateString('en-GB',
+        { day: '2-digit', month: 'short', year: 'numeric' });
+  }, 30);
+}
+document.getElementById('conj-next')?.addEventListener('click',
+  (ev) => springNaarConjunctie(1, ev.currentTarget));
+document.getElementById('conj-prev')?.addEventListener('click',
+  (ev) => springNaarConjunctie(-1, ev.currentTarget));
 
 // ---- Trackvenster ----
 // Bepaalt zowel het spoor op de bol als het bereik van de slider hierboven.
