@@ -538,15 +538,100 @@
       </div>
       </section>
 
+      <!-- ---------- DE ASSEN, ALS SCHAKELAARS ----------
+           TWEE GROEPEN, en hun namen zijn met opzet gelijk aan de twee secties in
+           Almanac: daar staan de getallen, hier de schakelaars. Eén op één te volgen.
+
+           WAAROM DEZE VIER HIER STAAN EN NIET BIJ HUN READOUT (sessie 21). Almanac
+           kwam er in sessie 20 omdat alles erin BEREKEND is in plaats van waargenomen.
+           Dat is een ordening naar de aard van de data; deze is er een naar de soort
+           bediening — Layers is wat je aanzet, Almanac is wat het je vertelt. Allebei
+           tegelijk kan niet. De doorslag gaf dat `Sun & Moon layers` hierboven al zo
+           stond, en daarmee de enige sectie was waar schakelaar en readout uit elkaar
+           lagen. Nu is dat de regel in plaats van de uitzondering.
+
+           Niet terugdraaien zonder ook die Sun & Moon-sectie mee te nemen, anders komt
+           de inconsistentie terug waar deze verhuizing hem juist weghaalt. -->
+      <section class="acc" data-acc="axis-layers">
+      <button class="acc-head" type="button" aria-expanded="false">
+      <span>Earth&#8217;s axis</span>
+      <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="acc-body">
+      <div class="elayer" id="rotaxis-toggle"><span class="edot"></span>Rotation axis<span class="estat" id="es-rotaxis">off</span></div>
+      <div class="elayer expandable" id="polarmotion-toggle">
+      <span class="edot"></span>Polar motion
+      <button class="row-expand" data-note="polarmotion-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <span class="estat" id="es-polarmotion">off</span>
+      </div>
+      <!-- De uitleg reist MET de rij mee, niet met de readout: hij beantwoordt "wat zet
+      ik hier aan", en dat is een vraag die je hier stelt. -->
+      <div class="layer-detail" id="polarmotion-note">
+      The rotation axis does not sit still in the crust. It spirals around a mean
+      position: the <b>Chandler wobble</b>, a free nutation with a period of about
+      1.19 years, plus an annual term driven by water, snow and air moving around
+      the planet.
+      <br /><br />
+      The scale is the whole story. The pole travels roughly <b>25 metres a year</b>
+      but never gets further than about <b>20 metres</b> from home &#8212; a spiral
+      inside a circle 40 m across. That is why this is a plot and not a correction
+      to the globe: at maximum zoom one pixel is 8.5 km, so the full wobble is
+      1/1055th of a pixel.
+      <br /><br />
+      Measured, not modelled. Values before 1962 carry an uncertainty of roughly
+      30&#160;mas &#8212; about a metre &#8212; so the early part of the long track
+      is rougher than it looks. The plot itself is in Almanac.
+      </div>
+      </div>
+      </section>
+
+      <section class="acc" data-acc="field-layers">
+      <button class="acc-head" type="button" aria-expanded="false">
+      <span>Magnetic field</span>
+      <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="acc-body">
+      <div class="elayer expandable" id="magaxis-toggle">
+      <span class="edot"></span>Magnetic axis
+      <button class="row-expand" data-note="magaxis-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <span class="estat" id="es-magaxis">off</span>
+      </div>
+      <div class="layer-detail" id="magaxis-note">
+      The axis of the dipole that best fits Earth&#8217;s magnetic field, from the
+      first three IGRF&#8209;14 coefficients. Where it meets the surface are the
+      <b>geomagnetic poles</b> &#8212; exactly opposite each other, and about 9&#176;
+      from the rotation axis.
+      <br /><br />
+      These are <b>not</b> the magnetic dip poles, where a compass needle points
+      straight down. Those come from the full field, do not sit opposite each
+      other, and are the ones racing towards Siberia. In 2025 the geomagnetic
+      north pole is at 80.8&#176; N 72.8&#176; W; the dip pole at 85.8&#176; N 138.1&#176; E.
+      <br /><br />
+      Published tables quote geodetic latitude, roughly 0.06&#176; higher than the
+      geocentric value shown here. The figures themselves are in Almanac.
+      </div>
+      <div class="elayer" id="magdrift-toggle"><span class="edot"></span>Pole drift 1900&#8211;2030<span class="estat" id="es-magdrift">off</span></div>
+      </div>
+      </section>
+
     </div>
 
     <div class="tabpanel" data-panel="cosmos">
       <!-- ---------- DE ASSEN VAN DE AARDE ----------
-           STAAT SINDS SESSIE 20 IN DE ALMANAC-TAB en niet meer bij Layers. Wat deze
-           tab bindt is dat alles erin BEREKEND is in plaats van waargenomen: zon,
-           maan, rotatie-as, dipoolas, poolbeweging. Layers is waarneming, dit is
-           model — en de as hoorde nooit tussen de datalagen, want hij heeft geen
-           teller en geen bron die kan uitvallen.
+           WAT DEZE TAB BINDT, HERZIEN IN SESSIE 21. Tot dan was het "alles hierin is
+           berekend in plaats van waargenomen". Dat hield geen stand: `Sun & Moon
+           layers` stond al bij Layers, en daarmee was er precies één sectie waar
+           schakelaar en readout in verschillende tabs leefden. De ordening loopt nu
+           langs de soort BEDIENING: Layers is wat je aanzet, Almanac is wat het je
+           vertelt. De vier as-schakelaars zijn daarom naar Layers verhuisd, naar twee
+           groepen die net zo heten als de twee secties hier.
+
+           Wat er van de oude reden overblijft, klopt nog steeds: deze getallen komen
+           uit een berekening, hebben geen teller en geen bron die kan uitvallen.
 
            "Statics" is bewust afgewezen: in het Engels is dat de tak van de mechanica
            over lichamen in rust, niet "de statische dingen". Een almanak gaf
@@ -566,10 +651,17 @@
       <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
       <div class="acc-body">
-      <!-- CONDITIONEEL PANEEL. `body.magneto-on` schakelt tussen twee sets: buiten
-      de state de laagschakelaars, binnen de state de camerastanden. Wat in een
-      stand niets doet hoort er ook niet te staan. De knop naar buiten staat
-      bovenaan en valt buiten beide sets, zodat hij altijd zichtbaar is. -->
+      <!-- CONDITIONEEL PANEEL. `body.magneto-on` toont de camerastanden, die buiten
+      de state niets te besturen hebben — wat in een stand niets doet hoort er ook
+      niet te staan. (Tot sessie 21 wisselde deze klasse tussen twee sets, met de
+      laagschakelaars als tegenhanger; die staan nu in Layers en hebben geen
+      state-wissel nodig, want ze werken in beide standen.)
+
+      DE KNOP BLIJFT HIER en gaat niet naar Magnetic field, hoe verleidelijk de naam
+      "magneto" ook is: wat deze state toont is de scheefstand van 23,44°, en dat is
+      een eigenschap van de ROTATIE-as. De dipoolas wordt door de draaiing meegevoerd
+      en stuurt niets aan — een misverstand dat in sessie 18 al één keer is
+      rechtgezet. -->
       <button class="apply" id="magneto-btn">Enter magneto view</button>
       <div class="magneto-only">
       <p class="magneto-uitleg">The Earth in space, tilted by its real 23.4&#176; obliquity.
@@ -583,34 +675,12 @@
       </div>
       <p class="magneto-uitleg" id="magneto-lock"></p>
       </div>
-      <!-- De laagschakelaars staan BUITEN de state-wissel: ze horen in beide
-      standen te werken. Ze eerst uitzetten en dan de state in moeten is geen
-      keuze maar een omweg. -->
-      <div class="elayer" id="rotaxis-toggle"><span class="edot"></span>Rotation axis<span class="estat" id="es-rotaxis">off</span></div>
-      <div class="elayer expandable" id="polarmotion-toggle">
-      <span class="edot"></span>Polar motion
-      <button class="row-expand" data-note="polarmotion-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-      </button>
-      <span class="estat" id="es-polarmotion">off</span>
-      </div>
-      <div class="layer-detail" id="polarmotion-note">
-      The rotation axis does not sit still in the crust. It spirals around a mean
-      position: the <b>Chandler wobble</b>, a free nutation with a period of about
-      1.19 years, plus an annual term driven by water, snow and air moving around
-      the planet.
-      <br /><br />
-      The scale is the whole story. The pole travels roughly <b>25 metres a year</b>
-      but never gets further than about <b>20 metres</b> from home &#8212; a spiral
-      inside a circle 40 m across. That is why this is a plot and not a correction
-      to the globe: at maximum zoom one pixel is 8.5 km, so the full wobble is
-      1/1055th of a pixel.
-      <br /><br />
-      Measured, not modelled. Values before 1962 carry an uncertainty of roughly
-      30&#160;mas &#8212; about a metre &#8212; so the early part of the long track
-      is rougher than it looks.
-      </div>
-      <!-- Alles hieronder hangt aan de schakelaar, en dat is niet cosmetisch: de
+      <!-- De schakelaars stonden hier tot sessie 21 en zijn naar de Layers-tab
+      verhuisd, naar de groep die net zo heet. Wat hier blijft is wat de berekening
+      OPLEVERT. De uitleg bij de rijen reisde mee; alleen de plot bleef.
+      Verhuizen en niet kopiëren — zie de UTC-schakelaar van sessie 20 voor waarom
+      twee besturingen voor één stand een bron van ellende zijn. -->
+      <!-- Alles hieronder hangt aan de schakelaar in Layers, en dat is niet cosmetisch: de
       reeks is 225 KB en wordt pas opgehaald als de laag aangaat. Staat de rij uit,
       dan raakt de app CelesTrak niet aan. `hidden` op een kale div is veilig — er
       staat geen eigen `display` op, dus de user-agent-regel wint (les sessie 14). -->
@@ -651,28 +721,8 @@
       <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
       <div class="acc-body">
-      <div class="elayer expandable" id="magaxis-toggle">
-      <span class="edot"></span>Magnetic axis
-      <button class="row-expand" data-note="magaxis-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-      </button>
-      <span class="estat" id="es-magaxis">off</span>
-      </div>
-      <div class="layer-detail" id="magaxis-note">
-      The axis of the dipole that best fits Earth&#8217;s magnetic field, from the
-      first three IGRF&#8209;14 coefficients. Where it meets the surface are the
-      <b>geomagnetic poles</b> &#8212; exactly opposite each other, and about 9&#176;
-      from the rotation axis.
-      <br /><br />
-      These are <b>not</b> the magnetic dip poles, where a compass needle points
-      straight down. Those come from the full field, do not sit opposite each
-      other, and are the ones racing towards Siberia. In 2025 the geomagnetic
-      north pole is at 80.8&#176; N 72.8&#176; W; the dip pole at 85.8&#176; N 138.1&#176; E.
-      <br /><br />
-      Published tables quote geodetic latitude, roughly 0.06&#176; higher than the
-      geocentric value shown here.
-      </div>
-      <div class="elayer" id="magdrift-toggle"><span class="edot"></span>Pole drift 1900&#8211;2030<span class="estat" id="es-magdrift">off</span></div>
+      <!-- Alleen de uitkomst. De twee schakelaars (magnetische as, pooldrift) staan
+      sinds sessie 21 in de Layers-tab, in de groep die net zo heet. -->
       <dl class="cosmos-readout">
       <dt>Geomagnetic north</dt>
       <dd id="gm-north">&#8212;</dd>
