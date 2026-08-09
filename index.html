@@ -6203,8 +6203,24 @@ function refreshTimeUI() {
   const val = document.getElementById('time-val');
   const reset = document.getElementById('time-reset');
   const head = document.getElementById('readout-head');
-  const stamp = fmtStamp(momentNow(),
-    { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+  // Het jaartal alleen wanneer het NIET het huidige jaar is. Twee redenen om het niet
+  // altijd te tonen: rond `nu` zegt "2026" niets, en dit label deelt een grid-kolom van
+  // vaste 190 px met de slider (zie .ti-row). Gemeten breedte zonder jaar: 22 px bij
+  // "now" tot 145 px bij "+13 d 15 h · 22 Aug, 05:02". Een permanent jaartal kost daar
+  // zo'n 35 px bovenop en komt gevaarlijk dicht bij de kolomgrens — en die kolom breder
+  // maken gaat ten koste van de sliderbaan, precies wat de sleep-bug van sessie 20 was.
+  // Springt de bezoeker naar 2016, dan is het label kort ("01 Jul 2016, 12:00") want een
+  // absoluut moment heeft geen offset-voorvoegsel.
+  // Via fmtStamp en niet via getFullYear(), zodat de vergelijking dezelfde tijdzone
+  // gebruikt als het label eronder — anders klopt hij niet in de uren rond oudjaar
+  // wanneer de UTC-schakelaar aanstaat.
+  const jaarVan = (d) => fmtStamp(d, { year: 'numeric' });
+  const anderJaar = jaarVan(momentNow()) !== jaarVan(new Date());
+  const stamp = fmtStamp(momentNow(), {
+    day: '2-digit', month: 'short',
+    ...(anderJaar ? { year: 'numeric' } : {}),
+    hour: '2-digit', minute: '2-digit'
+  });
   if (val) {
     const off = formatOffset(timeOffsetMs);
     // "+3 d" alleen zegt te weinig; het moment zelf hoort erbij.
@@ -6800,8 +6816,13 @@ function showDetail(d) {
         : '—';
   // Niet elke bron geeft een tijdstip. Zonder deze controle toont een ontbrekende
   // tijd "01 Jan, 01:00" (epoch), en dat is erger dan eerlijk niets tonen.
+  // MÉT jaartal, altijd. Zolang de app alleen het heden toonde was het jaar overbodig;
+  // sinds de tijdkiezer gebeurtenissen uit 1985 of 2016 kan opdiepen is "01 Jul, 12:00"
+  // ronduit misleidend — het leest als vandaag. Dit is de enige plek waar de tijd van
+  // een gebeurtenis zelf staat, dus hier mag geen twijfel over bestaan.
   document.getElementById('r-time').textContent = d.time
-    ? fmtStamp(new Date(d.time), { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' })
+    ? fmtStamp(new Date(d.time),
+        { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' })
     : '—';
   // Vrije regels. Leeg voor alles behalve een zonnegebied — zie de noot bij r-extra.
   const extraEl = document.getElementById('r-extra');
