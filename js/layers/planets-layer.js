@@ -39,8 +39,9 @@
       retrograde lus in. Zie hemelspoor() in compute/planets.js.
    ============================================================ */
 
-import { planeetEfemeriden, PLANETEN, PLANEET_INFO } from '../compute/planets.js';
-import { latLonToUnit } from '../sunmoon.js';
+import { planeetEfemeriden, hemelspoor, PLANETEN, PLANEET_INFO } from '../compute/planets.js';
+import { latLonToUnit, ephemeris, norm180 } from '../sunmoon.js';
+import { gastVan } from '../compute/frames.js';
 
 export function createPlanetsLayer(THREE, opts = {}) {
   const cfg = Object.assign({
@@ -228,6 +229,9 @@ export function createPlanetsLayer(THREE, opts = {}) {
     }
 
     if (camera) regelLabels(camera);
+    // Het spoor hoort bij het moment: schuift de tijdkiezer, dan schuift de
+    // lus mee. Gesmoord, want dit zijn 160 efemeriden per herbouw.
+    if (spoorDagen && focus) planSpoor(date, focus);
     return eph;
   }
 
@@ -281,9 +285,79 @@ export function createPlanetsLayer(THREE, opts = {}) {
     }
   }
 
-  function setFocus(sleutel) {
+  /* ==========================================================
+     HET HEMELSPOOR — met de retrograde lus erin.
+
+     WAT DIT LAAT ZIEN. Een planeet loopt maandenlang oostwaarts langs
+     de sterren, staat dan stil, loopt een tijd ACHTERUIT, en gaat weer
+     verder. Mars doet dat rond elke oppositie. Er is geen manier om die
+     lus te verklaren met een planeet die om de aarde draait — hij
+     ontstaat doordat de aarde hem aan de binnenkant inhaalt. Dit is dus
+     niet alleen het mooiste planeetfenomeen dat er is, het is ook wat
+     deze hele geocentrische weergave eerlijk houdt: je ziet de banen
+     niet, maar je ziet wel het bewijs dat ze niet om ons heen lopen.
+
+     EEN VASTE STERRENTIJD VOOR HET HELE SPOOR, en dat is de hele truc.
+     Neem je per punt de `gast` van dat moment, dan draait de aarde
+     onder het pad door en krijg je een spiraal van 90 windingen die
+     uitsluitend de AARDROTATIE toont — precies het grondspoor dat hier
+     niets zegt. Met een bevroren sterrentijd staat de hemel stil en
+     beweegt alleen de planeet. Het spoor ligt daarmee in het frame van
+     de sterren, niet in dat van de grond.
+  ========================================================== */
+  const spoorMat = new THREE.LineBasicMaterial({
+    color: 0xffffff, transparent: true, opacity: 0.55
+  });
+  const spoorGeo = new THREE.BufferGeometry();
+  const spoorLijn = new THREE.Line(spoorGeo, spoorMat);
+  spoorLijn.visible = false;
+  spoorLijn.frustumCulled = false;
+  group.add(spoorLijn);
+
+  let spoorDagen = 0;              // 0 = uit
+  let spoorTimer = null;
+  let spoorVoor = null;            // voor welke planeet het er ligt
+
+  function bouwSpoor(date, sleutel) {
+    if (!sleutel || !spoorDagen) { spoorLijn.visible = false; spoorVoor = null; return; }
+    const L = lichamen[sleutel];
+    const gast = gastVan(ephemeris(date));          // BEVROREN, zie de noot hierboven
+    const punten = hemelspoor(date, sleutel, spoorDagen, 160);
+    const arr = new Float32Array(punten.length * 3);
+    for (let i = 0; i < punten.length; i++) {
+      const u = latLonToUnit(punten[i].dec, norm180(punten[i].ra - gast));
+      arr[i * 3]     = u.x * L.schil;
+      arr[i * 3 + 1] = u.y * L.schil;
+      arr[i * 3 + 2] = u.z * L.schil;
+    }
+    spoorGeo.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+    spoorGeo.computeBoundingSphere();
+    spoorMat.color.setHex(PLANEET_INFO[sleutel].kleur);
+    spoorLijn.visible = true;
+    spoorVoor = sleutel;
+  }
+
+  /* Gesmoord op 120 ms, hetzelfde patroon en dezelfde reden als bij de
+     ground tracks in sessie 14: die maten daar 6,9 ms mediaan met
+     uitschieters naar 29 ms, en dit zijn 160 volledige efemeriden per
+     herbouw. Tijdens het slepen van de tijdslider hoort er niets te
+     gebeuren. */
+  function planSpoor(date, sleutel) {
+    clearTimeout(spoorTimer);
+    spoorTimer = setTimeout(() => bouwSpoor(date, sleutel), 120);
+  }
+
+  function setSpoorVenster(dagen, date) {
+    spoorDagen = dagen || 0;
+    if (!spoorDagen) { spoorLijn.visible = false; spoorVoor = null; return; }
+    if (focus && date) bouwSpoor(date, focus);
+  }
+
+  function setFocus(sleutel, date) {
     focus = sleutel && lichamen[sleutel] ? sleutel : null;
     for (const k of PLANETEN) pasDekkingToe(k);
+    if (spoorDagen && date) bouwSpoor(date, focus);
+    else if (!focus) { spoorLijn.visible = false; spoorVoor = null; }
     return focus;
   }
 
@@ -317,6 +391,9 @@ export function createPlanetsLayer(THREE, opts = {}) {
 
   return {
     group, update, setVisible, setPlaneetVisible, setFocus, raakPunt,
+    setSpoorVenster,
+    spoorVenster: () => spoorDagen,
+    spoorVoor: () => spoorVoor,
     // Alleen de labels opnieuw meten en schalen, zonder de efemeriden aan te
     // raken. Hangt aan de zoom: de maat is schermvast, dus hij moet mee met de
     // camera-afstand. LET OP bij het aankoppelen — `world.onZoom` is een SETTER

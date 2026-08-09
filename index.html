@@ -548,6 +548,24 @@
       </button>
       <div class="acc-body">
       <div class="elayer" id="rotaxis-toggle"><span class="edot"></span>Rotation axis<span class="estat" id="es-rotaxis">off</span></div>
+      <!-- DE ECLIPTICA hoort hier volgens de regel van sessie 21: hij levert
+      geometrie op de bol, dus Layers. En hij hoort in BEIDE weergaven, niet
+      alleen in Space — het vlak van de aardbaan verklaart net zo goed waarom
+      de zon staat waar hij staat. -->
+      <div class="elayer expandable" id="ecliptic-toggle">
+      <span class="edot"></span>Ecliptic
+      <button class="row-expand" data-note="ecliptic-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <span class="estat" id="es-ecliptic">off</span>
+      </div>
+      <div class="layer-detail" id="ecliptic-note">
+      The plane of Earth&#8217;s orbit, and near enough the plane the whole solar
+      system lies in. On the globe it swings between 23.4&#176; north and south
+      &#8212; exactly the band between the tropics, because that is where the Sun
+      stands overhead. It is also why the planets always appear in one narrow
+      strip of sky.
+      </div>
       <div class="elayer expandable" id="magaxis-toggle">
       <span class="edot"></span>Magnetic axis
       <button class="row-expand" data-note="magaxis-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
@@ -889,11 +907,40 @@
       <div class="space-lock" id="space-lock">Free orbit.</div>
       <h3>Bodies</h3>
       <div class="planet-list" id="planet-list"></div>
+      <!-- HET HEMELSPOOR. Hoort bij het lichaam in focus en niet bij alle
+      zeven tegelijk: zeven lussen over elkaar is geen uitleg meer. -->
+      <h3>Path through the sky</h3>
+      <div class="presets" id="spoor-venster">
+      <button class="preset active" data-dagen="0">off</button>
+      <button class="preset" data-dagen="30">30 d</button>
+      <button class="preset" data-dagen="90">90 d</button>
+      <button class="preset" data-dagen="180">180 d</button>
+      </div>
+      <p class="space-uitleg" id="spoor-noot">Select a body to draw its path.
+      Around opposition a planet appears to reverse for weeks &#8212; that
+      backwards loop is the reason a Sun-centred solar system had to replace
+      an Earth-centred one.</p>
+      <h3>Lagrange points</h3>
+      <div class="elayer off" id="lagrange-toggle">
+      <span class="edot"></span>Sun&#8211;Earth L-points
+      <span class="estat" id="es-lagrange">off</span>
+      </div>
+      <p class="space-uitleg">L1 and L2 sit 1.5 million km away &#8212; one
+      percent of the way to the Sun, so they are drawn nearer than they are.
+      L4 and L5 are on the true solar distance. Solar wind is measured at L1
+      before it reaches us.</p>
       <h3>Reading</h3>
       <div class="sunstat" id="space-readout">
       <div class="sunstat-row"><span>Selected</span><b id="sp-naam">&#8212;</b></div>
       <div class="sunstat-row"><span>Distance</span><b id="sp-afstand">&#8212;</b></div>
       <div class="sunstat-row"><span>Apparent magnitude</span><b id="sp-mag">&#8212;</b></div>
+      <!-- ELONGATIE staat hier omdat het de weergave eerlijk houdt. Mercurius
+      komt nooit verder dan 28 graden van de zon en Venus niet verder dan 47:
+      die twee zitten eraan vast omdat hun banen BINNEN die van de aarde
+      liggen. Mars, Jupiter en Saturnus halen wel 180 graden. Wie dit veld
+      een tijdje volgt, ziet het verschil tussen binnen- en buitenplaneet
+      zonder dat het uitgelegd hoeft te worden. -->
+      <div class="sunstat-row"><span>Elongation from Sun</span><b id="sp-elong">&#8212;</b></div>
       <div class="sunstat-row"><span>Illuminated</span><b id="sp-fase">&#8212;</b></div>
       <div class="sunstat-row"><span>Right ascension</span><b id="sp-ra">&#8212;</b></div>
       <div class="sunstat-row"><span>Declination</span><b id="sp-dec">&#8212;</b></div>
@@ -1333,6 +1380,8 @@ import { createMagnetoMode } from './js/modes/magneto.js';
 // aan te houden: rekenen (compute/) weet niets van three, tekenen (layers/)
 // niets van de app, en de state (states/) orkestreert zonder zelf te tekenen.
 import { createPlanetsLayer } from './js/layers/planets-layer.js';
+import { createEclipticLayer } from './js/layers/ecliptic-layer.js';
+import { createLagrangeLayer, LAGRANGE_PUNTEN } from './js/layers/lagrange-layer.js';
 import { createSpaceState } from './js/states/space.js';
 import { maakViewStates } from './js/core/view-state.js';
 import { PLANETEN, PLANEET_INFO } from './js/compute/planets.js';
@@ -3468,6 +3517,10 @@ function updateSunUniform() {
   // hele hemel, en dus geen tweede tijdlijn die uit de pas kan lopen. De laag
   // doet niets zolang hij onzichtbaar is, en dat is de normale stand.
   if (spaceState) spaceState.tik();
+  // De ecliptica en de Lagrange-punten hangen aan dezelfde klok. Beide doen
+  // niets zolang ze onzichtbaar zijn, en dat is de normale stand.
+  if (ecliptic) ecliptic.update(now);
+  if (lagrange) lagrange.update(now, world.camera());
   updateSpaceReadout();
 
   updateCosmosReadout();
@@ -3490,6 +3543,7 @@ world.onZoom(pov => {
   // 4. planeetlabels: hun maat is schermvast, dus die moet mee met de
   //    camera-afstand. Doet niets zolang de Space-state uit staat.
   if (planets) planets.hertekenLabels(world.camera());
+  if (lagrange) lagrange.hertekenLabels(world.camera());
 });
 
 world.controls().autoRotate = !REDUCED_MOTION;
@@ -5576,7 +5630,11 @@ function pmHerkomst(p, st) {
 const geomagToggles = [
   ['rotaxis-toggle', 'es-rotaxis', on => geomag.setVisible({ rotation: on })],
   ['magaxis-toggle', 'es-magaxis', on => geomag.setVisible({ dipole: on })],
-  ['magdrift-toggle', 'es-magdrift', on => geomag.setVisible({ trail: on })]
+  ['magdrift-toggle', 'es-magdrift', on => geomag.setVisible({ trail: on })],
+  // De ecliptica hangt hier mee: hij is dezelfde soort schakelaar (geometrie
+  // op de bol, uit bij het opstarten) en hoeft geen eigen machinerie. Zijn
+  // laag zit niet in `geomag`, dus de callback vangt dat zelf af.
+  ['ecliptic-toggle', 'es-ecliptic', on => ecliptic && ecliptic.setVisible(on, momentNow())]
 ];
 geomagToggles.forEach(([id, statId, apply]) => {
   const el = document.getElementById(id);
@@ -5589,7 +5647,8 @@ geomagToggles.forEach(([id, statId, apply]) => {
     on = !on;
     el.classList.toggle('on', on);
     document.getElementById(statId).textContent = on ? 'on' : 'off';
-    if (!geomag) return;
+    // De callback beslist zelf of zijn laag er is — sinds de ecliptica hier
+    // meehangt geldt de oude `if (!geomag) return` niet meer voor iedereen.
     apply(on);
     // setVisible() zet alleen vlaggen; de geometrie wordt in update() gebouwd, en
     // die slaat het tekenwerk over zolang de laag verborgen is. Zonder deze
@@ -6014,6 +6073,7 @@ bindCosmosToggle('sunspots-toggle', 'es-sunspots',
    tijdens de scene-opbouw al kan draaien, en `viewStates` bestaat pas in
    het init-blok. Zelfde TDZ-familie als de rest. */
 let viewStates = null, spaceState = null, planets = null;
+let ecliptic = null, lagrange = null;
 const spaceVoorheen = {};
 const inZonAanzicht = () => !!(viewStates && viewStates.isActief('sun'));
 const inSpaceAanzicht = () => !!(viewStates && viewStates.isActief('space'));
@@ -6095,12 +6155,13 @@ function bouwPlanetenLijst() {
       if (e.target.classList.contains('edot')) {
         const aan = rij.classList.toggle('on');
         planets.setPlaneetVisible(k, aan);
-        if (!aan && planets.focus() === k) planets.setFocus(null);
+        if (!aan && planets.focus() === k) planets.setFocus(null, momentNow());
       } else {
-        planets.setFocus(planets.focus() === k ? null : k);
+        planets.setFocus(planets.focus() === k ? null : k, momentNow());
       }
       markeerPlaneetFocus();
       updateSpaceReadout();
+      werkSpoorNootBij();
     });
     host.appendChild(rij);
   }
@@ -6133,7 +6194,7 @@ function updateSpaceReadout() {
   }
 
   if (!f || !eph || !eph[f]) {
-    for (const id of ['sp-naam','sp-afstand','sp-mag','sp-fase','sp-ra','sp-dec','sp-sub'])
+    for (const id of ['sp-naam','sp-afstand','sp-mag','sp-elong','sp-fase','sp-ra','sp-dec','sp-sub'])
       zet(id, '—');
     return;
   }
@@ -6143,6 +6204,11 @@ function updateSpaceReadout() {
   zet('sp-naam', PLANEET_INFO[f].naam);
   zet('sp-afstand', p.distanceAU.toFixed(3) + ' AU');
   zet('sp-mag', (p.magnitude > 0 ? '+' : '') + p.magnitude.toFixed(2));
+  // Oost = avondster (ondergaand ná de zon), west = ochtendster. Bij bijna
+  // nul of bijna 180 graden zegt die kant niets meer, dus dan valt hij weg.
+  const kant = (p.elongatie < 3 || p.elongatie > 177) ? ''
+             : (p.oostelijk ? ' E' : ' W');
+  zet('sp-elong', p.elongatie.toFixed(1) + '°' + kant);
   zet('sp-fase', (p.verlicht * 100).toFixed(0) + '%');
   zet('sp-ra', h + 'h ' + String(m).padStart(2, '0') + 'm');
   zet('sp-dec', (p.dec >= 0 ? '+' : '−') + Math.abs(p.dec).toFixed(1) + '°');
@@ -6258,6 +6324,36 @@ document.querySelectorAll('#space-views .preset').forEach(b =>
     markeerSpaceStand();
   }));
 
+// Het hemelspoor: venster in dagen, 0 is uit.
+document.querySelectorAll('#spoor-venster .preset').forEach(b =>
+  b.addEventListener('click', () => {
+    if (!planets) return;
+    document.querySelectorAll('#spoor-venster .preset').forEach(x =>
+      x.classList.toggle('active', x === b));
+    planets.setSpoorVenster(+b.dataset.dagen, momentNow());
+    werkSpoorNootBij();
+  }));
+
+// Zonder gekozen lichaam valt er niets te tekenen; dat hoort de noot te zeggen
+// in plaats van dat de knop stil niets doet.
+function werkSpoorNootBij() {
+  const noot = document.getElementById('spoor-noot');
+  if (!noot || !planets) return;
+  const d = planets.spoorVenster(), f = planets.focus();
+  noot.textContent = !d
+    ? 'Around opposition a planet appears to reverse for weeks — that backwards loop is the reason a Sun-centred solar system had to replace an Earth-centred one.'
+    : f ? 'Drawn against the fixed stars, not the ground: the sky is held still so only the planet moves.'
+        : 'Select a body below to draw its path.';
+}
+
+// ---- Lagrange ----
+document.getElementById('lagrange-toggle')?.addEventListener('click', () => {
+  if (!lagrange) return;
+  const aan = document.getElementById('lagrange-toggle').classList.toggle('off') === false;
+  lagrange.setVisible(aan, momentNow(), world.camera());
+  document.getElementById('es-lagrange').textContent = aan ? 'on' : 'off';
+});
+
 // Klikken op een planeet in de scene. Geen raycaster: de bollen zijn klein en
 // het label telt mee, dus een schermafstand is zowel goedkoper als
 // vergevingsgezinder dan een treffer op de geometrie zelf.
@@ -6265,9 +6361,10 @@ document.getElementById('globe')?.addEventListener('click', (e) => {
   if (!inSpaceAanzicht() || !planets) return;
   const k = planets.raakPunt(e.clientX, e.clientY);
   if (!k) return;
-  planets.setFocus(planets.focus() === k ? null : k);
+  planets.setFocus(planets.focus() === k ? null : k, momentNow());
   markeerPlaneetFocus();
   updateSpaceReadout();
+      werkSpoorNootBij();
 });
 
 // Zet de gemeten zonnetoestand in beeld: de getallen in de Cosmos-tab en de
@@ -7564,6 +7661,16 @@ planets = createPlanetsLayer(THREE, { earthRadius: 100 });
 planets.setVisible(false);              // hangt in de scene, staat uit tot de state aangaat
 world.scene().add(planets.group);
 
+// De ecliptica staat BUITEN de Space-state: hij is een schakelbare laag in
+// beide weergaven, want het vlak van de aardbaan verklaart net zo goed waarom
+// de zon staat waar hij staat als waarom de planeten in een band liggen.
+ecliptic = createEclipticLayer(THREE, { earthRadius: 100 });
+world.scene().add(ecliptic.group);
+
+// De Lagrange-punten horen wél bij Space: ze staan in de ruimte, niet op de bol.
+lagrange = createLagrangeLayer(THREE, { zonAfstand: PARAMS.sunDistance });
+world.scene().add(lagrange.group);
+
 // De haken die core/view-state.js van de app krijgt. Functies en geen
 // waarden: `labelsOn` en `autoRotateWanted` zijn `let`-bindingen, dus een
 // doorgegeven waarde zou een momentopname zijn — dezelfde val als de
@@ -7641,6 +7748,8 @@ viewStates.registreer('sun', {
 if (IS_LOCAL) {
   window.__test = {
     get planets() { return planets; },
+    get ecliptic() { return ecliptic; },
+    get lagrange() { return lagrange; },
     get viewStates() { return viewStates; },
     get spaceState() { return spaceState; },
     get sunMoon() { return sunMoon; },

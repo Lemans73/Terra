@@ -34,8 +34,10 @@
    maakt, en het verbindt deze state met `Earth's axis`.
    ============================================================ */
 
-import { ephemeris, latLonToUnit, meanObliquity, julianDay, deltaTSeconds,
-         norm180 } from '../sunmoon.js';
+// De frame-berekeningen stonden hier en zijn in sessie 22 naar
+// compute/frames.js verhuisd, omdat de ecliptica-laag ze ook nodig heeft.
+// Twee kopieën van een frame-berekening lopen stil uiteen.
+import { eclipticaPool as poolVan, zonRichting as zonVan } from '../compute/frames.js';
 
 export function createSpaceState(THREE, deps) {
   const { world, planets, lagen } = deps;
@@ -48,25 +50,13 @@ export function createSpaceState(THREE, deps) {
 
   const moment = () => (deps.moment ? deps.moment() : new Date());
 
-  /* De ecliptica-noordpool als eenheidsvector in Terra's frame. */
-  function eclipticaPool(date) {
-    const jdUT = julianDay(date);
-    const T = (jdUT + deltaTSeconds(date) / 86400 - 2451545.0) / 36525;
-    const eps = meanObliquity(T);
-    const eph = ephemeris(date);
-    // De pool deelt zijn sterrentijd met alles wat de app projecteert:
-    // subSolar.lon = ra_zon - gast, dus gast = ra_zon - subSolar.lon.
-    const gast = eph.sun.ra - eph.subSolar.lon;
-    const u = latLonToUnit(90 - eps, norm180(270 - gast));
-    return _pool.set(u.x, u.y, u.z).normalize();
-  }
-
-  /* De zonrichting als eenheidsvector — het subsolaire punt naar buiten. */
-  function zonRichting(date) {
-    const s = ephemeris(date).subSolar;
-    const u = latLonToUnit(s.lat, s.lon);
-    return _zon.set(u.x, u.y, u.z).normalize();
-  }
+  // Dunne wrappers die het resultaat in een hergebruikte Vector3 zetten:
+  // deze standen worden bij elke camerabeweging berekend en hoeven daar
+  // geen allocatie voor te doen.
+  const eclipticaPool = (date) => { const u = poolVan(date);
+                                    return _pool.set(u.x, u.y, u.z).normalize(); };
+  const zonRichting  = (date) => { const u = zonVan(date);
+                                    return _zon.set(u.x, u.y, u.z).normalize(); };
 
   /* ----------------------------------------------------------
      HOE VER MOET DE CAMERA STAAN?
