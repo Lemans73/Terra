@@ -424,5 +424,9 @@ export function latLonToUnit(lat, lon) {
   };
 }
 
+// `sind`/`cosd` staan hier sinds sessie 22 bij. Ze waren intern, maar
+// compute/planets.js heeft ze nodig en mag ze NIET zelf declareren: het
+// buildscript concateneert alle modules in een enkele scope, dus een
+// tweede `const sind` is een dubbele declaratie en een lege bol.
 export { norm180, norm360, gmstDeg, gastDeg, sunPosition, moonPosition,
-         julianDay, deltaTSeconds, meanObliquity, DEG };
+         julianDay, deltaTSeconds, meanObliquity, DEG, sind, cosd };
