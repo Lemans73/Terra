@@ -3413,14 +3413,42 @@ const LOCK_INFO = {
       tekst: 'Lightning arrives over a live stream from Blitzortung. Strikes that ' +
              'were not observed while it ran cannot be recovered.'
     },
-    // TIJDELIJK — verdwijnt met spoor 2, wanneer EONET zijn `start`/`end` krijgt.
-    // De bron heeft de historie wél (gemeten: terug tot 1990, bruikbaar vanaf ~2000).
-    volcano:  { kop: 'Not travelling yet', tekst: 'NASA EONET keeps this history, but Terra does not read it yet.' },
-    wildfire: { kop: 'Not travelling yet', tekst: 'NASA EONET keeps this history, but Terra does not read it yet.' },
-    storm:    { kop: 'Not travelling yet', tekst: 'NASA EONET keeps this history, but Terra does not read it yet.' },
-    ice:      { kop: 'Not travelling yet', tekst: 'NASA EONET keeps this history, but Terra does not read it yet.' }
+    // De vier EONET-lagen komen er hieronder bij, elk met zijn eigen beginjaar. Ze
+    // stonden hier tot sessie 21 met een vaste tekst die zei dat Terra de historie nog
+    // niet las; dat is nu wel zo, en de grens is niet langer de app maar de bron.
+    ...eonetTijdsloten()
   }
 };
+
+// Eén tekst per EONET-laag, met het beginjaar UIT `dekkingVanaf` zelf. Niet
+// overtypen: staan het getal in de spec en het getal in de tekst los van elkaar, dan
+// lopen ze vroeg of laat uiteen en vertelt het slotje iets anders dan het doet.
+//
+// ALLEEN de EONET-adapters (`healthId === 'eonet'`). USGS en EMSC hebben óók een
+// `dekkingVanaf`, maar daar is de uitkomst een andere: twee catalogi voeden dezelfde
+// laag, dus die WISSELEN van bron (borgBrondekking) in plaats van op slot te gaan.
+// Eén laag, één bron, geen uitweg → slot; twee bronnen → wissel.
+function eonetTijdsloten() {
+  const EONET_NAAM = {
+    volcano:  ['volcanoes',      'Reports before then were not collected in a form this map can read.'],
+    storm:    ['severe storms',  'Earlier storms were tracked, but not in this catalogue.'],
+    ice:      ['sea and lake ice', 'Iceberg and lake-ice tracking starts there.'],
+    wildfire: ['wildfires',      'Before then, no satellite was watching this way — and even ' +
+                                 'after, the record grows as the instruments do.']
+  };
+  const out = {};
+  for (const a of Object.values(Adapters)) {
+    if (a.healthId !== 'eonet' || !a.dekkingVanaf) continue;
+    for (const laag of a.layers) {
+      const [naam, waarom] = EONET_NAAM[laag] || [laag, ''];
+      out[laag] = {
+        kop: 'Beyond the record',
+        tekst: `NASA EONET's record of ${naam} begins in ${a.dekkingVanaf}. ${waarom}`
+      };
+    }
+  }
+  return out;
+}
 
 // Laag → verzameling redenen. Leeg (of afwezig) betekent open. Een Set en geen vlag,
 // juist omdat het slot pas weg mag als de LAATSTE reden weg is.
@@ -3518,7 +3546,17 @@ function setLayerLocked(layer, vergrendeld, reden = 'source') {
 // waarin de bezoeker hem achterliet (activeVoorSlot).
 function borgTijdsloten() {
   const verschoven = !bijNu();
+  // Kennen het heden en niets anders — die gaan bij elke verschuiving dicht.
   for (const l of TIJDREIS_ONMOGELIJK) setLayerLocked(l, verschoven, 'time');
+  // Reizen wél mee, maar hun catalogus begint ergens. Per laag, want die grenzen
+  // liggen twintig jaar uit elkaar: in 1990 staan de vulkanen gewoon op de kaart
+  // terwijl de bosbranden nog nergens zijn. `dektMoment()` is dezelfde toets die de
+  // bevingen gebruiken om van bron te wisselen — één dekkingsbegrip, twee uitkomsten.
+  for (const a of Object.values(Adapters)) {
+    if (a.healthId !== 'eonet' || !a.dekkingVanaf) continue;
+    const buitenBereik = !dektMoment(a);
+    for (const l of a.layers) setLayerLocked(l, buitenBereik, 'time');
+  }
 }
 
 // Het slot blijft staan, maar de zwaarste reden is een andere geworden — dan hoort de
@@ -6931,9 +6969,13 @@ function plandataVerversing() {
     // dubbel werk.
     if (borgBrondekking()) return;
     // Geen enkele laag bij naam: een adapter met `venster()` doet mee, de rest niet.
-    // Zo komt EONET er in spoor 2 bij zonder dat hier iets verandert.
+    // Zo kwam EONET er in sessie 21 bij zonder dat hier iets veranderde.
+    //
+    // `dektMoment` slaat de bronnen over die dit tijdvak niet hébben. Anders vertrekken
+    // er in 1990 vier verzoeken naar EONET die per definitie leeg terugkomen, terwijl
+    // de lagen op datzelfde moment al op slot staan.
     for (const a of Object.values(Adapters)) {
-      if (a.venster && a.enabled !== false && !vensterGedekt(a)) pull(a);
+      if (a.venster && a.enabled !== false && dektMoment(a) && !vensterGedekt(a)) pull(a);
     }
   }, VENSTER_SMOOR_MS);
 }
