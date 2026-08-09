@@ -2,9 +2,14 @@
 
 I wanted to know whether the earthquakes that make the news are the big ones.
 
-Terra is an interactive Three.js/WebGL globe that plots live geophysical data on Earth:
+Terra is an interactive Three.js/WebGL globe that plots geophysical data on Earth:
 earthquakes, volcanoes, wildfires, storms and sea ice, each as its own layer
 with its own 3D indicator.
+
+It does not only show now. A time control moves the whole scene — sunlight,
+the Moon, the Earth's axis and the events themselves — to any moment the
+sources can reach, which for earthquakes is 1900. Layers that cannot follow say
+so instead of quietly showing today's data under an old date.
 
 It is static HTML. No build step, no bundler, no framework. Open the file and
 it runs. **[Download terra.html](https://github.com/Lemans73/Terra/releases/latest/download/terra.html)**
@@ -17,22 +22,33 @@ Updates to come!
 — one file, no install, no clone. Details under [Running it
 locally](#running-it-locally).
 
-Earthquakes (USGS) and natural events (NASA EONET) work out of the box with no
-API key. Air quality and lightning need your own key or a local relay, see
-Optional layers below.
+Earthquakes (USGS or EMSC), natural events (NASA EONET) and everything Terra
+computes for itself work out of the box with no API key. Air quality and
+lightning need your own key or a local relay, see below.
 
 ## Layers and sources
 
-| Layer | Source | Notes |
+Observed — fetched from somewhere:
+
+| Layer | Source | Travels back to | Notes |
+|---|---|---|---|
+| Earthquakes | [USGS](https://earthquake.usgs.gov/fdsnws/event/1/) or [EMSC](https://www.seismicportal.eu/fdsn-wsevent.html) | 1900 / 1998 | magnitude-scaled; the app switches source when one does not cover the moment |
+| Volcanoes | [NASA EONET](https://eonet.gsfc.nasa.gov/) | 1980 | |
+| Wildfires | NASA EONET | 2015 | global only from 2024 — see limitations |
+| Storms | NASA EONET | 2000 | |
+| Sea ice | NASA EONET | 2011 | |
+| Sun activity | [NOAA SWPC](https://services.swpc.noaa.gov/) | — | sunspot regions, flares, 10.7 cm flux; present conditions only |
+| Air quality | [WAQI](https://waqi.info/) | — | needs a key, follows the camera, present only |
+| Lightning | [Blitzortung](https://www.blitzortung.org/) | — | needs a relay you run yourself, present only |
+
+Computed — no network, no key, and therefore no year they cannot reach:
+
+| Layer | Basis | Notes |
 |---|---|---|
-| Earthquakes | [USGS](https://earthquake.usgs.gov/earthquakes/feed/) | magnitude-scaled, filterable by time window |
-| Volcanoes | [NASA EONET](https://eonet.gsfc.nasa.gov/) | |
-| Wildfires | NASA EONET | North America only — see limitations |
-| Storms | NASA EONET | |
-| Sea ice | NASA EONET | |
-| Air quality | [WAQI](https://waqi.info/) | needs a key, follows the camera |
-| Lightning | [Blitzortung](https://www.blitzortung.org/) | needs a relay you run yourself |
-| Polar motion | IERS/USNO via [CelesTrak](https://celestrak.org/SpaceData/) | a plot, not geometry — the wobble is 8 m across |
+| Sun and Moon | Meeus, in `js/sunmoon.js` | positions, ground tracks, phase, twilight bands, solar eclipses |
+| Rotation axis | geometry | with the 23.44° obliquity |
+| Magnetic axis · pole drift 1900–2030 | [IGRF-14](https://www.ncei.noaa.gov/products/international-geomagnetic-reference-field) | a dipole fit; a model, not a measurement, and extrapolated past 2025 |
+| Polar motion | IERS/USNO via [CelesTrak](https://celestrak.org/SpaceData/) | a plot, not geometry: the pole stays inside a circle 40 m across, which at full zoom is a hundredth of a pixel |
 
 Plus three vector overlays: tectonic plate boundaries, country borders and
 country labels.
@@ -40,6 +56,10 @@ country labels.
 Two display modes. **Realistic** is the shaded Earth with volumetric
 indicators. **Schematic** is a flat vector map with discipline-specific symbols
 and no bloom.
+
+The panel follows one rule: **Layers** holds what you switch on and see on the
+globe, **Almanac** holds what the calculations tell you. Both are ordered from
+near to far — the ground, then the axes, then the Sun and Moon.
 
 ## Running it locally
 
@@ -115,6 +135,7 @@ itself.
 | `venster()` | the time span this source should fetch — see below |
 | `dagen` / `days` | how far back that span reaches: a fixed number of days, or one per time-window preset |
 | `dekkingVanaf` | the first year this source actually holds data |
+| `blijftOpen` | this source leaves events open indefinitely, so silence does not mean the event ended |
 
 An adapter marked `optional` that fails puts its layers behind a padlock with
 an expandable panel explaining how to connect a backend. When the source comes
@@ -140,6 +161,15 @@ app switches to whichever one covers the moment and switches back afterwards.
 
 `normalize` returning `[]` is a valid answer meaning "nothing to show" — unless
 `keepOnEmpty` says otherwise.
+
+One trap worth naming, because it is silent. A position at the chosen moment is
+not the same as *existing* at the chosen moment: an event's last known
+coordinates are always available, so a storm that dissipated three weeks ago
+will happily plot as though it were still turning. Decide when an event ended —
+a closing date if the source gives one, otherwise its last report plus a grace
+period you choose — and drop the ones that had not started or were already over.
+`blijftOpen` exists because that grace period is wrong for some sources:
+EONET leaves volcanoes open for years without a new report.
 
 ### Adding an API key
 
@@ -185,11 +215,32 @@ localhost automatically; to point at one elsewhere, set `RELAY_URL` in
 tunable value, `COLORS` the palette, `TEXTURE_SETS` the imagery. Most visual
 behaviour can be changed there without touching application code.
 
+A few flags in the same file decide what a given deployment shows:
+
+| Flag | Effect |
+|---|---|
+| `RELAY_URL` | where to find a lightning relay that is not on localhost |
+| `ANALYTICS_HOSTS` | hostnames that load Vercel Web Analytics — a list, not a boolean, so a fork does not request a script that is not there |
+| `LOCK_DETAILS` | whether a padlock expands into a panel explaining how to connect a backend |
+| `MAGNETO_VIEW` | whether the button into the tilted Earth–Sun view is shown. Off in this build: the view works but is not finished, and hiding it costs nothing — the rotation axis, magnetic axis and pole drift are ordinary layers and stay available |
+| `ASSET_BASE` | where textures and GeoJSON are loaded from; the standalone build points this at jsDelivr |
+
 ## Limitations, honestly
 
-- **Wildfires are North America only.** NASA EONET's coverage, not a bug.
-  Global coverage would mean a second source (GWIS/Copernicus); it is on the
-  list, not in the code.
+- **Wildfire coverage changes shape in 2024.** NASA EONET's doing, not ours,
+  and worth knowing before you read anything into a sparse map. Measured events
+  per year, and the share outside North America: 2023 → 97 events, 0% ·
+  2024 → 5636, 56% · 2025 → 4062, 64%. Before 2024 the catalogue is small and
+  effectively North American; from 2024 it is global and roughly fifty times
+  denser. That is a change in what was watched, not in what burned — the app
+  says as much next to the layer when you travel back.
+- **Coverage differs per layer, by a lot.** EONET's volcano record starts
+  around 1980, storms in 2000, sea ice in 2011, wildfires in 2015. Below its own
+  start year a layer is padlocked rather than shown empty.
+- **What is computed has no such limit, but is not measurement either.** Sun and
+  Moon come from Meeus and are good to well under a kilometre; the magnetic axis
+  comes from IGRF-14, which is a model, and past epoch 2025.0 it is
+  extrapolation. The app marks that in the readout.
 - **Lightning needs a process you run yourself.** There is no hosted relay.
 - **WAQI and Blitzortung permit non-commercial use only.** Terra is therefore a
   free demonstration and will stay one. If you fork it, that constraint travels
