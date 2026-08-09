@@ -448,7 +448,7 @@
       <span id="slider-val">full window</span>
       </div>
       </div>
-      <p class="quake-era" id="quake-era" hidden></p>
+      <p class="era-note" id="quake-era" hidden></p>
       <h3>Depth</h3>
       <div class="depth-scale"></div>
       <div class="depth-label"><span>shallow</span><span>deep</span></div>
@@ -464,6 +464,7 @@
       <span class="name">Wildfires</span>
       <span class="count" id="count-wildfire">—</span>
       </div>
+      <p class="era-note" id="fire-era" hidden></p>
       <div class="layer" data-layer="lightning">
       <span class="swatch sw-lightning"></span>
       <span class="name">Lightning</span>
@@ -1585,6 +1586,12 @@ function eonetAdapters(spec) {
       interval: 600_000, // 10 min volstaat ruim; alerts veranderen traag
       normalize(json) {
         const out = [];
+        // Hoeveel de catalogus in dit venster hééft, vóór onze eigen zeef. Kost niets —
+        // het staat in een antwoord dat we toch al ophaalden — en het is wat de
+        // volledigheidsnoot vergelijkt. `aantalNu` wordt alleen bij `nu` bijgewerkt en
+        // blijft daarna staan als ijkpunt om het verleden tegen af te zetten.
+        this.laatsteAantal = (json.events || []).length;
+        if (bijNu()) this.aantalNu = this.laatsteAantal;
         // Het MOMENT, niet de bovenkant van het opgehaalde venster — dat laatste ligt
         // door de marge en de dagafronding tot ruim een dag verder, en zou dus een
         // meetpunt kunnen kiezen dat op het gekozen moment nog niet bestond.
@@ -2119,6 +2126,12 @@ const TIME_FILTERED = new Set(['quake']);
 // die horen meteen weg. Vers genormaliseerde data voldoet er per constructie al aan
 // (geoOpMoment kiest niets van later) — deze regel ruimt alleen de restanten op.
 const TIJD_BOVENGRENS = new Set(['volcano', 'storm', 'ice', 'wildfire']);
+
+// Tot welk jaar het volledigheidsvoorbehoud bij de bosbranden hoort (zie
+// toonBrandNoot, onderaan). Staat hier en niet daar omdat render() die functie
+// aanroept en render() al tijdens het opzetten van de scene draait — een const
+// verderop zou dan in zijn temporal dead zone zitten.
+const BRAND_KANTELT = 2023;
 
 // Lagen die het gekozen moment NIET kunnen volgen: WAQI en Blitzortung kennen alleen
 // het heden en zullen dat altijd doen. De EONET-lagen stonden hier tot sessie 21 ook
@@ -2839,6 +2852,11 @@ let baseMoment = null;
 // draait al vanaf de eerste tijdkiezer-interactie — ruim voordat het adapterblok
 // onderaan geëvalueerd is. Vierde keer dat dit patroon in dit project telt.
 let vensterTimer = null;
+// De laatst geschreven tekst van de bosbrand-volledigheidsnoot (zie toonBrandNoot,
+// onderaan). Staat hier om de vijfde en zesde herhaling van datzelfde patroon: die
+// functie wordt vanuit render() aangeroepen, en render() draait bij het opzetten van
+// de scene al. Zesde keer dat dit in dit project telt.
+let laatsteBrandNoot = '';
 // Toont de app tijden in UTC of in de zone van het apparaat? Staat hier om dezelfde
 // TDZ-reden: fmtTime/fmtStamp lezen hem, en die draaien al bij de eerste klok-tick.
 // `null` betekent nooit iets gekozen en dus de standaard (lokaal, het oude gedrag);
@@ -3341,6 +3359,10 @@ function render() {
   rebuildLabels(quakes);     // leader-line labels voor de zwaarste bevingen
   renderQuakeList(quakes);   // en dezelfde verzameling als lijst
   updateCounts(shown);
+  // Hoort hier en niet in pull(): die lus kent bewust geen enkele laag bij naam, en de
+  // noot moet óók bijwerken wanneer alleen het moment verschuift. De functie leest
+  // enkel gecachte getallen en schrijft niets als de tekst gelijk blijft.
+  toonBrandNoot();
 }
 
 // ---- Counts & UI ---------------------------------------------
@@ -6940,6 +6962,38 @@ async function toonTijdvakNoot() {
     // Een bijzaak die faalt hoort geen storing te melden; de kaart klopt gewoon.
     if (ronde === dekkingRonde) el.hidden = true;
   }
+}
+
+// Hetzelfde voorbehoud als bij de bevingen, maar dan bij de bosbranden — en hier
+// gratis: het aantal staat al in het antwoord dat we toch ophaalden, dus anders dan
+// toonTijdvakNoot() kost dit geen enkel verzoek.
+//
+// De sprong is groter dan bij de seismometers en heeft dezelfde oorzaak: 159 branden
+// in heel 2015 tegen 5636 in 2024 is geen brandender aarde maar een dichter oog. Tot
+// BRAND_KANTELT staat het voorbehoud er daarom altijd bij; de reeks is nog steeds aan
+// het oplopen, dus die grens ligt veel dichter bij nu dan de 1980 van de bevingen.
+// (`BRAND_KANTELT` en `laatsteBrandNoot` staan boven bij de laag-constanten en de
+// scene-state — zie de TDZ-noten daar. render() roept deze functie aan en render()
+// draait al tijdens het opzetten van de scene.)
+function toonBrandNoot() {
+  const el = document.getElementById('fire-era');
+  if (!el) return;
+  const a = Adapters.eonet_wildfire;
+  // Bij `nu` valt er niets te vergelijken, en zonder ijkpunt (de eerste ronde is nog
+  // onderweg) ook niet. Het slot heeft zijn eigen uitleg, dus daar zwijgen we hier.
+  const stil = bijNu() || a.laatsteAantal == null || a.aantalNu == null ||
+               lockRedenen('wildfire').size > 0;
+  const tekst = stil ? '' :
+    `${momentNow().getUTCFullYear()}: <b>${a.laatsteAantal}</b> fires in this window, ` +
+    `against <b>${a.aantalNu}</b> today.` +
+    (momentNow().getUTCFullYear() < BRAND_KANTELT
+      ? ' Fewer here means fewer satellites watching, not a calmer Earth.'
+      : '');
+  // render() draait bij elke sliderstap; alleen schrijven als er iets verandert.
+  if (tekst === laatsteBrandNoot) return;
+  laatsteBrandNoot = tekst;
+  el.hidden = !tekst;
+  el.innerHTML = tekst;
 }
 
 // De zonneactiviteit is een momentopname van NOAA en reist niet mee. De waarden laten

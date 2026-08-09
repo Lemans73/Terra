@@ -960,10 +960,12 @@
   /* De regel die verschijnt als de app zelf van bron wisselde. Zelfde amber taal als
      .cosmos-warn bij polar motion — en met opzet dezelfde waarden, niet een eigen
      tint: dit is geen fout, maar wel iets waarvan je moet weten dat het gebeurd is. */
-  /* Het voorbehoud bij een historisch tijdvak: hoeveel bevingen deze catalogus in dat
-     jaar wist te zien, tegen vandaag. Geen waarschuwing maar context — vandaar de
-     gedempte tint en niet het amber van .src-switch. */
-  .quake-era {
+  /* Het voorbehoud bij een historisch tijdvak: hoeveel deze catalogus in dat jaar wist
+     te zien, tegen vandaag. Geen waarschuwing maar context — vandaar de gedempte tint
+     en niet het amber van .src-switch. Gedeeld door de bevingen (#quake-era) en de
+     bosbranden (#fire-era); heette tot sessie 21 .quake-era, wat een klassenaam was
+     die aan één laag vastzat terwijl het patroon dat niet is. */
+  .era-note {
     margin: 10px 0 0;
     padding: 7px 9px;
     border-radius: 6px;
@@ -973,7 +975,7 @@
     line-height: 1.55;
     color: var(--ink-dim);
   }
-  .quake-era b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .era-note b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
   .src-switch {
     margin: -6px 0 12px;
     padding: 7px 9px;
