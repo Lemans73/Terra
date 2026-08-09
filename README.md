@@ -34,7 +34,7 @@ Observed — fetched from somewhere:
 |---|---|---|---|
 | Earthquakes | [USGS](https://earthquake.usgs.gov/fdsnws/event/1/) or [EMSC](https://www.seismicportal.eu/fdsn-wsevent.html) | 1900 / 1998 | magnitude-scaled; the app switches source when one does not cover the moment |
 | Volcanoes | [NASA EONET](https://eonet.gsfc.nasa.gov/) | 1980 | |
-| Wildfires | NASA EONET | 2015 | global only from 2024 — see limitations |
+| Wildfires | NASA EONET | 2015 | global only from 2024, and published a few days late — see limitations |
 | Storms | NASA EONET | 2000 | |
 | Sea ice | NASA EONET | 2011 | |
 | Sun activity | [NOAA SWPC](https://services.swpc.noaa.gov/) | — | sunspot regions, flares, 10.7 cm flux; present conditions only |
@@ -136,6 +136,7 @@ itself.
 | `dagen` / `days` | how far back that span reaches: a fixed number of days, or one per time-window preset |
 | `dekkingVanaf` | the first year this source actually holds data |
 | `blijftOpen` | this source leaves events open indefinitely, so silence does not mean the event ended |
+| `sluitAdministratief` | this source's closing date is bookkeeping, not an ending — see below |
 
 An adapter marked `optional` that fails puts its layers behind a padlock with
 an expandable panel explaining how to connect a backend. When the source comes
@@ -170,6 +171,22 @@ a closing date if the source gives one, otherwise its last report plus a grace
 period you choose — and drop the ones that had not started or were already over.
 `blijftOpen` exists because that grace period is wrong for some sources:
 EONET leaves volcanoes open for years without a new report.
+
+`sluitAdministratief` exists because a closing date is not always an ending, and
+this one cost a real bug. EONET's wildfire records outside North America are all
+closed — measured over July and August 2026, 756 of 756, against 203 still open
+inside it. The closing lag is much the same either way (a median of 3.2 days
+after the last report, against 2.2), so it is not that fires elsewhere end
+sooner: North American records come from incident reporting and stay open while
+the fire burns, the rest are satellite detections filed shut on arrival. Believe
+that date and today's map is North American by construction while every past
+moment is global. With the flag set, an event ends at its closing date *or* after
+the grace period of silence, whichever is later — which can only add events, never
+remove them.
+
+The general lesson is worth more than the flag: before trusting a status field,
+check how it is distributed. If one category of record never carries a value that
+another always carries, the field is describing the pipeline, not the world.
 
 ### Adding an API key
 
@@ -234,6 +251,10 @@ A few flags in the same file decide what a given deployment shows:
   effectively North American; from 2024 it is global and roughly fifty times
   denser. That is a change in what was watched, not in what burned — the app
   says as much next to the layer when you travel back.
+- **The fire feed runs a few days behind.** Measured on 2026-08-09: nothing at
+  all had been published in the previous 24 hours, and the most recent report
+  outside North America was 2.7 days old. A fire burning right now is usually
+  not here yet, wherever it is.
 - **Coverage differs per layer, by a lot.** EONET's volcano record starts
   around 1980, storms in 2000, sea ice in 2011, wildfires in 2015. Below its own
   start year a layer is padlocked rather than shown empty.
