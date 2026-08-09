@@ -155,39 +155,6 @@ what was last loaded, nothing is fetched; if it falls outside, one request goes
 out 600 ms after the movement stops; during playback, none at all. Each request
 covers the visible span plus 25% on both sides.
 
-`dekkingVanaf` is what a source *has*, not what it claims. Below it the layer is
-padlocked rather than shown empty — a map that is half 1985 and half today is not
-incomplete, it is untrue. Where two sources feed the same layer (earthquakes), the
-app switches to whichever one covers the moment and switches back afterwards.
-
-`normalize` returning `[]` is a valid answer meaning "nothing to show" — unless
-`keepOnEmpty` says otherwise.
-
-One trap worth naming, because it is silent. A position at the chosen moment is
-not the same as *existing* at the chosen moment: an event's last known
-coordinates are always available, so a storm that dissipated three weeks ago
-will happily plot as though it were still turning. Decide when an event ended —
-a closing date if the source gives one, otherwise its last report plus a grace
-period you choose — and drop the ones that had not started or were already over.
-`blijftOpen` exists because that grace period is wrong for some sources:
-EONET leaves volcanoes open for years without a new report.
-
-`sluitAdministratief` exists because a closing date is not always an ending, and
-this one cost a real bug. EONET's wildfire records outside North America are all
-closed — measured over July and August 2026, 756 of 756, against 203 still open
-inside it. The closing lag is much the same either way (a median of 3.2 days
-after the last report, against 2.2), so it is not that fires elsewhere end
-sooner: North American records come from incident reporting and stay open while
-the fire burns, the rest are satellite detections filed shut on arrival. Believe
-that date and today's map is North American by construction while every past
-moment is global. With the flag set, an event ends at its closing date *or* after
-the grace period of silence, whichever is later — which can only add events, never
-remove them.
-
-The general lesson is worth more than the flag: before trusting a status field,
-check how it is distributed. If one category of record never carries a value that
-another always carries, the field is describing the pipeline, not the world.
-
 ### Adding an API key
 
 Air quality needs a free WAQI token. The key never reaches the browser: it
