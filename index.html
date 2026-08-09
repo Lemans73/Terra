@@ -1232,7 +1232,7 @@ import {
   AQI_BANDS, aqiBand, aqiHex, magHex,
   PARAMS, WINDOW_MS, MODE_LABELS, MODE_ICONS, EXPERT_LAYER_SCALE,
   TEXTURE_SETS, DEFAULT_QUALITY, assetsFor, textureSetSize, RELAY_URL, REPO_URL,
-  ANALYTICS_HOSTS, LOCK_DETAILS, ASSET_BASE, asset
+  ANALYTICS_HOSTS, LOCK_DETAILS, MAGNETO_VIEW, ASSET_BASE, asset
 } from './js/config.js';
 // GLSL shader-bronnen (Stap 0 refactor).
 import {
@@ -5610,6 +5610,15 @@ function magnetoGaNaar(naam, opties) {
   markeerMagnetoStand();
 }
 
+// De knop is de enige ingang naar de state, dus één vlag volstaat om hem weg te
+// houden — geen sneltoets, geen url-parameter. Verbergen en niet uitgrijzen: wat in
+// deze versie niet van toepassing is wordt niet getoond (besluit sessie 20). De
+// sectie eromheen blijft staan, want daar woont polar motion.
+// `.apply` heeft geen eigen `display`, dus `hidden` doet hier gewoon zijn werk.
+if (!MAGNETO_VIEW) {
+  const mb = document.getElementById('magneto-btn');
+  if (mb) mb.hidden = true;
+}
 document.getElementById('magneto-btn')?.addEventListener('click',
   () => setMagnetoView(!magnetoView));
 document.querySelectorAll('#magneto-views .preset').forEach(b =>
