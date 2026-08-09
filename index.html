@@ -508,6 +508,56 @@
       </div>
       </section>
 
+
+
+      <!-- ---------- ASSEN EN POLEN ----------
+           DRIE LAGEN, en wat ze bindt is toetsbaar: alle drie tekenen ze GEOMETRIE OP
+           DE BOL. Rotatie-as en dipoolas als stompen met een koorde en pooldiscs, de
+           drift als een lijn met punten op straal 101,7. Zet je ze aan, dan zie je ze —
+           zonder ergens anders heen te gaan.
+
+           DAT IS DE HELE REGEL VOOR DEZE TAB (sessie 21, na een misstap): staat het in
+           Layers, dan verschijnt het op de bol. `Polar motion` stond hier eerst ook en
+           hoorde er niet: die tekent NIETS op de bol (zie eop.js — 40 meter is 1/57 tot
+           1/113 pixel op maximale zoom) en zijn enige uitkomst is de plot in Almanac.
+           Een schakelaar hier en zijn resultaat in een andere tab is een omweg, geen
+           ordening. Hij staat nu weer bij die plot.
+
+           De readout bij de magnetische as (poolposities, tilt, veldsterkte) blijft in
+           Almanac: die is aanvullend, niet nodig om te snappen wat je aanzet. Precies
+           het onderscheid dat bij polar motion juist ontbrak. -->
+      <section class="acc" data-acc="axis-layers">
+      <button class="acc-head" type="button" aria-expanded="false">
+      <span>Axes &amp; poles</span>
+      <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="acc-body">
+      <div class="elayer" id="rotaxis-toggle"><span class="edot"></span>Rotation axis<span class="estat" id="es-rotaxis">off</span></div>
+      <div class="elayer expandable" id="magaxis-toggle">
+      <span class="edot"></span>Magnetic axis
+      <button class="row-expand" data-note="magaxis-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <span class="estat" id="es-magaxis">off</span>
+      </div>
+      <div class="layer-detail" id="magaxis-note">
+      The axis of the dipole that best fits Earth&#8217;s magnetic field, from the
+      first three IGRF&#8209;14 coefficients. Where it meets the surface are the
+      <b>geomagnetic poles</b> &#8212; exactly opposite each other, and about 9&#176;
+      from the rotation axis.
+      <br /><br />
+      These are <b>not</b> the magnetic dip poles, where a compass needle points
+      straight down. Those come from the full field, do not sit opposite each
+      other, and are the ones racing towards Siberia. In 2025 the geomagnetic
+      north pole is at 80.8&#176; N 72.8&#176; W; the dip pole at 85.8&#176; N 138.1&#176; E.
+      <br /><br />
+      Published tables quote geodetic latitude, roughly 0.06&#176; higher than the
+      geocentric value shown here. The figures themselves are in Almanac.
+      </div>
+      <div class="elayer" id="magdrift-toggle"><span class="edot"></span>Pole drift 1900&#8211;2030<span class="estat" id="es-magdrift">off</span></div>
+      </div>
+      </section>
+
 <section class="acc" data-acc="cosmos-layers">
       <button class="acc-head" type="button" aria-expanded="false">
       <span>Sun &amp; Moon layers</span>
@@ -535,86 +585,6 @@
       twilight &#8212; the Sun at 0&#176;, &#8722;6&#176;, &#8722;12&#176; and &#8722;18&#176; below the horizon.
       </div>
 
-      </div>
-      </section>
-
-      <!-- ---------- DE ASSEN, ALS SCHAKELAARS ----------
-           TWEE GROEPEN, en hun namen zijn met opzet gelijk aan de twee secties in
-           Almanac: daar staan de getallen, hier de schakelaars. Eén op één te volgen.
-
-           WAAROM DEZE VIER HIER STAAN EN NIET BIJ HUN READOUT (sessie 21). Almanac
-           kwam er in sessie 20 omdat alles erin BEREKEND is in plaats van waargenomen.
-           Dat is een ordening naar de aard van de data; deze is er een naar de soort
-           bediening — Layers is wat je aanzet, Almanac is wat het je vertelt. Allebei
-           tegelijk kan niet. De doorslag gaf dat `Sun & Moon layers` hierboven al zo
-           stond, en daarmee de enige sectie was waar schakelaar en readout uit elkaar
-           lagen. Nu is dat de regel in plaats van de uitzondering.
-
-           Niet terugdraaien zonder ook die Sun & Moon-sectie mee te nemen, anders komt
-           de inconsistentie terug waar deze verhuizing hem juist weghaalt. -->
-      <section class="acc" data-acc="axis-layers">
-      <button class="acc-head" type="button" aria-expanded="false">
-      <span>Earth&#8217;s axis</span>
-      <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-      </button>
-      <div class="acc-body">
-      <div class="elayer" id="rotaxis-toggle"><span class="edot"></span>Rotation axis<span class="estat" id="es-rotaxis">off</span></div>
-      <div class="elayer expandable" id="polarmotion-toggle">
-      <span class="edot"></span>Polar motion
-      <button class="row-expand" data-note="polarmotion-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-      </button>
-      <span class="estat" id="es-polarmotion">off</span>
-      </div>
-      <!-- De uitleg reist MET de rij mee, niet met de readout: hij beantwoordt "wat zet
-      ik hier aan", en dat is een vraag die je hier stelt. -->
-      <div class="layer-detail" id="polarmotion-note">
-      The rotation axis does not sit still in the crust. It spirals around a mean
-      position: the <b>Chandler wobble</b>, a free nutation with a period of about
-      1.19 years, plus an annual term driven by water, snow and air moving around
-      the planet.
-      <br /><br />
-      The scale is the whole story. The pole travels roughly <b>25 metres a year</b>
-      but never gets further than about <b>20 metres</b> from home &#8212; a spiral
-      inside a circle 40 m across. That is why this is a plot and not a correction
-      to the globe: at maximum zoom one pixel is 8.5 km, so the full wobble is
-      1/1055th of a pixel.
-      <br /><br />
-      Measured, not modelled. Values before 1962 carry an uncertainty of roughly
-      30&#160;mas &#8212; about a metre &#8212; so the early part of the long track
-      is rougher than it looks. The plot itself is in Almanac.
-      </div>
-      </div>
-      </section>
-
-      <section class="acc" data-acc="field-layers">
-      <button class="acc-head" type="button" aria-expanded="false">
-      <span>Magnetic field</span>
-      <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-      </button>
-      <div class="acc-body">
-      <div class="elayer expandable" id="magaxis-toggle">
-      <span class="edot"></span>Magnetic axis
-      <button class="row-expand" data-note="magaxis-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-      </button>
-      <span class="estat" id="es-magaxis">off</span>
-      </div>
-      <div class="layer-detail" id="magaxis-note">
-      The axis of the dipole that best fits Earth&#8217;s magnetic field, from the
-      first three IGRF&#8209;14 coefficients. Where it meets the surface are the
-      <b>geomagnetic poles</b> &#8212; exactly opposite each other, and about 9&#176;
-      from the rotation axis.
-      <br /><br />
-      These are <b>not</b> the magnetic dip poles, where a compass needle points
-      straight down. Those come from the full field, do not sit opposite each
-      other, and are the ones racing towards Siberia. In 2025 the geomagnetic
-      north pole is at 80.8&#176; N 72.8&#176; W; the dip pole at 85.8&#176; N 138.1&#176; E.
-      <br /><br />
-      Published tables quote geodetic latitude, roughly 0.06&#176; higher than the
-      geocentric value shown here. The figures themselves are in Almanac.
-      </div>
-      <div class="elayer" id="magdrift-toggle"><span class="edot"></span>Pole drift 1900&#8211;2030<span class="estat" id="es-magdrift">off</span></div>
       </div>
       </section>
 
@@ -675,12 +645,42 @@
       </div>
       <p class="magneto-uitleg" id="magneto-lock"></p>
       </div>
-      <!-- De schakelaars stonden hier tot sessie 21 en zijn naar de Layers-tab
-      verhuisd, naar de groep die net zo heet. Wat hier blijft is wat de berekening
-      OPLEVERT. De uitleg bij de rijen reisde mee; alleen de plot bleef.
-      Verhuizen en niet kopiëren — zie de UTC-schakelaar van sessie 20 voor waarom
-      twee besturingen voor één stand een bron van ellende zijn. -->
-      <!-- Alles hieronder hangt aan de schakelaar in Layers, en dat is niet cosmetisch: de
+      <!-- POLAR MOTION STAAT HIER, SCHAKELAAR ÉN PLOT, en dat is na één misstap in
+      sessie 21 bewust zo. Hij ging even naar Layers, met de andere as-lagen mee, en
+      dat was fout: deze laag tekent NIETS op de bol. Gerekend met de scene-waarden —
+      camera op zoomMinDistance 155, dus 3504 km hoog, fov 50 — beslaat één pixel 2,3
+      tot 4,5 km, terwijl de hele poolcirkel 40 METER breed is: 1/57 tot 1/113 pixel.
+      Zichtbaar maken vraagt 2300 tot 4500x uitvergroting, en dan toont het beeld een
+      pool die over een continent zwiept terwijl hij nooit verder dan 20 m van huis
+      komt. Vandaar sinds sessie 19 een plot mét schaalbalk, en géén geometrie.
+
+      Gevolg voor de indeling: een schakelaar hoort bij wat hij oplevert. Levert hij
+      iets op de bol, dan hoort hij in Layers; levert hij alleen deze plot, dan hoort
+      hij hier. Niet opnieuw naar Layers verplaatsen zonder de plot mee. -->
+      <div class="elayer expandable" id="polarmotion-toggle">
+      <span class="edot"></span>Polar motion
+      <button class="row-expand" data-note="polarmotion-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <span class="estat" id="es-polarmotion">off</span>
+      </div>
+      <div class="layer-detail" id="polarmotion-note">
+      The rotation axis does not sit still in the crust. It spirals around a mean
+      position: the <b>Chandler wobble</b>, a free nutation with a period of about
+      1.19 years, plus an annual term driven by water, snow and air moving around
+      the planet.
+      <br /><br />
+      The scale is the whole story. The pole travels roughly <b>25 metres a year</b>
+      but never gets further than about <b>20 metres</b> from home &#8212; a spiral
+      inside a circle 40 m across. That is why this is a plot and not a mark on the
+      globe: at maximum zoom one pixel spans several kilometres, so the whole circle
+      is a hundredth of a pixel.
+      <br /><br />
+      Measured, not modelled. Values before 1962 carry an uncertainty of roughly
+      30&#160;mas &#8212; about a metre &#8212; so the early part of the long track
+      is rougher than it looks.
+      </div>
+      <!-- Alles hieronder hangt aan de schakelaar hierboven, en dat is niet cosmetisch: de
       reeks is 225 KB en wordt pas opgehaald als de laag aangaat. Staat de rij uit,
       dan raakt de app CelesTrak niet aan. `hidden` op een kale div is veilig — er
       staat geen eigen `display` op, dus de user-agent-regel wint (les sessie 14). -->
@@ -749,27 +749,12 @@
       </div>
       </section>
 
-<section class="acc" data-acc="cosmos-eclipse">
-      <button class="acc-head" type="button" aria-expanded="false">
-      <span>Eclipse</span>
-      <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-      </button>
-      <div class="acc-body">
-      <div class="elayer on" id="eclipse-toggle"><span class="edot"></span>Shadow on Earth<span class="estat" id="es-eclipse">on</span></div>
-      <div class="eclipse-state" id="eclipse-state">No eclipse at this moment.</div>
-      <!-- Zonder deze knoppen zou vrijwel niemand de schaduw ooit te zien
-      krijgen: er zijn twee tot vijf zonsverduisteringen per jaar, elk een
-      uur of twee lang. -->
-      <div class="eclipse-nav">
-      <button class="play-btn" id="eclipse-prev" title="Previous eclipse">&#9664; Previous</button>
-      <button class="play-btn" id="eclipse-jump" title="Next eclipse">Next &#9654;</button>
-      </div>
-      </div>
-      </section>
-
 <section class="acc open" data-acc="cosmos-readings">
       <button class="acc-head" type="button" aria-expanded="true">
-      <span>Readings</span>
+      <!-- "Sun & Moon readings" en niet "Moon readings": het sub-solaire punt staat er
+      ook in. Zo vormt hij bovendien een paar met `Sun & Moon layers` in de Layers-tab
+      — daar de schakelaars, hier de getallen. -->
+      <span>Sun &amp; Moon readings</span>
       <span class="acc-sub" id="readout-head">right now</span>
       <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
@@ -798,6 +783,26 @@
       </div>
       </div>
       </section>
+
+<section class="acc" data-acc="cosmos-eclipse">
+      <button class="acc-head" type="button" aria-expanded="false">
+      <span>Eclipse</span>
+      <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="acc-body">
+      <div class="elayer on" id="eclipse-toggle"><span class="edot"></span>Shadow on Earth<span class="estat" id="es-eclipse">on</span></div>
+      <div class="eclipse-state" id="eclipse-state">No eclipse at this moment.</div>
+      <!-- Zonder deze knoppen zou vrijwel niemand de schaduw ooit te zien
+      krijgen: er zijn twee tot vijf zonsverduisteringen per jaar, elk een
+      uur of twee lang. -->
+      <div class="eclipse-nav">
+      <button class="play-btn" id="eclipse-prev" title="Previous eclipse">&#9664; Previous</button>
+      <button class="play-btn" id="eclipse-jump" title="Next eclipse">Next &#9654;</button>
+      </div>
+      </div>
+      </section>
+
+
 
 <section class="acc open" data-acc="cosmos-activity">
       <button class="acc-head" type="button" aria-expanded="true">
