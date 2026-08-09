@@ -682,6 +682,35 @@
   }
   #magneto-btn { margin-top: 2px; }
   body.magneto-on #magneto-btn { border-color: var(--quake); color: var(--ink); }
+
+  /* ---- Space (sessie 22) ----
+     Zelfde vorm als `.magneto-only` hierboven, en dat is opzet: het patroon
+     "klasse op body, blok verbergen wat in die stand niets betekent" is nu
+     de derde bewoner en hoort daarom herkenbaar hetzelfde te blijven.
+
+     LET OP bij uitbreiden: een expliciete `display` in een klasse verslaat het
+     `hidden`-attribuut, want `hidden` is niet meer dan een user-agent-regel
+     `display: none`. Krijgt een element hieronder ooit een eigen `display`,
+     geef het dan meteen een `[hidden]`-regel mee — die val kostte in sessie 14
+     een zichtbare knop die verborgen hoorde te zijn. */
+  .space-only { display: none; }
+  body.space-on .space-only { display: block; }
+  .space-uitleg {
+    margin: 10px 0 0; font-size: 11px; line-height: 1.5; color: var(--ink-faint);
+  }
+  #space-btn { margin-top: 8px; }
+  body.space-on #space-btn { border-color: var(--quake); color: var(--ink); }
+  .space-lock {
+    margin: 6px 0 0; font-size: 11px; color: var(--ink-faint);
+  }
+  .planet-list { margin-top: 4px; }
+  /* De stip draagt de kleur van de planeet en is tegelijk de aan/uit-knop.
+     Iets groter dan de standaard `.edot`: hij is hier een doelwit en niet
+     alleen een teken. */
+  .planet-row .edot { width: 9px; height: 9px; cursor: pointer; }
+  .planet-row.focus { color: var(--ink); }
+  .planet-row.focus .estat { color: var(--ink); }
+  .planet-row .estat { font-variant-numeric: tabular-nums; }
   .readout-warn { color: #ffd166; }
   .readout-note { display: block; color: var(--ink-faint); margin-top: 2px; }
   /* De tijdkiezer. `.shifted` is de niet te missen markering dat de scene een ander

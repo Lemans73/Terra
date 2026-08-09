@@ -857,6 +857,54 @@
       <button class="apply" id="sunview-btn">Observe the Sun</button>
       </div>
       </section>
+
+<!-- SPACE — de ingang naar de state, en zijn bediening zodra hij aanstaat.
+
+     ONDERAAN IN ALMANAC, volgens de ordening van sessie 21: van dichtbij naar
+     ver. De planeten staan verder dan de zon, dus verder dan alles wat
+     hierboven staat.
+
+     DE KOP HEET `Space` EN NIET `Planets`, hoewel er nu alleen planeten in
+     zitten. De state is bedoeld als plek voor alles buiten de aarde — de
+     magnetosfeer en de instrumenten op L1 horen hier later bij te komen — en
+     een kop die dan mee moet veranderen is een kop die nu al fout is. -->
+<section class="acc" data-acc="space">
+      <button class="acc-head" type="button" aria-expanded="false">
+      <span>Space</span>
+      <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="acc-body">
+      <p class="space-uitleg">The seven planets on their true direction in the sky,
+      each with the point on Earth it stands over. Brightness follows real
+      apparent magnitude, so what stands out here stands out overhead.</p>
+      <button class="apply" id="space-btn">Enter space view</button>
+      <div class="space-only">
+      <h3>View</h3>
+      <div class="presets" id="space-views">
+      <button class="preset" data-view="top">Top</button>
+      <button class="preset" data-view="left">Left</button>
+      <button class="preset" data-view="right">Right</button>
+      <button class="preset active" data-view="orbit">3D orbit</button>
+      </div>
+      <div class="space-lock" id="space-lock">Free orbit.</div>
+      <h3>Bodies</h3>
+      <div class="planet-list" id="planet-list"></div>
+      <h3>Reading</h3>
+      <div class="sunstat" id="space-readout">
+      <div class="sunstat-row"><span>Selected</span><b id="sp-naam">&#8212;</b></div>
+      <div class="sunstat-row"><span>Distance</span><b id="sp-afstand">&#8212;</b></div>
+      <div class="sunstat-row"><span>Apparent magnitude</span><b id="sp-mag">&#8212;</b></div>
+      <div class="sunstat-row"><span>Illuminated</span><b id="sp-fase">&#8212;</b></div>
+      <div class="sunstat-row"><span>Right ascension</span><b id="sp-ra">&#8212;</b></div>
+      <div class="sunstat-row"><span>Declination</span><b id="sp-dec">&#8212;</b></div>
+      <div class="sunstat-row"><span>Stands over</span><b id="sp-sub">&#8212;</b></div>
+      <div class="sunstat-note">Distances on screen are ordered, not to scale &#8212;
+      the whole solar system cannot share a frame with a recognisable Earth.
+      The distance above is the real one.</div>
+      </div>
+      </div>
+      </div>
+      </section>
     </div>
 
     <div class="tabpanel" data-panel="instellingen">
@@ -1279,6 +1327,15 @@ import { laadEOP, eopStatus, eopReeks, eopPadLengte, polarMotionAt,
 // Het magneto-perspectief. Eigen module met dependency-injection, zoals
 // modes/expert.js: de state hoort niet inline in dit bestand thuis.
 import { createMagnetoMode } from './js/modes/magneto.js';
+
+// SESSIE 22 — de Space-state en wat erin leeft. Drie bestanden met drie
+// verantwoordelijkheden, en dat is de vorm die volgende toevoegingen horen
+// aan te houden: rekenen (compute/) weet niets van three, tekenen (layers/)
+// niets van de app, en de state (states/) orkestreert zonder zelf te tekenen.
+import { createPlanetsLayer } from './js/layers/planets-layer.js';
+import { createSpaceState } from './js/states/space.js';
+import { maakViewStates } from './js/core/view-state.js';
+import { PLANETEN, PLANEET_INFO } from './js/compute/planets.js';
 // Deskundig (schematische) weergavemodus (Fase 1).
 import { enterExpertMode, exitExpertMode } from './js/modes/expert.js';
 // Schematische datalaag-symbolen voor de deskundig-modus (Fase 2).
@@ -3407,6 +3464,12 @@ function updateSunUniform() {
   // zolang de laag uit staat, en dat is de normale stand.
   updatePolarMotion();
 
+  // De planeten hangen aan dezelfde klok als zon en maan — één moment voor de
+  // hele hemel, en dus geen tweede tijdlijn die uit de pas kan lopen. De laag
+  // doet niets zolang hij onzichtbaar is, en dat is de normale stand.
+  if (spaceState) spaceState.tik();
+  updateSpaceReadout();
+
   updateCosmosReadout();
 }
 
@@ -3424,6 +3487,9 @@ world.onZoom(pov => {
   // 3. luchtkwaliteit: de enige bron die per gebied werkt, laat zijn stations
   //    meelopen met waar je kijkt. Doet niets als de laag uit staat.
   followAqiToView();
+  // 4. planeetlabels: hun maat is schermvast, dus die moet mee met de
+  //    camera-afstand. Doet niets zolang de Space-state uit staat.
+  if (planets) planets.hertekenLabels(world.camera());
 });
 
 world.controls().autoRotate = !REDUCED_MOTION;
@@ -4302,7 +4368,7 @@ function animateShader() {
   stepSunFlight(_cam, world.controls());
 
   // Het draaipunt volgt de zon zolang je hem bekijkt — zie de noot bij setSunView().
-  if (sunView && !sunFlight.actief && sunMoon) {
+  if (inZonAanzicht() && !sunFlight.actief && sunMoon) {
     ensureTargetLock();
     const sp = sunMoon.meshes.sunGroup.position;
     if (!sp.equals(_sunAnchor)) {
@@ -4707,7 +4773,7 @@ function flyTo(d) {
   // Wie naar een plek op de AARDE vliegt, verlaat het zonaanzicht. Zonder deze regel
   // brengt een klik op een melding je wel terug naar de aarde, maar blijft de
   // toestand achter bij de zon — zie de noot bij setSunView().
-  setSunView(false, { vlieg: false });
+  setSunView(false, { overgenomen: true });
   pauseAutoRotate();
   // Bij minder-beweging direct naar de bestemming springen in plaats van eroverheen
   // te vliegen. Het doel is hetzelfde, de weg ernaartoe is wat misselijk kan maken.
@@ -4776,7 +4842,7 @@ const _regionPos = new THREE.Vector3();
 const _regionNaar = new THREE.Vector3();
 function positionRegionLabels(cam) {
   if (!regionLabels.length) return;
-  const aan = sunView && sunMoon && sunMoon.meshes.sunspotGroup.visible;
+  const aan = inZonAanzicht() && sunMoon && sunMoon.meshes.sunspotGroup.visible;
   const zon = sunMoon ? sunMoon.meshes.sunGroup.position : null;
   const R = sunMoon ? sunMoon.config.sunRadius : 1;
   // Richting van de zon naar de camera: dát bepaalt welke helft je ziet, niet de
@@ -5937,8 +6003,20 @@ bindCosmosToggle('sunspots-toggle', 'es-sunspots',
 // en die staan op de aarde afgestemd (straal 100). Met de zon als draaipunt
 // (straal 22) zou je er dwars doorheen zoomen. OrbitControls klemt bovendien
 // alleen in `update()` — zie de noot bij de zoomgrenzen hierboven.
-let sunView = false;
-const _sunViewPrev = { pos: null, target: null, min: 0, max: 0, labels: true, autoRotate: false };
+/* SESSIE 22 — de eigen state-machinerie van het zonaanzicht is vervangen
+   door de gedeelde uit js/core/view-state.js. Wat hier stond was een
+   `let sunView` plus een `_sunViewPrev` met zeven velden, en magneto had
+   daar zijn eigen kopie van; een derde state zou de derde kopie zijn
+   geworden. De definitie (waar de camera heen gaat, wat er aan en uit
+   moet) staat nu in het init-blok bij de andere states.
+
+   `inZonAanzicht()` is NULL-SAFE met opzet: hij wordt gelezen door code die
+   tijdens de scene-opbouw al kan draaien, en `viewStates` bestaat pas in
+   het init-blok. Zelfde TDZ-familie als de rest. */
+let viewStates = null, spaceState = null, planets = null;
+const spaceVoorheen = {};
+const inZonAanzicht = () => !!(viewStates && viewStates.isActief('sun'));
+const inSpaceAanzicht = () => !!(viewStates && viewStates.isActief('space'));
 
 // De twee schakelaars in Instellingen die het zonaanzicht tijdelijk overneemt.
 // Zonder deze koppeling staan ze "on" terwijl het uit is, en dat is erger dan
@@ -5954,72 +6032,122 @@ const _sunAnchor = new THREE.Vector3();   // waar de zon stond bij de vorige fra
 const _sunShift = new THREE.Vector3();    // hulpvector bij het instappen
 const _sunDelta = new THREE.Vector3();    // verplaatsing per frame
 
-// `vlieg: false` verlaat het zonaanzicht zónder eigen terugvlucht. Dat is nodig
-// wanneer iets ánders de camera al naar de aarde brengt — een klik op een melding
-// bijvoorbeeld. Zonder deze uitgang bleef `sunView` op true staan terwijl je de
-// aarde zag: het draaipunt bleef aan de zon vastgeklonken, het slot op
+// `{ overgenomen: true }` verlaat het zonaanzicht zónder de camera aan te raken.
+// Dat is nodig wanneer iets ánders hem al naar de aarde brengt — een klik op een
+// melding bijvoorbeeld. Zonder deze uitgang bleef de state op true staan terwijl je
+// de aarde zag: het draaipunt bleef aan de zon vastgeklonken, het slot op
 // `controls.target` bleef dicht en de knop zei nog "Back to Earth". Je kwam er dan
 // niet meer uit — de vlucht ging wel, het blijven niet.
+//
+// SESSIE 22: dit heette `vlieg: false` en dekte daarmee twee verschillende
+// bedoelingen. "Zonder animatie" en "raak de camera niet aan" zijn niet hetzelfde,
+// en de generieke machine kon ze niet uit elkaar houden: bij vertrek liet hij de
+// camera staan waar de state hem had gezet. Zie de kop van js/core/view-state.js.
+// De aardbevingslabels wijzen in beide states naar plekken op een aarde die je
+// niet of anders ziet. Alleen de WEERGAVE gaat uit: de adapters blijven draaien
+// en meldingen komen gewoon binnen. Dat regelt de state-machine (`behoudLabels`
+// staat niet aan), net als het pauzeren van de auto-rotatie — die zou om de zon
+// heen draaien en juist de kant tonen waar NOAA niets van weet.
 function setSunView(on, opties) {
-  if (!sunMoon || on === sunView) return;
-  const vlieg = !opties || opties.vlieg !== false;
-  const ctl = world.controls(), cam = world.camera();
-  const btn = document.getElementById('sunview-btn');
-  if (on) {
-    _sunViewPrev.pos = cam.position.clone();
-    _sunViewPrev.target = ctl.target.clone();
-    _sunViewPrev.min = ctl.minDistance;
-    _sunViewPrev.max = ctl.maxDistance;
-    pauseAutoRotate();
-    // De corona is een BILLBOARD van 5,5 zonsstralen breed. Vanaf de aarde is dat
-    // een geloofwaardige krans om een schijfje van een paar pixels; van 99
-    // eenheden af beslaat hij het hele scherm en telt hij additief bij alles op,
-    // waardoor de bol verzadigt naar wit en de vlekken verdwijnen. Van dichtbij
-    // is een plat vlak ook gewoon niet wat een corona is.
-    sunMoon.meshes.sunGlow.visible = false;
-    // De aardbevingslabels wijzen naar plekken op een aarde die je niet meer ziet en
-    // zouden als losse tekst in de leegte blijven hangen. Alleen de WEERGAVE gaat
-    // uit: de adapters blijven draaien en meldingen van nieuwe bevingen komen ook
-    // hier gewoon binnen. `labelsOn` is genoeg — positionLabels() leest die vlag.
-    _sunViewPrev.labels = labelsOn;
-    labelsOn = false;
-    // Auto-rotatie zou om de zon heen draaien en juist de kant tonen waar NOAA
-    // niets van weet: de helft die naar de aarde wijst is de helft met data.
-    _sunViewPrev.autoRotate = autoRotateWanted;
-    setAutoRotate(false);
-    syncViewToggles();
-    const R = sunMoon.config.sunRadius;
-    const sunPos = sunMoon.meshes.sunGroup.position;
-    // Aan de kant van de aarde gaan staan: dat is de helft die NOAA meet, en de
-    // enige helft waar vlekken van bekend zijn.
-    _sunShift.copy(sunPos).normalize().multiplyScalar(-R * 4.5);
-    flyCamera(cam, ctl, sunPos.clone().add(_sunShift), sunPos.clone(),
-              { min: R * 1.6, max: R * 24 });
-    _sunAnchor.copy(sunPos);
-  } else {
-    sunMoon.meshes.sunGlow.visible = true;
-    labelsOn = _sunViewPrev.labels;
-    setAutoRotate(_sunViewPrev.autoRotate);
-    // De schakelaars in Instellingen moeten weer kloppen met wat er werkelijk staat.
-    syncViewToggles();
-    if (vlieg) {
-      flyCamera(cam, ctl, _sunViewPrev.pos, _sunViewPrev.target,
-                { min: _sunViewPrev.min, max: _sunViewPrev.max });
-    } else {
-      // Een lopende vlucht afbreken en alles meteen teruggeven aan wie het overneemt.
-      sunFlight.actief = false;
-      ctl.minDistance = _sunViewPrev.min;
-      ctl.maxDistance = _sunViewPrev.max;
-      ctl.target.x = 0; ctl.target.y = 0; ctl.target.z = 0;
-    }
+  if (!sunMoon || !viewStates) return;
+  viewStates.zet('sun', on, opties);
+}
+
+function setSpaceView(on, opties) {
+  if (!viewStates) return;
+  viewStates.zet('space', on, opties);
+  markeerSpaceStand();
+  updateSpaceReadout();
+}
+
+/* Welke stand actief is, en of hij vastgezet is. De tekst zegt uitdrukkelijk
+   dat pannen en zoomen blijven werken — dat is het verschil met magneto's
+   "zoom only", en een gebruiker die dat niet weet probeert het niet. */
+function markeerSpaceStand() {
+  if (!viewStates) return;
+  const stand = viewStates.huidigeStand();
+  document.querySelectorAll('#space-views .preset').forEach(b =>
+    b.classList.toggle('active', b.dataset.view === stand));
+  const noot = document.getElementById('space-lock');
+  if (noot) noot.textContent = viewStates.standIsVast(stand)
+    ? 'Locked to the ecliptic plane — pan and zoom still work.'
+    : 'Free orbit.';
+}
+
+/* De planetenlijst wordt uit PLANETEN gebouwd en niet met de hand geschreven:
+   een tweede lijst is een lijst die uit de pas gaat lopen. Klikken kiest het
+   lichaam in focus; het oogje ernaast zet hem uit. */
+function bouwPlanetenLijst() {
+  const host = document.getElementById('planet-list');
+  if (!host || host.childElementCount) return;
+  for (const k of PLANETEN) {
+    const rij = document.createElement('div');
+    rij.className = 'elayer on planet-row';
+    rij.dataset.planet = k;
+    rij.innerHTML = '<span class="edot"></span>' + PLANEET_INFO[k].naam +
+                    '<span class="estat" data-mag>&#8212;</span>';
+    rij.querySelector('.edot').style.background =
+      '#' + PLANEET_INFO[k].kleur.toString(16).padStart(6, '0');
+    rij.addEventListener('click', (e) => {
+      // Klik op de stip = aan/uit, klik op de naam = in focus nemen. Twee
+      // handelingen op één rij, en de stip is de kleinere en preciezere —
+      // die krijgt daarom de handeling die je zelden wilt.
+      if (e.target.classList.contains('edot')) {
+        const aan = rij.classList.toggle('on');
+        planets.setPlaneetVisible(k, aan);
+        if (!aan && planets.focus() === k) planets.setFocus(null);
+      } else {
+        planets.setFocus(planets.focus() === k ? null : k);
+      }
+      markeerPlaneetFocus();
+      updateSpaceReadout();
+    });
+    host.appendChild(rij);
   }
-  sunView = on;
-  if (btn) btn.textContent = on ? 'Back to Earth' : 'Observe the Sun';
-  // Op <body> en niet op een element, precies zoals `magneto-on`: zo kan CSS per
-  // weergave verbergen wat er niet van toepassing is, zonder dat elke nieuwe state
-  // daar eigen machinerie voor hoeft te bedenken. Het tijdeiland verdwijnt hier,
-  // want de zonnevlekken zijn een momentopname van NOAA.
-  document.body.classList.toggle('sun-view', on);
+}
+
+function markeerPlaneetFocus() {
+  if (!planets) return;
+  const f = planets.focus();
+  document.querySelectorAll('#planet-list .planet-row').forEach(r =>
+    r.classList.toggle('focus', r.dataset.planet === f));
+}
+
+/* De readout. Toont het lichaam in focus; zonder focus blijft hij leeg in
+   plaats van iets willekeurigs te kiezen — een getal zonder gekozen bron
+   leest als een meting die het niet is. */
+function updateSpaceReadout() {
+  if (!planets || !inSpaceAanzicht()) return;
+  const eph = planets.efemeriden();
+  const f = planets.focus();
+  const zet = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+
+  // De magnitudes lopen altijd mee, ook zonder focus: dat is de kolom die
+  // verklaart waarom het ene lichaam opvalt en het andere niet.
+  if (eph) {
+    document.querySelectorAll('#planet-list .planet-row').forEach(r => {
+      const p = eph[r.dataset.planet];
+      const cel = r.querySelector('[data-mag]');
+      if (p && cel) cel.textContent = (p.magnitude > 0 ? '+' : '') + p.magnitude.toFixed(1);
+    });
+  }
+
+  if (!f || !eph || !eph[f]) {
+    for (const id of ['sp-naam','sp-afstand','sp-mag','sp-fase','sp-ra','sp-dec','sp-sub'])
+      zet(id, '—');
+    return;
+  }
+  const p = eph[f];
+  const uur = p.ra / 15;
+  const h = Math.floor(uur), m = Math.floor((uur - h) * 60);
+  zet('sp-naam', PLANEET_INFO[f].naam);
+  zet('sp-afstand', p.distanceAU.toFixed(3) + ' AU');
+  zet('sp-mag', (p.magnitude > 0 ? '+' : '') + p.magnitude.toFixed(2));
+  zet('sp-fase', (p.verlicht * 100).toFixed(0) + '%');
+  zet('sp-ra', h + 'h ' + String(m).padStart(2, '0') + 'm');
+  zet('sp-dec', (p.dec >= 0 ? '+' : '−') + Math.abs(p.dec).toFixed(1) + '°');
+  zet('sp-sub', Math.abs(p.sub.lat).toFixed(1) + '° ' + (p.sub.lat >= 0 ? 'N' : 'S') +
+                ', ' + Math.abs(p.sub.lon).toFixed(1) + '° ' + (p.sub.lon >= 0 ? 'E' : 'W'));
 }
 
 // De sprong van de aarde naar de zon is 400 eenheden; ineens is dat een harde
@@ -6110,13 +6238,37 @@ function ensureTargetLock() {
     const orig = t[naam].bind(t);
     // Ook tijdens de TERUGVLUCHT blijft het slot dicht: dan staat `sunView` al op
     // false terwijl het draaipunt nog onderweg is naar de oorsprong.
-    t[naam] = (...args) => ((sunView || sunFlight.actief) ? t : orig(...args));
+    t[naam] = (...args) => ((inZonAanzicht() || sunFlight.actief) ? t : orig(...args));
   }
   t.__terraLocked = true;
 }
 ensureTargetLock();
 
-document.getElementById('sunview-btn').addEventListener('click', () => setSunView(!sunView));
+document.getElementById('sunview-btn').addEventListener("click", () => setSunView(!inZonAanzicht()));
+
+// ---- Space ----
+document.getElementById('space-btn')?.addEventListener('click', () => {
+  bouwPlanetenLijst();
+  setSpaceView(!inSpaceAanzicht());
+});
+document.querySelectorAll('#space-views .preset').forEach(b =>
+  b.addEventListener('click', () => {
+    if (!viewStates || !inSpaceAanzicht()) return;
+    viewStates.gaNaarStand(b.dataset.view);
+    markeerSpaceStand();
+  }));
+
+// Klikken op een planeet in de scene. Geen raycaster: de bollen zijn klein en
+// het label telt mee, dus een schermafstand is zowel goedkoper als
+// vergevingsgezinder dan een treffer op de geometrie zelf.
+document.getElementById('globe')?.addEventListener('click', (e) => {
+  if (!inSpaceAanzicht() || !planets) return;
+  const k = planets.raakPunt(e.clientX, e.clientY);
+  if (!k) return;
+  planets.setFocus(planets.focus() === k ? null : k);
+  markeerPlaneetFocus();
+  updateSpaceReadout();
+});
 
 // Zet de gemeten zonnetoestand in beeld: de getallen in de Cosmos-tab en de
 // vlekken op de bol. Wordt aangeroepen zodra één van de vier NOAA-bestanden
@@ -6446,7 +6598,7 @@ function springNaarEclips(richting, btn) {
     btn.textContent = label;
     if (!gevonden) { btn.textContent = 'none'; setTimeout(() => btn.textContent = label, 1500); return; }
     // Ook deze sprong gaat naar een plek op de aarde — zie de noot bij setSunView().
-    setSunView(false, { vlieg: false });
+    setSunView(false, { overgenomen: true });
     stopPlay();
     // Een venster van één dag maakt de slider fijn genoeg om de schaduw stap voor
     // stap over de aarde te zien trekken; de hele passage duurt maar een uur of twee.
@@ -7398,6 +7550,107 @@ world.scene().add(geomag.group);
 // gebouwd te worden.
 magneto = createMagnetoMode(THREE, { earthRadius: 100 });
 world.scene().add(magneto.group);
+
+/* ------------------------------------------------------------------
+   SPACE — de planetenlaag, de state-machine en de state zelf.
+
+   STAAT HIER OM DE TDZ-REDEN die dit project inmiddels zes keer heeft
+   ingelopen: alles hieronder leest `world`, `sunMoon` en de
+   scene-globals, en die bestaan pas in dit init-blok. Verplaatsen naar
+   de kop van het bestand geeft `Cannot access ... before
+   initialization`, de module stopt, en het bootscherm blijft staan.
+------------------------------------------------------------------ */
+planets = createPlanetsLayer(THREE, { earthRadius: 100 });
+planets.setVisible(false);              // hangt in de scene, staat uit tot de state aangaat
+world.scene().add(planets.group);
+
+// De haken die core/view-state.js van de app krijgt. Functies en geen
+// waarden: `labelsOn` en `autoRotateWanted` zijn `let`-bindingen, dus een
+// doorgegeven waarde zou een momentopname zijn — dezelfde val als de
+// `window.__test`-haak van sessie 14.
+viewStates = maakViewStates({
+  world,
+  flyCamera,
+  stopFlight: () => { sunFlight.actief = false; },
+  labels:     { lees: () => labelsOn, schrijf: (v) => { labelsOn = v; } },
+  autoRotate: { lees: () => autoRotateWanted, schrijf: setAutoRotate,
+                pauzeer: pauseAutoRotate },
+  syncToggles: syncViewToggles
+});
+
+spaceState = createSpaceState(THREE, {
+  world, planets,
+  moment: momentNow,
+  lagen: {
+    // Gebeurtenissen gaan uit en komen terug zoals ze waren. Zelfde
+    // patroon als `activeVoorSlot` bij de sloten: onthouden wat er aan
+    // stond, want anders zet je bij het verlaten lagen aan die de
+    // gebruiker zelf had uitgezet.
+    gebeurtenissenUit() {
+      for (const laag of Object.keys(active)) {
+        spaceVoorheen[laag] = active[laag];
+        active[laag] = false;
+      }
+      render();
+    },
+    gebeurtenissenTerug() {
+      for (const laag of Object.keys(spaceVoorheen)) active[laag] = spaceVoorheen[laag];
+      render();
+    }
+  }
+});
+viewStates.registreer('space', spaceState.definitie);
+
+// De zon/maan-state migreert mee op dezelfde machine. Dit is de tweede
+// bewoner en daarmee het bewijs dat de abstractie klopt: zou hij alleen
+// door `space` gebruikt worden, dan was er een vierde variant bij in
+// plaats van een gedeelde.
+viewStates.registreer('sun', {
+  body: 'sun-view',
+  knop: 'sunview-btn',
+  knopAan: 'Back to Earth',
+  knopUit: 'Observe the Sun',
+  doel: () => {
+    const R = sunMoon.config.sunRadius;
+    const sunPos = sunMoon.meshes.sunGroup.position;
+    _sunShift.copy(sunPos).normalize().multiplyScalar(-R * 4.5);
+    return { pos: sunPos.clone().add(_sunShift), target: sunPos.clone(),
+             min: R * 1.6, max: R * 24 };
+  },
+  binnen() {
+    // De corona is een billboard van 5,5 zonsstralen breed. Van 99 eenheden
+    // af beslaat hij het hele scherm en telt hij additief bij alles op,
+    // waardoor de bol verzadigt naar wit en de vlekken verdwijnen.
+    sunMoon.meshes.sunGlow.visible = false;
+    _sunAnchor.copy(sunMoon.meshes.sunGroup.position);
+  },
+  buiten() { sunMoon.meshes.sunGlow.visible = true; }
+});
+
+/* MEETHAAK, ALLEEN LOKAAL. De inline module is een gesloten scope, dus er is
+   van buitenaf niets te meten — en meten is in dit project de enige manier om
+   iets vast te stellen, want de Browser pane houdt `document.hidden` op true
+   en laat `requestAnimationFrame` stilstaan. Een screenshot toont dan een
+   zwarte bol die niets bewijst.
+
+   ALLES IS EEN GETTER en geen waarde. Een `{ planets }` legt de stand van dit
+   moment vast; staat de haak vóór het init-blok, dan bevat hij `null` en lijkt
+   de laag te ontbreken. Die val is in sessie 14 twee keer ingelopen.
+
+   Achter IS_LOCAL, zodat hij niet meegaat naar de demo of de standalone. */
+if (IS_LOCAL) {
+  window.__test = {
+    get planets() { return planets; },
+    get viewStates() { return viewStates; },
+    get spaceState() { return spaceState; },
+    get sunMoon() { return sunMoon; },
+    get active() { return active; },
+    get spaceVoorheen() { return spaceVoorheen; },
+    setSpaceView, setSunView, momentNow,
+    bouwPlanetenLijst,
+    get world() { return world; }
+  };
+}
 
 // globe.gl's eigen DirectionalLight opzoeken. Terra's code voegt geen enkel licht
 // toe; globe.gl zet er twee neer (AmbientLight PI en DirectionalLight 0,6·PI op
