@@ -280,24 +280,122 @@
     transition: color 0.15s, background 0.15s;
   }
   .panel-collapse:hover { color: var(--ink); background: rgba(255,255,255,0.08); }
-  .panel-open {
+  /* ---- De knoppenrij (sessie 24) ----------------------------------------
+     Was één knop `.panel-open` die op `display: none` ging zodra het paneel
+     openging. Met twee panelen kan dat niet meer: een rij die verdwijnt zodra
+     je hem gebruikt, laat je niet naar het andere paneel. De rij blijft dus
+     staan en de knop van het open paneel krijgt `.active`.
+
+     GEEN `transform` VOOR DE PLAATSING. Die zit hier op `left`/`bottom`, en
+     dat is bewust: de media queries verzetten die twee, en een transform
+     eronder is de val die bij `.mode-switch` en `#toasts` al twee keer heeft
+     toegeslagen — daar ís `translateX(-50%)` de centrering, dus het opheffen
+     van `left` schuift het element een halve schermbreedte weg. */
+  .dock {
     position: fixed;
     left: 28px; bottom: 28px;
     z-index: 11;
-    display: none;
+    display: flex;
+    align-items: center; gap: 8px;
+  }
+  .dock-btn {
+    display: flex;
     align-items: center; gap: 8px;
     background: rgba(11,16,24,0.82);
     backdrop-filter: blur(14px);
     border: 1px solid var(--hair);
     border-radius: 12px;
-    padding: 11px 14px;
+    padding: 11px 13px;
     color: var(--ink);
     font-family: inherit; font-size: 12px; font-weight: 500;
     letter-spacing: 0.02em;
     cursor: pointer;
-    transition: border-color 0.18s;
+    transition: border-color 0.18s, background 0.18s, color 0.18s;
   }
-  .panel-open:hover { border-color: var(--ink-dim); }
+  .dock-btn svg { width: 15px; height: 15px; flex: 0 0 auto; }
+  .dock-btn:hover { border-color: var(--ink-dim); }
+  .dock-btn.active { border-color: var(--accent); color: var(--accent); }
+  /* Het label verschijnt op de knop van het OPEN paneel — zelfde afspraak als
+     bij `.tab-label` in de paneelkop, en om dezelfde reden: drie labels naast
+     elkaar passen niet op een telefoon, één wel. */
+  .dock-label { display: none; }
+  .dock-btn.active .dock-label { display: inline; }
+  /* Back to Earth is geen schakelaar maar een handeling, en hij staat er alleen
+     wanneer er een state actief is. Zijn label blijft dus altijd staan — een
+     naamloos pijltje is geen uitweg die je durft te nemen. */
+  .dock-back .dock-label { display: inline; }
+  .dock-back { border-color: rgba(255,255,255,0.22); }
+  .dock-back:hover { border-color: var(--ink); }
+  /* `hidden` heeft hier een eigen regel nodig: `.dock-btn` zet een expliciete
+     `display: flex` en die verslaat het attribuut. Zelfde val als bij
+     `.time-reset` en `.ti-panel` — zie de noot daar. */
+  .dock-btn[hidden] { display: none; }
+
+  /* ---- Het Navigate-paneel ----------------------------------------------
+     Boven de knoppenrij, in dezelfde glastaal als `.panel`. Smaller, want het
+     draagt een handvol rijen en geen accordeons. */
+  .nav-panel {
+    position: fixed;
+    left: 28px; bottom: 84px;
+    z-index: 10;
+    width: 214px;
+    max-height: calc(100dvh - 122px);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: rgba(11,16,24,0.72);
+    backdrop-filter: blur(14px);
+    border: 1px solid var(--hair);
+    border-radius: 14px;
+  }
+  .nav-panel[hidden] { display: none; }
+  .nav-head {
+    flex: 0 0 auto;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 12px 10px 14px;
+    background: rgba(11,16,24,0.94);
+    border-bottom: 1px solid var(--hair);
+    font-size: 11px; font-weight: 600;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--ink-dim);
+  }
+  .nav-close {
+    background: none; border: 0; padding: 2px 6px;
+    border-radius: 7px;
+    color: var(--ink-dim);
+    font-size: 16px; line-height: 1;
+    cursor: pointer;
+    transition: color 0.15s, background 0.15s;
+  }
+  .nav-close:hover { color: var(--ink); background: rgba(255,255,255,0.08); }
+  .nav-body { flex: 1 1 auto; overflow-y: auto; padding: 8px; }
+  .nav-state {
+    display: flex; align-items: center; gap: 10px;
+    width: 100%;
+    background: none; border: 1px solid transparent;
+    border-radius: 10px;
+    padding: 9px 10px;
+    color: var(--ink-dim);
+    font-family: inherit; font-size: 12.5px; font-weight: 500;
+    text-align: left;
+    cursor: pointer;
+    transition: color 0.15s, background 0.15s, border-color 0.15s;
+  }
+  .nav-state:hover { color: var(--ink); background: rgba(255,255,255,0.06); }
+  .nav-state.active { color: var(--accent); border-color: var(--accent); }
+  .nav-icon { display: flex; flex: 0 0 auto; }
+  .nav-icon svg { width: 16px; height: 16px; }
+  /* De camerastanden staan ingesprongen onder hun state: dat toont dat ze
+     erbij horen en niet zelf een state zijn. */
+  .nav-views {
+    display: flex; flex-wrap: wrap; gap: 5px;
+    padding: 4px 0 6px 34px;
+  }
+  .nav-note {
+    margin: 0; padding: 2px 10px 6px 34px;
+    font-size: 10.5px; line-height: 1.45;
+    color: var(--ink-faint);
+  }
   .layer {
     display: flex;
     align-items: center;
@@ -1760,7 +1858,8 @@
        wordmark aan liep. Met alleen de iconen is het nog 76 px breed en is er tussen
        wordmark en bel 211 px vrij: ruim genoeg, en het scheelt een verdieping. */
     .mode-switch { top: 12px; }
-    .panel-open { left: 12px; bottom: 12px; }
+    .dock { left: 12px; bottom: 12px; }
+    .nav-panel { left: 12px; right: 12px; width: auto; bottom: 66px; max-height: 56dvh; }
     .notif-panel { left: 10px; right: 10px; width: auto; top: 56px; max-height: 60vh; }
     /* `transform: none` is hier GEEN opsmuk. Op desktop staat #toasts op
        `left: 50%` met `translateX(-50%)` als centrering. Zet je dan links én

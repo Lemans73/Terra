@@ -21,33 +21,46 @@
    zoomgrenzen daarbij horen, en wat er nog meer aan of uit moet.
    Dat is wat een state hier opgeeft; de rest doet deze module.
 
+   HET REGISTER IS OOK DE NAVIGATIE (sessie 24). `list()` geeft de
+   aangemelde states in registratievolgorde, mét hun `label` en `icon`.
+   `js/ui/nav.js` bouwt het Navigate-paneel daaruit, zodat een nieuwe
+   state nul regels navigatiecode kost. Wie hier een state aanmeldt
+   zonder label of icoon krijgt hem dus wel, maar naamloos — vandaar
+   dat die twee in het contract staan en niet in de UI.
+
    TWEE CONCEPTEN
    1. DE STATE       — de app neemt een andere gedaante aan
-   2. STANDEN ERIN   — vaste camerastandpunten binnen die gedaante
-                       (Top, Left, Right, vrij), elk met een doel en
-                       een vlag of hij vastgezet is
+   2. VIEWS ERIN     — vaste camerastandpunten binnen die gedaante
+                       (Top, Edge, Side, vrij), elk met een camera()
+                       en een vlag of hij vastgezet is
 
-   PANNEN BLIJFT TOEGESTAAN IN EEN VASTGEZETTE STAND, en dat is het
+   PANNEN BLIJFT TOEGESTAAN IN EEN VASTGEZETTE VIEW, en dat is het
    verschil met de magneto-implementatie waar dit uit voortkomt.
    Daar staat "zoom only" en kun je een uitvergroot beeld niet
    verschuiven, wat precies dan knelt wanneer je iets van dichtbij
    wilt bekijken. Vastzetten hoort de ORIENTATIE te bewaken, niet de
    bewegingsvrijheid binnen die orientatie. Magneto erft dit zodra
-   hij hier op migreert.
+   hij hier op migreert — die state staat sinds sessie 20 uit achter
+   `MAGNETO_VIEW` en komt later terug vanuit een eigen PoC.
 
-   DE STAND WORDT GEZET BIJ HET KIEZEN, NIET ELK FRAME AFGEDWONGEN.
-   Dat is wat pannen mogelijk maakt: een stand die zichzelf per frame
+   DE VIEW WORDT GEZET BIJ HET KIEZEN, NIET ELK FRAME AFGEDWONGEN.
+   Dat is wat pannen mogelijk maakt: een view die zichzelf per frame
    herstelt, wist elke verschuiving die de gebruiker maakt. De prijs
-   is dat een stand langzaam veroudert als zijn referentie beweegt
+   is dat een view langzaam veroudert als zijn referentie beweegt
    (de zonrichting schuift een graad per dag); dat is aanvaardbaar
-   omdat de gebruiker de stand opnieuw kan aanklikken, en het
+   omdat de gebruiker de view opnieuw kan aanklikken, en het
    alternatief kost de bediening.
+
+   IDENTIFIERS ZIJN ENGELS SINDS SESSIE 24 (besluit B10). Het
+   commentaar blijft Nederlands. Wie hier iets toevoegt: `camera()`
+   en niet `target()`, want dat laatste botst met het `target`-veld
+   ín zijn eigen antwoord.
    ============================================================ */
 
 /* ------------------------------------------------------------
-   maakViewStates(omgeving)
+   createViewStates(env)
 
-   `omgeving` verbindt deze module met de inline module, waar de
+   `env` verbindt deze module met de inline module, waar de
    scene-globals leven. Ze worden als functies doorgegeven en niet
    als waarden, om twee redenen die allebei eerder zijn ingelopen:
 
@@ -63,22 +76,22 @@
      world           globe.gl-instantie (voor camera() en controls())
      flyCamera(cam, ctl, pos, target, {min, max})
      stopFlight()    een lopende vlucht afbreken
-     labels          { lees(), schrijf(bool) }
-     autoRotate      { lees(), schrijf(bool), pauzeer() }
+     labels          { get(), set(bool) }
+     autoRotate      { get(), set(bool), pause() }
      syncToggles()   de schakelaars in Instellingen bijwerken
 ------------------------------------------------------------ */
-export function maakViewStates(omgeving) {
-  const { world, flyCamera, stopFlight, labels, autoRotate, syncToggles } = omgeving;
+export function createViewStates(env) {
+  const { world, flyCamera, stopFlight, labels, autoRotate, syncToggles } = env;
 
-  const definities = new Map();
-  let actieveSleutel = null;
-  let actieveStand = null;
+  const definitions = new Map();
+  let activeKey = null;
+  let activeView = null;
 
   // Wat de state bij binnenkomst overneemt en bij vertrek teruggeeft.
   // Een enkel object volstaat: er kan er per definitie maar een state
   // tegelijk actief zijn, en een geneste state zou de vorige stand van
   // de een met die van de ander overschrijven.
-  const bewaard = {
+  const saved = {
     pos: null, target: null, min: 0, max: 0,
     labels: true, autoRotate: false,
     rotate: true, pan: true
@@ -88,39 +101,67 @@ export function maakViewStates(omgeving) {
 
      def:
        body        klassenaam voor <body>, bv. 'space-on'
-       knop        id van de knopelement (optioneel)
-       knopAan     tekst als de state actief is
-       knopUit     tekst als hij dat niet is
-       doel()      -> { pos, target, min, max }   waar de camera heen gaat
-       binnen()    state-specifieke dingen aanzetten (optioneel)
-       buiten()    ze weer uitzetten (optioneel)
-       standen     { naam: { doel() -> {pos, target, min, max}, vast } }
-       beginstand  welke stand bij binnenkomst geldt (optioneel)
-       behoudLabels    laat de labels met rust (standaard: uit)
-       behoudRotatie   laat auto-rotate met rust (standaard: uit)
+       label       zichtbare naam in de navigatie, bv. 'Space'
+       icon        inline SVG-markup voor de navigatie (optioneel)
+       button      id van een knopelement (optioneel, legacy)
+       buttonOn    tekst als de state actief is
+       buttonOff   tekst als hij dat niet is
+       camera()    -> { pos, target, min, max }   waar de camera heen gaat
+       enter()     state-specifieke dingen aanzetten (optioneel)
+       exit()      ze weer uitzetten (optioneel)
+       views       { naam: { camera() -> {pos, target, min, max}, locked } }
+       initialView welke view bij binnenkomst geldt (optioneel)
+       keepLabels     laat de labels met rust (standaard: uit)
+       keepRotation   laat auto-rotate met rust (standaard: uit)
   */
-  function registreer(sleutel, def) {
-    definities.set(sleutel, def);
+  function register(key, def) {
+    definitions.set(key, def);
   }
 
-  const isActief = (sleutel) => actieveSleutel === sleutel;
-  const huidigeStand = () => actieveStand;
+  /* Het register uitlezen, in registratievolgorde — `Map` bewaart die.
+     Dit is wat `js/ui/nav.js` gebruikt; teruggegeven wordt een kopie van
+     de lijst, niet de Map zelf, zodat niemand er per ongeluk in schrijft. */
+  function list() {
+    return [...definitions.entries()].map(([key, def]) => ({
+      key,
+      label: def.label || key,
+      icon: def.icon || '',
+      views: def.views
+        ? Object.entries(def.views).map(([name, v]) => ({
+            name, label: v.label || name, locked: !!v.locked, note: v.note || ''
+          }))
+        : []
+    }));
+  }
+
+  /* De noot bij de ACTIEVE view — "vastgezet, maar pannen en zoomen werken
+     nog" tegenover "vrij". Die tekst hoort bij de view en niet bij de UI:
+     twee vaste strings in een `if` werken voor één state en breken bij de
+     tweede. */
+  function viewNote() {
+    const def = definitions.get(activeKey);
+    const v = def && def.views && def.views[activeView];
+    return (v && v.note) || '';
+  }
+
+  const isActive = (key) => activeKey === key;
+  const currentView = () => activeView;
 
   /* ----------------------------------------------------------
      De state aan- of uitzetten.
 
      TWEE OPTIES DIE JE NIET MOET VERWARREN — ze zaten in de oude
-     sun-view samen in één vlag `vlieg: false`, en die betekende
+     sun-view samen in één vlag `fly: false`, en die betekende
      daardoor twee dingen:
 
-       vlieg: false        plaats de camera DIRECT, zonder animatie.
+       fly: false          plaats de camera DIRECT, zonder animatie.
                            Bij vertrek gaat hij dus wel degelijk terug
                            naar waar hij vandaan kwam, alleen zonder
                            vlucht. Dit is wat je wilt zonder
                            `requestAnimationFrame` — in een test, of
                            bij `prefers-reduced-motion`.
 
-       overgenomen: true   RAAK DE CAMERA NIET AAN, want iemand anders
+       handedOver: true    RAAK DE CAMERA NIET AAN, want iemand anders
                            zet hem al. Zo verlaat een klik op een
                            melding het zonaanzicht: `flyTo()` vliegt
                            zelf naar de aarde, en een tweede schrijver
@@ -132,83 +173,84 @@ export function maakViewStates(omgeving) {
      uitgang moest dus blijven — alleen niet langer onder dezelfde
      naam als "spring er meteen heen".
   ---------------------------------------------------------- */
-  function zet(sleutel, aan, opties) {
-    const def = definities.get(sleutel);
+  function set(key, on, options) {
+    const def = definitions.get(key);
     if (!def) return false;
-    if (aan === isActief(sleutel)) return false;
+    if (on === isActive(key)) return false;
     // Twee states tegelijk kan niet: de tweede zou het snapshot van de
     // eerste overschrijven en de weg terug wissen.
-    if (aan && actieveSleutel) zet(actieveSleutel, false, { overgenomen: true });
+    if (on && activeKey) set(activeKey, false, { handedOver: true });
 
-    const vlieg = !opties || opties.vlieg !== false;
-    const overgenomen = !!(opties && opties.overgenomen);
+    const fly = !options || options.fly !== false;
+    const handedOver = !!(options && options.handedOver);
     const ctl = world.controls(), cam = world.camera();
 
-    if (aan) {
-      bewaard.pos = cam.position.clone();
-      bewaard.target = ctl.target.clone();
-      bewaard.min = ctl.minDistance;
-      bewaard.max = ctl.maxDistance;
-      bewaard.rotate = ctl.enableRotate;
-      bewaard.pan = ctl.enablePan;
-      bewaard.labels = labels.lees();
-      bewaard.autoRotate = autoRotate.lees();
+    if (on) {
+      saved.pos = cam.position.clone();
+      saved.target = ctl.target.clone();
+      saved.min = ctl.minDistance;
+      saved.max = ctl.maxDistance;
+      saved.rotate = ctl.enableRotate;
+      saved.pan = ctl.enablePan;
+      saved.labels = labels.get();
+      saved.autoRotate = autoRotate.get();
 
-      autoRotate.pauzeer();
-      if (!def.behoudLabels) labels.schrijf(false);
-      if (!def.behoudRotatie) autoRotate.schrijf(false);
+      autoRotate.pause();
+      if (!def.keepLabels) labels.set(false);
+      if (!def.keepRotation) autoRotate.set(false);
       syncToggles();
 
-      actieveSleutel = sleutel;
-      if (def.binnen) def.binnen();
+      activeKey = key;
+      if (def.enter) def.enter();
 
-      const stand = def.beginstand || (def.standen ? Object.keys(def.standen)[0] : null);
-      if (stand) {
-        gaNaarStand(stand, { vlieg });
+      const view = def.initialView || (def.views ? Object.keys(def.views)[0] : null);
+      if (view) {
+        goToView(view, { fly });
       } else {
-        const d = def.doel();
-        if (vlieg) flyCamera(cam, ctl, d.pos, d.target, { min: d.min, max: d.max });
-        else plaatsDirect(cam, ctl, d);
+        const d = def.camera();
+        if (fly) flyCamera(cam, ctl, d.pos, d.target, { min: d.min, max: d.max });
+        else placeDirect(cam, ctl, d);
       }
     } else {
-      if (def.buiten) def.buiten();
-      labels.schrijf(bewaard.labels);
-      autoRotate.schrijf(bewaard.autoRotate);
+      if (def.exit) def.exit();
+      labels.set(saved.labels);
+      autoRotate.set(saved.autoRotate);
       syncToggles();
 
       // De besturing komt onvoorwaardelijk terug. Zou een vastgezette
-      // stand blijven staan nadat de state weg is, dan zit de gebruiker
+      // view blijven staan nadat de state weg is, dan zit de gebruiker
       // met een bol die niet meer draait en geen zichtbare oorzaak.
-      ctl.enableRotate = bewaard.rotate;
-      ctl.enablePan = bewaard.pan;
+      ctl.enableRotate = saved.rotate;
+      ctl.enablePan = saved.pan;
 
-      if (overgenomen) {
+      if (handedOver) {
         // Alleen de grenzen en het draaipunt teruggeven; wie het overneemt
         // schrijft zelf in `camera.position`. Het draaipunt MOET hier terug,
         // want dat zat aan de zon vastgeklonken en globe.gl's eigen vlucht
         // rekent vanaf het middelpunt.
         stopFlight();
-        ctl.minDistance = bewaard.min;
-        ctl.maxDistance = bewaard.max;
-        ctl.target.copy(bewaard.target);
-      } else if (vlieg) {
-        flyCamera(cam, ctl, bewaard.pos, bewaard.target,
-                  { min: bewaard.min, max: bewaard.max });
+        ctl.minDistance = saved.min;
+        ctl.maxDistance = saved.max;
+        ctl.target.copy(saved.target);
+      } else if (fly) {
+        flyCamera(cam, ctl, saved.pos, saved.target,
+                  { min: saved.min, max: saved.max });
       } else {
-        plaatsDirect(cam, ctl, { pos: bewaard.pos, target: bewaard.target,
-                                 min: bewaard.min, max: bewaard.max });
+        placeDirect(cam, ctl, { pos: saved.pos, target: saved.target,
+                                min: saved.min, max: saved.max });
       }
-      actieveSleutel = null;
-      actieveStand = null;
+      activeKey = null;
+      activeView = null;
     }
 
-    document.body.classList.toggle(def.body, aan);
-    const btn = def.knop && document.getElementById(def.knop);
-    if (btn) btn.textContent = aan ? def.knopAan : def.knopUit;
+    document.body.classList.toggle(def.body, on);
+    const btn = def.button && document.getElementById(def.button);
+    if (btn) btn.textContent = on ? def.buttonOn : def.buttonOff;
+    notify();
     return true;
   }
 
-  function plaatsDirect(cam, ctl, d) {
+  function placeDirect(cam, ctl, d) {
     stopFlight();
     cam.position.copy(d.pos);
     ctl.target.copy(d.target);
@@ -217,37 +259,56 @@ export function maakViewStates(omgeving) {
   }
 
   /* ----------------------------------------------------------
-     Naar een stand binnen de actieve state.
+     Naar een view binnen de actieve state.
 
-     Een vastgezette stand schakelt ROTEREN uit en laat pannen en
-     zoomen staan — zie de kop. Een vrije stand geeft alles terug.
+     Een vastgezette view schakelt ROTEREN uit en laat pannen en
+     zoomen staan — zie de kop. Een vrije view geeft alles terug.
   ---------------------------------------------------------- */
-  function gaNaarStand(naam, opties) {
-    if (!actieveSleutel) return false;
-    const def = definities.get(actieveSleutel);
-    const stand = def.standen && def.standen[naam];
-    if (!stand) return false;
+  function goToView(name, options) {
+    if (!activeKey) return false;
+    const def = definitions.get(activeKey);
+    const view = def.views && def.views[name];
+    if (!view) return false;
 
     const ctl = world.controls(), cam = world.camera();
-    const d = stand.doel();
-    actieveStand = naam;
+    const d = view.camera();
+    activeView = name;
 
-    ctl.enableRotate = !stand.vast;
+    ctl.enableRotate = !view.locked;
     ctl.enablePan = true;      // ook vastgezet: de orientatie staat vast, het beeld niet
 
-    if (!opties || opties.vlieg !== false) {
+    if (!options || options.fly !== false) {
       flyCamera(cam, ctl, d.pos, d.target, { min: d.min, max: d.max });
     } else {
-      plaatsDirect(cam, ctl, d);
+      placeDirect(cam, ctl, d);
     }
+    notify();
     return true;
   }
 
-  const standIsVast = (naam) => {
-    const def = definities.get(actieveSleutel);
-    return !!(def && def.standen && def.standen[naam] && def.standen[naam].vast);
+  const viewIsLocked = (name) => {
+    const def = definitions.get(activeKey);
+    return !!(def && def.views && def.views[name] && def.views[name].locked);
   };
 
-  return { registreer, zet, isActief, huidigeStand, gaNaarStand, standIsVast,
-           actieveState: () => actieveSleutel };
+  /* ----------------------------------------------------------
+     ABONNEES (sessie 24). Het Navigate-paneel moet weten wanneer de
+     state of de view verandert, en dat gebeurt op vier plekken: een
+     klik in dat paneel zelf, de Back to Earth-knop, de sprong naar
+     een eclips, en de `handedOver`-uitgang wanneer een klik op een
+     melding het zonaanzicht verlaat.
+
+     Een callback is daarom de enige manier die alle vier dekt. De UI
+     laten pollen zou werken zolang `requestAnimationFrame` loopt, en
+     dat is precies de aanname die in dit project drie keer eerder
+     misging.
+  ---------------------------------------------------------- */
+  const listeners = [];
+  const onChange = (fn) => { listeners.push(fn); return fn; };
+  function notify() {
+    for (const fn of listeners) fn(activeKey, activeView);
+  }
+
+  return { register, list, set, isActive, currentView, goToView, viewIsLocked,
+           viewNote, onChange, activeState: () => activeKey };
 }

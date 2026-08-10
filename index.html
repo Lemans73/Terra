@@ -287,10 +287,39 @@
     <div class="notif-list" id="notif-list"><div class="notif-empty">No notifications yet</div></div>
   </div>
 
-  <button class="panel-open" id="panel-open" title="Show layers & filters">
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
-    <span>Layers &amp; filters</span>
-  </button>
+  <!-- DE KNOPPENRIJ (sessie 24). Was één knop `Layers & filters` die verdween
+       zodra het paneel openging; dat kon toen nog, want er viel verder niets te
+       bedienen. Met een tweede paneel gaat dat niet meer op: een rij die zichzelf
+       verbergt zodra je hem gebruikt, laat je niet naar het andere paneel.
+
+       ICOON ALTIJD, LABEL OP DE OPEN KNOP — hetzelfde patroon als de tabs in het
+       paneel, en om dezelfde reden: vier labels naast elkaar passen niet, één wel,
+       en zo blijft zichtbaar waar je bent.
+
+       `Back to Earth` is de uitzondering en houdt zijn label altijd. Hij is geen
+       schakelaar maar een handeling, en hij staat er alleen wanneer hij iets
+       betekent — buiten een state is er geen aarde om naar terug te gaan.
+
+       `Details` komt hier in fase 3 bij, wanneer dat paneel bestaat. -->
+  <div class="dock" id="dock">
+    <button class="dock-btn" id="panel-open" type="button" aria-pressed="false"
+            title="Layers &amp; filters" aria-label="Layers and filters">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+      <span class="dock-label">Layers &amp; filters</span>
+    </button>
+    <button class="dock-btn" id="nav-open" type="button" aria-pressed="false"
+            title="Navigate" aria-label="Navigate">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polygon points="15.5 8.5 10.5 10.5 8.5 15.5 13.5 13.5 15.5 8.5" fill="currentColor" stroke="none"/></svg>
+      <span class="dock-label">Navigate</span>
+    </button>
+    <button class="dock-btn dock-back" id="back-earth" type="button" hidden
+            title="Back to Earth" aria-label="Back to Earth">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 19l-7-7 7-7"/><path d="M3 12h11a7 7 0 0 1 7 7v1"/></svg>
+      <span class="dock-label">Back to Earth</span>
+    </button>
+  </div>
+
+  <div id="nav-panel" hidden></div>
 
   <div class="panel">
     <div class="panel-head">
@@ -963,7 +992,8 @@
       <div class="sunstat-note sa-stale" id="sa-stale" hidden>Current conditions &#8212; solar
       activity is a snapshot from NOAA and does not follow the time picker.</div>
       </div>
-      <button class="apply" id="sunview-btn">Observe the Sun</button>
+      <!-- `Observe the Sun` stond hier tot sessie 24 en zit nu in het
+      Navigate-paneel; zie de noot bij de Space-sectie hieronder. -->
       </div>
       </section>
 
@@ -986,23 +1016,15 @@
       <p class="space-uitleg">The seven planets on their true direction in the sky,
       each with the point on Earth it stands over. Brightness follows real
       apparent magnitude, so what stands out here stands out overhead.</p>
-      <button class="apply" id="space-btn">Enter space view</button>
-      <div class="space-only">
-      <h3>View</h3>
-      <div class="presets" id="space-views">
-      <button class="preset" data-view="top">Top</button>
-      <button class="preset" data-view="edge">Edge</button>
-      <button class="preset" data-view="side">Side</button>
-      <button class="preset active" data-view="orbit">3D orbit</button>
-      </div>
-      <div class="space-lock" id="space-lock">Free orbit.</div>
-      </div>
-      <!-- VANAF HIER STAAT ALLES BUITEN `.space-only` (sessie 23). De lijst,
-      het spoor, de conjuncties en de readout gaan over de planeten ZOALS WIJ ZE
-      ZIEN — dat hoort bij de gewone weergave, waar de indicatoren nu leven.
-      Alleen de camerastanden hierboven zijn van de Space-state zelf.
-      LET OP: het moest echt uit de wrapper en niet met `hidden`, want
-      `.space-only { display: none }` verslaat het attribuut (sessie 14). -->
+      <!-- DE INGANG EN DE CAMERASTANDEN ZIJN HIER WEG (sessie 24). Ze staan nu in
+      het Navigate-paneel, dat zichzelf uit het view-state-register bouwt — samen
+      met `Observe the Sun`, die dezelfde behandeling kreeg. Reden: een ingang per
+      state, elk in een andere tab, betekende dat je eerst moest weten in welke tab
+      de knop stond om terug te kunnen naar de aarde.
+
+      Wat hieronder staat blijft: de lijst, het spoor, de conjuncties en de
+      readout gaan over de planeten ZOALS WIJ ZE ZIEN — dat hoort bij de gewone
+      weergave, waar de indicatoren leven, en niet bij de Space-state. -->
       <h3>Bodies</h3>
       <div class="planet-list" id="planet-list"></div>
       <!-- HET HEMELSPOOR. Hoort bij het lichaam in focus en niet bij alle
@@ -1524,7 +1546,9 @@ import { createOrbitsLayer } from './js/layers/orbits-layer.js';
 import { createSpaceState } from './js/states/space.js';
 import { createEnvironmentToggle } from './js/core/globe-root.js';
 import { skyFrame } from './js/compute/frames.js';
-import { maakViewStates } from './js/core/view-state.js';
+import { createViewStates } from './js/core/view-state.js';
+import { createNavPanel } from './js/ui/nav.js';
+import { createPanelManager } from './js/ui/panels.js';
 import { PLANETS, PLANET_INFO, nextConjunction,
          previousConjunction, heliocentricState } from './js/compute/planets.js';
 // Deskundig (schematische) weergavemodus (Fase 1).
@@ -4982,7 +5006,7 @@ function flyTo(d) {
   // Wie naar een plek op de AARDE vliegt, verlaat het zonaanzicht. Zonder deze regel
   // brengt een klik op een melding je wel terug naar de aarde, maar blijft de
   // toestand achter bij de zon — zie de noot bij setSunView().
-  setSunView(false, { overgenomen: true });
+  setSunView(false, { handedOver: true });
   pauseAutoRotate();
   // Bij minder-beweging direct naar de bestemming springen in plaats van eroverheen
   // te vliegen. Het doel is hetzelfde, de weg ernaartoe is wat misselijk kan maken.
@@ -5225,12 +5249,11 @@ function setQuakeListOpen(open) {
   if (isNarrow()) {
     if (open) {
       setPanelOpen(false);
-      panelOpenBtn.style.display = 'none';
+      setDockVisible(false);
     } else if (!panelOpenWanted) {
-      // Alleen terughalen als het paneel óók dicht staat — anders zou de knop
+      // Alleen terughalen als het paneel óók dicht staat — anders zou de rij
       // naast een open paneel komen te staan. Zelfde afweging als in hideDetail().
-      panelOpenBtn.style.display = 'flex';
-      gsap.set(panelOpenBtn, { opacity: 1, scale: 1 });
+      setDockVisible(true);
     }
   }
 }
@@ -6279,9 +6302,15 @@ bindCosmosToggle('sunspots-toggle', 'es-sunspots',
    het init-blok. Zelfde TDZ-familie als de rest. */
 let viewStates = null, spaceState = null, planets = null;
 let disks = null, lagrange = null, orbits = null, environment = null;
+/* `panels` en `navPanel` staan hier om dezelfde reden als de rij hierboven, en
+   niet bij hun eigen code verderop: `setPanelOpen()` leest `panels` en die
+   functie kan draaien vóór de regel die hem aanmaakt. Een `const` op die plek is
+   een temporal dead zone — de tiende in dit project — en `if (panels)` vángt hem
+   niet af: een TDZ-lezing GOOIT, hij geeft geen `undefined`. */
+let panels = null, navPanel = null;
 const spaceVoorheen = {};
-const inZonAanzicht = () => !!(viewStates && viewStates.isActief('sun'));
-const inSpaceAanzicht = () => !!(viewStates && viewStates.isActief('space'));
+const inZonAanzicht = () => !!(viewStates && viewStates.isActive('sun'));
+const inSpaceAanzicht = () => !!(viewStates && viewStates.isActive('space'));
 
 // De twee schakelaars in Instellingen die het zonaanzicht tijdelijk overneemt.
 // Zonder deze koppeling staan ze "on" terwijl het uit is, en dat is erger dan
@@ -6297,7 +6326,7 @@ const _sunAnchor = new THREE.Vector3();   // waar de zon stond bij de vorige fra
 const _sunShift = new THREE.Vector3();    // hulpvector bij het instappen
 const _sunDelta = new THREE.Vector3();    // verplaatsing per frame
 
-// `{ overgenomen: true }` verlaat het zonaanzicht zónder de camera aan te raken.
+// `{ handedOver: true }` verlaat het zonaanzicht zónder de camera aan te raken.
 // Dat is nodig wanneer iets ánders hem al naar de aarde brengt — een klik op een
 // melding bijvoorbeeld. Zonder deze uitgang bleef de state op true staan terwijl je
 // de aarde zag: het draaipunt bleef aan de zon vastgeklonken, het slot op
@@ -6315,32 +6344,24 @@ const _sunDelta = new THREE.Vector3();    // verplaatsing per frame
 // heen draaien en juist de kant tonen waar NOAA niets van weet.
 function setSunView(on, opties) {
   if (!sunMoon || !viewStates) return;
-  viewStates.zet('sun', on, opties);
+  viewStates.set('sun', on, opties);
 }
 
 function setSpaceView(on, opties) {
   if (!viewStates) return;
-  viewStates.zet('space', on, opties);
-  markeerSpaceStand();
+  viewStates.set('space', on, opties);
   // Ook bij de OVERSTAP, niet alleen bij een klik op een planeet: wie in de
   // gewone weergave iets koos, moet dat in Space terugzien oplichten.
   markeerPlaneetFocus();
   updateSpaceReadout();
 }
 
-/* Welke stand actief is, en of hij vastgezet is. De tekst zegt uitdrukkelijk
-   dat pannen en zoomen blijven werken — dat is het verschil met magneto's
-   "zoom only", en een gebruiker die dat niet weet probeert het niet. */
-function markeerSpaceStand() {
-  if (!viewStates) return;
-  const stand = viewStates.huidigeStand();
-  document.querySelectorAll('#space-views .preset').forEach(b =>
-    b.classList.toggle('active', b.dataset.view === stand));
-  const noot = document.getElementById('space-lock');
-  if (noot) noot.textContent = viewStates.standIsVast(stand)
-    ? 'Locked to the ecliptic plane — pan and zoom still work.'
-    : 'Free orbit.';
-}
+/* `markeerSpaceStand()` is in sessie 24 vervallen. Die functie markeerde de
+   actieve camerastand in `#space-views` en schreef er een van twee vaste
+   teksten onder — beide dingen doet js/ui/nav.js nu voor élke state, uit het
+   register. De nootteksten zijn meeverhuisd naar de views zelf in
+   js/states/space.js, want een `if` met twee strings werkt voor één state en
+   breekt bij de tweede. */
 
 /* De planetenlijst wordt uit PLANETS gebouwd en niet met de hand geschreven:
    een tweede lijst is een lijst die uit de pas gaat lopen. Klikken kiest het
@@ -6581,19 +6602,10 @@ function ensureTargetLock() {
 }
 ensureTargetLock();
 
-document.getElementById('sunview-btn').addEventListener("click", () => setSunView(!inZonAanzicht()));
-
 // ---- Space ----
-document.getElementById('space-btn')?.addEventListener('click', () => {
-  bouwPlanetenLijst();
-  setSpaceView(!inSpaceAanzicht());
-});
-document.querySelectorAll('#space-views .preset').forEach(b =>
-  b.addEventListener('click', () => {
-    if (!viewStates || !inSpaceAanzicht()) return;
-    viewStates.gaNaarStand(b.dataset.view);
-    markeerSpaceStand();
-  }));
+// De ingang en de camerastanden zitten sinds sessie 24 in js/ui/nav.js, dat ze
+// uit het view-state-register haalt. Wat hier stond waren drie handlers die
+// alleen deze ene state kenden.
 
 // Het hemelspoor: venster in dagen, 0 is uit.
 document.querySelectorAll('#spoor-venster .preset').forEach(b =>
@@ -6980,7 +6992,7 @@ function springNaarEclips(richting, btn) {
     btn.textContent = label;
     if (!gevonden) { btn.textContent = 'none'; setTimeout(() => btn.textContent = label, 1500); return; }
     // Ook deze sprong gaat naar een plek op de aarde — zie de noot bij setSunView().
-    setSunView(false, { overgenomen: true });
+    setSunView(false, { handedOver: true });
     stopPlay();
     // Een venster van één dag maakt de slider fijn genoeg om de schaduw stap voor
     // stap over de aarde te zien trekken; de hele passage duurt maar een uur of twee.
@@ -7202,15 +7214,52 @@ function finishPanelClose() {
 function finishPanelOpen() {
   if (!panelOpenWanted) return;  // ondertussen weer gesloten: niets doen
   gsap.set(panelEl, { x: 0, opacity: 1 });
-  panelOpenBtn.style.display = 'none';
+  // DE KNOP BLIJFT STAAN (sessie 24). Hier stond `display: none`, wat kon zolang
+  // er één knop was: het paneel zelf had een inklappijl. Met een rij knoppen gaat
+  // dat niet meer op — een rij die verdwijnt zodra je hem gebruikt, laat je niet
+  // naar het andere paneel. De knop krijgt in plaats daarvan `.active`, via
+  // panels.sync().
 }
 
 // Op een smal scherm liggen paneel en readout als bottom sheet over de volle breedte
 // en dus over het tijdeiland heen. De klasse wordt altijd gezet; alleen de media query
 // op 640 px doet er iets mee, zodat er geen tweede breedtegrens in JS ontstaat die uit
 // de pas kan lopen met de CSS.
+/* `sheet-open` zegt: er ligt een venster over de volle breedte, dus het
+   tijdeiland moet wijken. Alleen de media query op 640 px doet er iets mee,
+   zodat er geen tweede breedtegrens in JS ontstaat die uit de pas loopt met
+   de CSS.
+
+   ELK zwevend paneel telt mee, niet alleen het lagenpaneel (sessie 24).
+   GEMETEN toen Navigate erbij kwam en dit nog `panelOpenWanted || detailVisible`
+   was: op 375x812 liep het Navigate-paneel van 577 tot 746 en het tijdeiland
+   van 692 tot 751 — 54 px overlap, allebei bijna schermbreed. Dat is precies de
+   regel die Terry stelde: knoppenrij altijd zichtbaar, plus precies één van
+   paneel of tijdslider.
+
+   `panels &&` is geen overdaad: deze functie wordt aangeroepen vanuit
+   `setPanelOpen()`, en die kan draaien vóór de regel die de beheerder aanmaakt. */
 function borgSheetKlasse() {
-  document.body.classList.toggle('sheet-open', panelOpenWanted || detailVisible);
+  const paneelOpen = !!(panels && panels.openKey()) || panelOpenWanted;
+  document.body.classList.toggle('sheet-open', paneelOpen || detailVisible);
+}
+
+/* De knoppenrij wegzetten op een smal scherm, waar een bottom sheet tot de
+   onderrand loopt en er dus overheen ligt. Drie plekken deden dit tot sessie 24
+   met `panelOpenBtn.style.display`; dat werkte toen er één knop stond, maar met
+   een rij zou het alleen `Layers & filters` verbergen en `Navigate` en
+   `Back to Earth` los laten zweven.
+
+   DIT IS EEN TUSSENSTAP. Fase 2 schaft het verbergen helemaal af — de regel
+   wordt dan: knoppenrij altijd zichtbaar, plus precies één van paneel of
+   tijdslider. Zolang de sheet nog tot de onderrand loopt, is wegzetten het
+   minste kwaad; de knoppen zouden er anders onbereikbaar onder liggen.
+
+   Een FUNCTIEDECLARATIE en geen `const`: hij wordt aangeroepen op regels ver
+   boven deze plek, en een `const` is daar een temporal dead zone. */
+function setDockVisible(on) {
+  const d = document.getElementById('dock');
+  if (d) d.style.display = on ? 'flex' : 'none';
 }
 
 function setPanelOpen(open) {
@@ -7224,24 +7273,58 @@ function setPanelOpen(open) {
   if (open) {
     panelEl.style.display = 'flex';   // flexkolom: vaste kop + scrollend middendeel
     gsap.fromTo(panelEl, { x: -16, opacity: 0 }, { x: 0, opacity: 1, duration: 0.38, ease: 'power2.out' });
-    gsap.to(panelOpenBtn, { opacity: 0, duration: 0.18, onComplete: finishPanelOpen });
     setTimeout(finishPanelOpen, 600);   // vangnet, zie finishPanelClose
   } else {
     gsap.to(panelEl, { x: -16, opacity: 0, duration: 0.28, ease: 'power2.in', onComplete: finishPanelClose });
     setTimeout(finishPanelClose, 600);   // vangnet, zie hierboven
-    panelOpenBtn.style.display = 'flex';
-    gsap.fromTo(panelOpenBtn, { opacity: 0, scale: 0.85 }, { opacity: 1, scale: 1, duration: 0.3, ease: 'back.out(1.6)' });
-    // Zelfde vangnet: anders blijft de knop om het paneel terug te halen op
-    // opacity 0 staan, en dan is er geen weg terug naar het lagenlijstje.
-    setTimeout(() => { if (!panelOpenWanted) gsap.set(panelOpenBtn, { opacity: 1, scale: 1 }); }, 600);
   }
+  if (panels) panels.sync();
 }
-document.getElementById('panel-collapse').addEventListener('click', () => setPanelOpen(false));
-panelOpenBtn.addEventListener('click', () => setPanelOpen(true));
+
+/* ---- Paneelbeheer (sessie 24) ------------------------------------------
+   `js/ui/panels.js` bepaalt WELK paneel open staat en houdt de knoppen in de
+   pas; hij vervangt de open/dicht-functies niet maar roept ze aan. Daardoor
+   blijven de gemeten vangnetten hierboven staan waar ze staan — die zijn er
+   voor een stilstaande `requestAnimationFrame` en dat probleem verandert niet.
+
+   Twee bewoners deze sessie. Het detailvenster, de bel en de bevingenlijst
+   volgen in fase 2; die vragen elk nog een verbouwing aan hun eigen kant.
+
+   HET NAVIGATE-PANEEL ZELF WORDT PAS IN HET INIT-BLOK GEBOUWD, want dat
+   heeft `viewStates` nodig en die bestaat hier nog niet. De KNOP en zijn
+   paneelgedrag horen wel hier: dat is DOM en verder niets. */
+panels = createPanelManager();
+
+panels.register('layers', {
+  button: panelOpenBtn,
+  isOpen: () => panelOpenWanted,
+  open:   () => setPanelOpen(true),
+  close:  () => setPanelOpen(false)
+});
+
+const navHost = document.getElementById('nav-panel');
+const navBtn = document.getElementById('nav-open');
+panels.register('nav', {
+  button: navBtn,
+  isOpen: () => !navHost.hidden,
+  open:   () => { navHost.hidden = false; },
+  close:  () => { navHost.hidden = true; }
+});
+
+// Elk paneel dat opengaat of dichtvalt raakt de sheet-regel — zie borgSheetKlasse().
+panels.onChange(borgSheetKlasse);
+
+// Weg 2 en 3: nog een keer op dezelfde knop, of op een andere.
+panelOpenBtn.addEventListener('click', () => panels.toggle('layers'));
+navBtn.addEventListener('click', () => panels.toggle('nav'));
+// Weg 1: het kruisje in het paneel zelf.
+document.getElementById('panel-collapse').addEventListener('click', () => panels.close('layers'));
+
 // Ook de BEGINSTAND moet kloppen. setPanelOpen() keert vroeg terug wanneer de gevraagde
 // stand al geldt, dus bij het opstarten komt hij daar nooit langs — en op een telefoon
 // staat het paneel open, waardoor het eiland eronder verdween.
 borgSheetKlasse();
+panels.sync();
 document.getElementById('r-close').addEventListener('click', hideDetail);
 
 // ---- Tijdvenster: presets ----
@@ -7482,11 +7565,8 @@ function hideDetail() {
   borgSheetKlasse();
   const r = document.getElementById('readout');
   r.style.pointerEvents = 'none';   // meteen, wacht niet op de animatie
-  // De knop om het paneel terug te halen mag weer, mits het paneel dicht staat.
-  if (!panelOpenWanted) {
-    panelOpenBtn.style.display = 'flex';
-    gsap.set(panelOpenBtn, { opacity: 1, scale: 1 });
-  }
+  // De knoppenrij mag weer, mits het paneel óók dicht staat.
+  if (!panelOpenWanted) setDockVisible(true);
   const settle = () => { if (!detailVisible) gsap.set(r, { opacity: 0, y: 0 }); };
   if (REDUCED_MOTION) {
     gsap.to(r, { opacity: 0, duration: 0.15, overwrite: true, onComplete: settle });
@@ -7502,10 +7582,11 @@ function showDetail(d) {
   // Zonder dit bleef het paneel over het detailvenster heen staan.
   if (isNarrow()) {
     setPanelOpen(false);
-    // De bottom sheet loopt tot de onderrand en dekt de plek van de knop
-    // "Lagen & filters" af. Die knop is daar dus onbruikbaar; de weg terug loopt
-    // via de sluitknop van dit venster.
-    panelOpenBtn.style.display = 'none';
+    // De bottom sheet loopt tot de onderrand en dekt de plek van de knoppenrij
+    // af. Die is daar dus onbruikbaar; de weg terug loopt via de sluitknop van
+    // dit venster. Fase 2 haalt dit weg door de sheet boven de rij te laten
+    // stoppen — zie de noot bij setDockVisible().
+    setDockVisible(false);
   }
   const names = { region:'Active region', quake:'Earthquake', volcano:'Volcano', storm:'Storm', ice:'Sea ice', wildfire:'Wildfire', aqi:'Air quality', lightning:'Lightning' };
   document.getElementById('r-kicker').textContent = names[d.layer].toUpperCase();
@@ -8031,13 +8112,13 @@ environment = createEnvironmentToggle(world);
 // waarden: `labelsOn` en `autoRotateWanted` zijn `let`-bindingen, dus een
 // doorgegeven waarde zou een momentopname zijn — dezelfde val als de
 // `window.__test`-haak van sessie 14.
-viewStates = maakViewStates({
+viewStates = createViewStates({
   world,
   flyCamera,
   stopFlight: () => { sunFlight.actief = false; },
-  labels:     { lees: () => labelsOn, schrijf: (v) => { labelsOn = v; } },
-  autoRotate: { lees: () => autoRotateWanted, schrijf: setAutoRotate,
-                pauzeer: pauseAutoRotate },
+  labels:     { get: () => labelsOn, set: (v) => { labelsOn = v; } },
+  autoRotate: { get: () => autoRotateWanted, set: setAutoRotate,
+                pause: pauseAutoRotate },
   syncToggles: syncViewToggles
 });
 
@@ -8092,7 +8173,6 @@ spaceState = createSpaceState(THREE, {
     environmentRestore() { environment.restore(); }
   }
 });
-viewStates.registreer('space', spaceState.definitie);
 
 /* DE PLANETENLIJST WORDT HIER AL GEBOUWD en niet pas bij de eerste klik op
    `Enter space view`. Sinds sessie 23 hoort die lijst bij de gewone weergave —
@@ -8105,19 +8185,22 @@ bouwPlanetenLijst();
 // bewoner en daarmee het bewijs dat de abstractie klopt: zou hij alleen
 // door `space` gebruikt worden, dan was er een vierde variant bij in
 // plaats van een gedeelde.
-viewStates.registreer('sun', {
+viewStates.register('sun', {
   body: 'sun-view',
-  knop: 'sunview-btn',
-  knopAan: 'Back to Earth',
-  knopUit: 'Observe the Sun',
-  doel: () => {
+  label: 'Sun',
+  // Een schijf met stralen. Onderscheidt zich van Space (een baan om een
+  // middelpunt) zonder dat het een tweede cirkel wordt.
+  icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+        'stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 ' +
+        '19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4L17 7M7 17l-1.6 1.6"/></svg>',
+  camera: () => {
     const R = sunMoon.config.sunRadius;
     const sunPos = sunMoon.meshes.sunGroup.position;
     _sunShift.copy(sunPos).normalize().multiplyScalar(-R * 4.5);
     return { pos: sunPos.clone().add(_sunShift), target: sunPos.clone(),
              min: R * 1.6, max: R * 24 };
   },
-  binnen() {
+  enter() {
     // De corona is een billboard van 5,5 zonsstralen breed. Van 99 eenheden
     // af beslaat hij het hele scherm en telt hij additief bij alles op,
     // waardoor de bol verzadigt naar wit en de vlekken verdwijnen.
@@ -8132,11 +8215,37 @@ viewStates.registreer('sun', {
        Geen van beide betekent hier iets: dit beeld gaat over de zon. */
     environment.hide(aardgebondenVersiering(), { includeGlobe: false });
   },
-  buiten() {
+  exit() {
     sunMoon.meshes.sunGlow.visible = true;
     environment.restore();
   }
 });
+
+/* DE VOLGORDE VAN REGISTREREN IS DE VOLGORDE IN DE NAVIGATIE, en dat is de
+   reden dat `space` hieronder staat en niet direct na `createSpaceState()`:
+   van dichtbij naar ver, dezelfde ordening die het paneel sinds sessie 21
+   aanhoudt. Eerst de zon, dan het stelsel eromheen. */
+viewStates.register('space', spaceState.definition);
+
+/* ---- Navigate (sessie 24) ----------------------------------------------
+   HIER en niet bij de paneelknoppen hierboven: dit paneel leest het register,
+   en dat is pas gevuld nadat álle states zich hebben aangemeld. Zou het eerder
+   gebouwd worden, dan toonde het een lege lijst en zou niemand zien dat de
+   volgorde van registratie ook de volgorde in de navigatie is. */
+navPanel = createNavPanel({ viewStates, host: navHost });
+navPanel.onClose(() => panels.close('nav'));
+
+/* De Back to Earth-knop hangt aan het REGISTER en niet aan een state: er is
+   maar één uitgang, en die kent het register al. Hij verschijnt alleen wanneer
+   er iets is om uit terug te keren — buiten een state is er geen aarde om naar
+   toe te gaan, en een knop die dan niets doet leert de bezoeker hem te negeren. */
+const backBtn = document.getElementById('back-earth');
+backBtn.addEventListener('click', () => {
+  const actief = viewStates.activeState();
+  if (actief) viewStates.set(actief, false);
+});
+viewStates.onChange((actief) => { backBtn.hidden = !actief; });
+backBtn.hidden = !viewStates.activeState();
 
 /* MEETHAAK, ALLEEN LOKAAL. De inline module is een gesloten scope, dus er is
    van buitenaf niets te meten — en meten is in dit project de enige manier om

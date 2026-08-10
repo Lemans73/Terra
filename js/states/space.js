@@ -111,18 +111,25 @@ export function createSpaceState(THREE, deps) {
      pannen en zoomen blijven toegestaan. Dat is het verschil met magneto's
      "zoom only"; zie de kop van core/view-state.js.
   ---------------------------------------------------------- */
-  const standen = {
+  /* `label` en `note` staan sinds sessie 24 bij de view zelf en niet meer in
+     de markup. Reden: js/ui/nav.js bouwt de knoppenrij uit het register, dus
+     een view die zijn naam niet meegeeft verschijnt met zijn sleutel. En de
+     nootregel wás een `if` in `markeerSpaceStand()` met twee vaste teksten —
+     dat werkt voor één state en breekt bij de tweede. */
+  const LOCK_NOTE = 'Locked to the ecliptic plane — pan and zoom still work.';
+
+  const views = {
     top: {
-      vast: true,
-      doel: () => targetFrom(orbits.pole(_dir).clone(), overviewDistance())
+      locked: true, label: 'Top', note: LOCK_NOTE,
+      camera: () => targetFrom(orbits.pole(_dir).clone(), overviewDistance())
     },
     edge: {
-      vast: true,
-      doel: () => targetFrom(orbits.vernal(_dir).clone(), overviewDistance())
+      locked: true, label: 'Edge', note: LOCK_NOTE,
+      camera: () => targetFrom(orbits.vernal(_dir).clone(), overviewDistance())
     },
     side: {
-      vast: true,
-      doel: () => {
+      locked: true, label: 'Side', note: LOCK_NOTE,
+      camera: () => {
         // Loodrecht op zowel de pool als het lentepunt: de derde as van
         // hetzelfde frame, dus per constructie in het baanvlak.
         _side.crossVectors(orbits.pole(_dir), orbits.vernal(_tilt)).normalize();
@@ -130,8 +137,8 @@ export function createSpaceState(THREE, deps) {
       }
     },
     orbit: {
-      vast: false,
-      doel: () => {
+      locked: false, label: '3D orbit', note: 'Free orbit.',
+      camera: () => {
         // Schuin boven het vlak: de banen worden dan ellipsen in plaats van
         // lijnen of cirkels, en dat leest als ruimte. Uit de huidige
         // camerarichting zou hier ook kunnen, maar dan hangt de stand af
@@ -146,26 +153,34 @@ export function createSpaceState(THREE, deps) {
   /* ----------------------------------------------------------
      DE DEFINITIE die core/view-state.js uitvoert.
 
-     De sleutels hier (body/knop/standen/binnen/buiten) zijn Nederlands
-     omdat het CONTRACT in view-state.js woont, en dat bestand raken we
-     deze sessie niet aan. Het gaat mee zodra magneto erop migreert.
-  ---------------------------------------------------------- */
-  const definitie = {
-    body: 'space-on',
-    knop: 'space-btn',
-    knopAan: 'Back to Earth',
-    knopUit: 'Enter space view',
-    standen,
-    beginstand: 'orbit',
-    doel: () => targetFrom(
-      standen.orbit.doel().pos.clone().normalize(), overviewDistance()),
+     De sleutels zijn Engels sinds sessie 24 — het contract in
+     view-state.js is toen hernoemd (besluit B10). `label` en `icon`
+     zijn er toen bij gekomen: het register is óók de navigatie, dus
+     een state die zich aanmeldt zonder die twee verschijnt naamloos
+     in het Navigate-paneel.
 
-    binnen() {
+     Het icoon is een baan om een middelpunt — dat is wat deze state
+     toont, en het onderscheidt zich van de zon (een schijf met
+     stralen) zonder een tweede cirkel te worden.
+  ---------------------------------------------------------- */
+  const definition = {
+    body: 'space-on',
+    label: 'Space',
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+          'stroke-linecap="round"><circle cx="12" cy="12" r="3" fill="currentColor" ' +
+          'stroke="none"/><ellipse cx="12" cy="12" rx="10" ry="4.5" ' +
+          'transform="rotate(-20 12 12)"/></svg>',
+    views,
+    initialView: 'orbit',
+    camera: () => targetFrom(
+      views.orbit.camera().pos.clone().normalize(), overviewDistance()),
+
+    enter() {
       const d = moment();
       layers.eventsOff();
       layers.environmentOff();
-      // EERST orienteren, DAN pas een stand berekenen: view-state.js vraagt
-      // direct na `binnen()` om `standen.orbit.doel()`, en die leest de
+      // EERST orienteren, DAN pas een view berekenen: view-state.js vraagt
+      // direct na `enter()` om `views.orbit.camera()`, en die leest de
       // quaternion die hier gezet wordt. Andersom staat de camera op de
       // orientatie van de vórige keer.
       const f = deps.skyFrame(d);
@@ -175,7 +190,7 @@ export function createSpaceState(THREE, deps) {
       orbits.update(d, world.camera());
     },
 
-    buiten() {
+    exit() {
       orbits.setVisible(false);
       orbits.setFocus(null);
       layers.environmentRestore();
@@ -191,5 +206,5 @@ export function createSpaceState(THREE, deps) {
     orbits.update(moment(), world.camera());
   }
 
-  return { definitie, standen: Object.keys(standen), tik };
+  return { definition, views: Object.keys(views), tik };
 }
