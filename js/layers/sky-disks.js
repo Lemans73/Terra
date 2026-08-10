@@ -49,9 +49,10 @@
    DE OPBOUW: EEN KEER BOUWEN, PER TIK ALLEEN DRAAIEN.
 
      group.quaternion = rotY(-gast)        +Y = hemelpool, +Z = lentepunt
-     ├── equatorband, RA-ticks, RA-labels, equinox-markers   (statisch)
-     └── ecliptica.quaternion = rotZ(+eps)
-         └── eclipticaband
+     ├── equatorband, RA-ticks in UREN, equinox-markers   (statisch)
+     └── ecliptica.quaternion = rotZ(+eps)   +Y = ecliptica-pool, +Z = lentepunt
+         ├── eclipticaband
+         └── gradenverdeling in GRADEN
 
    De hele inhoud is statisch in dat frame; alleen de twee quaternions
    veranderen. Dat is ordegrootte dertig bewerkingen per tik, tegen de
@@ -83,6 +84,22 @@ export function createSkyDisksLayer(THREE, opts = {}) {
     eclipticColor: 0xffc14d, // dezelfde warme tint als de andere zonzaken
     equatorColor:  0x8fb4d8, // koel, zodat de twee vlakken uit elkaar te houden zijn
     opacity:         0.42,
+    /* TWEE VERDELINGEN MET VERSCHILLENDE EENHEDEN, en dat is geen slordigheid
+       maar de conventie. Rechte klimming wordt in UREN gemeten (0h..24h, 1h =
+       15 graden) omdat de hemel 15 graden per uur draait: een telescoop-
+       instelcirkel en elke sterrencatalogus doen het zo. Ecliptische lengte
+       wordt in GRADEN gemeten (0..360) vanaf hetzelfde lentepunt — dat is de
+       verdeling waar de dierenriem op gebouwd is, twaalf tekens van 30 graden.
+
+       Ze delen hun NULPUNT: bij het lentepunt staat 0h en 0 graden, en vanaf
+       daar lopen ze uit elkaar omdat de vlakken 23,44 graden schelen. Dat is
+       precies wat de figuur te vertellen heeft.
+
+       De ecliptica krijgt de BINNENSTE ring en de equator de buitenste, zodat
+       ze bij de snijpunten niet in elkaar overlopen. */
+    eclTickInner:     106,
+    eclTickOuter:     114,
+    eclTickLong:      119,
     tickInner:        132,
     tickOuter:        140,
     tickLong:         147,
@@ -211,6 +228,44 @@ export function createSkyDisksLayer(THREE, opts = {}) {
   eclipticGroup.add(eclipticBand);
   group.add(eclipticGroup);
 
+  /* ---- de gradenverdeling van de ecliptica ----
+     Hij hangt IN `eclipticGroup` en erft dus de kanteling; daarmee ligt hij per
+     constructie in het eclipticavlak en niet in het equatorvlak.
+
+     Het nulpunt is lokaal +Z, en dat is dezelfde richting als bij de uren:
+     `rotZ(+eps)` draait om de Z-as en laat +Z dus ongemoeid. Het lentepunt is
+     daarmee het nulpunt van BEIDE schalen, zonder dat daar iets voor uitgelijnd
+     hoeft te worden. Lokaal +X is ecliptische lengte 90 — de derde as van een
+     rechtshandig frame met +Y op de ecliptica-pool en +Z op het lentepunt. */
+  const eclipticGradGroup = new THREE.Group();
+  eclipticGradGroup.name = 'ecliptic-graduation';
+  const eclTickPts = [];
+  for (let d = 0; d < 360; d += 10) {
+    const a = d * Math.PI / 180;
+    const lang = d % 30 === 0;
+    const r0 = cfg.eclTickInner, r1 = lang ? cfg.eclTickLong : cfg.eclTickOuter;
+    const sx = Math.sin(a), sz = Math.cos(a);
+    eclTickPts.push(sx * r0, 0, sz * r0, sx * r1, 0, sz * r1);
+
+    if (lang) {
+      const sp = createLabelSprite(THREE, d + '°', cfg.eclipticColor,
+                                   { width: 128, height: 56, font: 40 });
+      sp.position.set(sx * (cfg.eclTickLong + 7), 0, sz * (cfg.eclTickLong + 7));
+      sp.renderOrder = 4;
+      eclipticGradGroup.add(sp);
+      raLabels.push(sp);
+    }
+  }
+  const eclTickGeo = track(new THREE.BufferGeometry());
+  eclTickGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(eclTickPts), 3));
+  const eclTickLine = new THREE.LineSegments(eclTickGeo, track(new THREE.LineBasicMaterial({
+    color: cfg.eclipticColor, transparent: true, opacity: 0.7, depthWrite: false
+  })));
+  eclTickLine.renderOrder = 4;
+  eclTickLine.raycast = () => {};
+  eclipticGradGroup.add(eclTickLine);
+  eclipticGroup.add(eclipticGradGroup);
+
   /* ---- bijwerken ----
      Twee quaternions, meer niet. Geen vertex-herschrijving, dus ook geen
      smoring: de dot-vergelijking die de oude laag gebruikte om werk te
@@ -243,13 +298,20 @@ export function createSkyDisksLayer(THREE, opts = {}) {
      schakelbaar zijn. Weglaten = ongemoeid laten, zodat een aanroeper die
      alleen de equator omzet de ecliptica niet stilletjes meesleept. */
   function setVisible(which = {}, date, camera) {
-    if ('ecliptic' in which) eclipticGroup.visible = !!which.ecliptic;
+    //  is het KANTELFRAME en staat altijd aan; wat schakelt zijn
+    // zijn kinderen. Anders zou de gradenverdeling meeverdwijnen zodra iemand
+    // alleen de band uitzet, en die twee zijn los bedienbaar.
+    if ('ecliptic' in which) eclipticBand.visible = !!which.ecliptic;
     if ('equator' in which) equatorBand.visible = !!which.equator;
-    if ('graduation' in which) { gradGroup.visible = !!which.graduation;
-                                 equinoxGroup.visible = !!which.graduation; }
+    if ('graduation' in which) gradGroup.visible = !!which.graduation;
+    if ('eclipticGraduation' in which) eclipticGradGroup.visible = !!which.eclipticGraduation;
+    // De equinox-markers horen bij BEIDE verdelingen: het zijn de nulpunten van
+    // allebei de schalen, en de plek waar de twee vlakken elkaar snijden.
+    equinoxGroup.visible = gradGroup.visible || eclipticGradGroup.visible;
     // De groep zelf staat aan zodra er íéts in zichtbaar is; scheelt een
     // traverse per frame wanneer alles uit staat.
-    group.visible = eclipticGroup.visible || equatorBand.visible || gradGroup.visible;
+    group.visible = eclipticBand.visible || equatorBand.visible ||
+                    gradGroup.visible || eclipticGradGroup.visible;
     // De orientatie wordt pas in update() gezet, dus een toggle moet die zelf
     // aanroepen — anders gebeurt er niets zichtbaars tot de volgende tik van
     // dertig seconden. Dezelfde val als bij setVisible() van de zon/maan-laag
@@ -258,8 +320,10 @@ export function createSkyDisksLayer(THREE, opts = {}) {
     return group.visible;
   }
 
-  // Beginstand: alles uit, elk onderdeel heeft zijn eigen schakelaar.
-  eclipticGroup.visible = false;
+  // Beginstand: alles uit, elk onderdeel heeft zijn eigen schakelaar. Het
+  // kantelframe zelf blijft aan — dat is geen zichtbaar ding maar een rotatie.
+  eclipticBand.visible = false;
+  eclipticGradGroup.visible = false;
   equatorBand.visible = false;
   gradGroup.visible = false;
   equinoxGroup.visible = false;
@@ -278,7 +342,8 @@ export function createSkyDisksLayer(THREE, opts = {}) {
   return {
     group, update, setVisible, redrawLabels, equinoxDirections, dispose,
     config: cfg,
-    meshes: { equatorBand, eclipticBand, eclipticGroup, gradGroup, equinoxGroup },
+    meshes: { equatorBand, eclipticBand, eclipticGroup, gradGroup,
+              eclipticGradGroup, equinoxGroup },
     isVisible: () => group.visible
   };
 }

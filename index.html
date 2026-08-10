@@ -603,8 +603,26 @@
       </div>
       <div class="layer-detail" id="ragrid-note">
       A 24-hour scale around the celestial equator, plus the two equinox points.
-      It turns 15&#176; an hour against the ground &#8212; that is the sidereal day, and
-      it is why the same star rises four minutes earlier each night.
+      Right ascension is measured in hours because the sky turns 15&#176; an hour;
+      0h sits exactly on the vernal equinox, which is what defines it. The whole
+      scale drifts 15&#176; an hour against the ground &#8212; that is the sidereal
+      day, and it is why the same star rises four minutes earlier each night.
+      </div>
+      <div class="elayer expandable" id="eclgrid-toggle">
+      <span class="edot"></span>Ecliptic longitude
+      <button class="row-expand" data-note="eclgrid-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <span class="estat" id="es-eclgrid">off</span>
+      </div>
+      <div class="layer-detail" id="eclgrid-note">
+      The same circle in the other unit: 0&#8211;360&#176; around the ecliptic, the
+      scale the planets are actually quoted in. Switch both graduations on and
+      they start from the same mark &#8212; the vernal equinox is zero for each
+      &#8212; then diverge, because the planes lie 23.4&#176; apart. That is the whole
+      reason astronomy carries two coordinate systems. The twelve 30&#176; steps are
+      where the zodiac signs come from; they no longer line up with the
+      constellations of the same name, because the equinox has drifted since.
       </div>
       </div>
       </section>
@@ -5722,7 +5740,9 @@ const geomagToggles = [
   ['equator-toggle', 'es-equator',
     on => disks && disks.setVisible({ equator: on }, momentNow(), world.camera())],
   ['ragrid-toggle', 'es-ragrid',
-    on => disks && disks.setVisible({ graduation: on }, momentNow(), world.camera())]
+    on => disks && disks.setVisible({ graduation: on }, momentNow(), world.camera())],
+  ['eclgrid-toggle', 'es-eclgrid',
+    on => disks && disks.setVisible({ eclipticGraduation: on }, momentNow(), world.camera())]
 ];
 geomagToggles.forEach(([id, statId, apply]) => {
   const el = document.getElementById(id);
