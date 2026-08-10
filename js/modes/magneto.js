@@ -38,6 +38,7 @@
    ============================================================ */
 
 import { latLonToUnit, meanObliquity, DEG } from '../sunmoon.js';
+import { findGlobeRoot } from '../core/globe-root.js';
 
 export function createMagnetoMode(THREE, opts = {}) {
   const cfg = Object.assign({
@@ -199,7 +200,7 @@ export function createMagnetoMode(THREE, opts = {}) {
     group.visible = true;
     // globe.gl's eigen aarde gaat uit. Hij blijft in de scene staan zodat al zijn
     // lagen en accessors ongemoeid blijven; alleen zichtbaarheid verandert.
-    const globe = vindGlobeRoot(world);
+    const globe = findGlobeRoot(world);
     if (globe) globe.visible = false;
     if (world.showAtmosphere) world.showAtmosphere(false);
     // Alles wat in het aardvaste frame rekent moet mee kantelen en meedraaien.
@@ -209,7 +210,7 @@ export function createMagnetoMode(THREE, opts = {}) {
 
   function exit({ world, scene, extraGroups = [] }) {
     group.visible = false;
-    const globe = vindGlobeRoot(world);
+    const globe = findGlobeRoot(world);
     if (globe) globe.visible = true;
     if (world.showAtmosphere) world.showAtmosphere(true);
     // Terug naar de scene-wortel. De rotatie zat op DEZE groep en niet op hen, dus
@@ -217,23 +218,10 @@ export function createMagnetoMode(THREE, opts = {}) {
     extraGroups.forEach(g => g && scene.add(g));
   }
 
-  // globe.gl's ThreeGlobe heeft geen enkele marker op zijn root; alleen een groep
-  // diep erin draagt `__globeObjType === 'globe'`. GEMETEN, en niet zoals verwacht:
-  // die groep zit NIET direct onder de wortel maar onder een tussenlaag, en de
-  // lagen met paden en indicatoren hangen aan weer een andere ouder. Alleen die
-  // tussenlaag verbergen laat de landgrenzen en de bevingen gewoon staan.
-  //
-  // Daarom klimmen we door tot het directe kind van de scene. Dat is de enige
-  // ondubbelzinnige greep: hoe globe.gl zijn binnenkant ook indeelt, alles van hem
-  // hangt onder dat ene object.
-  function vindGlobeRoot(world) {
-    const scene = world.scene();
-    let gevonden = null;
-    scene.traverse(o => { if (!gevonden && o.__globeObjType === 'globe') gevonden = o; });
-    if (!gevonden) return null;
-    while (gevonden.parent && gevonden.parent !== scene) gevonden = gevonden.parent;
-    return gevonden.parent === scene ? gevonden : null;
-  }
+  // De greep op globe.gl's wortel staat sinds sessie 23 in `js/core/globe-root.js`,
+  // samen met de gemeten uitleg waarom het de WORTEL moet zijn en niet de aarde-mesh.
+  // De space-state heeft hem ook nodig, en twee kopieen van een greep die op een
+  // ongedocumenteerde binnenkant leunt lopen stil uiteen bij een globe.gl-upgrade.
 
   function dispose() {
     disposables.forEach(o => o.dispose && o.dispose());
