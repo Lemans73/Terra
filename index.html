@@ -876,11 +876,34 @@
       <dd id="rd-elongation">&#8212;</dd>
       <dt>Moon distance</dt>
       <dd id="rd-distance">&#8212;</dd>
+      <!-- DAGLENGTE OP VIER BREEDTEGRADEN en niet op één plek, want Terra heeft
+      geen waarnemerslocatie en die komt er ook niet (besluit sessie 22). Vier
+      regels tonen bovendien het PATROON, en dat is waar het om gaat: naar de
+      pool toe waaiert het uit, op de evenaar staat het stil. Drie van de vier
+      breedtegraden zijn AFGELEID van de scheefstand — de keerkring ís de
+      scheefstand en de poolcirkel is 90 graden min diezelfde hoek — dus ze
+      kunnen niet uit de pas lopen met de rest van de app. -->
+      <dt id="rd-day-eq-l">Day at equator</dt>
+      <dd id="rd-day-eq">&#8212;</dd>
+      <dt id="rd-day-tropic-l">Day at tropic</dt>
+      <dd id="rd-day-tropic">&#8212;</dd>
+      <dt id="rd-day-mid-l">Day at 52&#176; N</dt>
+      <dd id="rd-day-mid">&#8212;</dd>
+      <dt id="rd-day-polar-l">Day at polar circle</dt>
+      <dd id="rd-day-polar">&#8212;</dd>
       </dl>
       <div class="cosmos-note">
       Positions are calculated in the browser from Meeus&#39; algorithms &#8212; no feed,
       no key. Sun and Moon are drawn at compressed distances so both stay
       readable; the real Moon distance is in the readout above.
+      </div>
+      <div class="cosmos-note">
+      Day length counts from the Sun&#8217;s upper edge clearing the horizon, at
+      &#8722;0.833&#176; &#8212; refraction lifts the image about half a degree, and half a
+      solar disc is added on top. That is why the equator gets 12h 07m rather
+      than a flat twelve hours, every day of the year, and why the polar circle
+      still sees the Sun briefly at midwinter instead of nothing at all.
+      Southern latitudes read the same table with the seasons reversed.
       </div>
       </div>
       </section>
@@ -1439,7 +1462,7 @@ import {
   dayNightShader, CLOUD_VERT, CLOUD_FRAG, FOG_VERT, FOG_FRAG
 } from './js/shaders.js';
 // Efemeriden voor zon en maan (Meeus). Puur JS, geen netwerk, geen sleutel.
-import { ephemeris, latLonToUnit, eclipseShadow,
+import { ephemeris, latLonToUnit, eclipseShadow, dayLength, meanObliquity,
          nextSolarEclipse, previousSolarEclipse, eclipsePath } from './js/sunmoon.js';
 import { createSunMoonLayer } from './js/sunmoon-layer.js';
 // De geomagnetische dipool (IGRF-14). Ook puur JS, ook geen netwerk: de
@@ -6066,8 +6089,33 @@ function updateCosmosReadout() {
   set('rd-fraction',   `${(e.illumination.fraction * 100).toFixed(1)}%`);
   set('rd-elongation', `${e.illumination.elongation.toFixed(1)}°`);
   set('rd-distance',   `${Math.round(e.moon.distanceKm).toLocaleString('en-GB')} km`);
+  updateDayLengths(e, set);
   drawPhase(e.illumination);
   updateEclipseState(e);
+}
+
+/* DAGLENGTE OP VIER BREEDTEGRADEN. De rekenkant staat in js/sunmoon.js; hier
+   staat alleen welke breedtegraden en hoe ze heten.
+
+   De keerkring en de poolcirkel worden AFGELEID uit de scheefstand van dit
+   moment in plaats van als 23,4 en 66,6 ingetikt. Dat is geen precisie om de
+   precisie: het houdt deze regels vast aan dezelfde `meanObliquity()` als de
+   ecliptica-schijf en de tijdkiezer, zodat er geen tweede waarheid ontstaat. */
+function updateDayLengths(e, set) {
+  const eps = meanObliquity(e.sun.T);
+  const dec = e.sun.dec;
+  const toon = (d) => d.polar === 'day' ? 'midnight sun'
+                    : d.polar === 'night' ? 'polar night'
+                    : `${Math.floor(d.hours)}h ${String(Math.round((d.hours % 1) * 60)).padStart(2, '0')}m`;
+  const rij = (id, label, lat) => {
+    const l = document.getElementById(id + '-l');
+    if (l) l.textContent = label;
+    set(id, toon(dayLength(dec, lat)));
+  };
+  rij('rd-day-eq',     'Day at equator',                          0);
+  rij('rd-day-tropic', `Day at tropic ${eps.toFixed(1)}° N`,      eps);
+  rij('rd-day-mid',    'Day at 52° N',                            52);
+  rij('rd-day-polar',  `Day at polar circle ${(90 - eps).toFixed(1)}° N`, 90 - eps);
 }
 
 // Meldt of er op dit moment ergens op aarde een zonsverduistering te zien is.

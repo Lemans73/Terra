@@ -424,6 +424,35 @@ export function latLonToUnit(lat, lon) {
   };
 }
 
+/* ------------------------------------------------------------
+   DAGLENGTE op een breedtegraad, uit de zonsdeclinatie.
+
+     cos(H0) = (sin(h0) - sin(lat)*sin(dec)) / (cos(lat)*cos(dec))
+     daglengte = 2*H0 / 15   uren
+
+   `h0` is de hoogte waarop de zon "onder" heet: -0,833 graden, want
+   refractie tilt het beeld ongeveer 0,57 graden op en er komt een halve
+   zonsdiameter bij. Dat is exact dezelfde grens waarop de terminator in
+   sessie 14 is rechtgezet (-0,0145 = cos(90,83 graden)), en daarom hoort
+   die constante hier niet opnieuw gekozen te worden.
+
+   Zichtbaar gevolg dat vaak verrast: op de EVENAAR is de dag daardoor
+   niet 12 uur maar 12 uur en 7 minuten, het hele jaar door. De zon komt
+   iets eerder op dan de meetkunde zegt en gaat iets later onder.
+
+   Valt de cosinus buiten [-1, 1], dan komt de zon die dag niet op of
+   niet onder. Dat is geen randgeval om weg te klemmen maar het antwoord:
+   middernachtzon en poolnacht.
+------------------------------------------------------------ */
+export function dayLength(decDeg, latDeg, h0 = -0.833) {
+  const noemer = cosd(latDeg) * cosd(decDeg);
+  if (Math.abs(noemer) < 1e-12) return { hours: 12, polar: null };
+  const cosH = (sind(h0) - sind(latDeg) * sind(decDeg)) / noemer;
+  if (cosH <= -1) return { hours: 24, polar: 'day' };
+  if (cosH >= 1) return { hours: 0, polar: 'night' };
+  return { hours: 2 * (Math.acos(cosH) / DEG) / 15, polar: null };
+}
+
 // `sind`/`cosd` staan hier sinds sessie 22 bij. Ze waren intern, maar
 // compute/planets.js heeft ze nodig en mag ze NIET zelf declareren: het
 // buildscript concateneert alle modules in een enkele scope, dus een
