@@ -42,6 +42,7 @@
 import { planetEphemerides, skyTrack, PLANETS, PLANET_INFO } from '../compute/planets.js';
 import { latLonToUnit, ephemeris, norm180 } from '../sunmoon.js';
 import { gastFrom } from '../compute/frames.js';
+import { createLabelSprite, scaleToPixels } from '../core/label-sprite.js';
 
 export function createPlanetsLayer(THREE, opts = {}) {
   const cfg = Object.assign({
@@ -80,20 +81,39 @@ export function createPlanetsLayer(THREE, opts = {}) {
     (cfg.schilBuiten - cfg.schilBinnen) *
     (Math.sqrt(HALVE_LANGE_AS[k]) - wMin) / (wMax - wMin);
 
-  /* HET LABEL-CANVAS. Staat hier en niet bij `maakLabel()`, want de lus
-     hieronder roept die functie aan en zou deze `const` dan nog niet kunnen
-     lezen: een functiedeclaratie is hoisted, een `const` niet. Dat is de
-     temporal dead zone, en dit project is er nu zeven keer ingelopen — de
-     module stopt, het bootscherm blijft staan, en de fout wijst naar een
-     regel die er niets aan kan doen. Constanten die door de opbouw gelezen
-     worden horen bóven die opbouw.
+  /* HET LABEL-CANVAS. Staat hier en niet verderop, want de opbouwlus
+     hieronder leest het en zou deze `const` dan nog niet kunnen zien: een
+     functiedeclaratie is hoisted, een `const` niet. Dat is de temporal dead
+     zone, en dit project is er nu zeven keer ingelopen — de module stopt,
+     het bootscherm blijft staan, en de fout wijst naar een regel die er
+     niets aan kan doen. Constanten die door de opbouw gelezen worden horen
+     bóven die opbouw.
 
      HET CANVAS WORDT VOLGEMAAKT en dat is niet cosmetisch: eerst stond er
      22px tekst op een canvas van 64px hoog, en na schaling naar de sprite
      bleef daar 3,7 px van over — gemeten, volstrekt onleesbaar, terwijl elke
      controle keurig "label zichtbaar: true" meldde. Hoe voller het canvas,
-     hoe meer schermpixels de tekst bij dezelfde spritehoogte krijgt. */
-  const LABEL_CANVAS = { breed: 256, hoog: 56, font: 40 };
+     hoe meer schermpixels de tekst bij dezelfde spritehoogte krijgt.
+
+     De opbouw zelf staat sinds sessie 23 in core/label-sprite.js; deze
+     maten blijven hier omdat ze bij DEZE laag horen — planeetnamen zijn
+     langer dan "L1" en vragen een breder canvas. */
+  const LABEL_CANVAS = { width: 256, height: 56, font: 40 };
+
+  /* Een label is een sprite met een canvas-textuur, en schermvast geschaald.
+     Beide staan sinds sessie 23 in core/label-sprite.js met de gemeten uitleg
+     erbij; hier blijven alleen de twee aanroepen die de maten van DEZE laag
+     meegeven.
+
+     EN ZE STAAN BOVEN DE LUS, om exact de reden die er twee alinea's hoger
+     staat: dit waren functiedeclaraties en zijn nu `const`. Hoisting valt
+     daarmee weg, en de opbouwlus roept `maakLabel()` aan. Onderaan gezet is
+     dit een temporal dead zone en een leeg bootscherm — voor de achtste keer. */
+  const maakLabel = (THREE_, tekst, kleur) =>
+    createLabelSprite(THREE_, tekst, kleur, LABEL_CANVAS);
+
+  const schaalLabel = (L, camera) =>
+    scaleToPixels(THREE, L.label, camera, cfg.labelHoogtePx);
 
   /* ----------------------------------------------------------
      PER PLANEET: bol, subpunt op de bol, leader line, label.
@@ -136,44 +156,6 @@ export function createPlanetsLayer(THREE, opts = {}) {
     group.add(bol, sub, lijn, label);
     lichamen[k] = { bol, bolMat, sub, subMat, lijn, lijnGeo, lijnMat, label,
                     schil: schilVan(k), zichtbaar: true, dekking: 1, scherm: null };
-  }
-
-  /* Een label is een sprite met een canvas-textuur. Zelfde aanpak als de
-     rest van Terra: geen tekstgeometrie, want die kostte in sessie 9 een
-     p90 van 357 ms bij de landnamen. De maten staan in LABEL_CANVAS, boven
-     de lus die deze functie aanroept — zie de noot daar. */
-  function maakLabel(THREE, tekst, kleur) {
-    const cv = document.createElement('canvas');
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
-    cv.width = LABEL_CANVAS.breed * dpr; cv.height = LABEL_CANVAS.hoog * dpr;
-    const ctx = cv.getContext('2d');
-    ctx.scale(dpr, dpr);
-    ctx.font = '600 ' + LABEL_CANVAS.font + 'px ui-sans-serif, system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.lineWidth = 6;
-    ctx.strokeStyle = 'rgba(0,0,0,0.8)';
-    ctx.strokeText(tekst, LABEL_CANVAS.breed / 2, LABEL_CANVAS.hoog / 2);
-    ctx.fillStyle = '#' + kleur.toString(16).padStart(6, '0');
-    ctx.fillText(tekst, LABEL_CANVAS.breed / 2, LABEL_CANVAS.hoog / 2);
-    const tex = new THREE.CanvasTexture(cv);
-    tex.minFilter = THREE.LinearFilter;
-    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
-    const sp = new THREE.Sprite(mat);
-    sp.scale.set(1, LABEL_CANVAS.hoog / LABEL_CANVAS.breed, 1);  // schaalLabel() zet de maat
-    return sp;
-  }
-
-  /* SCHERMVAST, net als de icoonschaling elders in Terra. Een vaste
-     wereldmaat werkt hier niet: het zoombereik van deze state loopt van de
-     aarde tot voorbij Neptunus, en een sprite die daar leesbaar is bedekt
-     van dichtbij het halve scherm. De maat wordt dus per update uit de
-     camera-afstand teruggerekend naar het aantal pixels dat we willen. */
-  function schaalLabel(L, camera) {
-    const d = camera.position.distanceTo(L.label.position);
-    const perPixel = 2 * d * Math.tan(camera.fov / 2 * Math.PI / 180) / window.innerHeight;
-    const h = cfg.labelHoogtePx * perPixel;
-    L.label.scale.set(h * LABEL_CANVAS.breed / LABEL_CANVAS.hoog, h, 1);
   }
 
   /* ----------------------------------------------------------

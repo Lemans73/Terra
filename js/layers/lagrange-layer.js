@@ -30,6 +30,7 @@
    ============================================================ */
 
 import { lagrangeDirections, LAGRANGE_INFO, L1_L2_KM } from '../compute/frames.js';
+import { createLabelSprite, scaleToPixels } from '../core/label-sprite.js';
 
 export const LAGRANGE_POINTS = ['L1', 'L2', 'L4', 'L5'];
 
@@ -46,27 +47,11 @@ export function createLagrangeLayer(THREE, opts = {}) {
   group.name = 'lagrange';
   group.visible = false;
 
-  const LABEL_CANVAS = { breed: 128, hoog: 56, font: 40 };
-
-  function makeLabel(tekst) {
-    const cv = document.createElement('canvas');
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
-    cv.width = LABEL_CANVAS.breed * dpr; cv.height = LABEL_CANVAS.hoog * dpr;
-    const ctx = cv.getContext('2d');
-    ctx.scale(dpr, dpr);
-    ctx.font = '600 ' + LABEL_CANVAS.font + 'px ui-sans-serif, system-ui, sans-serif';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(0,0,0,0.8)';
-    ctx.strokeText(tekst, LABEL_CANVAS.breed / 2, LABEL_CANVAS.hoog / 2);
-    ctx.fillStyle = '#8fd0ff';
-    ctx.fillText(tekst, LABEL_CANVAS.breed / 2, LABEL_CANVAS.hoog / 2);
-    const tex = new THREE.CanvasTexture(cv);
-    tex.minFilter = THREE.LinearFilter;
-    const sp = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: tex, transparent: true, depthTest: false }));
-    sp.scale.set(1, LABEL_CANVAS.hoog / LABEL_CANVAS.breed, 1);
-    return sp;
-  }
+  // Het label-canvas is smaller dan bij de planeten: "L1" is twee tekens
+  // en een breed canvas zou de tekst alleen maar kleiner maken bij dezelfde
+  // schermhoogte. De opbouw zelf staat sinds sessie 23 in core/label-sprite.js.
+  const makeLabel = (tekst) =>
+    createLabelSprite(THREE, tekst, cfg.color, { width: 128, height: 56, font: 40 });
 
   const points = {};
   for (const k of LAGRANGE_POINTS) {
@@ -98,12 +83,7 @@ export function createLagrangeLayer(THREE, opts = {}) {
 
   // Schermvast, zelfde reden als bij de planeetlabels: het zoombereik van
   // deze scene is te groot voor een vaste wereldmaat.
-  function scaleLabel(p, camera) {
-    const d = camera.position.distanceTo(p.label.position);
-    const perPixel = 2 * d * Math.tan(camera.fov / 2 * Math.PI / 180) / window.innerHeight;
-    const h = cfg.labelHeightPx * perPixel;
-    p.label.scale.set(h * LABEL_CANVAS.breed / LABEL_CANVAS.hoog, h, 1);
-  }
+  const scaleLabel = (p, camera) => scaleToPixels(THREE, p.label, camera, cfg.labelHeightPx);
 
   function setVisible(aan, date, camera) {
     group.visible = !!aan;
