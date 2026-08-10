@@ -145,9 +145,14 @@ export function greatCircle(axis, points = 180) {
    ruimteweer-waarschuwing hangt daaraan. L2 huisvest James Webb, Gaia
    en Euclid.
 ------------------------------------------------------------ */
-const AU_KM = 149597870.7;
+/* GEEN `AU_KM`, hoe voor de hand liggend die naam ook is: `js/sunmoon.js:162`
+   heeft er al een, en tools/build-standalone.mjs concateneert alle modules in
+   EEN scope. Een tweede declaratie is daar een parse-fout en dus een lege bol.
+   Dit is precies de val die de hernoeming van sessie 23 zelf creëerde — de
+   oude naam `AE_KM` was toevallig uniek. */
+const FRAMES_AU_KM = 149597870.7;
 const EARTH_OVER_SUN = 3.00348959632e-6;
-export const L1_L2_KM = AU_KM * Math.cbrt(EARTH_OVER_SUN / 3);   // 1,497 mln km
+export const L1_L2_KM = FRAMES_AU_KM * Math.cbrt(EARTH_OVER_SUN / 3);   // 1,497 mln km
 
 export const LAGRANGE_INFO = {
   L1: { name: 'L1', what: 'Solar wind is measured here before it reaches us — DSCOVR, ACE' },
@@ -175,7 +180,7 @@ export function lagrangeDirections(date) {
   return {
     L1: { direction: z,                             distanceKm: L1_L2_KM, onSunShell: false },
     L2: { direction: { x: -z.x, y: -z.y, z: -z.z }, distanceKm: L1_L2_KM, onSunShell: false },
-    L4: { direction: rotate(60),                    distanceKm: AU_KM,    onSunShell: true },
-    L5: { direction: rotate(-60),                   distanceKm: AU_KM,    onSunShell: true }
+    L4: { direction: rotate(60),                    distanceKm: FRAMES_AU_KM,    onSunShell: true },
+    L5: { direction: rotate(-60),                   distanceKm: FRAMES_AU_KM,    onSunShell: true }
   };
 }
