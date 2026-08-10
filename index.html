@@ -541,17 +541,32 @@
            De readout bij de magnetische as (poolposities, tilt, veldsterkte) blijft in
            Almanac: die is aanvullend, niet nodig om te snappen wat je aanzet. Precies
            het onderscheid dat bij polar motion juist ontbrak. -->
-      <section class="acc" data-acc="axis-layers">
+      <!-- SKY PROJECTIONS — alleen wat er ECHT op de aarde geprojecteerd wordt
+      (Terry, sessie 23). Dat is de indelingsregel van sessie 21 nog een slag
+      scherper: een schakelaar hoort bij wat hij oplevert, en deze drie leveren
+      geometrie op straal 101,5 tot 102. De planetenLIJST blijft in Almanac
+      staan, want die levert informatie — magnitude, elongatie, fase — en geen
+      meetkunde. Volgorde van dichtbij naar ver, dus vóór `Axes & poles` (134). -->
+      <section class="acc" data-acc="sky-projections">
       <button class="acc-head" type="button" aria-expanded="false">
-      <span>Axes &amp; poles</span>
+      <span>Sky projections</span>
       <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
       <div class="acc-body">
-      <div class="elayer" id="rotaxis-toggle"><span class="edot"></span>Rotation axis<span class="estat" id="es-rotaxis">off</span></div>
-      <!-- DE ECLIPTICA hoort hier volgens de regel van sessie 21: hij levert
-      geometrie op de bol, dus Layers. En hij hoort in BEIDE weergaven, niet
-      alleen in Space — het vlak van de aardbaan verklaart net zo goed waarom
-      de zon staat waar hij staat. -->
+      <div class="elayer expandable" id="skyplanets-toggle">
+      <span class="edot"></span>Planets on the globe
+      <button class="row-expand" data-note="skyplanets-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <span class="estat" id="es-skyplanets">off</span>
+      </div>
+      <div class="layer-detail" id="skyplanets-note">
+      Each planet in its true direction as seen from Earth, with the point on
+      the surface it stands directly above. This is the sky we actually live
+      under &#8212; and the reason it looks like a tangle is that we are moving
+      too. Press <b>Enter space view</b> further down in Almanac to see the same
+      seven from outside, in orbit around the Sun.
+      </div>
       <div class="elayer expandable" id="ecliptic-toggle">
       <span class="edot"></span>Ecliptic
       <button class="row-expand" data-note="ecliptic-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
@@ -566,6 +581,41 @@
       stands overhead. It is also why the planets always appear in one narrow
       strip of sky.
       </div>
+      <div class="elayer expandable" id="equator-toggle">
+      <span class="edot"></span>Celestial equator
+      <button class="row-expand" data-note="equator-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <span class="estat" id="es-equator">off</span>
+      </div>
+      <div class="layer-detail" id="equator-note">
+      Earth&#8217;s own equator projected outwards. Switch it on together with the
+      ecliptic and the two planes cross at 23.4&#176; &#8212; the tilt that makes the
+      seasons. The two crossing points are the equinoxes, and the Sun sits on
+      one of them on the first day of spring and of autumn.
+      </div>
+      <div class="elayer expandable" id="ragrid-toggle">
+      <span class="edot"></span>Right ascension
+      <button class="row-expand" data-note="ragrid-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <span class="estat" id="es-ragrid">off</span>
+      </div>
+      <div class="layer-detail" id="ragrid-note">
+      A 24-hour scale around the celestial equator, plus the two equinox points.
+      It turns 15&#176; an hour against the ground &#8212; that is the sidereal day, and
+      it is why the same star rises four minutes earlier each night.
+      </div>
+      </div>
+      </section>
+
+      <section class="acc" data-acc="axis-layers">
+      <button class="acc-head" type="button" aria-expanded="false">
+      <span>Axes &amp; poles</span>
+      <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="acc-body">
+      <div class="elayer" id="rotaxis-toggle"><span class="edot"></span>Rotation axis<span class="estat" id="es-rotaxis">off</span></div>
       <div class="elayer expandable" id="magaxis-toggle">
       <span class="edot"></span>Magnetic axis
       <button class="row-expand" data-note="magaxis-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
@@ -905,6 +955,13 @@
       <button class="preset active" data-view="orbit">3D orbit</button>
       </div>
       <div class="space-lock" id="space-lock">Free orbit.</div>
+      </div>
+      <!-- VANAF HIER STAAT ALLES BUITEN `.space-only` (sessie 23). De lijst,
+      het spoor, de conjuncties en de readout gaan over de planeten ZOALS WIJ ZE
+      ZIEN — dat hoort bij de gewone weergave, waar de indicatoren nu leven.
+      Alleen de camerastanden hierboven zijn van de Space-state zelf.
+      LET OP: het moest echt uit de wrapper en niet met `hidden`, want
+      `.space-only { display: none }` verslaat het attribuut (sessie 14). -->
       <h3>Bodies</h3>
       <div class="planet-list" id="planet-list"></div>
       <!-- HET HEMELSPOOR. Hoort bij het lichaam in focus en niet bij alle
@@ -915,11 +972,13 @@
       <button class="preset" data-dagen="30">30 d</button>
       <button class="preset" data-dagen="90">90 d</button>
       <button class="preset" data-dagen="180">180 d</button>
+      <button class="preset" data-dagen="orbit">orbit</button>
       </div>
       <p class="space-uitleg" id="spoor-noot">Select a body to draw its path.
       Around opposition a planet appears to reverse for weeks &#8212; that
       backwards loop is the reason a Sun-centred solar system had to replace
-      an Earth-centred one.</p>
+      an Earth-centred one. <b>orbit</b> draws the whole orbit instead: where
+      that body can ever appear.</p>
       <!-- CONJUNCTIES. De knoppen staan hier en niet bij het spoor, omdat ze
       het moment verzetten en niet de weergave. Ze zetten wél het spoor mee
       goed: een sprong die je op het juiste moment in het verkeerde beeld
@@ -957,10 +1016,10 @@
       <div class="sunstat-row"><span>Right ascension</span><b id="sp-ra">&#8212;</b></div>
       <div class="sunstat-row"><span>Declination</span><b id="sp-dec">&#8212;</b></div>
       <div class="sunstat-row"><span>Stands over</span><b id="sp-sub">&#8212;</b></div>
-      <div class="sunstat-note">Distances on screen are ordered, not to scale &#8212;
-      the whole solar system cannot share a frame with a recognisable Earth.
-      The distance above is the real one.</div>
-      </div>
+      <div class="sunstat-note">On the globe, distances are ordered rather than
+      scaled &#8212; the whole solar system cannot share a frame with a
+      recognisable Earth. In space view every orbit is a true ellipse with the
+      Sun at one focus; only the spacing between orbits is compressed.</div>
       </div>
       </div>
       </section>
@@ -1392,7 +1451,7 @@ import { createMagnetoMode } from './js/modes/magneto.js';
 // aan te houden: rekenen (compute/) weet niets van three, tekenen (layers/)
 // niets van de app, en de state (states/) orkestreert zonder zelf te tekenen.
 import { createPlanetsLayer } from './js/layers/planets-layer.js';
-import { createEclipticLayer } from './js/layers/ecliptic-layer.js';
+import { createSkyDisksLayer } from './js/layers/sky-disks.js';
 import { createLagrangeLayer, LAGRANGE_POINTS } from './js/layers/lagrange-layer.js';
 import { createOrbitsLayer } from './js/layers/orbits-layer.js';
 import { createSpaceState } from './js/states/space.js';
@@ -3535,7 +3594,7 @@ function updateSunUniform() {
   if (spaceState) spaceState.tik();
   // De ecliptica en de Lagrange-punten hangen aan dezelfde klok. Beide doen
   // niets zolang ze onzichtbaar zijn, en dat is de normale stand.
-  if (ecliptic) ecliptic.update(now);
+  if (disks) disks.update(now, world.camera());
   if (lagrange) lagrange.update(now, world.camera());
   // De geocentrische planeetindicatoren hangen sinds sessie 23 NIET meer aan de
   // Space-state: die staat is heliocentrisch geworden en deze laag hoort bij de
@@ -5652,10 +5711,18 @@ const geomagToggles = [
   ['rotaxis-toggle', 'es-rotaxis', on => geomag.setVisible({ rotation: on })],
   ['magaxis-toggle', 'es-magaxis', on => geomag.setVisible({ dipole: on })],
   ['magdrift-toggle', 'es-magdrift', on => geomag.setVisible({ trail: on })],
-  // De ecliptica hangt hier mee: hij is dezelfde soort schakelaar (geometrie
-  // op de bol, uit bij het opstarten) en hoeft geen eigen machinerie. Zijn
-  // laag zit niet in `geomag`, dus de callback vangt dat zelf af.
-  ['ecliptic-toggle', 'es-ecliptic', on => ecliptic && ecliptic.setVisible(on, momentNow())]
+  // De sectie `Sky projections` hangt hier mee: het zijn dezelfde soort
+  // schakelaars (geometrie op de bol, uit bij het opstarten) en die hoeven geen
+  // eigen machinerie. Hun lagen zitten niet in `geomag`, dus de callbacks
+  // vangen dat zelf af.
+  ['skyplanets-toggle', 'es-skyplanets',
+    on => planets && planets.setVisible(on, momentNow(), world.camera())],
+  ['ecliptic-toggle', 'es-ecliptic',
+    on => disks && disks.setVisible({ ecliptic: on }, momentNow(), world.camera())],
+  ['equator-toggle', 'es-equator',
+    on => disks && disks.setVisible({ equator: on }, momentNow(), world.camera())],
+  ['ragrid-toggle', 'es-ragrid',
+    on => disks && disks.setVisible({ graduation: on }, momentNow(), world.camera())]
 ];
 geomagToggles.forEach(([id, statId, apply]) => {
   const el = document.getElementById(id);
@@ -6094,7 +6161,7 @@ bindCosmosToggle('sunspots-toggle', 'es-sunspots',
    tijdens de scene-opbouw al kan draaien, en `viewStates` bestaat pas in
    het init-blok. Zelfde TDZ-familie als de rest. */
 let viewStates = null, spaceState = null, planets = null;
-let ecliptic = null, lagrange = null, orbits = null, environment = null;
+let disks = null, lagrange = null, orbits = null, environment = null;
 const spaceVoorheen = {};
 const inZonAanzicht = () => !!(viewStates && viewStates.isActief('sun'));
 const inSpaceAanzicht = () => !!(viewStates && viewStates.isActief('space'));
@@ -6199,7 +6266,7 @@ function markeerPlaneetFocus() {
    plaats van iets willekeurigs te kiezen — een getal zonder gekozen bron
    leest als een meting die het niet is. */
 function updateSpaceReadout() {
-  if (!planets || !inSpaceAanzicht()) return;
+  if (!planets || !planets.group.visible) return;
   const eph = planets.efemeriden();
   const f = planets.focus();
   const zet = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
@@ -6351,7 +6418,10 @@ document.querySelectorAll('#spoor-venster .preset').forEach(b =>
     if (!planets) return;
     document.querySelectorAll('#spoor-venster .preset').forEach(x =>
       x.classList.toggle('active', x === b));
-    planets.setSpoorVenster(+b.dataset.dagen, momentNow());
+    // 'orbit' is geen getal: dat venster tekent de hele baan in plaats van
+    // een pad over tijd. De laag kent het als string.
+    const v = b.dataset.dagen === 'orbit' ? 'orbit' : +b.dataset.dagen;
+    planets.setSpoorVenster(v, momentNow());
     werkSpoorNootBij();
   }));
 
@@ -6368,9 +6438,18 @@ function werkSpoorNootBij() {
 }
 
 // ---- Lagrange ----
+/* EEN schakelaar, TWEE lagen — en dat is geen luiheid maar het punt. In de
+   gewone weergave staan L1/L2/L4/L5 op de geocentrische zonschil: richtingen
+   zonder plek, want "zestig graden vóór de aarde in haar baan" heeft daar geen
+   baan om in te liggen. In de heliocentrische weergave zijn L4 en L5 letterlijk
+   de aardepositie 60 graden om de ecliptica-pool gedraaid, dus ze liggen exact
+   op de aardbaan. Dezelfde vier punten, en pas in het tweede beeld te zien wat
+   ze zijn. De omgevingsschakelaar verbergt de geocentrische laag in Space, dus
+   er staat er altijd maar één tegelijk. */
 document.getElementById('lagrange-toggle')?.addEventListener('click', () => {
   if (!lagrange) return;
   const aan = document.getElementById('lagrange-toggle').classList.toggle('off') === false;
+  if (orbits) orbits.setLagrangeVisible(aan, momentNow(), world.camera());
   lagrange.setVisible(aan, momentNow(), world.camera());
   document.getElementById('es-lagrange').textContent = aan ? 'on' : 'off';
 });
@@ -6379,7 +6458,9 @@ document.getElementById('lagrange-toggle')?.addEventListener('click', () => {
 // het label telt mee, dus een schermafstand is zowel goedkoper als
 // vergevingsgezinder dan een treffer op de geometrie zelf.
 document.getElementById('globe')?.addEventListener('click', (e) => {
-  if (!inSpaceAanzicht() || !planets) return;
+  // De indicatoren leven sinds sessie 23 in de gewone weergave, dus deze klik
+  // hoort bij de LAAG en niet meer bij de state.
+  if (!planets || !planets.group.visible) return;
   const k = planets.raakPunt(e.clientX, e.clientY);
   if (!k) return;
   planets.setFocus(planets.focus() === k ? null : k, momentNow());
@@ -7741,11 +7822,11 @@ planets = createPlanetsLayer(THREE, { earthRadius: 100 });
 planets.setVisible(false);              // hangt in de scene, staat uit tot de state aangaat
 world.scene().add(planets.group);
 
-// De ecliptica staat BUITEN de Space-state: hij is een schakelbare laag in
+// De hemelschijven staan BUITEN de Space-state: het zijn schakelbare lagen in
 // beide weergaven, want het vlak van de aardbaan verklaart net zo goed waarom
 // de zon staat waar hij staat als waarom de planeten in een band liggen.
-ecliptic = createEclipticLayer(THREE, { earthRadius: 100 });
-world.scene().add(ecliptic.group);
+disks = createSkyDisksLayer(THREE, { earthRadius: 100 });
+world.scene().add(disks.group);
 
 // De Lagrange-punten horen wél bij Space: ze staan in de ruimte, niet op de bol.
 lagrange = createLagrangeLayer(THREE, { sunDistance: PARAMS.sunDistance });
@@ -7806,7 +7887,7 @@ spaceState = createSpaceState(THREE, {
       environment.hide([
         sunMoon && sunMoon.group,      // zon op 420, maan, schemering, tracks, eclips
         geomag && geomag.group,        // rotatie- en dipoolas, pooldrift
-        ecliptic && ecliptic.group,    // de ecliptica op de bol
+        disks && disks.group,          // ecliptica- en equatorschijf op de bol
         lagrange && lagrange.group,    // L1/L2/L4/L5 staan op de GEOCENTRISCHE zonschil
         planets && planets.group,      // de geocentrische projectie
         typeof wireMesh !== 'undefined' ? wireMesh : null
@@ -7857,7 +7938,7 @@ viewStates.registreer('sun', {
 if (IS_LOCAL) {
   window.__test = {
     get planets() { return planets; },
-    get ecliptic() { return ecliptic; },
+    get disks() { return disks; },
     get lagrange() { return lagrange; },
     get orbits() { return orbits; },
     get environment() { return environment; },

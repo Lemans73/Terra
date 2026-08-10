@@ -181,6 +181,81 @@ export function createOrbitsLayer(THREE, opts = {}) {
                   shell: shellOf(k), k: 1, au: 0, visible: true };
   }
 
+  /* ----------------------------------------------------------
+     DE LAGRANGE-PUNTEN, en hier kloppen L4 en L5 voor het eerst echt.
+
+     In de geocentrische weergave staan ze op de zonschil op 60 graden — een
+     richting zonder plek, want daar is de aarde het middelpunt en heeft "60
+     graden voor de aarde in haar baan" geen baan om in te liggen. Hier wel:
+     L4 en L5 zijn letterlijk de aardepositie, 60 graden om de ecliptica-pool
+     gedraaid. Ze liggen dus exact ÓP de aardbaan, en dat is precies wat ze
+     zijn.
+
+     L1 EN L2 BLIJVEN SYMBOLISCH, en dat is geen slordigheid maar meetkunde:
+     ze staan op 1,00% van de zonafstand, oftewel 1,4 eenheden van de aarde af
+     op deze schaal — binnen de aardmarker van straal 10. Ze worden op 22
+     eenheden gezet, een factor 15 te ver, en het paneel zegt dat erbij.
+     Waarom ze er toch staan: op L1 meten DSCOVR en ACE de zonnewind vóór hij
+     ons bereikt, en op L2 staan James Webb en Gaia.
+  ---------------------------------------------------------- */
+  const L_COLOR = 0x8fd0ff;
+  const L1_L2_SYMBOLIC = 22;
+  const lagrangeGroup = new THREE.Group();
+  lagrangeGroup.name = 'orbit-lagrange';
+  lagrangeGroup.visible = false;
+  const lagrangeMarks = {};
+
+  for (const naam of ['L1', 'L2', 'L4', 'L5']) {
+    const mesh = new THREE.Mesh(
+      track(new THREE.OctahedronGeometry(4)),
+      track(new THREE.MeshBasicMaterial({ color: L_COLOR, transparent: true,
+                                          opacity: 0.9, wireframe: true })));
+    mesh.raycast = () => {};
+    const label = createLabelSprite(THREE, naam, L_COLOR,
+                                    { width: 128, height: 56, font: 40 });
+    lagrangeGroup.add(mesh, label);
+    lagrangeMarks[naam] = { mesh, label };
+  }
+  group.add(lagrangeGroup);
+
+  /* Werkvectoren. Ze staan BOVEN hun gebruikers — die zijn hoisted
+     functiedeclaraties, deze `const`s niet. `_labelLift` wordt ook door
+     update() gelezen, verderop. */
+  const _earth = new THREE.Vector3();
+  const _lag = new THREE.Vector3();
+  const _poleAxis = new THREE.Vector3(0, 1, 0);
+  const _labelLift = new THREE.Vector3();
+
+  function placeLagrange(camera) {
+    if (!lagrangeGroup.visible) return;
+    const E = bodies.earth.mesh.position;
+    _earth.copy(E);
+    const r = _earth.length() || 1;
+
+    // L1 naar de zon toe, L2 er recht vanaf — beide langs de zon-aardelijn.
+    for (const [naam, teken] of [['L1', -1], ['L2', 1]]) {
+      const M = lagrangeMarks[naam];
+      _lag.copy(_earth).multiplyScalar(1 + teken * L1_L2_SYMBOLIC / r);
+      M.mesh.position.copy(_lag);
+      M.label.position.copy(_lag).add(_labelLift.set(0, 12, 0));
+      if (camera) scaleToPixels(THREE, M.label, camera, cfg.labelHeightPx * 0.8);
+    }
+    // L4 zestig graden vóór de aarde in haar baan, L5 evenveel erachter. De
+    // draaiing gaat om de LOKALE +Y, want dat is hier de ecliptica-pool.
+    for (const [naam, graden] of [['L4', 60], ['L5', -60]]) {
+      const M = lagrangeMarks[naam];
+      _lag.copy(_earth).applyAxisAngle(_poleAxis, graden * Math.PI / 180);
+      M.mesh.position.copy(_lag);
+      M.label.position.copy(_lag).add(_labelLift.set(0, 12, 0));
+      if (camera) scaleToPixels(THREE, M.label, camera, cfg.labelHeightPx * 0.8);
+    }
+  }
+
+  function setLagrangeVisible(on, date, camera) {
+    lagrangeGroup.visible = !!on;
+    if (lagrangeGroup.visible) placeLagrange(camera);
+  }
+
   /* ---- de banen bouwen ----
      Sweep van de excentrische anomalie, niet van de tijd: dat sluit exact
      (het laatste punt IS het eerste) en kost geen 165 jaar aan tijdstappen
@@ -211,11 +286,8 @@ export function createOrbitsLayer(THREE, opts = {}) {
   }
 
   /* ---- de lichamen plaatsen ----
-     `_labelLift` staat BOVEN `update()`: die is hoisted, deze `const` niet.
-     In de praktijk gaat het goed omdat update() pas na de opbouw wordt
-     aangeroepen, maar dat is precies de aanname waar dit project acht keer
-     op is stukgelopen. */
-  const _labelLift = new THREE.Vector3();
+     De werkvectoren die update() leest (`_labelLift`) staan bij de
+     Lagrange-blok hierboven, ruim boven deze functie. Zie de noot daar. */
   let lastEph = null;
   let focus = null;
 
@@ -242,6 +314,7 @@ export function createOrbitsLayer(THREE, opts = {}) {
       if (camera) scaleToPixels(THREE, B.label, camera, cfg.labelHeightPx);
     }
     lastEph = out;
+    placeLagrange(camera);
     applyFocus();
     return out;
   }
@@ -308,7 +381,7 @@ export function createOrbitsLayer(THREE, opts = {}) {
 
   return {
     group, update, buildOrbits, setVisible, setFocus, setBodyVisible,
-    redrawLabels, orient, pole, vernal, dispose,
+    redrawLabels, orient, pole, vernal, dispose, setLagrangeVisible,
     config: cfg, bodies,
     ephemerides: () => lastEph,
     focus: () => focus,

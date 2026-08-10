@@ -5,7 +5,7 @@
 
    WAAROM DIT EEN EIGEN BESTAND IS
    `states/space.js` had de ecliptica-pool en de zonrichting zelf staan,
-   en `layers/ecliptic-layer.js` heeft ze ook nodig. Twee kopieën van een
+   en `layers/sky-disks.js` heeft ze ook nodig. Twee kopieën van een
    frame-berekening is precies het soort duplicatie dat stil uiteen gaat
    lopen: de een krijgt een correctie, de ander niet, en het verschil is
    een paar graden die niemand opmerkt tot iets niet meer op elkaar valt.

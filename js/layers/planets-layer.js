@@ -39,7 +39,8 @@
       retrograde lus in. Zie hemelspoor() in compute/planets.js.
    ============================================================ */
 
-import { planetEphemerides, skyTrack, PLANETS, PLANET_INFO } from '../compute/planets.js';
+import { planetEphemerides, skyTrack, projectedOrbit, PLANETS,
+         PLANET_INFO } from '../compute/planets.js';
 import { latLonToUnit, ephemeris, norm180 } from '../sunmoon.js';
 import { gastFrom } from '../compute/frames.js';
 import { createLabelSprite, scaleToPixels } from '../core/label-sprite.js';
@@ -300,11 +301,26 @@ export function createPlanetsLayer(THREE, opts = {}) {
   let spoorTimer = null;
   let spoorVoor = null;            // voor welke planeet het er ligt
 
+  /* HET VENSTER 'orbit' IS IETS ANDERS DAN EEN LANG DAGVENSTER, en dat
+     verschil is de reden dat het bestaat. Het pad van Neptunus over één
+     omlooptijd is 165 retrograde lussen; met 160 monsterpunten aliassen die
+     tot een gladde cirkel — het juiste plaatje om de verkeerde reden, en voor
+     Mars een onleesbare kluwen. `projectedOrbit()` houdt de aarde stil en laat
+     alleen de planeet zijn baan rondgaan: geen pad over tijd maar het antwoord
+     op "waar KAN dit lichaam aan de hemel staan". Voor Mercurius en Venus is
+     dat een lus om de zon waarvan de wijdte hun grootste elongatie is; voor de
+     buitenplaneten iets dat dicht bij de ecliptica blijft.
+
+     Het is bovendien exact dezelfde baan die de heliocentrische weergave als
+     ring tekent — dezelfde `orbitBasis`/`orbitPoint`, van de andere kant
+     bekeken. Dat is precies wat de twee weergaven naast elkaar moeten zeggen. */
   function bouwSpoor(date, sleutel) {
     if (!sleutel || !spoorDagen) { spoorLijn.visible = false; spoorVoor = null; return; }
     const L = lichamen[sleutel];
     const gast = gastFrom(ephemeris(date));          // BEVROREN, zie de noot hierboven
-    const punten = skyTrack(date, sleutel, spoorDagen, 160);
+    const punten = spoorDagen === 'orbit'
+      ? projectedOrbit(date, sleutel, 240)
+      : skyTrack(date, sleutel, spoorDagen, 160);
     const arr = new Float32Array(punten.length * 3);
     for (let i = 0; i < punten.length; i++) {
       const u = latLonToUnit(punten[i].dec, norm180(punten[i].ra - gast));
@@ -329,6 +345,9 @@ export function createPlanetsLayer(THREE, opts = {}) {
     spoorTimer = setTimeout(() => bouwSpoor(date, sleutel), 120);
   }
 
+  /* `dagen` is een getal of de string 'orbit'. Die laatste overleeft de `|| 0`
+     hieronder omdat een niet-lege string truthy is — geen toeval, maar wel iets
+     om te weten als hier ooit een lege waarde bij komt. */
   function setSpoorVenster(dagen, date) {
     spoorDagen = dagen || 0;
     if (!spoorDagen) { spoorLijn.visible = false; spoorVoor = null; return; }
@@ -343,8 +362,13 @@ export function createPlanetsLayer(THREE, opts = {}) {
     return focus;
   }
 
-  function setVisible(aan) {
+  /* setVisible() zet alleen een vlag; de posities worden in update() gezet, en
+     die slaat alles over zolang de laag verborgen is. Zonder deze aanroep
+     gebeurt er dus niets zichtbaars tot de volgende tik van dertig seconden.
+     Dezelfde val als bij de zon/maan-laag in sessie 14. */
+  function setVisible(aan, date, camera) {
     group.visible = !!aan;
+    if (group.visible && date) update(date, camera);
   }
 
   /* Een enkele planeet aan of uit. De laag houdt de vlag zelf bij zodat
