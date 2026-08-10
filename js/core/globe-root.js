@@ -65,9 +65,15 @@ export function createEnvironmentToggle(world) {
     return typeof v === 'boolean' ? v : true;
   };
 
-  function hide(groups = []) {
+  /* `opts.includeGlobe` (standaard true) bepaalt of de aardbol zelf meegaat.
+     De heliocentrische weergave wil hem weg — daar is de aarde een stip in een
+     baan. De zon-weergave juist NIET: daar kijk je van vlakbij de zon, en een
+     aarde in de verte is dan geen storing maar de schaal van het beeld. Wat er
+     in beide gevallen wél uit moet is de aardgebonden versiering: assen,
+     planeetindicatoren, hemelschijven. */
+  function hide(groups = [], opts = {}) {
     if (snapshot) return false;
-    const root = findGlobeRoot(world);
+    const root = opts.includeGlobe === false ? null : findGlobeRoot(world);
     const items = [root, ...groups].filter(Boolean);
     snapshot = { items: items.map(o => ({ o, visible: o.visible })), pointer: readPointer() };
     snapshot.items.forEach(s => { s.o.visible = false; });

@@ -7876,6 +7876,20 @@ viewStates = maakViewStates({
   syncToggles: syncViewToggles
 });
 
+/* WAT ER AAN DE AARDE VASTZIT, en dus geen betekenis heeft zodra de aarde niet
+   meer het middelpunt is. Eén lijst voor twee states, want ze hadden hem allebei
+   nodig en twee kopieën lopen stil uiteen — dezelfde reden dat de
+   frame-berekeningen in sessie 22 naar `compute/frames.js` verhuisden.
+
+   De lijst is EXPLICIET en niet afgeleid: deze groepen hangen stuk voor stuk als
+   direct kind van de scene, dus de globe-wortel dekt ze niet. */
+const aardgebondenVersiering = () => [
+  geomag && geomag.group,        // rotatie- en dipoolas, pooldrift
+  disks && disks.group,          // ecliptica- en equatorschijf op de bol
+  lagrange && lagrange.group,    // L1/L2/L4/L5 op de GEOCENTRISCHE zonschil
+  planets && planets.group       // de geocentrische projectie
+];
+
 spaceState = createSpaceState(THREE, {
   world, orbits,
   moment: momentNow,
@@ -7906,10 +7920,7 @@ spaceState = createSpaceState(THREE, {
     environmentOff() {
       environment.hide([
         sunMoon && sunMoon.group,      // zon op 420, maan, schemering, tracks, eclips
-        geomag && geomag.group,        // rotatie- en dipoolas, pooldrift
-        disks && disks.group,          // ecliptica- en equatorschijf op de bol
-        lagrange && lagrange.group,    // L1/L2/L4/L5 staan op de GEOCENTRISCHE zonschil
-        planets && planets.group,      // de geocentrische projectie
+        ...aardgebondenVersiering(),
         typeof wireMesh !== 'undefined' ? wireMesh : null
       ]);
     },
@@ -7917,6 +7928,13 @@ spaceState = createSpaceState(THREE, {
   }
 });
 viewStates.registreer('space', spaceState.definitie);
+
+/* DE PLANETENLIJST WORDT HIER AL GEBOUWD en niet pas bij de eerste klik op
+   `Enter space view`. Sinds sessie 23 hoort die lijst bij de gewone weergave —
+   je kiest er een lichaam mee om zijn baan of hemelspoor te tekenen, en dat is
+   iets wat je op de bol doet. Hem leeg laten tot iemand een keer de ruimte in
+   is geweest maakt van een omweg een voorwaarde. */
+bouwPlanetenLijst();
 
 // De zon/maan-state migreert mee op dezelfde machine. Dit is de tweede
 // bewoner en daarmee het bewijs dat de abstractie klopt: zou hij alleen
@@ -7940,8 +7958,19 @@ viewStates.registreer('sun', {
     // waardoor de bol verzadigt naar wit en de vlekken verdwijnen.
     sunMoon.meshes.sunGlow.visible = false;
     _sunAnchor.copy(sunMoon.meshes.sunGroup.position);
+
+    /* DE AARDGEBONDEN VERSIERING GAAT UIT, maar de aarde zelf blijft staan —
+       `includeGlobe: false`. Gemeten wat er anders gebeurt: de planeetschillen
+       lopen tot straal 400 en de zon staat op 420, dus er hangt een planeet mét
+       label pal naast de zon alsof het een zonnevlek is. En de as-koorden
+       hebben `depthTest: false`, dus die tekenen dwars door alles heen.
+       Geen van beide betekent hier iets: dit beeld gaat over de zon. */
+    environment.hide(aardgebondenVersiering(), { includeGlobe: false });
   },
-  buiten() { sunMoon.meshes.sunGlow.visible = true; }
+  buiten() {
+    sunMoon.meshes.sunGlow.visible = true;
+    environment.restore();
+  }
 });
 
 /* MEETHAAK, ALLEEN LOKAAL. De inline module is een gesloten scope, dus er is
