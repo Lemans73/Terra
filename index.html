@@ -900,8 +900,8 @@
       <h3>View</h3>
       <div class="presets" id="space-views">
       <button class="preset" data-view="top">Top</button>
-      <button class="preset" data-view="left">Left</button>
-      <button class="preset" data-view="right">Right</button>
+      <button class="preset" data-view="edge">Edge</button>
+      <button class="preset" data-view="side">Side</button>
       <button class="preset active" data-view="orbit">3D orbit</button>
       </div>
       <div class="space-lock" id="space-lock">Free orbit.</div>
@@ -1394,7 +1394,10 @@ import { createMagnetoMode } from './js/modes/magneto.js';
 import { createPlanetsLayer } from './js/layers/planets-layer.js';
 import { createEclipticLayer } from './js/layers/ecliptic-layer.js';
 import { createLagrangeLayer, LAGRANGE_POINTS } from './js/layers/lagrange-layer.js';
+import { createOrbitsLayer } from './js/layers/orbits-layer.js';
 import { createSpaceState } from './js/states/space.js';
+import { createEnvironmentToggle } from './js/core/globe-root.js';
+import { skyFrame } from './js/compute/frames.js';
 import { maakViewStates } from './js/core/view-state.js';
 import { PLANETS, PLANET_INFO, nextConjunction,
          previousConjunction } from './js/compute/planets.js';
@@ -3534,6 +3537,10 @@ function updateSunUniform() {
   // niets zolang ze onzichtbaar zijn, en dat is de normale stand.
   if (ecliptic) ecliptic.update(now);
   if (lagrange) lagrange.update(now, world.camera());
+  // De geocentrische planeetindicatoren hangen sinds sessie 23 NIET meer aan de
+  // Space-state: die staat is heliocentrisch geworden en deze laag hoort bij de
+  // gewone weergave. Hij slaat zelf over als hij onzichtbaar is.
+  if (planets) planets.update(now, world.camera());
   updateSpaceReadout();
 
   updateCosmosReadout();
@@ -3557,6 +3564,7 @@ world.onZoom(pov => {
   //    camera-afstand. Doet niets zolang de Space-state uit staat.
   if (planets) planets.hertekenLabels(world.camera());
   if (lagrange) lagrange.redrawLabels(world.camera());
+  if (orbits) orbits.redrawLabels(world.camera());
 });
 
 world.controls().autoRotate = !REDUCED_MOTION;
@@ -6086,7 +6094,7 @@ bindCosmosToggle('sunspots-toggle', 'es-sunspots',
    tijdens de scene-opbouw al kan draaien, en `viewStates` bestaat pas in
    het init-blok. Zelfde TDZ-familie als de rest. */
 let viewStates = null, spaceState = null, planets = null;
-let ecliptic = null, lagrange = null;
+let ecliptic = null, lagrange = null, orbits = null, environment = null;
 const spaceVoorheen = {};
 const inZonAanzicht = () => !!(viewStates && viewStates.isActief('sun'));
 const inSpaceAanzicht = () => !!(viewStates && viewStates.isActief('space'));
@@ -7743,6 +7751,16 @@ world.scene().add(ecliptic.group);
 lagrange = createLagrangeLayer(THREE, { sunDistance: PARAMS.sunDistance });
 world.scene().add(lagrange.group);
 
+// Het heliocentrische stelsel. Staat uit tot de Space-state aangaat, en zijn
+// orientatie wordt daar bevroren — hier alleen aanmaken en ophangen.
+orbits = createOrbitsLayer(THREE);
+world.scene().add(orbits.group);
+
+// De omgevingsschakelaar zet globe.gl's bol plus alles wat aan de aarde
+// vastzit weg, en geeft precies terug wat er stond. Zie js/core/globe-root.js
+// voor waarom het de WORTEL is en niet de aarde-mesh.
+environment = createEnvironmentToggle(world);
+
 // De haken die core/view-state.js van de app krijgt. Functies en geen
 // waarden: `labelsOn` en `autoRotateWanted` zijn `let`-bindingen, dus een
 // doorgegeven waarde zou een momentopname zijn — dezelfde val als de
@@ -7758,24 +7776,43 @@ viewStates = maakViewStates({
 });
 
 spaceState = createSpaceState(THREE, {
-  world, planets,
+  world, orbits,
   moment: momentNow,
-  lagen: {
+  skyFrame,
+  layers: {
     // Gebeurtenissen gaan uit en komen terug zoals ze waren. Zelfde
     // patroon als `activeVoorSlot` bij de sloten: onthouden wat er aan
     // stond, want anders zet je bij het verlaten lagen aan die de
     // gebruiker zelf had uitgezet.
-    gebeurtenissenUit() {
+    eventsOff() {
       for (const laag of Object.keys(active)) {
         spaceVoorheen[laag] = active[laag];
         active[laag] = false;
       }
       render();
     },
-    gebeurtenissenTerug() {
+    eventsRestore() {
       for (const laag of Object.keys(spaceVoorheen)) active[laag] = spaceVoorheen[laag];
       render();
-    }
+    },
+
+    /* De aardbol en alles wat aan haar vastzit. De lijst is expliciet en
+       niet afgeleid, want deze groepen hangen stuk voor stuk als DIRECT
+       kind van de scene — de globe-wortel dekt ze niet. `wireMesh` staat
+       er ook bij en dat is geen overdaad: die hangt náást de wortel, en
+       staat wireframe aan, dan blijft er een draadbol staan op precies de
+       plek waar de zon komt. */
+    environmentOff() {
+      environment.hide([
+        sunMoon && sunMoon.group,      // zon op 420, maan, schemering, tracks, eclips
+        geomag && geomag.group,        // rotatie- en dipoolas, pooldrift
+        ecliptic && ecliptic.group,    // de ecliptica op de bol
+        lagrange && lagrange.group,    // L1/L2/L4/L5 staan op de GEOCENTRISCHE zonschil
+        planets && planets.group,      // de geocentrische projectie
+        typeof wireMesh !== 'undefined' ? wireMesh : null
+      ]);
+    },
+    environmentRestore() { environment.restore(); }
   }
 });
 viewStates.registreer('space', spaceState.definitie);
@@ -7822,6 +7859,8 @@ if (IS_LOCAL) {
     get planets() { return planets; },
     get ecliptic() { return ecliptic; },
     get lagrange() { return lagrange; },
+    get orbits() { return orbits; },
+    get environment() { return environment; },
     get viewStates() { return viewStates; },
     get spaceState() { return spaceState; },
     get sunMoon() { return sunMoon; },

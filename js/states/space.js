@@ -1,62 +1,61 @@
 /* ============================================================
-   TERRA — Space · de aarde in haar kosmische omgeving
+   TERRA — Space · het zonnestelsel om de zon
    ------------------------------------------------------------
-   Een state, geen laag. Hij ORKESTREERT: hij zet gebeurtenislagen uit,
-   de planeten aan, laat zon en maan staan, en biedt vier camerastanden.
-   Wat hij zelf tekent is niets.
+   Een state, geen laag. Hij ORKESTREERT: hij zet de gebeurtenislagen uit,
+   verbergt de aarde en alles wat aan haar vastzit, zet de banen aan en
+   biedt vier camerastanden. Wat hij zelf tekent is niets.
 
    DAT ONDERSCHEID IS DE HELE OPZET. De magnetosfeer en de instrumenten
    op L1 en L2 horen hier later naast te passen zonder dat dit bestand
-   opengebroken wordt — de volgende bewoner meldt zich aan via `lagen`,
+   opengebroken wordt — de volgende bewoner meldt zich aan via `layers`,
    hij wordt hier niet ingebouwd.
 
-   WAAROM DE GEBEURTENISSEN UIT GAAN (Terry, sessie 22): bevingen,
-   branden, stormen, zee-ijs, luchtkwaliteit en bliksem gaan over wat er
-   OP de aarde gebeurt. Deze state gaat over wat er omheen staat. Ze
-   tegelijk tonen levert twee verhalen op een bol, en dan wint geen van
-   beide.
+   ------------------------------------------------------------
+   WAT ER IN SESSIE 23 VERANDERDE, EN WAAROM
+   ------------------------------------------------------------
+   Deze state was GEOCENTRISCH: zeven planeten op schillen rond de
+   aardbol. Meetkundig klopte dat tot op 5e-14, maar het beeld leest als
+   een model van het zonnestelsel, en dat is het niet. Terry, aan het
+   eind van sessie 22: "het zonnestelsel draait natuurlijk niet rondom
+   de aarde maar de zon."
+
+   De ontsnapping uit "de aarde staat op (0,0,0)" is niet de scene
+   verbouwen — globe.gl's bol, de shader, de terminator en elke laag
+   gaan van die oorsprong uit en die is daar niet weg te halen. De
+   ontsnapping is: TOON DE GLOBE NIET. In een heliocentrisch beeld heb
+   je geen aardbol nodig, alleen een stip in een baan.
+
+   De geocentrische projectie is niet weggegooid: die staat nu in de
+   gewone weergave, als schakelbare laag. Dezelfde planeet, twee
+   stelsels, en de knop ertussen is de uitleg.
 
    ------------------------------------------------------------
-   HET REFERENTIEVLAK IS DE ECLIPTICA, niet het aarde-zonvlak van de
-   magneto-state. Voor planeten is dat het juiste vlak: ze liggen er per
-   definitie omheen, dus de stand verklaart zelf waarom je ze in een
-   band ziet staan.
+   DE ORIENTATIE WORDT BEVROREN, en dat is het belangrijkste detail.
 
-   De ecliptica-noordpool ligt op rechte klimming 270 graden en
-   declinatie 90 - eps. In Terra's AARDVASTE frame (lengte 0 op +Z)
-   draait die pool dus mee met de sterrentijd — en dat is fysiek juist:
-   sta je boven de ecliptica-pool, dan draait de aarde onder je door.
-   Dezelfde meetkunde als "the Earth turns beneath a Sun that stays put"
-   bij magneto, alleen om een andere as.
+   `eclipticPole()` draait in Terra's aardvaste frame mee met de
+   sterrentijd — 15,041 graden per uur. Voor de geocentrische weergave
+   is dat fysiek juist: sta je boven de ecliptica-pool, dan draait de
+   aarde onder je door. Voor een HELIOCENTRISCH beeld is het onzin: het
+   zonnestelsel zou dan 88 keer sneller bewegen dan Mercurius (0,17
+   graden per uur) en 366 keer sneller dan de aarde (0,041), en het
+   beeld toont vrijwel uitsluitend de aardrotatie. Precies de fout die
+   het hemelspoor met een bevroren sterrentijd vermijdt.
 
-   TOP staat daarmee 23,44 graden scheef op de rotatie-as, en dat is
-   geen artefact maar het punt: het is de scheefstand die de seizoenen
-   maakt, en het verbindt deze state met `Earth's axis`.
+   Dus: bij binnenkomst één keer orienteren op het ecliptica-frame zoals
+   dat op DAT moment staat — wat de overgang vanuit de aarde-weergave
+   naadloos maakt — en daarna niet meer. De camerastanden lezen daarom
+   `orbits.pole()` en `orbits.vernal()` uit de groep, niet uit de klok.
    ============================================================ */
 
-// De frame-berekeningen stonden hier en zijn in sessie 22 naar
-// compute/frames.js verhuisd, omdat de ecliptica-laag ze ook nodig heeft.
-// Twee kopieën van een frame-berekening lopen stil uiteen.
-import { eclipticPole as poolVan, sunDirection as zonVan } from '../compute/frames.js';
-
 export function createSpaceState(THREE, deps) {
-  const { world, planets, lagen } = deps;
+  const { world, orbits, layers } = deps;
 
-  const _pool = new THREE.Vector3();
-  const _zon = new THREE.Vector3();
-  const _zij = new THREE.Vector3();
-  const _op = new THREE.Vector3();
-  const nul = new THREE.Vector3(0, 0, 0);
+  const _dir = new THREE.Vector3();
+  const _side = new THREE.Vector3();
+  const _tilt = new THREE.Vector3();
+  const origin = new THREE.Vector3(0, 0, 0);
 
   const moment = () => (deps.moment ? deps.moment() : new Date());
-
-  // Dunne wrappers die het resultaat in een hergebruikte Vector3 zetten:
-  // deze standen worden bij elke camerabeweging berekend en hoeven daar
-  // geen allocatie voor te doen.
-  const eclipticaPool = (date) => { const u = poolVan(date);
-                                    return _pool.set(u.x, u.y, u.z).normalize(); };
-  const zonRichting  = (date) => { const u = zonVan(date);
-                                    return _zon.set(u.x, u.y, u.z).normalize(); };
 
   /* ----------------------------------------------------------
      HOE VER MOET DE CAMERA STAAN?
@@ -66,79 +65,90 @@ export function createSpaceState(THREE, deps) {
      Op een telefoon in portret vraagt hetzelfde beeld ruim twee keer
      de afstand van een breed scherm, dus dit is geen constante.
   ---------------------------------------------------------- */
-  function pasAfstand(S) {
+  function fitDistance(S) {
     const cam = world.camera();
     const halfV = (cam.fov / 2) * Math.PI / 180;
     const halfH = Math.atan(cam.aspect * Math.tan(halfV));
     return S / Math.sin(Math.min(halfV, halfH));
   }
 
-  // De buitenste schil plus de bol erop, zodat Neptunus niet op de rand plakt.
-  const overzichtsAfstand = () =>
-    pasAfstand(planets.config.schilBuiten + planets.config.bolStraal * 2);
+  // Neptunus' baan plus de bol erop, zodat hij niet op de rand plakt.
+  const overviewDistance = () =>
+    fitDistance(orbits.config.scaleOuter + orbits.config.bodyRadius * 2);
 
-  const grenzen = () => ({
-    min: planets.config.earthRadius * 1.55,
-    max: overzichtsAfstand() * 2.4
+  /* De ondergrens is hier NIET `zoomMinDistance` (155). Dat getal bestaat
+     omdat diep inzoomen op de aardbol zwarte clipping geeft — en die bol
+     is in deze state verborgen. Halverwege Mercurius' baan mag je dus
+     gerust komen; dat is precies waar het binnenstelsel leesbaar wordt. */
+  const bounds = () => ({
+    min: orbits.config.scaleInner * 0.5,
+    max: overviewDistance() * 2.4
   });
 
-  function doelUit(richting, afstand) {
-    const g = grenzen();
-    return { pos: richting.clone().multiplyScalar(afstand), target: nul.clone(),
-             min: g.min, max: Math.max(g.max, afstand * 1.15) };
+  function targetFrom(direction, distance) {
+    const b = bounds();
+    return { pos: direction.clone().multiplyScalar(distance), target: origin.clone(),
+             min: b.min, max: Math.max(b.max, distance * 1.15) };
   }
 
   /* ----------------------------------------------------------
-     DE VIER STANDEN.
+     DE VIER STANDEN, alle vier uit de BEVROREN groepsorientatie.
 
-     TOP          langs de ecliptica-pool: alle planeten in een ring
-     LEFT/RIGHT   in het eclipticavlak, 90 graden van de zon: de band
-                  op zijn kant, wat het sterkste beeld is van "alles
-                  ligt in een vlak"
-     ORBIT        vrij
+     TOP        langs de ecliptica-pool: acht banen als concentrische
+                ellipsen, en Mercurius' zon-offset is daar het duidelijkst
+     EDGE       in het vlak, langs het lentepunt: het baanvlak op zijn
+                kant, wat het sterkste beeld is van "alles ligt in een vlak"
+     SIDE       idem, 90 graden verder — een tweede kijkrichting binnen
+                datzelfde vlak
+     ORBIT      schuin, vrij te draaien
 
-     Top, Left en Right zijn VASTGEZET — de orientatie staat vast,
-     maar pannen en zoomen blijven toegestaan. Dat is het verschil
-     met magneto's "zoom only"; zie de kop van core/view-state.js.
+     `left`/`right` uit sessie 22 zijn vervallen: die stonden loodrecht op
+     de zonrichting GEZIEN VANAF DE AARDE, en die aarde is hier geen
+     middelpunt meer. Ze zijn vervangen door richtingen uit het frame zelf,
+     die niet verouderen zodra je de tijd verschuift.
+
+     Top, Edge en Side zijn VASTGEZET — de orientatie staat vast, maar
+     pannen en zoomen blijven toegestaan. Dat is het verschil met magneto's
+     "zoom only"; zie de kop van core/view-state.js.
   ---------------------------------------------------------- */
   const standen = {
     top: {
       vast: true,
-      doel: () => doelUit(eclipticaPool(moment()), overzichtsAfstand())
+      doel: () => targetFrom(orbits.pole(_dir).clone(), overviewDistance())
     },
-    left: {
+    edge: {
+      vast: true,
+      doel: () => targetFrom(orbits.vernal(_dir).clone(), overviewDistance())
+    },
+    side: {
       vast: true,
       doel: () => {
-        const d = moment();
-        _zij.crossVectors(eclipticaPool(d), zonRichting(d)).normalize();
-        return doelUit(_zij.clone(), overzichtsAfstand());
-      }
-    },
-    right: {
-      vast: true,
-      doel: () => {
-        const d = moment();
-        _zij.crossVectors(eclipticaPool(d), zonRichting(d)).normalize().negate();
-        return doelUit(_zij.clone(), overzichtsAfstand());
+        // Loodrecht op zowel de pool als het lentepunt: de derde as van
+        // hetzelfde frame, dus per constructie in het baanvlak.
+        _side.crossVectors(orbits.pole(_dir), orbits.vernal(_tilt)).normalize();
+        return targetFrom(_side.clone(), overviewDistance());
       }
     },
     orbit: {
       vast: false,
       doel: () => {
-        // Vanaf een punt schuin boven de ecliptica: de ring is dan een
-        // ellips in plaats van een lijn of een cirkel, en dat leest als
-        // ruimte. Uit de huidige camerarichting zou hier ook kunnen,
-        // maar dan hangt de stand af van waar je toevallig stond.
-        const d = moment();
-        _op.copy(eclipticaPool(d)).multiplyScalar(0.55);
-        _zij.crossVectors(eclipticaPool(d), zonRichting(d)).normalize();
-        return doelUit(_op.add(_zij).normalize(), overzichtsAfstand());
+        // Schuin boven het vlak: de banen worden dan ellipsen in plaats van
+        // lijnen of cirkels, en dat leest als ruimte. Uit de huidige
+        // camerarichting zou hier ook kunnen, maar dan hangt de stand af
+        // van waar je toevallig stond.
+        _tilt.copy(orbits.pole(_dir)).multiplyScalar(0.55);
+        _side.copy(orbits.vernal(_dir));
+        return targetFrom(_tilt.add(_side).normalize().clone(), overviewDistance());
       }
     }
   };
 
   /* ----------------------------------------------------------
      DE DEFINITIE die core/view-state.js uitvoert.
+
+     De sleutels hier (body/knop/standen/binnen/buiten) zijn Nederlands
+     omdat het CONTRACT in view-state.js woont, en dat bestand raken we
+     deze sessie niet aan. Het gaat mee zodra magneto erop migreert.
   ---------------------------------------------------------- */
   const definitie = {
     body: 'space-on',
@@ -147,28 +157,39 @@ export function createSpaceState(THREE, deps) {
     knopUit: 'Enter space view',
     standen,
     beginstand: 'orbit',
-    doel: () => doelUit(
-      standen.orbit.doel().pos.clone().normalize(), overzichtsAfstand()),
+    doel: () => targetFrom(
+      standen.orbit.doel().pos.clone().normalize(), overviewDistance()),
 
     binnen() {
-      lagen.gebeurtenissenUit();
-      planets.setVisible(true);
-      planets.update(moment(), world.camera());
+      const d = moment();
+      layers.eventsOff();
+      layers.environmentOff();
+      // EERST orienteren, DAN pas een stand berekenen: view-state.js vraagt
+      // direct na `binnen()` om `standen.orbit.doel()`, en die leest de
+      // quaternion die hier gezet wordt. Andersom staat de camera op de
+      // orientatie van de vórige keer.
+      const f = deps.skyFrame(d);
+      orbits.orient(f.gast, f.eps);
+      orbits.setVisible(true);
+      orbits.buildOrbits(d);
+      orbits.update(d, world.camera());
     },
 
     buiten() {
-      planets.setVisible(false);
-      planets.setFocus(null);
-      lagen.gebeurtenissenTerug();
+      orbits.setVisible(false);
+      orbits.setFocus(null);
+      layers.environmentRestore();
+      layers.eventsRestore();
     }
   };
 
   /* De state loopt mee met de tijdkiezer. Wordt aangeroepen door dezelfde
-     plek die de zon en maan bijwerkt, zodat er geen tweede klok ontstaat. */
+     plek die de zon en maan bijwerkt, zodat er geen tweede klok ontstaat.
+     Hier wordt NIET opnieuw georienteerd — zie de kopnoot. */
   function tik() {
-    if (!planets.group.visible) return;
-    planets.update(moment(), world.camera());
+    if (!orbits.group.visible) return;
+    orbits.update(moment(), world.camera());
   }
 
-  return { definitie, standen: Object.keys(standen), tik, eclipticaPool, zonRichting };
+  return { definitie, standen: Object.keys(standen), tik };
 }

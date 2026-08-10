@@ -67,10 +67,30 @@ export function createLabelSprite(THREE, text, color, opts = {}) {
    deze scenes loopt van de aarde tot voorbij Neptunus, en een sprite die
    daar leesbaar is bedekt van dichtbij het halve scherm. De maat wordt
    dus per update uit de camera-afstand teruggerekend naar het aantal
-   pixels dat we willen. */
+   pixels dat we willen.
+
+   DE AFSTAND MOET IN WERELDRUIMTE, en dat is niet vanzelfsprekend: eerder
+   stond hier `camera.position.distanceTo(sprite.position)`. Dat klopt
+   zolang de ouder van de sprite op identiteit staat — bij de planeten- en
+   Lagrange-laag is dat zo, dus het viel nooit op. De baanlaag hangt in een
+   GEDRAAIDE groep, en daar vergelijkt die regel een wereldpositie met een
+   lokale. GEMETEN gevolg: Neptunus' label werd 36,5 px waar 24 hoorde, een
+   fout van 52%, terwijl Venus op 20,5 uitkwam — labels die schermvast
+   heten en het zichtbaar niet zijn.
+
+   `getWorldPosition()` werkt de matrix zelf bij, dus dit blijft ook kloppen
+   als de aanroeper vóór de eerstvolgende render meet.
+
+   `_scratch` staat BOVEN zijn gebruiker — deze module is klein genoeg om de
+   TDZ te overleven, maar de regel in dit project is dat een `const` boven de
+   code staat die hem leest, en die geldt ook als het net goed zou gaan. */
+let _tmp = null;
+const _scratch = (THREE) => (_tmp || (_tmp = new THREE.Vector3()));
+
 export function scaleToPixels(THREE, sprite, camera, heightPx) {
   const c = sprite.userData.labelCanvas || DEFAULTS;
-  const d = camera.position.distanceTo(sprite.position);
+  const wp = sprite.getWorldPosition(_scratch(THREE));
+  const d = camera.position.distanceTo(wp);
   const perPixel = 2 * d * Math.tan(camera.fov / 2 * Math.PI / 180) / window.innerHeight;
   const h = heightPx * perPixel;
   sprite.scale.set(h * c.width / c.height, h, 1);
