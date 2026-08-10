@@ -53,7 +53,7 @@ import { DEG, sind, cosd, norm360, norm180, julianDay, deltaTSeconds,
    positie is het verschil van twee heliocentrische, dus zonder de
    aarde is er niets te berekenen.
 ------------------------------------------------------------ */
-const BAAN = {
+const ORBIT_ELEMENTS = {
   mercury: {
     L: [252.250906, 149474.0722491, 0.00030350, 0.000000018],
     a: [0.387098310, 0, 0, 0],
@@ -122,20 +122,30 @@ const BAAN = {
 
 // De zeven die Terra toont. De aarde staat bewust niet in deze lijst:
 // hij is het rekenpunt, niet een lichaam aan de hemel.
-export const PLANETEN = ['mercury', 'venus', 'mars', 'jupiter',
+export const PLANETS = ['mercury', 'venus', 'mars', 'jupiter',
                          'saturn', 'uranus', 'neptune'];
 
 // Wat een kijker ziet, niet wat een ontwerper mooi vindt. De kleuren
 // zijn de waargenomen tinten; de laag gebruikt ze als beginwaarde van
 // een materiaal dat later een textuur kan krijgen.
-export const PLANEET_INFO = {
-  mercury: { naam: 'Mercury', kleur: 0x9c9188 },
-  venus:   { naam: 'Venus',   kleur: 0xe8dcb0 },
-  mars:    { naam: 'Mars',    kleur: 0xc1502e },
-  jupiter: { naam: 'Jupiter', kleur: 0xd8a878 },
-  saturn:  { naam: 'Saturn',  kleur: 0xe3d5a0 },
-  uranus:  { naam: 'Uranus',  kleur: 0x9fd8e0 },
-  neptune: { naam: 'Neptune', kleur: 0x5b7fd4 }
+/* De ACHT lichamen van het heliocentrische beeld — hier hoort de aarde er
+   wel bij, want daar is hij geen rekenpunt maar een planeet als de rest.
+   Dat verschil is het hele punt van die weergave, en het is de reden dat
+   dit een tweede lijst is en geen uitbreiding van PLANETS: wie `PLANETS`
+   uitbreidt, zet de aarde ook in het lijstje aan de hemel, en daar staat
+   hij per definitie niet. */
+export const BODIES = ['mercury', 'venus', 'earth', 'mars', 'jupiter',
+                       'saturn', 'uranus', 'neptune'];
+
+export const PLANET_INFO = {
+  mercury: { name: 'Mercury', color: 0x9c9188 },
+  earth:   { name: 'Earth',   color: 0x63a5e0 },
+  venus:   { name: 'Venus',   color: 0xe8dcb0 },
+  mars:    { name: 'Mars',    color: 0xc1502e },
+  jupiter: { name: 'Jupiter', color: 0xd8a878 },
+  saturn:  { name: 'Saturn',  color: 0xe3d5a0 },
+  uranus:  { name: 'Uranus',  color: 0x9fd8e0 },
+  neptune: { name: 'Neptune', color: 0x5b7fd4 }
 };
 
 const poly = (c, T) => c[0] + c[1] * T + c[2] * T * T + c[3] * T * T * T;
@@ -144,7 +154,7 @@ const poly = (c, T) => c[0] + c[1] * T + c[2] * T * T + c[3] * T * T * T;
    Zonder deze correctie staat Jupiter tot 0,01 graad naast zijn
    plek — een kwartier maanbreedte, dus zichtbaar zodra je twee
    bronnen naast elkaar legt. */
-const LICHTTIJD_PER_AE = 0.0057755183;
+const LIGHT_TIME_PER_AU = 0.0057755183;
 
 /* ------------------------------------------------------------
    KEPLER — E - e*sin(E) = M, opgelost met Newton-Raphson.
@@ -167,8 +177,8 @@ function keplerE(M, e) {
 
 /* Heliocentrische rechthoekige ecliptische coordinaten, in AE.
    Meeus 33.1 t/m 33.4. */
-function helio(sleutel, T) {
-  const el = BAAN[sleutel];
+function heliocentricAt(key, T) {
+  const el = ORBIT_ELEMENTS[key];
   const L = norm360(poly(el.L, T));
   const a = poly(el.a, T);
   const e = poly(el.e, T);
@@ -195,6 +205,121 @@ function helio(sleutel, T) {
 }
 
 /* ------------------------------------------------------------
+   HET HELIOCENTRISCHE BEELD — drie functies die de posities die
+   hierboven al berekend worden NIET meer weggooien.
+
+   `planetPosition()` roept `heliocentricAt()` twee keer aan en houdt
+   alleen het VERSCHIL met de aarde over. Dat verschil is wat je vanaf
+   de aarde ziet; wat eronder ligt — waar de planeten werkelijk staan —
+   verdween tot sessie 23 in het niets. Deze drie halen het naar boven.
+
+   GEEN LICHTTIJDCORRECTIE hier, en dat is geen verzuim. Lichttijd
+   corrigeert voor een WAARNEMER; in een heliocentrisch beeld is er
+   geen waarnemer, je kijkt naar het stelsel zelf. De planeet staat waar
+   hij staat.
+------------------------------------------------------------ */
+
+/* De Juliaanse eeuwen TT sinds J2000 — dezelfde T die planetPosition()
+   intern gebruikt, nu ook bruikbaar voor wie de baanelementen zelf wil
+   uitlezen zonder een positie te vragen. */
+export function julianCenturies(date) {
+  return (julianDay(date) + deltaTSeconds(date) / 86400 - 2451545.0) / 36525;
+}
+
+/* Heliocentrische rechthoekige ecliptische coordinaten in AE, voor elk
+   lichaam uit BODIES (de aarde inbegrepen). Rechtshandig: +x naar het
+   lentepunt van de datum, +z naar de ecliptica-noordpool. */
+export function heliocentric(date, key) {
+  return heliocentricAt(key, julianCenturies(date));
+}
+
+/* ------------------------------------------------------------
+   DE BAAN ALS ECHTE ELLIPS — de Gauss-vectoren P en Q.
+
+   P wijst naar het perihelium, Q staat er een kwartslag verder in de
+   bewegingsrichting op. Daarmee is de hele baan:
+
+     r(E) = a(cos E - e)·P + b·sin E·Q       met  b = a·sqrt(1 - e²)
+
+   WAAROM NIET GEWOON heliocentric() N KEER OVER EEN OMLOOPTIJD. Drie
+   redenen, en de derde is de doorslaggevende:
+   1. het kost N Kepler-oplossingen en N polynoom-evaluaties;
+   2. Neptunus vraagt dan 165 jaar aan tijdstappen;
+   3. de lus SLUIT NIET exact, want de elementen verlopen ondertussen —
+      en een baanring met een zichtbare naad is geen baanring.
+
+   Met een sweep van E op EEN vaste T is het laatste punt letterlijk het
+   eerste, en blijft de zon exact in een brandpunt. Dat laatste is wat de
+   ring te vertellen heeft: Mercurius' zon-offset is a·e = 21% van zijn
+   baanstraal, en dat zie je.
+------------------------------------------------------------ */
+export function orbitBasis(key, T) {
+  const el = ORBIT_ELEMENTS[key];
+  const a = poly(el.a, T);
+  const e = poly(el.e, T);
+  const i = poly(el.i, T);
+  const O = norm360(poly(el.O, T));
+  const w = norm360(poly(el.P, T) - O);      // argument van het perihelium
+
+  return {
+    a, e,
+    b: a * Math.sqrt(1 - e * e),
+    P: { x: cosd(O) * cosd(w) - sind(O) * sind(w) * cosd(i),
+         y: sind(O) * cosd(w) + cosd(O) * sind(w) * cosd(i),
+         z: sind(w) * sind(i) },
+    Q: { x: -cosd(O) * sind(w) - sind(O) * cosd(w) * cosd(i),
+         y: -sind(O) * sind(w) + cosd(O) * cosd(w) * cosd(i),
+         z:  cosd(w) * sind(i) }
+  };
+}
+
+/* Een punt op die ellips. E = 0 is het perihelium, E = pi het aphelium. */
+export function orbitPoint(basis, E) {
+  const c = basis.a * (Math.cos(E) - basis.e);
+  const s = basis.b * Math.sin(E);
+  return { x: c * basis.P.x + s * basis.Q.x,
+           y: c * basis.P.y + s * basis.Q.y,
+           z: c * basis.P.z + s * basis.Q.z };
+}
+
+/* ------------------------------------------------------------
+   DE BAAN GEZIEN VANAF DE AARDE — de geocentrische tegenhanger.
+
+   Neemt de hele baan-ellips en projecteert hem op de hemel vanaf de
+   HUIDIGE aardepositie. Voor Mercurius en Venus levert dat een gesloten
+   lus rond de zon, waarvan de wijdte hun grootste elongatie is; voor de
+   buitenplaneten een kromme die dicht bij de ecliptica blijft.
+
+   DIT IS IETS ANDERS DAN skyTrack() OVER EEN OMLOOPTIJD, en het verschil
+   is de reden dat deze functie bestaat. Dat pad zou de planeet volgen
+   terwijl de AARDE ondertussen 165 rondjes maakt: 165 retrograde lussen
+   die bij een paar honderd monsterpunten aliassen tot een gladde cirkel —
+   het juiste plaatje om de verkeerde reden. Hier staat de aarde stil en
+   beweegt alleen de planeet, en dat is precies de vraag "waar KAN dit
+   lichaam aan de hemel staan".
+------------------------------------------------------------ */
+export function projectedOrbit(date, key, points = 240) {
+  const T = julianCenturies(date);
+  const earth = heliocentricAt('earth', T);
+  const basis = orbitBasis(key, T);
+  const eps = meanObliquity(T);
+
+  const out = [];
+  for (let n = 0; n < points; n++) {
+    const p = orbitPoint(basis, (n / points) * Math.PI * 2);
+    const dx = p.x - earth.x, dy = p.y - earth.y, dz = p.z - earth.z;
+    const delta = Math.hypot(dx, dy, dz);
+    const lambda = norm360(Math.atan2(dy, dx) / DEG);
+    const beta = Math.asin(dz / delta) / DEG;
+    const ra = norm360(Math.atan2(sind(lambda) * cosd(eps) - Math.tan(beta * DEG) * sind(eps),
+                                  cosd(lambda)) / DEG);
+    const dec = Math.asin(sind(beta) * cosd(eps) + cosd(beta) * sind(eps) * sind(lambda)) / DEG;
+    out.push({ ra, dec });
+  }
+  return out;
+}
+
+/* ------------------------------------------------------------
    SCHIJNBARE MAGNITUDE — Meeus 41, set van de Astronomical Almanac.
 
    Dit is geen sierwaarde: de laag koppelt zijn dekking eraan, zodat
@@ -209,10 +334,10 @@ function helio(sleutel, T) {
    en moet dan ook de laag laten weten dat Saturnus' helderheid over
    jaren varieert zonder dat zijn afstand verandert.
 ------------------------------------------------------------ */
-function magnitude(sleutel, r, delta, fase) {
+function magnitude(key, r, delta, phase) {
   const g = 5 * Math.log10(r * delta);
-  const i = fase, i2 = i * i, i3 = i2 * i;
-  switch (sleutel) {
+  const i = phase, i2 = i * i, i3 = i2 * i;
+  switch (key) {
     case 'mercury': return -0.42 + g + 0.0380 * i - 0.000273 * i2 + 0.000002 * i3;
     case 'venus':   return -4.40 + g + 0.0009 * i + 0.000239 * i2 - 0.00000065 * i3;
     case 'mars':    return -1.52 + g + 0.016 * i;
@@ -237,20 +362,20 @@ function magnitude(sleutel, r, delta, fase) {
    niets meer: de correctie op de correctie ligt onder een
    boogseconde, ruim onder de boogminuut die deze reeks waard is.
 ------------------------------------------------------------ */
-export function planeetPositie(date, sleutel) {
+export function planetPosition(date, key) {
   const jdUT = julianDay(date);
   const jdTT = jdUT + deltaTSeconds(date) / 86400;
   const T = (jdTT - 2451545.0) / 36525;
 
-  const aarde = helio('earth', T);
-  let p = helio(sleutel, T);
-  let dx = p.x - aarde.x, dy = p.y - aarde.y, dz = p.z - aarde.z;
+  const earth = heliocentricAt('earth', T);
+  let p = heliocentricAt(key, T);
+  let dx = p.x - earth.x, dy = p.y - earth.y, dz = p.z - earth.z;
   let delta = Math.hypot(dx, dy, dz);
 
   // Terug in de tijd over de lichttijd, en opnieuw.
-  const Ttau = T - (LICHTTIJD_PER_AE * delta) / 36525;
-  p = helio(sleutel, Ttau);
-  dx = p.x - aarde.x; dy = p.y - aarde.y; dz = p.z - aarde.z;
+  const Ttau = T - (LIGHT_TIME_PER_AU * delta) / 36525;
+  p = heliocentricAt(key, Ttau);
+  dx = p.x - earth.x; dy = p.y - earth.y; dz = p.z - earth.z;
   delta = Math.hypot(dx, dy, dz);
 
   const lambda = norm360(Math.atan2(dy, dx) / DEG);
@@ -262,9 +387,9 @@ export function planeetPositie(date, sleutel) {
   const dec = Math.asin(sind(beta) * cosd(eps) + cosd(beta) * sind(eps) * sind(lambda)) / DEG;
 
   // Fasehoek: de hoek zon-planeet-aarde. R is de afstand zon-aarde.
-  const R = Math.hypot(aarde.x, aarde.y, aarde.z);
+  const R = Math.hypot(earth.x, earth.y, earth.z);
   const cosFase = (p.r * p.r + delta * delta - R * R) / (2 * p.r * delta);
-  const fase = Math.acos(Math.max(-1, Math.min(1, cosFase))) / DEG;
+  const phase = Math.acos(Math.max(-1, Math.min(1, cosFase))) / DEG;
 
   /* ELONGATIE — de hoek tussen de planeet en de zon, aan de hemel gezien.
 
@@ -280,22 +405,22 @@ export function planeetPositie(date, sleutel) {
      Berekend als de ware hoekafstand en niet als het verschil in
      ecliptische lengte: dat scheelt bij Mercurius tot een halve graad,
      want zijn baan staat 7 graden schuin. */
-  const zon = sunPosition(jdTT);
-  const cosElong = sind(dec) * sind(zon.dec)
-                 + cosd(dec) * cosd(zon.dec) * cosd(ra - zon.ra);
-  const elongatie = Math.acos(Math.max(-1, Math.min(1, cosElong))) / DEG;
+  const sun = sunPosition(jdTT);
+  const cosElong = sind(dec) * sind(sun.dec)
+                 + cosd(dec) * cosd(sun.dec) * cosd(ra - sun.ra);
+  const elongation = Math.acos(Math.max(-1, Math.min(1, cosElong))) / DEG;
   // Oost of west van de zon: avondster tegenover ochtendster.
-  const oostelijk = norm180(lambda - zon.lambda) > 0;
+  const eastern = norm180(lambda - sun.lambda) > 0;
 
   const gast = gastDeg(jdUT, T);
   return {
-    sleutel, ra, dec, lambda, beta,
+    key, ra, dec, lambda, beta,
     distanceAU: delta,
     heliocentricAU: p.r,
-    faseHoek: fase,
-    verlicht: (1 + cosd(fase)) / 2,
-    magnitude: magnitude(sleutel, p.r, delta, fase),
-    elongatie, oostelijk,
+    phaseAngle: phase,
+    illuminated: (1 + cosd(phase)) / 2,
+    magnitude: magnitude(key, p.r, delta, phase),
+    elongation, eastern,
     sub: { lat: dec, lon: norm180(ra - gast) }
   };
 }
@@ -304,9 +429,9 @@ export function planeetPositie(date, sleutel) {
    volgorde is niet cosmetisch: de laag zet ze op oplopende schillen
    en leest hem hier af, zodat er geen tweede lijst ontstaat die uit
    de pas kan lopen. */
-export function planeetEfemeriden(date) {
+export function planetEphemerides(date) {
   const uit = {};
-  for (const k of PLANETEN) uit[k] = planeetPositie(date, k);
+  for (const k of PLANETS) uit[k] = planetPosition(date, k);
   return uit;
 }
 
@@ -325,13 +450,13 @@ export function planeetEfemeriden(date) {
    `dagen` is het HELE venster; het spoor loopt van -dagen/2 tot
    +dagen/2 rond het gegeven moment. Een lus vraagt 60 tot 90 dagen.
 ------------------------------------------------------------ */
-export function hemelspoor(date, sleutel, dagen = 90, punten = 120) {
+export function skyTrack(date, key, days = 90, points = 120) {
   const uit = [];
-  const t0 = date.getTime() - (dagen / 2) * 86400000;
-  const stap = (dagen * 86400000) / (punten - 1);
-  for (let n = 0; n < punten; n++) {
-    const t = new Date(t0 + n * stap);
-    const p = planeetPositie(t, sleutel);
+  const t0 = date.getTime() - (days / 2) * 86400000;
+  const step = (days * 86400000) / (points - 1);
+  for (let n = 0; n < points; n++) {
+    const t = new Date(t0 + n * step);
+    const p = planetPosition(t, key);
     uit.push({ ra: p.ra, dec: p.dec, t: t.getTime() });
   }
   return uit;
@@ -356,7 +481,7 @@ export function hemelspoor(date, sleutel, dagen = 90, punten = 120) {
 ============================================================ */
 
 /* Hoekafstand tussen twee posities, in graden. */
-function scheiding(a, b) {
+function separation(a, b) {
   const c = sind(a.dec) * sind(b.dec)
           + cosd(a.dec) * cosd(b.dec) * cosd(a.ra - b.ra);
   return Math.acos(Math.max(-1, Math.min(1, c))) / DEG;
@@ -365,7 +490,7 @@ function scheiding(a, b) {
 /* Een conjunctie telt pas als de twee dichter dan dit bij elkaar staan.
    Drie graden is ruim zes maandiameters: dicht genoeg om als paar op te
    vallen, ruim genoeg om er een handvol per jaar te hebben. */
-const CONJUNCTIE_DREMPEL = 3;
+const CONJUNCTION_LIMIT = 3;
 
 /* ------------------------------------------------------------
    De eerstvolgende (of vorige) conjunctie vanaf een moment.
@@ -380,10 +505,10 @@ const CONJUNCTIE_DREMPEL = 3;
    af — dat is geen kunstgreep maar het verschil tussen een berekening
    en een waarneming.
 ------------------------------------------------------------ */
-export function volgendeConjunctie(from, maxDagen = 900, richting = 1) {
-  const stapGrof = 1;                       // dagen
+export function nextConjunction(from, maxDays = 900, direction = 1) {
+  const coarseStep = 1;                       // dagen
   const t0 = from.getTime();
-  let kandidaat = null;
+  let candidate = null;
 
   /* PER PAAR bijhouden of het nadert of wijkt. Eén gedeelde "vorige stap"
      volstaat niet, en dat kostte de eerste versie een fout: die zag elke
@@ -394,33 +519,33 @@ export function volgendeConjunctie(from, maxDagen = 900, richting = 1) {
      paar dat al wijkt op het moment dat je begint te kijken, hoort dus
      overgeslagen te worden tot het opnieuw nadert — anders vind je een
      conjunctie die net achter je ligt. */
-  const staat = {};                         // paarsleutel -> { vorige, dalend }
+  const pairState = {};                         // paarsleutel -> { vorige, dalend }
 
-  for (let d = 0; d <= maxDagen && !kandidaat; d += stapGrof) {
-    const t = new Date(t0 + richting * d * 86400000);
-    const eph = planeetEfemeriden(t);
+  for (let d = 0; d <= maxDays && !candidate; d += coarseStep) {
+    const t = new Date(t0 + direction * d * 86400000);
+    const eph = planetEphemerides(t);
 
-    for (let i = 0; i < PLANETEN.length && !kandidaat; i++) {
-      for (let j = i + 1; j < PLANETEN.length && !kandidaat; j++) {
-        const A = PLANETEN[i], B = PLANETEN[j], sleutel = A + '|' + B;
+    for (let i = 0; i < PLANETS.length && !candidate; i++) {
+      for (let j = i + 1; j < PLANETS.length && !candidate; j++) {
+        const A = PLANETS[i], B = PLANETS[j], key = A + '|' + B;
         const a = eph[A], b = eph[B];
         // In het daglicht: meetkundig een conjunctie, maar niets te zien.
-        if (a.elongatie < 15 || b.elongatie < 15) { delete staat[sleutel]; continue; }
-        const s = scheiding(a, b);
-        if (s > CONJUNCTIE_DREMPEL) { delete staat[sleutel]; continue; }
+        if (a.elongation < 15 || b.elongation < 15) { delete pairState[key]; continue; }
+        const s = separation(a, b);
+        if (s > CONJUNCTION_LIMIT) { delete pairState[key]; continue; }
 
-        const st = staat[sleutel];
+        const st = pairState[key];
         if (st) {
           if (s < st.sep) {
-            staat[sleutel] = { sep: s, t: t.getTime(), dalend: true };
-          } else if (st.dalend) {
+            pairState[key] = { sep: s, t: t.getTime(), falling: true };
+          } else if (st.falling) {
             // Gedaald en nu weer stijgend: het minimum lag bij de vorige stap.
-            kandidaat = { t: st.t, paar: { a: A, b: B } };
+            candidate = { t: st.t, pair: { a: A, b: B } };
           } else {
-            staat[sleutel] = { sep: s, t: t.getTime(), dalend: false };
+            pairState[key] = { sep: s, t: t.getTime(), falling: false };
           }
         } else {
-          staat[sleutel] = { sep: s, t: t.getTime(), dalend: false };
+          pairState[key] = { sep: s, t: t.getTime(), falling: false };
         }
       }
     }
@@ -428,7 +553,7 @@ export function volgendeConjunctie(from, maxDagen = 900, richting = 1) {
 
   // Niets gevonden binnen het venster, of het liep nog steeds op toen we
   // stopten: dan is er geen conjunctie om naartoe te springen.
-  if (!kandidaat) return null;
+  if (!candidate) return null;
 
   /* Fijn zoeken rond het grove minimum: een uur per stap over twee dagen.
      Verder verfijnen heeft geen zin — de scheiding verandert bij een
@@ -436,26 +561,26 @@ export function volgendeConjunctie(from, maxDagen = 900, richting = 1) {
      is een boogminuut waard. */
   let best = null;
   for (let u = -24; u <= 24; u++) {
-    const t = new Date(kandidaat.t + u * 3600000);
-    const eph = planeetEfemeriden(t);
-    const s = scheiding(eph[kandidaat.paar.a], eph[kandidaat.paar.b]);
+    const t = new Date(candidate.t + u * 3600000);
+    const eph = planetEphemerides(t);
+    const s = separation(eph[candidate.pair.a], eph[candidate.pair.b]);
     if (!best || s < best.sep) best = { sep: s, t };
   }
 
-  const eph = planeetEfemeriden(best.t);
+  const eph = planetEphemerides(best.t);
   return {
     moment: best.t,
-    a: kandidaat.paar.a,
-    b: kandidaat.paar.b,
-    scheiding: best.sep,
+    a: candidate.pair.a,
+    b: candidate.pair.b,
+    separation: best.sep,
     // Waar aan de hemel, zodat de camera erheen kan draaien.
-    sub: eph[kandidaat.paar.a].sub,
-    elongatie: Math.min(eph[kandidaat.paar.a].elongatie, eph[kandidaat.paar.b].elongatie)
+    sub: eph[candidate.pair.a].sub,
+    elongation: Math.min(eph[candidate.pair.a].elongation, eph[candidate.pair.b].elongation)
   };
 }
 
-export function vorigeConjunctie(from, maxDagen = 900) {
-  return volgendeConjunctie(from, maxDagen, -1);
+export function previousConjunction(from, maxDays = 900) {
+  return nextConjunction(from, maxDays, -1);
 }
 
 /* ------------------------------------------------------------
@@ -491,5 +616,5 @@ export function vorigeConjunctie(from, maxDagen = 900) {
    grenzen gebruikt moet daar als eerste naar kijken — niet naar de
    aardebaan.
 ------------------------------------------------------------ */
-export const GELDIG_VAN = 1600;
-export const GELDIG_TOT = 2400;
+export const VALID_FROM = 1600;
+export const VALID_TO = 2400;

@@ -29,17 +29,17 @@
    slordigheid maar een keuze tussen twee onmogelijkheden.
    ============================================================ */
 
-import { lagrangeRichtingen, LAGRANGE_INFO, L1_L2_KM } from '../compute/frames.js';
+import { lagrangeDirections, LAGRANGE_INFO, L1_L2_KM } from '../compute/frames.js';
 
-export const LAGRANGE_PUNTEN = ['L1', 'L2', 'L4', 'L5'];
+export const LAGRANGE_POINTS = ['L1', 'L2', 'L4', 'L5'];
 
 export function createLagrangeLayer(THREE, opts = {}) {
   const cfg = Object.assign({
-    zonAfstand:    420,     // moet gelijk zijn aan PARAMS.sunDistance
-    binnenStraal:  150,     // waar L1 en L2 komen te staan (symbolisch)
-    markerStraal:    3.4,
-    kleur:      0x8fd0ff,
-    labelHoogtePx:  22
+    sunDistance:    420,     // moet gelijk zijn aan PARAMS.sunDistance
+    innerRadius:  150,     // waar L1 en L2 komen te staan (symbolisch)
+    markerRadius:    3.4,
+    color:      0x8fd0ff,
+    labelHeightPx:  22
   }, opts);
 
   const group = new THREE.Group();
@@ -48,7 +48,7 @@ export function createLagrangeLayer(THREE, opts = {}) {
 
   const LABEL_CANVAS = { breed: 128, hoog: 56, font: 40 };
 
-  function maakLabel(tekst) {
+  function makeLabel(tekst) {
     const cv = document.createElement('canvas');
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     cv.width = LABEL_CANVAS.breed * dpr; cv.height = LABEL_CANVAS.hoog * dpr;
@@ -68,40 +68,40 @@ export function createLagrangeLayer(THREE, opts = {}) {
     return sp;
   }
 
-  const punten = {};
-  for (const k of LAGRANGE_PUNTEN) {
+  const points = {};
+  for (const k of LAGRANGE_POINTS) {
     // Een ruit en geen bol: dit is geen lichaam maar een plek. Een
     // octaeder van drie eenheden leest als een merkteken.
     const mesh = new THREE.Mesh(
-      new THREE.OctahedronGeometry(cfg.markerStraal),
-      new THREE.MeshBasicMaterial({ color: cfg.kleur, transparent: true,
+      new THREE.OctahedronGeometry(cfg.markerRadius),
+      new THREE.MeshBasicMaterial({ color: cfg.color, transparent: true,
                                     opacity: 0.9, wireframe: true }));
-    const label = maakLabel(k);
+    const label = makeLabel(k);
     group.add(mesh, label);
-    punten[k] = { mesh, label, afstandKm: 0, opSchaal: false };
+    points[k] = { mesh, label, distanceKm: 0, onScale: false };
   }
 
   function update(date, camera) {
     if (!group.visible) return null;
-    const r = lagrangeRichtingen(date);
-    for (const k of LAGRANGE_PUNTEN) {
-      const p = punten[k], d = r[k];
-      const straal = d.opZonschil ? cfg.zonAfstand : cfg.binnenStraal;
-      p.mesh.position.set(d.richting.x * straal, d.richting.y * straal, d.richting.z * straal);
+    const r = lagrangeDirections(date);
+    for (const k of LAGRANGE_POINTS) {
+      const p = points[k], d = r[k];
+      const radius = d.onSunShell ? cfg.sunDistance : cfg.innerRadius;
+      p.mesh.position.set(d.direction.x * radius, d.direction.y * radius, d.direction.z * radius);
       p.label.position.copy(p.mesh.position).multiplyScalar(1.05);
-      p.afstandKm = d.afstandKm;
-      p.opSchaal = d.opZonschil;
-      if (camera) schaalLabel(p, camera);
+      p.distanceKm = d.distanceKm;
+      p.onScale = d.onSunShell;
+      if (camera) scaleLabel(p, camera);
     }
     return r;
   }
 
   // Schermvast, zelfde reden als bij de planeetlabels: het zoombereik van
   // deze scene is te groot voor een vaste wereldmaat.
-  function schaalLabel(p, camera) {
+  function scaleLabel(p, camera) {
     const d = camera.position.distanceTo(p.label.position);
     const perPixel = 2 * d * Math.tan(camera.fov / 2 * Math.PI / 180) / window.innerHeight;
-    const h = cfg.labelHoogtePx * perPixel;
+    const h = cfg.labelHeightPx * perPixel;
     p.label.scale.set(h * LABEL_CANVAS.breed / LABEL_CANVAS.hoog, h, 1);
   }
 
@@ -111,12 +111,12 @@ export function createLagrangeLayer(THREE, opts = {}) {
   }
 
   return {
-    group, update, setVisible, punten, config: cfg,
+    group, update, setVisible, points, config: cfg,
     info: LAGRANGE_INFO,
-    afstandKm: L1_L2_KM,
-    hertekenLabels: (camera) => {
+    distanceKm: L1_L2_KM,
+    redrawLabels: (camera) => {
       if (!group.visible) return;
-      for (const k of LAGRANGE_PUNTEN) schaalLabel(punten[k], camera);
+      for (const k of LAGRANGE_POINTS) scaleLabel(points[k], camera);
     },
     isZichtbaar: () => group.visible
   };

@@ -6,7 +6,7 @@
 
    WAT DIT TEKENT EN WAAROM HET ERTOE DOET
    De ecliptica is het vlak van de aardbaan, en daarmee ongeveer het vlak
-   waarin het hele zonnestelsel ligt. Op de bol is hij een grootcirkel
+   waarin het hele zonnestelsel ligt. Op de bol is hij een greatCircle
    die tussen 23,44 graden noord en zuid slingert — precies de band
    tussen de keerkringen, want daar staat de zon loodrecht.
 
@@ -22,7 +22,7 @@
    dit past er netjes tussen.
    ============================================================ */
 
-import { eclipticaPool, grootcirkel } from '../compute/frames.js';
+import { eclipticPole, greatCircle } from '../compute/frames.js';
 
 export function createEclipticLayer(THREE, opts = {}) {
   const cfg = Object.assign({
@@ -65,12 +65,12 @@ export function createEclipticLayer(THREE, opts = {}) {
 
   function update(date) {
     if (!group.visible) return false;
-    const pool = eclipticaPool(date);
+    const pool = eclipticPole(date);
     if (gebouwd) {
       const dot = pool.x * vorige.x + pool.y * vorige.y + pool.z * vorige.z;
       if (dot > DREMPEL) return false;
     }
-    const punten = grootcirkel(pool, cfg.punten);
+    const punten = greatCircle(pool, cfg.punten);
     for (let i = 0; i < cfg.punten; i++) {
       posities[i * 3]     = punten[i].x * straal;
       posities[i * 3 + 1] = punten[i].y * straal;

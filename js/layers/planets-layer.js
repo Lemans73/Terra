@@ -39,9 +39,9 @@
       retrograde lus in. Zie hemelspoor() in compute/planets.js.
    ============================================================ */
 
-import { planeetEfemeriden, hemelspoor, PLANETEN, PLANEET_INFO } from '../compute/planets.js';
+import { planetEphemerides, skyTrack, PLANETS, PLANET_INFO } from '../compute/planets.js';
 import { latLonToUnit, ephemeris, norm180 } from '../sunmoon.js';
-import { gastVan } from '../compute/frames.js';
+import { gastFrom } from '../compute/frames.js';
 
 export function createPlanetsLayer(THREE, opts = {}) {
   const cfg = Object.assign({
@@ -105,18 +105,18 @@ export function createPlanetsLayer(THREE, opts = {}) {
   ---------------------------------------------------------- */
   const lichamen = {};
 
-  for (const k of PLANETEN) {
-    const info = PLANEET_INFO[k];
+  for (const k of PLANETS) {
+    const info = PLANET_INFO[k];
 
     const bolMat = new THREE.MeshBasicMaterial({
-      color: info.kleur, transparent: true, opacity: 1, map: null
+      color: info.color, transparent: true, opacity: 1, map: null
     });
     const bol = new THREE.Mesh(new THREE.SphereGeometry(cfg.bolStraal, 24, 16), bolMat);
 
     // Het subplanetaire punt: waar hij loodrecht boven staat. Een platte
     // ring en geen bol, zodat hij op het oppervlak leest en niet erin.
     const subMat = new THREE.MeshBasicMaterial({
-      color: info.kleur, transparent: true, opacity: 1,
+      color: info.color, transparent: true, opacity: 1,
       side: THREE.DoubleSide, depthWrite: false
     });
     const sub = new THREE.Mesh(new THREE.RingGeometry(1.4, 2.2, 24), subMat);
@@ -125,13 +125,13 @@ export function createPlanetsLayer(THREE, opts = {}) {
     // een hergebruikte buffer — nooit per frame een nieuwe geometrie,
     // dat is de les uit sessie 9 over de landnamen.
     const lijnMat = new THREE.LineBasicMaterial({
-      color: info.kleur, transparent: true, opacity: 0.5
+      color: info.color, transparent: true, opacity: 0.5
     });
     const lijnGeo = new THREE.BufferGeometry();
     lijnGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
     const lijn = new THREE.Line(lijnGeo, lijnMat);
 
-    const label = maakLabel(THREE, info.naam, info.kleur);
+    const label = maakLabel(THREE, info.name, info.color);
 
     group.add(bol, sub, lijn, label);
     lichamen[k] = { bol, bolMat, sub, subMat, lijn, lijnGeo, lijnMat, label,
@@ -201,10 +201,10 @@ export function createPlanetsLayer(THREE, opts = {}) {
      per lichaam en die hoort niet in de renderlus thuis.
   ---------------------------------------------------------- */
   function update(date, camera) {
-    const eph = planeetEfemeriden(date);
+    const eph = planetEphemerides(date);
     laatsteEph = eph;
 
-    for (const k of PLANETEN) {
+    for (const k of PLANETS) {
       const L = lichamen[k], p = eph[k];
       const u = latLonToUnit(p.sub.lat, p.sub.lon);
 
@@ -261,7 +261,7 @@ export function createPlanetsLayer(THREE, opts = {}) {
   ---------------------------------------------------------- */
   function regelLabels(camera) {
     const zichtbaar = [];
-    for (const k of PLANETEN) {
+    for (const k of PLANETS) {
       const L = lichamen[k];
       if (!L.zichtbaar) { L.label.visible = false; continue; }
       _v.copy(L.bol.position).project(camera);
@@ -321,8 +321,8 @@ export function createPlanetsLayer(THREE, opts = {}) {
   function bouwSpoor(date, sleutel) {
     if (!sleutel || !spoorDagen) { spoorLijn.visible = false; spoorVoor = null; return; }
     const L = lichamen[sleutel];
-    const gast = gastVan(ephemeris(date));          // BEVROREN, zie de noot hierboven
-    const punten = hemelspoor(date, sleutel, spoorDagen, 160);
+    const gast = gastFrom(ephemeris(date));          // BEVROREN, zie de noot hierboven
+    const punten = skyTrack(date, sleutel, spoorDagen, 160);
     const arr = new Float32Array(punten.length * 3);
     for (let i = 0; i < punten.length; i++) {
       const u = latLonToUnit(punten[i].dec, norm180(punten[i].ra - gast));
@@ -332,7 +332,7 @@ export function createPlanetsLayer(THREE, opts = {}) {
     }
     spoorGeo.setAttribute('position', new THREE.BufferAttribute(arr, 3));
     spoorGeo.computeBoundingSphere();
-    spoorMat.color.setHex(PLANEET_INFO[sleutel].kleur);
+    spoorMat.color.setHex(PLANET_INFO[sleutel].color);
     spoorLijn.visible = true;
     spoorVoor = sleutel;
   }
@@ -355,7 +355,7 @@ export function createPlanetsLayer(THREE, opts = {}) {
 
   function setFocus(sleutel, date) {
     focus = sleutel && lichamen[sleutel] ? sleutel : null;
-    for (const k of PLANETEN) pasDekkingToe(k);
+    for (const k of PLANETS) pasDekkingToe(k);
     if (spoorDagen && date) bouwSpoor(date, focus);
     else if (!focus) { spoorLijn.visible = false; spoorVoor = null; }
     return focus;
@@ -380,7 +380,7 @@ export function createPlanetsLayer(THREE, opts = {}) {
      een schermafstand is hier zowel goedkoper als vergevingsgezinder. */
   function raakPunt(x, y, marge = 34) {
     let best = null, bestD = marge;
-    for (const k of PLANETEN) {
+    for (const k of PLANETS) {
       const L = lichamen[k];
       if (!L.zichtbaar || !L.scherm) continue;
       const d = Math.hypot(L.scherm.x - x, L.scherm.y - y);

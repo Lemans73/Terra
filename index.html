@@ -1393,11 +1393,11 @@ import { createMagnetoMode } from './js/modes/magneto.js';
 // niets van de app, en de state (states/) orkestreert zonder zelf te tekenen.
 import { createPlanetsLayer } from './js/layers/planets-layer.js';
 import { createEclipticLayer } from './js/layers/ecliptic-layer.js';
-import { createLagrangeLayer, LAGRANGE_PUNTEN } from './js/layers/lagrange-layer.js';
+import { createLagrangeLayer, LAGRANGE_POINTS } from './js/layers/lagrange-layer.js';
 import { createSpaceState } from './js/states/space.js';
 import { maakViewStates } from './js/core/view-state.js';
-import { PLANETEN, PLANEET_INFO, volgendeConjunctie,
-         vorigeConjunctie } from './js/compute/planets.js';
+import { PLANETS, PLANET_INFO, nextConjunction,
+         previousConjunction } from './js/compute/planets.js';
 // Deskundig (schematische) weergavemodus (Fase 1).
 import { enterExpertMode, exitExpertMode } from './js/modes/expert.js';
 // Schematische datalaag-symbolen voor de deskundig-modus (Fase 2).
@@ -3556,7 +3556,7 @@ world.onZoom(pov => {
   // 4. planeetlabels: hun maat is schermvast, dus die moet mee met de
   //    camera-afstand. Doet niets zolang de Space-state uit staat.
   if (planets) planets.hertekenLabels(world.camera());
-  if (lagrange) lagrange.hertekenLabels(world.camera());
+  if (lagrange) lagrange.redrawLabels(world.camera());
 });
 
 world.controls().autoRotate = !REDUCED_MOTION;
@@ -6147,20 +6147,20 @@ function markeerSpaceStand() {
     : 'Free orbit.';
 }
 
-/* De planetenlijst wordt uit PLANETEN gebouwd en niet met de hand geschreven:
+/* De planetenlijst wordt uit PLANETS gebouwd en niet met de hand geschreven:
    een tweede lijst is een lijst die uit de pas gaat lopen. Klikken kiest het
    lichaam in focus; het oogje ernaast zet hem uit. */
 function bouwPlanetenLijst() {
   const host = document.getElementById('planet-list');
   if (!host || host.childElementCount) return;
-  for (const k of PLANETEN) {
+  for (const k of PLANETS) {
     const rij = document.createElement('div');
     rij.className = 'elayer on planet-row';
     rij.dataset.planet = k;
-    rij.innerHTML = '<span class="edot"></span>' + PLANEET_INFO[k].naam +
+    rij.innerHTML = '<span class="edot"></span>' + PLANET_INFO[k].name +
                     '<span class="estat" data-mag>&#8212;</span>';
     rij.querySelector('.edot').style.background =
-      '#' + PLANEET_INFO[k].kleur.toString(16).padStart(6, '0');
+      '#' + PLANET_INFO[k].color.toString(16).padStart(6, '0');
     rij.addEventListener('click', (e) => {
       // Klik op de stip = aan/uit, klik op de naam = in focus nemen. Twee
       // handelingen op één rij, en de stip is de kleinere en preciezere —
@@ -6214,15 +6214,15 @@ function updateSpaceReadout() {
   const p = eph[f];
   const uur = p.ra / 15;
   const h = Math.floor(uur), m = Math.floor((uur - h) * 60);
-  zet('sp-naam', PLANEET_INFO[f].naam);
+  zet('sp-naam', PLANET_INFO[f].name);
   zet('sp-afstand', p.distanceAU.toFixed(3) + ' AU');
   zet('sp-mag', (p.magnitude > 0 ? '+' : '') + p.magnitude.toFixed(2));
   // Oost = avondster (ondergaand ná de zon), west = ochtendster. Bij bijna
   // nul of bijna 180 graden zegt die kant niets meer, dus dan valt hij weg.
-  const kant = (p.elongatie < 3 || p.elongatie > 177) ? ''
-             : (p.oostelijk ? ' E' : ' W');
-  zet('sp-elong', p.elongatie.toFixed(1) + '°' + kant);
-  zet('sp-fase', (p.verlicht * 100).toFixed(0) + '%');
+  const kant = (p.elongation < 3 || p.elongation > 177) ? ''
+             : (p.eastern ? ' E' : ' W');
+  zet('sp-elong', p.elongation.toFixed(1) + '°' + kant);
+  zet('sp-fase', (p.illuminated * 100).toFixed(0) + '%');
   zet('sp-ra', h + 'h ' + String(m).padStart(2, '0') + 'm');
   zet('sp-dec', (p.dec >= 0 ? '+' : '−') + Math.abs(p.dec).toFixed(1) + '°');
   zet('sp-sub', Math.abs(p.sub.lat).toFixed(1) + '° ' + (p.sub.lat >= 0 ? 'N' : 'S') +
@@ -6752,7 +6752,7 @@ function springNaarConjunctie(richting, btn) {
   setTimeout(() => {
     // Vijf dagen marge: anders vindt hij de conjunctie waar we al op staan.
     const vanaf = new Date(momentNow().getTime() + richting * 5 * 86400000);
-    const gevonden = richting > 0 ? volgendeConjunctie(vanaf) : vorigeConjunctie(vanaf);
+    const gevonden = richting > 0 ? nextConjunction(vanaf) : previousConjunction(vanaf);
     btn.disabled = false;
     btn.textContent = label;
     if (!gevonden) { btn.textContent = 'none within 900 days';
@@ -6782,8 +6782,8 @@ function springNaarConjunctie(richting, btn) {
 
     const noot = document.getElementById('conj-uitkomst');
     if (noot) noot.textContent =
-      PLANEET_INFO[gevonden.a].naam + ' and ' + PLANEET_INFO[gevonden.b].naam +
-      ' — ' + gevonden.scheiding.toFixed(2) + '° apart on ' +
+      PLANET_INFO[gevonden.a].name + ' and ' + PLANET_INFO[gevonden.b].name +
+      ' — ' + gevonden.separation.toFixed(2) + '° apart on ' +
       gevonden.moment.toLocaleDateString('en-GB',
         { day: '2-digit', month: 'short', year: 'numeric' });
   }, 30);
@@ -7740,7 +7740,7 @@ ecliptic = createEclipticLayer(THREE, { earthRadius: 100 });
 world.scene().add(ecliptic.group);
 
 // De Lagrange-punten horen wél bij Space: ze staan in de ruimte, niet op de bol.
-lagrange = createLagrangeLayer(THREE, { zonAfstand: PARAMS.sunDistance });
+lagrange = createLagrangeLayer(THREE, { sunDistance: PARAMS.sunDistance });
 world.scene().add(lagrange.group);
 
 // De haken die core/view-state.js van de app krijgt. Functies en geen

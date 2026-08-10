@@ -37,7 +37,7 @@
 // De frame-berekeningen stonden hier en zijn in sessie 22 naar
 // compute/frames.js verhuisd, omdat de ecliptica-laag ze ook nodig heeft.
 // Twee kopieën van een frame-berekening lopen stil uiteen.
-import { eclipticaPool as poolVan, zonRichting as zonVan } from '../compute/frames.js';
+import { eclipticPole as poolVan, sunDirection as zonVan } from '../compute/frames.js';
 
 export function createSpaceState(THREE, deps) {
   const { world, planets, lagen } = deps;
