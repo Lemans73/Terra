@@ -19,6 +19,22 @@
     --aqi: #a78bfa;
     --lightning: #bcd6ff;
     --accent: #ff6b3d;
+
+    /* ---- De knoppenrij, en wat eroverheen mag staan (sessie 24) ----------
+       De rij ligt onderaan en is ALTIJD zichtbaar. Elk zwevend paneel moet er
+       dus bovenop stoppen, en dat is geen schatting: `--dock-h` is GEMETEN op
+       39 px (11 px padding boven en onder, 15 px icoon, 2 px rand).
+
+       Waarom variabelen en geen ingetikte getallen: `.panel` en `.nav-panel`
+       moeten allebei dezelfde onderrand aanhouden, en de media query op 640 px
+       verzet de rij naar 12 px. Twee ingetikte reeksen zouden stil uiteenlopen
+       — precies wat er bij de keerkring en de scheefstand ook dreigde. */
+    --dock-bottom: 28px;
+    --dock-h: 39px;
+    --dock-gap: 14px;
+    --panel-lift: calc(var(--dock-bottom) + var(--dock-h) + var(--dock-gap));
+    /* Vrije ruimte boven een paneel, zodat de masthead er niet onder verdwijnt. */
+    --panel-top-gap: 38px;
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -206,7 +222,11 @@
   .panel {
     position: fixed;
     left: 28px;
-    bottom: 28px;
+    /* BOVEN DE KNOPPENRIJ, niet erop (sessie 24). Stond op 28 px — dezelfde
+       waarde als de rij — dus het paneel liep tot achter de knoppen door en de
+       rij tekende er bovenop. Zichtbaar als een knop die in het paneel lijkt te
+       zweven. Zie `--panel-lift` in :root voor de opbouw van dit getal. */
+    bottom: var(--panel-lift);
     z-index: 10;
     /* Breder en iets lager sinds sessie 17: de tabs dragen meer bediening dan bij
        248 px comfortabel paste. Alleen desktop — de query op 640 px zet `width: auto`
@@ -216,9 +236,13 @@
        terwijl de zichtbare hoogte 292 px was. Met `bottom: 28px` groeide het paneel dus
        tot 82 px BOVEN de schermrand, en daarmee stond de hele `.panel-head` (tabs plus
        inklappijl) buiten beeld. Vandaar `dvh`, dat de balken van de browser wél meetelt.
-       De `vh`-regel blijft eronder staan als fallback voor browsers zonder `dvh`. */
-    max-height: calc(100vh - 66px);
-    max-height: calc(100dvh - 66px);
+       De `vh`-regel blijft eronder staan als fallback voor browsers zonder `dvh`.
+
+       De aftrek is de onderrand PLUS de vrije ruimte bovenaan, en niet meer een
+       ingetikte 66: de onderrand is sinds sessie 24 een variabele omdat het
+       paneel boven de knoppenrij moet stoppen. */
+    max-height: calc(100vh - var(--panel-lift) - var(--panel-top-gap));
+    max-height: calc(100dvh - var(--panel-lift) - var(--panel-top-gap));
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -293,7 +317,8 @@
      van `left` schuift het element een halve schermbreedte weg. */
   .dock {
     position: fixed;
-    left: 28px; bottom: 28px;
+    left: 28px;
+    bottom: var(--dock-bottom);
     z-index: 11;
     display: flex;
     align-items: center; gap: 8px;
@@ -336,10 +361,11 @@
      draagt een handvol rijen en geen accordeons. */
   .nav-panel {
     position: fixed;
-    left: 28px; bottom: 84px;
+    left: 28px;
+    bottom: var(--panel-lift);   /* zelfde onderrand als .panel — zie :root */
     z-index: 10;
     width: 214px;
-    max-height: calc(100dvh - 122px);
+    max-height: calc(100dvh - var(--panel-lift) - var(--panel-top-gap));
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -385,14 +411,27 @@
   .nav-state.active { color: var(--accent); border-color: var(--accent); }
   .nav-icon { display: flex; flex: 0 0 auto; }
   .nav-icon svg { width: 16px; height: 16px; }
-  /* De camerastanden staan ingesprongen onder hun state: dat toont dat ze
-     erbij horen en niet zelf een state zijn. */
+  /* De camerastanden staan ingesprongen onder hun state — precies onder het
+     LABEL, niet onder het icoon: 10px paneelpadding + 10px knoppadding + 16px
+     icoon + 10px gap = 46px. Dat toont dat ze bij die state horen.
+
+     EEN GRID VAN TWEE KOLOMMEN, geen flexrij (sessie 24). GEMETEN met vier
+     standen in een paneel van 214 px: een rij gaf 37 px per knop, en "3D orbit"
+     brak daarin af naar twee regels — waardoor álle vier 45 px hoog werden en
+     de rij scheef oogde. Twee kolommen geven 76 px per knop en dat past op één
+     regel. Bij drie standen wordt het 2 + 1, links uitgelijnd; ook dat blijft
+     recht, wat een wrappende flexrij niet doet. */
   .nav-views {
-    display: flex; flex-wrap: wrap; gap: 5px;
-    padding: 4px 0 6px 34px;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 5px;
+    padding: 4px 0 6px 46px;
   }
+  /* `.preset` staat op `flex: 1` voor zijn gebruik in `.presets`; in een grid
+     doet dat niets, maar de tekst mag hier niet afbreken. */
+  .nav-views .preset { white-space: nowrap; }
   .nav-note {
-    margin: 0; padding: 2px 10px 6px 34px;
+    margin: 0; padding: 2px 10px 6px 46px;
     font-size: 10.5px; line-height: 1.45;
     color: var(--ink-faint);
   }
@@ -1795,35 +1834,55 @@
   }
 
   @media (max-width: 640px) {
+    /* De knoppenrij schuift naar de rand, en alles wat erboven stopt schuift mee.
+       Eén plek om te verzetten in plaats van vier — zie de noot bij :root. */
+    :root {
+      --dock-bottom: 12px;
+      --dock-gap: 10px;
+    }
     /* Volle breedte, en GEEN transform die opgeheven moet worden — zie de noot bij
        .time-island. Bij een open bottom sheet (paneel of readout) verdwijnt het
        eiland; naast elkaar passen ze hier niet, dezelfde afspraak die paneel en
        readout onderling al hebben. */
     .time-island {
       left: 10px; right: 10px; max-width: none;
-      /* BOVEN de knop "Layers & filters", niet erop. Die staat hier op `bottom: 12px`
-         en is 39 px hoog (gemeten); zonder deze verhoging lag hij over de
+      /* BOVEN de knoppenrij, niet erop; zonder deze verhoging lag die over de
          afspeelknoppen heen en waren die onbereikbaar. */
-      bottom: calc(61px + env(safe-area-inset-bottom, 0px));
+      bottom: calc(var(--panel-lift) + env(safe-area-inset-bottom, 0px));
     }
     body.sheet-open .time-island { display: none; }
-    /* Een vaste kolom van 190 px laat op 355 px breed te weinig over voor de slider, en
-       een kortere notatie van het moment zou de offset kwijtraken. Hier gaat het moment
-       dus op een eigen regel onder de bediening — verticaal is er ruimte, horizontaal
-       niet. De slider houdt daarmee ook op een telefoon zijn volle breedte. */
+    /* HET MOMENT STAAT WEER OP DEZELFDE REGEL (sessie 24, Terry's verzoek). Het
+       stond op een eigen regel omdat een vaste kolom van 190 px op 355 px breed
+       te weinig overliet voor de slider. De oplossing is niet het moment
+       verplaatsen maar de kolom smaller maken: 118 px is genoeg voor
+       "10 Aug 2026, 20:52" op 10 px met tabular-nums plus de resetknop, en dat
+       laat de slider ruim 80 px.
+
+       De vaste kolom zelf blijft, en dat is geen detail: met een meegroeiende
+       kolom bepaalt de BREEDTE VAN HET LABEL hoeveel baan er overblijft, en die
+       groeit van 22 px ("now") tot 145 px. De slider sprong daardoor tijdens het
+       slepen en de knop schoof onder de vinger weg — zie de noot bij .ti-row.
+
+       DE 126 IS UITGEREKEND, niet geschat. Op 10 px met tabular-nums meet het
+       langste moment ("31 Dec 2026, 23:59") 100 px; daar komt de resetknop van
+       20 px bij plus 6 px tussenruimte, en die knop verschijnt juist wanneer het
+       moment verschoven is — dus precies wanneer het label op zijn breedst is.
+       Met 118 viel er een ellips overheen. Wat overblijft voor de slider is dan
+       78 px: kort, maar de fijne instelling zit in het uitklappaneel met het
+       datumveld, en die baan is hier de grove greep. */
     .ti-row {
-      grid-template-columns: auto minmax(0, 1fr) auto;
-      grid-template-areas: "play slider more" "now now now";
-      row-gap: 7px;
+      grid-template-columns: auto minmax(0, 1fr) 126px auto;
+      grid-template-areas: "play slider now more";
+      gap: 7px;
     }
-    .ti-now { justify-content: center; }
     .ti-val { font-size: 10px; }
 
     .panel {
       left: 10px; right: 10px; width: auto;
-      /* De home-indicator van een iPhone is 20 px hoog en zat over de onderrand van het
-         paneel heen. `env()` valt terug op 0 waar het niet bestaat. */
-      bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+      /* Boven de knoppenrij. De home-indicator van een iPhone is 20 px hoog en
+         zat over de onderrand van het paneel heen; `env()` valt terug op 0 waar
+         het niet bestaat. */
+      bottom: calc(var(--panel-lift) + env(safe-area-inset-bottom, 0px));
       max-height: 62vh;
       max-height: 62dvh;
     }
@@ -1858,8 +1917,12 @@
        wordmark aan liep. Met alleen de iconen is het nog 76 px breed en is er tussen
        wordmark en bel 211 px vrij: ruim genoeg, en het scheelt een verdieping. */
     .mode-switch { top: 12px; }
-    .dock { left: 12px; bottom: 12px; }
-    .nav-panel { left: 12px; right: 12px; width: auto; bottom: 66px; max-height: 56dvh; }
+    .dock { left: 12px; }
+    .nav-panel {
+      left: 12px; right: 12px; width: auto;
+      bottom: calc(var(--panel-lift) + env(safe-area-inset-bottom, 0px));
+      max-height: 56dvh;
+    }
     .notif-panel { left: 10px; right: 10px; width: auto; top: 56px; max-height: 60vh; }
     /* `transform: none` is hier GEEN opsmuk. Op desktop staat #toasts op
        `left: 50%` met `translateX(-50%)` als centrering. Zet je dan links én
@@ -1892,13 +1955,21 @@
      overheen. Deze query zet het paneel onder die strook, zodat het niet meer met
      de bediening kan overlappen hoe laag het scherm ook wordt. */
   @media (max-height: 480px) {
+    /* Ook hier moet alles boven de knoppenrij stoppen. De rij zelf mag dichter
+       bij de rand: op 292 px hoogte telt elke pixel, en 28 px onderaan is dan
+       een derde van wat het paneel overhoudt. */
+    :root { --dock-bottom: 12px; --dock-gap: 8px; }
     .panel {
       top: 92px;
-      bottom: 12px;
+      /* GEEN 12 px meer (sessie 24): dat is de plek van de knoppenrij, en het
+         paneel liep er tot dan toe achter door. `--panel-lift` rekent de rij
+         plus zijn tussenruimte erbij — zie :root. */
+      bottom: var(--panel-lift);
       /* top én bottom samen bepalen nu de hoogte; een max-height zou daar
          overheen gaan en het paneel opnieuw laten groeien */
       max-height: none;
     }
+    .nav-panel { bottom: var(--panel-lift); max-height: calc(100dvh - 150px); }
     /* De ondertitel kost een regel die er in landscape niet is. */
     .tagline { display: none; }
     .masthead { padding: 12px 22px; }
