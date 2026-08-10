@@ -196,11 +196,17 @@ function heliocentricAt(key, T) {
   const r = a * (1 - e * Math.cos(E));
 
   const u = w + v;                     // argument van de breedte
+  /* `v`, `E` en `M` GAAN MEE NAAR BUITEN, en dat is geen uitbreiding maar het
+     ophouden met weggooien. Ze staan hier al uitgerekend; wie de ware anomalie
+     wil, zou anders Kepler een tweede keer moeten oplossen op dezelfde T en
+     dan een tweede antwoord krijgen dat het eerste hoort te zijn. Zie de
+     alinea hieronder: dit bestand heeft die fout al eens gemaakt met de
+     posities zelf. */
   return {
     x: r * (cosd(O) * cosd(u) - sind(O) * sind(u) * cosd(i)),
     y: r * (sind(O) * cosd(u) + cosd(O) * sind(u) * cosd(i)),
     z: r * sind(u) * sind(i),
-    r
+    r, v: norm360(v), E: E / DEG, M
   };
 }
 
@@ -231,6 +237,67 @@ export function julianCenturies(date) {
    lentepunt van de datum, +z naar de ecliptica-noordpool. */
 export function heliocentric(date, key) {
   return heliocentricAt(key, julianCenturies(date));
+}
+
+/* GEEN `AU_KM`, om dezelfde reden die in compute/frames.js:148 uitgeschreven
+   staat: `js/sunmoon.js` heeft er al twee (`AU_KM` en `AU_KM_`), frames.js een
+   derde, en het buildscript concateneert alles in EEN scope. Een vierde met de
+   voor de hand liggende naam breekt de standalone terwijl de app in de browser
+   gewoon doordraait — daar zijn het aparte modules. Dat is precies de val die
+   sessie 23 een uur kostte. */
+const PLANETS_AU_KM = 149597870.7;
+// Heliocentrische gravitatieparameter in km^3/s^2 (IAU 2015 nominale waarde).
+const SUN_GM_KM3 = 1.32712440018e11;
+
+/* ------------------------------------------------------------
+   DE HELIOCENTRISCHE TOESTAND — wat het zonnestelsel-beeld beschrijft.
+
+   WAAROM DIT EEN EIGEN FUNCTIE IS EN GEEN VELD IN ephemeris(). Die laatste
+   beschrijft wat een waarnemer OP AARDE ziet: schijnbare magnitude, elongatie
+   van de zon, rechte klimming, het subpunt. In het heliocentrische beeld staat
+   de aarde zelf als lichaam in het plaatje en is er geen waarnemer — dan zegt
+   "afstand tot de aarde" niets meer over wat je ziet, en "staat boven 14 graden
+   noord" verwijst naar een bol die verborgen is.
+
+   Twee frames, twee functies. Ze delen hun bron (`heliocentricAt`), dus er
+   ontstaat geen tweede waarheid; wat verschilt is welke vraag ze beantwoorden.
+
+   DE AARDE HOORT ER WEL BIJ, anders dan bij ephemeris(): daar is hij het
+   rekenpunt, hier een planeet als de rest. `BODIES` telt er dus acht waar
+   `PLANETS` er zeven telt.
+------------------------------------------------------------ */
+export function heliocentricState(date, key) {
+  const T = julianCenturies(date);
+  const p = heliocentricAt(key, T);
+  const basis = orbitBasis(key, T);
+  const { a, e } = basis;
+
+  /* Kepler 3 in de vorm waarin hij het kortst is: met de halve lange as in AE
+     en de tijd in jaren valt de constante weg, want de aarde maakt beide
+     eenheden 1. P = a^1.5, en dat is de hele wet. */
+  const periodYears = Math.pow(a, 1.5);
+
+  /* Vis-viva. De snelheid volgt uit r en a alleen — de vorm van de baan doet
+     er niet toe, en dat is nu juist wat de formule te vertellen heeft: een
+     lichaam is snel waar het dicht bij de zon staat. Controle: de aarde op
+     r = a = 1 AE geeft 29,78 km/s, en dat is de gepubliceerde waarde. */
+  const rKm = p.r * PLANETS_AU_KM, aKm = a * PLANETS_AU_KM;
+  const speedKmS = Math.sqrt(SUN_GM_KM3 * (2 / rKm - 1 / aKm));
+
+  return {
+    key,
+    distanceAU: p.r,
+    // Heliocentrische ecliptische lengte: dezelfde hoek die de gradenverdeling
+    // op de ecliptica-band aangeeft, dus readout en figuur zeggen hetzelfde.
+    lambda: norm360(Math.atan2(p.y, p.x) / DEG),
+    trueAnomaly: p.v,
+    meanAnomaly: p.M,
+    a, e,
+    perihelionAU: a * (1 - e),
+    aphelionAU:   a * (1 + e),
+    periodYears,
+    speedKmS
+  };
 }
 
 /* ------------------------------------------------------------

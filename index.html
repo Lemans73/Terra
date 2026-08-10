@@ -1041,9 +1041,18 @@
       percent of the way to the Sun, so they are drawn nearer than they are.
       L4 and L5 are on the true solar distance. Solar wind is measured at L1
       before it reaches us.</p>
-      <h3>Reading</h3>
+      <!-- DE READOUT WISSELT VAN FRAME MEE MET DE WEERGAVE, en de kop zegt
+      welk frame je leest. Dezelfde getallen naast elkaar zetten zou van de
+      bezoeker vragen dat hij zelf uitzoekt welke helft bij het beeld hoort;
+      dat is precies de verwarring die de splitsing van sessie 23 wegnam.
+
+      Wat GEDEELD is, staat buiten allebei de blokken: het gekozen lichaam is
+      hetzelfde lichaam, welk frame je er ook omheen zet. -->
+      <h3 id="sp-frame">Reading &#8212; from Earth</h3>
       <div class="sunstat" id="space-readout">
       <div class="sunstat-row"><span>Selected</span><b id="sp-naam">&#8212;</b></div>
+
+      <div id="sp-geo">
       <div class="sunstat-row"><span>Distance</span><b id="sp-afstand">&#8212;</b></div>
       <div class="sunstat-row"><span>Apparent magnitude</span><b id="sp-mag">&#8212;</b></div>
       <!-- ELONGATIE staat hier omdat het de weergave eerlijk houdt. Mercurius
@@ -1057,6 +1066,23 @@
       <div class="sunstat-row"><span>Right ascension</span><b id="sp-ra">&#8212;</b></div>
       <div class="sunstat-row"><span>Declination</span><b id="sp-dec">&#8212;</b></div>
       <div class="sunstat-row"><span>Stands over</span><b id="sp-sub">&#8212;</b></div>
+      </div>
+
+      <!-- HET HELIOCENTRISCHE BLOK. Zes rijen die alle zes uit de baan zelf
+      volgen, en niet uit een waarnemer: in dit beeld staat er geen. De ware
+      anomalie zegt waar op de getekende ellips het lichaam staat, en het
+      perihelium-aphelium-bereik waartussen zijn afstand heen en weer loopt —
+      samen maken die twee de eerste wet van Kepler afleesbaar op het scherm
+      dat hem tekent. -->
+      <div id="sp-helio" hidden>
+      <div class="sunstat-row"><span>Distance from Sun</span><b id="sp-sun-dist">&#8212;</b></div>
+      <div class="sunstat-row"><span>Ranges between</span><b id="sp-range">&#8212;</b></div>
+      <div class="sunstat-row"><span>Orbital period</span><b id="sp-period">&#8212;</b></div>
+      <div class="sunstat-row"><span>Orbital speed</span><b id="sp-speed">&#8212;</b></div>
+      <div class="sunstat-row"><span>Heliocentric longitude</span><b id="sp-lambda">&#8212;</b></div>
+      <div class="sunstat-row"><span>True anomaly</span><b id="sp-anomaly">&#8212;</b></div>
+      </div>
+
       <div class="sunstat-note">On the globe, distances are ordered rather than
       scaled &#8212; the whole solar system cannot share a frame with a
       recognisable Earth. In space view every orbit is a true ellipse with the
@@ -1500,7 +1526,7 @@ import { createEnvironmentToggle } from './js/core/globe-root.js';
 import { skyFrame } from './js/compute/frames.js';
 import { maakViewStates } from './js/core/view-state.js';
 import { PLANETS, PLANET_INFO, nextConjunction,
-         previousConjunction } from './js/compute/planets.js';
+         previousConjunction, heliocentricState } from './js/compute/planets.js';
 // Deskundig (schematische) weergavemodus (Fase 1).
 import { enterExpertMode, exitExpertMode } from './js/modes/expert.js';
 // Schematische datalaag-symbolen voor de deskundig-modus (Fase 2).
@@ -6296,6 +6322,9 @@ function setSpaceView(on, opties) {
   if (!viewStates) return;
   viewStates.zet('space', on, opties);
   markeerSpaceStand();
+  // Ook bij de OVERSTAP, niet alleen bij een klik op een planeet: wie in de
+  // gewone weergave iets koos, moet dat in Space terugzien oplichten.
+  markeerPlaneetFocus();
   updateSpaceReadout();
 }
 
@@ -6346,24 +6375,68 @@ function bouwPlanetenLijst() {
   }
 }
 
+/* FOCUS IS EEN BEGRIP MET DRIE PLEKKEN DIE HEM TONEN: de rij in het lijstje,
+   de planeetmarkers om de aarde en de baan-ellipsen om de zon. De laatste twee
+   staan nooit samen aan, maar de keuze moet de overstap wel overleven —
+   anders noemt de readout in Space een lichaam dat in het beeld nergens
+   oplicht, en dat is precies het gat dat deze functie dicht. Alles wat de
+   focus of de weergave verzet, roept deze ene functie aan. */
 function markeerPlaneetFocus() {
   if (!planets) return;
   const f = planets.focus();
   document.querySelectorAll('#planet-list .planet-row').forEach(r =>
     r.classList.toggle('focus', r.dataset.planet === f));
+  if (orbits) orbits.setFocus(f);
 }
 
 /* De readout. Toont het lichaam in focus; zonder focus blijft hij leeg in
    plaats van iets willekeurigs te kiezen — een getal zonder gekozen bron
    leest als een meting die het niet is. */
+const GEO_VELDEN   = ['sp-afstand','sp-mag','sp-elong','sp-fase','sp-ra','sp-dec','sp-sub'];
+const HELIO_VELDEN = ['sp-sun-dist','sp-range','sp-period','sp-speed','sp-lambda','sp-anomaly'];
+
+/* DE OMLOOPTIJD KOMT UIT KEPLER 3 OP DEZELFDE `a` DIE DE ELLIPS TEKENT, en niet
+   uit een tabel met gepubliceerde perioden. Dat scheelt bij de buitenplaneten
+   iets — Neptunus komt op 165,2 jaar waar de literatuur 164,8 noemt, want die
+   waarde is de wáárgenomen gemiddelde beweging inclusief de storingen van
+   Uranus, Jupiter en Saturnus, en die zitten niet in een twee-lichamenbaan.
+
+   Toch is dit de goede keuze: het getal in de readout hoort bij de ellips op
+   het scherm. Een tabelwaarde ernaast zou een tweede waarheid zijn, precies
+   zoals een ingetikte 23,4 naast `meanObliquity()` dat zou zijn. Vandaar ook
+   de afnemende precisie in de opmaak: 165 jaar is eerlijk, 165,22 niet. */
+function formatPeriode(jaren) {
+  if (jaren < 1)   return (jaren * 365.256).toFixed(1) + ' d';
+  if (jaren < 10)  return jaren.toFixed(2) + ' yr';
+  if (jaren < 100) return jaren.toFixed(1) + ' yr';
+  return Math.round(jaren) + ' yr';
+}
+
+/* De readout. Toont het lichaam in focus in het frame van de HUIDIGE weergave;
+   zonder focus blijft hij leeg in plaats van iets willekeurigs te kiezen — een
+   getal zonder gekozen bron leest als een meting die het niet is. */
 function updateSpaceReadout() {
-  if (!planets || !planets.group.visible) return;
+  if (!planets) return;
+  const helio = inSpaceAanzicht();
+  /* DE GUARD MOET HET FRAME VOLGEN, niet één laag. In Space is de planetenlaag
+     verborgen en de baanlaag zichtbaar — die twee staan nooit samen aan. De
+     oude toets `!planets.group.visible` stapte er in Space dus meteen uit, en
+     dat maakte de readout daar leeg nog vóór de vraag welk frame hij toont. */
+  if (!helio && !planets.group.visible) return;
+
   const eph = planets.efemeriden();
   const f = planets.focus();
   const zet = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  const toon = (id, aan) => { const el = document.getElementById(id); if (el) el.hidden = !aan; };
+
+  toon('sp-geo', !helio);
+  toon('sp-helio', helio);
+  zet('sp-frame', helio ? 'Reading — from the Sun' : 'Reading — from Earth');
 
   // De magnitudes lopen altijd mee, ook zonder focus: dat is de kolom die
-  // verklaart waarom het ene lichaam opvalt en het andere niet.
+  // verklaart waarom het ene lichaam opvalt en het andere niet. Ze horen bij
+  // de aardse blik, dus ze blijven staan wat het readout-frame ook is — de
+  // lijst zelf is immers de lijst van wat er aan ONZE hemel staat.
   if (eph) {
     document.querySelectorAll('#planet-list .planet-row').forEach(r => {
       const p = eph[r.dataset.planet];
@@ -6372,15 +6445,34 @@ function updateSpaceReadout() {
     });
   }
 
-  if (!f || !eph || !eph[f]) {
-    for (const id of ['sp-naam','sp-afstand','sp-mag','sp-elong','sp-fase','sp-ra','sp-dec','sp-sub'])
-      zet(id, '—');
+  if (!f) {
+    for (const id of ['sp-naam', ...GEO_VELDEN, ...HELIO_VELDEN]) zet(id, '—');
     return;
   }
+  zet('sp-naam', PLANET_INFO[f].name);
+
+  /* HELIOCENTRISCH — en dit blok kent de aarde. `ephemeris()` geeft er zeven,
+     `BODIES` telt er acht: in het zonnestelsel-beeld is de aarde geen rekenpunt
+     maar een planeet als de rest. Zou dit blok op `eph[f]` leunen zoals het
+     geocentrische hieronder, dan bleef juist het lichaam waar je vandaan komt
+     leeg. `heliocentricState()` heeft die beperking niet. */
+  if (helio) {
+    const s = heliocentricState(momentNow(), f);
+    zet('sp-sun-dist', s.distanceAU.toFixed(3) + ' AU');
+    zet('sp-range', s.perihelionAU.toFixed(3) + ' – ' + s.aphelionAU.toFixed(3) + ' AU');
+    zet('sp-period', formatPeriode(s.periodYears));
+    zet('sp-speed', s.speedKmS.toFixed(2) + ' km/s');
+    zet('sp-lambda', s.lambda.toFixed(1) + '°');
+    // De ware anomalie telt vanaf het PERIHELIUM, niet vanaf het lentepunt.
+    // Zonder dat erbij is het een graadgetal naast een ander graadgetal.
+    zet('sp-anomaly', s.trueAnomaly.toFixed(1) + '° from perihelion');
+    return;
+  }
+
+  if (!eph || !eph[f]) { for (const id of GEO_VELDEN) zet(id, '—'); return; }
   const p = eph[f];
   const uur = p.ra / 15;
   const h = Math.floor(uur), m = Math.floor((uur - h) * 60);
-  zet('sp-naam', PLANET_INFO[f].name);
   zet('sp-afstand', p.distanceAU.toFixed(3) + ' AU');
   zet('sp-mag', (p.magnitude > 0 ? '+' : '') + p.magnitude.toFixed(2));
   // Oost = avondster (ondergaand ná de zon), west = ochtendster. Bij bijna
