@@ -8017,7 +8017,9 @@ world.scene().add(lagrange.group);
 
 // Het heliocentrische stelsel. Staat uit tot de Space-state aangaat, en zijn
 // orientatie wordt daar bevroren — hier alleen aanmaken en ophangen.
-orbits = createOrbitsLayer(THREE);
+// Dezelfde SSS-zontextuur die de aarde-weergave gebruikt; via `asset()` zodat
+// hij in de standalone-variant van het CDN komt.
+orbits = createOrbitsLayer(THREE, { sunTextureUrl: asset('assets/planets/2k_sun.jpg') });
 world.scene().add(orbits.group);
 
 // De omgevingsschakelaar zet globe.gl's bol plus alles wat aan de aarde

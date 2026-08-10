@@ -65,9 +65,31 @@ export function createOrbitsLayer(THREE, opts = {}) {
     scaleOuter:    900,    // Neptunus
     segments:      256,    // per baan; koordefout op de buitenste 0,03 px
     bodyRadius:     10,    // GEMETEN: bij 6 is Neptunus 2,7 px op desktop
-    sunRadius:      14,
-    sunGlowScale:  3.2,    // 45 eenheden — moet ruim binnen Mercurius' 63,5 blijven
+    /* DE ZON IS EEN LICHAAM EN GEEN STIP, maar hij mag zijn binnenste buurman
+       niet opeten. GEMETEN op de getekende baanlijn: Mercurius' perihelium ligt
+       op 63,5 scene-eenheden, zijn aphelium op 96,5.
+
+       LET OP DE FACTOR TWEE, want daar zit de val. `sunGlowScale` gaat via
+       `scale.setScalar()` naar een SPRITE, en de schaal van een sprite is zijn
+       VOLLE breedte, niet zijn straal:
+
+         gloedstraal = sunRadius x sunGlowScale / 2 = 22 x 3,2 / 2 = 35,2
+         marge tot Mercurius' perihelium              63,5 - 35,2 = 28,3
+
+       De oude noot vergeleek 'sunRadius x sunGlowScale = 45' rechtstreeks met
+       die 63,5 en zette dus een volle breedte naast een straal. Dat viel niet
+       op omdat het antwoord toevallig ook veilig was. Wie hier iets verzet,
+       moet de deling door twee meenemen — anders lijkt een halo die keurig
+       past ineens te groot, en krimpt hij tot niets. */
+    sunRadius:      22,
+    sunGlowScale:  3.2,
+    /* De boost tilt de zon boven de bloom-drempel van 0,75 uit; zie de noot bij
+       het materiaal. Hij vermenigvuldigt de TEXTUUR, dus zonder `sunTextureUrl`
+       is dit een vlakke kleur die na de bloom naar wit klapt — dat was tot
+       sessie 24 de reden dat de zon hier wit oogde en in de aarde-weergave
+       warm, terwijl beide dezelfde getallen gebruiken. */
     sunColorBoost: [2.6, 2.25, 1.85],
+    sunTextureUrl:  null,
     orbitOpacity:  0.42,
     dimOpacity:    0.28,   // buiten focus
     labelHeightPx:  24,
@@ -113,6 +135,33 @@ export function createOrbitsLayer(THREE, opts = {}) {
   const sun = new THREE.Mesh(
     track(new THREE.SphereGeometry(cfg.sunRadius, 40, 24)), sunMaterial);
   sun.raycast = () => {};
+
+  /* De textuur, langs dezelfde weg als in sunmoon-layer.js. `crossOrigin` is
+     geen formaliteit: zodra ASSET_BASE naar het CDN wijst (de standalone) is
+     die vlag het verschil tussen een zichtbare zon en een zwarte bol — zonder
+     toestemming laadt het plaatje wel, maar raakt het canvas tainted en
+     weigert WebGL het.
+
+     Deze laag laadt hem ZELF in plaats van de al geladen textuur over te nemen
+     van de zon/maan-laag, en dat is een bewuste afweging. Overnemen zou de twee
+     lagen aan elkaar knopen terwijl de afspraak onder `layers/` juist is dat ze
+     alleen van THREE afhangen. De prijs is eerlijk benoemd: het netwerk kost
+     niets (de browser heeft hem in de cache), het GPU-geheugen ongeveer 8 MB
+     voor een tweede 2k-kopie — tegen de 8k-aardtexturen in dezelfde scene is
+     dat ongeveer een procent. */
+  if (cfg.sunTextureUrl) {
+    const loader = new THREE.TextureLoader();
+    loader.setCrossOrigin('anonymous');
+    loader.load(cfg.sunTextureUrl, (tex) => {
+      tex.colorSpace = THREE.SRGBColorSpace;
+      sunMaterial.map = tex;
+      sunMaterial.needsUpdate = true;
+      track(tex);
+    }, undefined,
+    // Zonder plaatje blijft de effen boost staan: een witte zon is beter dan
+    // geen zon.
+    () => console.warn('[orbits] zontextuur niet geladen: ' + cfg.sunTextureUrl));
+  }
 
   // `depthTest: true`, zie de gemeten noot in sunmoon-layer.js: met `false`
   // tekent de gloed-sprite over zijn eigen lichaam heen en wordt de zon een
