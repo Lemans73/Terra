@@ -3660,11 +3660,19 @@ world.onZoom(pov => {
   // 3. luchtkwaliteit: de enige bron die per gebied werkt, laat zijn stations
   //    meelopen met waar je kijkt. Doet niets als de laag uit staat.
   followAqiToView();
-  // 4. planeetlabels: hun maat is schermvast, dus die moet mee met de
-  //    camera-afstand. Doet niets zolang de Space-state uit staat.
+  // 4. labels van de hemellagen: hun maat is schermvast en hun zichtbaarheid
+  //    hangt van de kijkrichting af (achter de bol = weg), dus allebei moeten
+  //    mee met de camera. Elke laag doet niets zolang hij uit staat.
+  //
+  //    DE HEMELSCHIJVEN STONDEN HIER NIET IN tot sessie 24, en dat was
+  //    zichtbaar: hun uur- en gradenlabels hielden hun wereldmaat tijdens het
+  //    zoomen en sprongen pas terug bij de volgende update() — de tik van
+  //    dertig seconden of een toggle. Wie hier een laag met labels toevoegt,
+  //    moet hem in dit rijtje zetten; er is geen andere plek waar dit gebeurt.
   if (planets) planets.hertekenLabels(world.camera());
   if (lagrange) lagrange.redrawLabels(world.camera());
   if (orbits) orbits.redrawLabels(world.camera());
+  if (disks) disks.redrawLabels(world.camera());
 });
 
 world.controls().autoRotate = !REDUCED_MOTION;

@@ -43,7 +43,7 @@ import { planetEphemerides, skyTrack, projectedOrbit, PLANETS,
          PLANET_INFO } from '../compute/planets.js';
 import { latLonToUnit, ephemeris, norm180 } from '../sunmoon.js';
 import { gastFrom } from '../compute/frames.js';
-import { createLabelSprite, scaleToPixels } from '../core/label-sprite.js';
+import { createLabelSprite, scaleToPixels, occludedByGlobe } from '../core/label-sprite.js';
 
 export function createPlanetsLayer(THREE, opts = {}) {
   const cfg = Object.assign({
@@ -173,6 +173,9 @@ export function createPlanetsLayer(THREE, opts = {}) {
   }
 
   const _v = new THREE.Vector3();
+  // Aparte kladvector voor de horizontoets: `_v` wordt in regelLabels() door
+  // project() overschreven, en die twee mogen elkaar niet in de weg zitten.
+  const _world = new THREE.Vector3();
   let focus = null;          // sleutel van het lichaam in focus, of null
   let laatsteEph = null;
 
@@ -247,6 +250,17 @@ export function createPlanetsLayer(THREE, opts = {}) {
     for (const k of PLANETS) {
       const L = lichamen[k];
       if (!L.zichtbaar) { L.label.visible = false; continue; }
+      /* ACHTER DE AARDE IS WEG, en deze toets moet VÓÓR de botsingslus staan.
+         Een verborgen label mag geen schermruimte claimen in `bezet` — anders
+         duwt een planeet die je niet eens ziet een zichtbare buurman weg.
+
+         De bol zelf wordt al door de gewone diepte-toets geklipt; het label
+         niet, want dat is een sprite op `depthTest: false`. In sky-disks.js
+         staat uitgeschreven waarom dat een aparte horizontoets vraagt en niet
+         gewoon de diepte-toets. */
+      if (occludedByGlobe(L.bol.getWorldPosition(_world), camera.position, cfg.earthRadius)) {
+        L.label.visible = false; L.scherm = null; continue;
+      }
       _v.copy(L.bol.position).project(camera);
       // Achter de camera: project() spiegelt dan, dus expliciet weg.
       if (_v.z > 1) { L.label.visible = false; L.scherm = null; continue; }

@@ -30,7 +30,7 @@
    ============================================================ */
 
 import { lagrangeDirections, LAGRANGE_INFO, L1_L2_KM } from '../compute/frames.js';
-import { createLabelSprite, scaleToPixels } from '../core/label-sprite.js';
+import { createLabelSprite, scaleToPixels, occludedByGlobe } from '../core/label-sprite.js';
 
 export const LAGRANGE_POINTS = ['L1', 'L2', 'L4', 'L5'];
 
@@ -40,7 +40,12 @@ export function createLagrangeLayer(THREE, opts = {}) {
     innerRadius:  150,     // waar L1 en L2 komen te staan (symbolisch)
     markerRadius:    3.4,
     color:      0x8fd0ff,
-    labelHeightPx:  22
+    labelHeightPx:  22,
+    // DEZE LAAG STAAT OM DE AARDE, en die dekt zijn eigen punten af: L2 ligt
+    // van de zon af en valt dus regelmatig achter de bol. De heliocentrische
+    // L-punten zitten in orbits-layer.js en hebben dit niet nodig — daar is de
+    // globe verborgen.
+    earthRadius:    100
   }, opts);
 
   const group = new THREE.Group();
@@ -52,6 +57,9 @@ export function createLagrangeLayer(THREE, opts = {}) {
   // schermhoogte. De opbouw zelf staat sinds sessie 23 in core/label-sprite.js.
   const makeLabel = (tekst) =>
     createLabelSprite(THREE, tekst, cfg.color, { width: 128, height: 56, font: 40 });
+
+  // Kladvector voor de horizontoets in redrawLabels(), boven zijn gebruiker.
+  const _world = new THREE.Vector3();
 
   const points = {};
   for (const k of LAGRANGE_POINTS) {
@@ -76,14 +84,29 @@ export function createLagrangeLayer(THREE, opts = {}) {
       p.label.position.copy(p.mesh.position).multiplyScalar(1.05);
       p.distanceKm = d.distanceKm;
       p.onScale = d.onSunShell;
-      if (camera) scaleLabel(p, camera);
+      if (camera) placeLabel(p, camera);
     }
     return r;
   }
 
-  // Schermvast, zelfde reden als bij de planeetlabels: het zoombereik van
-  // deze scene is te groot voor een vaste wereldmaat.
-  const scaleLabel = (p, camera) => scaleToPixels(THREE, p.label, camera, cfg.labelHeightPx);
+  /* Schermvast, zelfde reden als bij de planeetlabels: het zoombereik van deze
+     scene is te groot voor een vaste wereldmaat.
+
+     EN DE HORIZONTOETS ZIT ER IN, niet naast: `update()` en `redrawLabels()`
+     moeten allebei dezelfde uitkomst geven. Zou alleen `redrawLabels()` hem
+     doen, dan blijft een L-punt dat door de tijdstap achter de bol schuift
+     zichtbaar tot de bezoeker toevallig zoomt.
+
+     De toets hangt aan het MERKTEKEN en niet aan het label: de ruit bepaalt of
+     dit punt boven de horizon staat, het label hoort daarbij. De ruit zelf
+     wordt al door de gewone diepte-toets geklipt; het label niet, want dat is
+     een sprite op `depthTest: false`. In sky-disks.js staat uitgeschreven
+     waarom dit een aparte toets is en niet gewoon die diepte-toets. */
+  const placeLabel = (p, camera) => {
+    p.label.visible = !occludedByGlobe(p.mesh.getWorldPosition(_world),
+                                       camera.position, cfg.earthRadius);
+    if (p.label.visible) scaleToPixels(THREE, p.label, camera, cfg.labelHeightPx);
+  };
 
   function setVisible(aan, date, camera) {
     group.visible = !!aan;
@@ -96,7 +119,7 @@ export function createLagrangeLayer(THREE, opts = {}) {
     distanceKm: L1_L2_KM,
     redrawLabels: (camera) => {
       if (!group.visible) return;
-      for (const k of LAGRANGE_POINTS) scaleLabel(points[k], camera);
+      for (const k of LAGRANGE_POINTS) placeLabel(points[k], camera);
     },
     isZichtbaar: () => group.visible
   };

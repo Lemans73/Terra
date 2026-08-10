@@ -72,7 +72,7 @@
 
 import { skyFrame } from '../compute/frames.js';
 import { createSkyOrientation } from '../core/sky-orientation.js';
-import { createLabelSprite, scaleToPixels } from '../core/label-sprite.js';
+import { createLabelSprite, scaleToPixels, occludedByGlobe } from '../core/label-sprite.js';
 
 export function createSkyDisksLayer(THREE, opts = {}) {
   const cfg = Object.assign({
@@ -168,6 +168,11 @@ export function createSkyDisksLayer(THREE, opts = {}) {
   gradGroup.name = 'ra-graduation';
   const tickPts = [];
   const raLabels = [];
+  // Kladvector voor de horizontoets in redrawLabels(). Staat BOVEN zijn
+  // gebruiker; deze module heeft verderop al een `_v` maar die staat lager in
+  // het bestand, en de regel in dit project is dat een `const` boven de code
+  // staat die hem leest — ook als het toevallig goed zou gaan.
+  const _world = new THREE.Vector3();
   for (let d = 0; d < 360; d += 10) {
     const a = d * Math.PI / 180;
     const lang = d % 30 === 0;
@@ -289,9 +294,34 @@ export function createSkyDisksLayer(THREE, opts = {}) {
     return true;
   }
 
+  /* ACHTER DE BOL IS WEG — en dat moet expliciet, want deze labels tekenen
+     anders dwars door de aarde heen.
+
+     DE ASYMMETRIE DIE DIT OPLOST, gemeld door Terry in sessie 24: de ticks en
+     de banden verdwijnen keurig achter de bol, de cijfers niet. De reden staat
+     in core/label-sprite.js: labelsprites staan op `depthTest: false`, de
+     lijnen op `depthWrite: false` MET de gewone diepte-toets.
+
+     De diepte-toets hier aanzetten is geen alternatief. Een sprite is een quad;
+     snijdt hij de bol, dan wordt hij HALF weggeknipt — een cijfer dat
+     doormidden verdwijnt — en bij de limbus flikkert dat. Een label hoort er
+     helemaal te staan of helemaal niet, en dat is precies waarom sessie 23
+     `occludedByGlobe()` bouwde: een exacte horizontoets die het hele label
+     schakelt in plaats van de pixels te klippen.
+
+     `getWorldPosition()` en niet `sp.position`: de gradenlabels hangen in het
+     gekantelde `eclipticGroup`, dus lokaal en wereld lopen hier echt uiteen.
+     Dezelfde val die in sessie 23 Neptunus' label 36,5 px maakte waar 24
+     hoorde. */
   function redrawLabels(camera) {
     if (!group.visible || !camera) return;
-    for (const sp of raLabels) scaleToPixels(THREE, sp, camera, cfg.labelHeightPx);
+    for (const sp of raLabels) {
+      sp.visible = !occludedByGlobe(sp.getWorldPosition(_world),
+                                    camera.position, cfg.earthRadius);
+      // Schalen alleen voor wat er staat; een verborgen label krijgt zijn maat
+      // vanzelf zodra hij weer om de horizon komt.
+      if (sp.visible) scaleToPixels(THREE, sp, camera, cfg.labelHeightPx);
+    }
   }
 
   /* `setVisible` neemt een object, want deze laag draagt drie dingen die los
