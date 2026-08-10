@@ -349,7 +349,7 @@
 
 <section class="acc open" data-acc="layers-list">
       <button class="acc-head" type="button" aria-expanded="true">
-      <span>Layers</span>
+      <span>Data Layers</span>
       <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
       <div class="acc-body">
@@ -850,8 +850,8 @@
       </div>
       </section>
 
-<section class="acc open" data-acc="cosmos-readings">
-      <button class="acc-head" type="button" aria-expanded="true">
+<section class="acc" data-acc="cosmos-readings">
+      <button class="acc-head" type="button" aria-expanded="false">
       <!-- "Sun & Moon readings" en niet "Moon readings": het sub-solaire punt staat er
       ook in. Zo vormt hij bovendien een paar met `Sun & Moon layers` in de Layers-tab
       — daar de schakelaars, hier de getallen. -->
@@ -905,8 +905,8 @@
 
 
 
-<section class="acc open" data-acc="cosmos-activity">
-      <button class="acc-head" type="button" aria-expanded="true">
+<section class="acc" data-acc="cosmos-activity">
+      <button class="acc-head" type="button" aria-expanded="false">
       <span>Sun activity</span>
       <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
@@ -5963,12 +5963,27 @@ function clampNaarVlak(cx, cy, tx, ty) {
   return [cx + (tx - cx) * f, cy + (ty - cy) * f];
 }
 
+/* EEN DOM-LABEL ERFT GEEN ZICHTBAARHEID, en dat was een echte bug: deze vier
+   letters bleven in de zon- en de ruimteweergave gewoon achter de zon hangen,
+   ondersteboven en al. De reden is dat `rotGroup.visible` op `true` blijft
+   terwijl zijn OUDER `geomag.group` op onzichtbaar gaat — voor three is dat
+   hetzelfde resultaat, want die slaat de hele subtree over, maar een `<div>`
+   in de overlay-laag merkt daar niets van.
+
+   Vandaar een toets die de hele keten afloopt in plaats van één vlag. Dat is
+   meteen bestand tegen het magneto-perspectief, waar `geomag.group` onder een
+   andere ouder gaat hangen. */
+function ketenZichtbaar(obj) {
+  for (let p = obj; p; p = p.parent) if (!p.visible) return false;
+  return true;
+}
+
 function positionAxisLabels(cam) {
   // Deze guard beschermt óók `axisLabels` hierboven: die const staat vóór het
   // init-blok dat `geomag` vult, dus zolang geomag null is bestaat de lijst al.
   if (!geomag) return;
-  const rotAan = geomag.meshes.rotGroup.visible;
-  const dipAan = geomag.meshes.dipGroup.visible;
+  const rotAan = ketenZichtbaar(geomag.meshes.rotGroup);
+  const dipAan = ketenZichtbaar(geomag.meshes.dipGroup);
   // Beide assen staan standaard uit, en dan hoort deze functie per frame niets te
   // kosten. Zonder deze uitgang doet hij nog altijd een project() voor het
   // ankerpunt. `_uit` onthoudt of de labels al verborgen zijn, zodat we niet elke
