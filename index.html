@@ -876,8 +876,15 @@
 
     <div class="tabpanel" data-panel="d-planets">
 
-<section class="acc" data-acc="space">
-      <button class="acc-head" type="button" aria-expanded="false">
+<!-- STAAT STANDAARD OPEN (sessie 26). Deze tab heeft nog maar één sectie sinds de
+     planeet-readings naar het detailvenster verhuisden, en een accordeon van één
+     die je eerst moet openklappen vraagt een klik om niets te verbergen. Zelfde
+     patroon als Preferences in Instellingen: `class="acc open"` plus
+     `aria-expanded="true"` — die twee horen bij elkaar, want de klasse stuurt de
+     opmaak en het attribuut de chevron én de schermlezer. Komt er ooit een tweede
+     sectie bij, dan is dit weer een gewone keuze. -->
+<section class="acc open" data-acc="space">
+      <button class="acc-head" type="button" aria-expanded="true">
       <span>Space</span>
       <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
@@ -6898,15 +6905,32 @@ document.getElementById('lagrange-toggle')?.addEventListener('click', () => {
   document.getElementById('es-lagrange').textContent = aan ? 'on' : 'off';
 });
 
-// Klikken op een planeet in de scene. Geen raycaster: de bollen zijn klein en
-// het label telt mee, dus een schermafstand is zowel goedkoper als
-// vergevingsgezinder dan een treffer op de geometrie zelf.
+/* Klikken op een planeet in de scene. Geen raycaster: de bollen zijn klein en
+   het label telt mee, dus een schermafstand is zowel goedkoper als
+   vergevingsgezinder dan een treffer op de geometrie zelf.
+
+   TWEE LAGEN, ÉÉN FOCUS (sessie 26, Terry's test). Er staan twee verzamelingen
+   planeten in deze app: de indicatoren aan de hemel (`planets`, geocentrisch, in
+   de gewone weergave) en de banen om de zon (`orbits`, heliocentrisch, in Space).
+   Aanklikken werkte alleen op de eerste — in Space keek je naar acht bollen die
+   niets deden. Welke laag de treffer levert hangt dus af van het aanzicht.
+
+   `planets.focus()` BLIJFT DE ENIGE WAARHEID, ook in Space: `markeerPlaneetFocus()`
+   spiegelt hem naar `orbits.setFocus()` en naar de lijst in het paneel, en
+   `planeetView()` leest hem. Een tweede focus in de baanlaag zou betekenen dat een
+   klik in de scene iets anders oplicht dan een klik in de lijst.
+
+   DE AARDE IS GEEN KLIKDOEL, en dat is bestaand gedrag dat hier zichtbaar wordt.
+   `BODIES` telt er acht en `PLANETS` zeven: in het zonnestelsel-beeld is de aarde
+   een planeet als de rest, maar hij staat in geen enkele lijst waar je hem kunt
+   kiezen — ook niet in het paneel. Zonder deze toets zou een klik erop de vorige
+   focus wissen en verder niets doen, en dat leest als een storing. */
 document.getElementById('globe')?.addEventListener('click', (e) => {
-  // De indicatoren leven sinds sessie 23 in de gewone weergave, dus deze klik
-  // hoort bij de LAAG en niet meer bij de state.
-  if (!planets || !planets.group.visible) return;
-  const k = planets.raakPunt(e.clientX, e.clientY);
-  if (!k) return;
+  const helio = inSpaceAanzicht();
+  const k = helio
+    ? (orbits ? orbits.raakPunt(e.clientX, e.clientY, world.camera()) : null)
+    : (planets && planets.group.visible ? planets.raakPunt(e.clientX, e.clientY) : null);
+  if (!k || !PLANETS.includes(k)) return;
   planets.setFocus(planets.focus() === k ? null : k, momentNow());
   markeerPlaneetFocus();
   updateSpaceReadout();
@@ -8831,18 +8855,37 @@ viewStates.onChange((actief) => { backBtn.hidden = !actief; });
 // zonnestelsel. Zie borgTrackPresets() waarom dit aan `onChange` hangt en niet aan
 // setSpaceView().
 viewStates.onChange(borgTrackPresets);
-/* NAAR DE ZON GAAN IS DE READINGS OPENEN (sessie 26). Je vliegt er niet heen om
-   naar een bol te kijken maar om te zien wat hij doet, en de acht getallen stonden
-   tot nu toe in een paneeltab die je apart moest opzoeken.
+/* EEN ANDER AANZICHT IS EEN ANDER ONDERWERP (sessie 26, na Terry's test).
+   Het detailvenster gaat over ÉÉN ding, en dat ding hoort bij waar je staat: de
+   zonneactiviteit bij de zon, een planeet bij het zonnestelsel, een aardbeving bij
+   de aarde. Verlaat je dat aanzicht, dan is wat er staat niet meer van toepassing —
+   de zonne-readings bleven anders gewoon staan terwijl je al terug op de aarde was.
+   Dus: elke wissel sluit het venster, en de zon opent er meteen zijn eigen voor in
+   de plaats.
 
-   Aan `onChange` en niet aan de `enter()` van de state: die hoort bij de scene —
-   glow, environment, camera — en dit is interface. Bovendien dekt `onChange` alle
-   vier de wegen waarlangs de state verandert, waar `enter()` er maar één van is.
+   NAAR DE ZON GAAN IS DE READINGS OPENEN. Je vliegt er niet heen om naar een bol te
+   kijken maar om te zien wat hij doet, en die acht getallen stonden tot nu toe in
+   een paneeltab die je apart moest opzoeken.
+
+   `vorigeState` IS GEEN OVERBODIGE VARIABELE. `notify()` vuurt óók bij `goToView()`
+   (view-state.js:285), dus zonder deze vergelijking zou elke wissel van camerastand
+   — Top, Edge, Side, 3D orbit — het venster dichtgooien terwijl je binnen hetzelfde
+   aanzicht blijft. En in Space is dat juist de plek waar je een planeet aanklikt.
+
+   Aan `onChange` en niet aan de `enter()`/`exit()` van een state: die horen bij de
+   scene — glow, environment, camera — en dit is interface. Bovendien dekt `onChange`
+   alle vier de wegen waarlangs de state verandert, waar `enter()` er maar één van is.
 
    Het venster laat hiermee ook Navigate wijken (zie navYield), en dat is precies de
    bedoeling: je hebt Sun aangetikt, dus je bent er. Sluit je de readings, dan staat
    Navigate er weer. */
-viewStates.onChange((actief) => { if (actief === 'sun') showSolarActivity(); });
+let vorigeState = viewStates.activeState();
+viewStates.onChange((actief) => {
+  if (actief === vorigeState) return;   // alleen de camerastand veranderde
+  vorigeState = actief;
+  hideDetail();
+  if (actief === 'sun') showSolarActivity();
+});
 borgTrackPresets();
 backBtn.hidden = !viewStates.activeState();
 

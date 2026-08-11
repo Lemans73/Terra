@@ -616,27 +616,34 @@
   .nav-state.active { color: var(--accent); border-color: var(--accent); }
   .nav-icon { display: flex; flex: 0 0 auto; }
   .nav-icon svg { width: 16px; height: 16px; }
-  /* De camerastanden staan ingesprongen onder hun state — precies onder het
-     LABEL, niet onder het icoon: 10px paneelpadding + 10px knoppadding + 16px
-     icoon + 10px gap = 46px. Dat toont dat ze bij die state horen.
+  /* DE CAMERASTANDEN LOPEN VAN RAND TOT RAND (sessie 26, Terry). Ze stonden 46 px
+     ingesprongen — 10 paneelpadding + 10 knoppadding + 16 icoon + 10 gap, precies
+     onder het LABEL van hun state — om te tonen dat ze erbij hoorden. Wat je in de
+     praktijk zag was een verspringing: vier knoppen die smaller waren dan de rij
+     erboven en er niet mee uitlijnden, in een paneel van maar 214 px. De koppeling
+     hoeft die inspringing niet te dragen; ze staan al direct onder hun state, en
+     alleen de actieve state heeft ze.
 
      EEN GRID VAN TWEE KOLOMMEN, geen flexrij (sessie 24). GEMETEN met vier
      standen in een paneel van 214 px: een rij gaf 37 px per knop, en "3D orbit"
      brak daarin af naar twee regels — waardoor álle vier 45 px hoog werden en
      de rij scheef oogde. Twee kolommen geven 76 px per knop en dat past op één
-     regel. Bij drie standen wordt het 2 + 1, links uitgelijnd; ook dat blijft
-     recht, wat een wrappende flexrij niet doet. */
+     regel; over de volle breedte wordt dat 99 px, dus nog ruimer. Bij drie standen
+     wordt het 2 + 1, links uitgelijnd; ook dat blijft recht, wat een wrappende
+     flexrij niet doet. */
   .nav-views {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: 5px;
-    padding: 4px 0 6px 46px;
+    padding: 4px 0 6px;
   }
   /* `.preset` staat op `flex: 1` voor zijn gebruik in `.presets`; in een grid
      doet dat niets, maar de tekst mag hier niet afbreken. */
   .nav-views .preset { white-space: nowrap; }
+  /* Lijnt uit met de knoppen erboven, niet met het label van de state: het is een
+     bijschrift bij die vier standen. */
   .nav-note {
-    margin: 0; padding: 2px 10px 6px 46px;
+    margin: 0; padding: 2px 2px 6px;
     font-size: 10.5px; line-height: 1.45;
     color: var(--ink-faint);
   }

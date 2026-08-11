@@ -407,6 +407,39 @@ export function createOrbitsLayer(THREE, opts = {}) {
     for (const key of BODIES) scaleToPixels(THREE, bodies[key].label, camera, cfg.labelHeightPx);
   }
 
+  /* Welk lichaam ligt het dichtst bij een schermpunt? Voor klikken, en met dezelfde
+     redenering als `raakPunt()` in planets-layer.js: geen raycaster, want de bollen
+     zijn hier nog kleiner — Mercurius meet een fractie van een pixel op de
+     overzichtsafstand — en een schermafstand is zowel goedkoper als
+     vergevingsgezinder dan een treffer op de geometrie zelf.
+
+     WAT HIER ANDERS IS DAN BIJ DE PLANETENLAAG: die bewaart per lichaam een
+     schermpositie in zijn eigen update(), want hij plaatst er toch al labels mee.
+     Deze laag houdt alles in 3D en schaalt zijn labels als sprites, dus er ís geen
+     schermpositie om te lezen. Daarom projecteert hij hier zelf, één keer per klik.
+
+     `_hitWereld` en niet `mesh.position`: de hele groep draagt een quaternion (zie
+     `orient()`), dus de lokale positie zegt niets over waar het lichaam op het
+     scherm staat. */
+  const _hitWereld = new THREE.Vector3();
+  function raakPunt(x, y, camera, marge = 34) {
+    if (!group.visible || !camera) return null;
+    let best = null, bestD = marge;
+    for (const key of BODIES) {
+      const B = bodies[key];
+      if (!B.visible || !B.mesh.visible) continue;
+      B.mesh.getWorldPosition(_hitWereld).project(camera);
+      // Achter de camera projecteert een punt naar de tegenoverliggende kant van
+      // het beeld; zonder deze toets is een lichaam dat je NIET ziet aanklikbaar.
+      if (_hitWereld.z > 1) continue;
+      const sx = (_hitWereld.x * 0.5 + 0.5) * window.innerWidth;
+      const sy = (-_hitWereld.y * 0.5 + 0.5) * window.innerHeight;
+      const d = Math.hypot(sx - x, sy - y);
+      if (d < bestD) { bestD = d; best = key; }
+    }
+    return best;
+  }
+
   /* ---- de orientatie ----
      Wordt EEN keer bij binnenkomst gezet en daarna bevroren. Laat je hem
      met `gast` meelopen, dan draait het hele zonnestelsel met 15,041 graden
@@ -430,7 +463,7 @@ export function createOrbitsLayer(THREE, opts = {}) {
 
   return {
     group, update, buildOrbits, setVisible, setFocus, setBodyVisible,
-    redrawLabels, orient, pole, vernal, dispose, setLagrangeVisible,
+    redrawLabels, raakPunt, orient, pole, vernal, dispose, setLagrangeVisible,
     config: cfg, bodies,
     ephemerides: () => lastEph,
     focus: () => focus,
