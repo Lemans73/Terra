@@ -2167,10 +2167,27 @@
        HIER WORDT DE ONDERSTE STAPEL GEZET (sessie 25). Het eiland is op deze
        breedte schermbreed en ligt dus wél in de weg, dus stopt een paneel niet
        boven de knoppenrij maar boven de TIJDRIJ. Van onder naar boven:
-       knoppenrij (12..51) · tijdrij (61..101) · paneel (vanaf 111). */
+       knoppenrij (12..51) · tijdrij (61..133) · paneel (vanaf 143).
+
+       `--time-h` IS HIER 74 EN NIET 40 (sessie 26). Die maat is niet "de hoogte van
+       .ti-row" maar "de hoogte van alles wat op de tijdverdieping staat", en sinds
+       het moment boven de baan zweeft hoort dat label erin.
+
+       GEMETEN op 375x812, en de meting week af van de schatting: het plaatje is
+       20 px hoog bij "now" en 28 px zodra het moment verschoven is — de resetknop
+       verschijnt dan, en die is 20 px plus 3 px padding boven en onder plus 2 px
+       rand. Dat maakt 40 (rij) + 6 (tussenruimte) + 28 = 74. Ik had 26 geschat en
+       kwam op 72 uit; dat ging goed omdat `--time-gap` het verschil opving, en dat
+       is toeval en geen ontwerp.
+
+       Laat je hem op 40 staan, dan stopt een paneel op 111 en valt het label
+       eronder — `--z-island` (8) ligt onder `--z-panel` (10), dus je ziet het
+       moment precies niet wanneer je het nodig hebt. Kosten: 34 px minder
+       paneelhoogte, en `.panel` zit meestal toch aan zijn `max-height: 62dvh`. */
     :root {
       --dock-bottom: 12px;
       --dock-gap: 10px;
+      --time-h: 74px;
       --panel-lift: var(--time-lift);
     }
     /* Volle breedte, en GEEN transform die opgeheven moet worden — zie de noot bij
@@ -2182,29 +2199,49 @@
       left: 10px; right: 10px; max-width: none;
       bottom: calc(var(--dock-lift) + env(safe-area-inset-bottom, 0px));
     }
-    /* HET MOMENT STAAT WEER OP DEZELFDE REGEL (sessie 24, Terry's verzoek). Het
-       stond op een eigen regel omdat een vaste kolom van 190 px op 355 px breed
-       te weinig overliet voor de slider. De oplossing is niet het moment
-       verplaatsen maar de kolom smaller maken: 118 px is genoeg voor
-       "10 Aug 2026, 20:52" op 10 px met tabular-nums plus de resetknop, en dat
-       laat de slider ruim 80 px.
+    /* HET MOMENT ZWEEFT BOVEN DE BAAN (sessie 26, Terry). Het stond hier in een
+       vaste kolom van 126 px, en dat was uitgerekend: het langste moment
+       ("31 Dec 2026, 23:59") meet 100 px op 10 px met tabular-nums, plus 20 px
+       resetknop en 6 px tussenruimte. Wat de slider overhield was 78 px. Dat is
+       geen slider meer — het is een streepje met een knop erop.
 
-       De vaste kolom zelf blijft, en dat is geen detail: met een meegroeiende
-       kolom bepaalt de BREEDTE VAN HET LABEL hoeveel baan er overblijft, en die
-       groeit van 22 px ("now") tot 145 px. De slider sprong daardoor tijdens het
-       slepen en de knop schoof onder de vinger weg — zie de noot bij .ti-row.
+       Het label uit het grid halen wint 126 + 7 = 133 px, en de baan gaat daarmee
+       naar ruim 200 px. `position: absolute` doet dat beter dan een tweede rij:
+       het label neemt dan helemaal geen hoogte in de rij in, en de drie
+       klikdoelen (afspelen, baan, klok) houden hun volle 40 px.
 
-       DE 126 IS UITGEREKEND, niet geschat. Op 10 px met tabular-nums meet het
-       langste moment ("31 Dec 2026, 23:59") 100 px; daar komt de resetknop van
-       20 px bij plus 6 px tussenruimte, en die knop verschijnt juist wanneer het
-       moment verschoven is — dus precies wanneer het label op zijn breedst is.
-       Met 118 viel er een ellips overheen. Wat overblijft voor de slider is dan
-       78 px: kort, maar de fijne instelling zit in het uitklappaneel met het
-       datumveld, en die baan is hier de grove greep. */
+       EN DE SLEEP-BUG VAN SESSIE 20 IS HIERMEE DOOD, niet omzeild. Die kwam
+       doordat de breedte van het label bepaalde hoeveel baan er overbleef: het
+       groeit van 22 px ("now") tot 145 px, dus de slider sprong tijdens het
+       slepen en de knop schoof onder de vinger weg. Daar hielp een vaste kolom
+       tegen; uit de flow halen is sterker, want er ís geen inhoud meer die de
+       sliderkolom kan duwen. Op desktop blijft de kolom van 190 px staan, en
+       daarmee ook de bescherming daar.
+
+       EIGEN GLASPLAATJE, want het label ligt nu over de bol in plaats van op de
+       rij. Zonder achtergrond is het onleesbaar boven een lichte oceaan. */
     .ti-row {
-      grid-template-columns: auto minmax(0, 1fr) 126px auto;
-      grid-template-areas: "play slider now more";
+      position: relative;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      grid-template-areas: "play slider more";
       gap: 7px;
+    }
+    /* `grid-area: auto` is niet overbodig: `now` bestaat niet meer in
+       `grid-template-areas` hierboven, en een absolute doos met een gebiedsnaam
+       die nergens op slaat laat de browser kiezen waar hij hem ophangt. */
+    .ti-now {
+      grid-area: auto;
+      position: absolute;
+      bottom: calc(100% + 6px);
+      right: 0;
+      /* Buiten de flow begrenst niets de breedte meer, en zonder grens doet de
+         `text-overflow: ellipsis` op .ti-val niets. */
+      max-width: calc(100% - 12px);
+      padding: 3px 8px;
+      background: rgba(11,16,24,0.72);
+      backdrop-filter: blur(14px);
+      border: 1px solid var(--hair);
+      border-radius: 10px;
     }
     .ti-val { font-size: 10px; }
 
