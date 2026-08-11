@@ -552,30 +552,52 @@
        schakelaar maar een handeling, en hij staat er alleen wanneer hij iets
        betekent — buiten een state is er geen aarde om naar terug te gaan.
 
-       `Details` komt hier in fase 3 bij, wanneer dat paneel bestaat. -->
+       TWEE HOEKEN SINDS SESSIE 26. Links staat wat je aan de aarde doet — lagen
+       aanzetten, gegevens opzoeken. Rechts staat waar je heen gaat en hoe je
+       terugkomt, en dat is dezelfde kant als het detailvenster: wat je aantikt
+       verschijnt rechts, dus de weg erheen hoort daar ook.
+
+       WAAROM TWEE CONTAINERS EN GEEN WRAPPER. Beide zijn `position: fixed`, de
+       een aan `left` en de ander aan `right`. Eén wrapper zou allebei moeten
+       zetten, dus schermbreed worden, en dan vangt hij kliks af over de bol heen
+       tenzij je `pointer-events` per kind gaat repareren. Twee blokken is minder
+       code en levert geen enkele nieuwe val op.
+
+       Bijvangst, en het was al krap: op 375 px was de rij van vier 363 px breed in
+       een beeld van 375. Gesplitst is links ~90 px en rechts ~181 px. -->
   <div class="dock" id="dock">
     <button class="dock-btn" id="panel-open" type="button" aria-pressed="false"
             title="Layers &amp; filters" aria-label="Layers and filters">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
       <span class="dock-label">Layers &amp; filters</span>
     </button>
-    <button class="dock-btn" id="nav-open" type="button" aria-pressed="false"
-            title="Navigate" aria-label="Navigate">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polygon points="15.5 8.5 10.5 10.5 8.5 15.5 13.5 13.5 15.5 8.5" fill="currentColor" stroke="none"/></svg>
-      <span class="dock-label">Navigate</span>
-    </button>
     <button class="dock-btn" id="details-open" type="button" aria-pressed="false"
             title="Details" aria-label="Details">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16.5"/><circle cx="12" cy="7.8" r="0.9" fill="currentColor" stroke="none"/></svg>
       <span class="dock-label">Details</span>
     </button>
+  </div>
+
+  <!-- Back to Earth staat LINKS van Navigate: eerst de uitgang, dan de bestemming,
+       en zo blijft de Navigate-knop op dezelfde plek staan wanneer de terugknop
+       verschijnt of verdwijnt. Zou het andersom zijn, dan sprong Navigate elke keer
+       dat je een aanzicht binnenging of verliet. -->
+  <div class="dock dock-right" id="dock-right">
     <button class="dock-btn dock-back" id="back-earth" type="button" hidden
             title="Back to Earth" aria-label="Back to Earth">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 19l-7-7 7-7"/><path d="M3 12h11a7 7 0 0 1 7 7v1"/></svg>
       <span class="dock-label">Back to Earth</span>
     </button>
+    <button class="dock-btn" id="nav-open" type="button" aria-pressed="false"
+            title="Navigate" aria-label="Navigate">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polygon points="15.5 8.5 10.5 10.5 8.5 15.5 13.5 13.5 15.5 8.5" fill="currentColor" stroke="none"/></svg>
+      <span class="dock-label">Navigate</span>
+    </button>
   </div>
 
+  <!-- Start DICHT, en dat regelt dit `hidden` als enige — er is geen enkele
+       `panels.open('nav')` in de code. Wie deze regel verplaatst, verplaatst dus
+       ook de beginstand. -->
   <div id="nav-panel" hidden></div>
 
   <!-- ==================== DETAILS ====================
@@ -7594,8 +7616,13 @@ function setPanelOpen(open) {
 
    TWEE GROEPEN, en een paneel sluit alleen wat in zijn eigen groep zit:
 
-     'dock'   linksonder  Layers & filters · Navigate · (Details, fase 3)
-     'top'    rechtsboven Notificaties · Bevingenlijst · Instellingen
+     'dock'   de onderrand  Layers & filters · Navigate · Details
+     'top'    rechtsboven   Notificaties · Bevingenlijst · Instellingen
+
+   De drie in 'dock' staan sinds sessie 26 niet meer in dezelfde hoek — Navigate
+   verhuisde naar rechts — maar ze delen nog altijd de verdieping boven de
+   knoppenrij, en twee schermbrede sheets over elkaar heen is op een telefoon
+   precies waar de groep voor bestaat.
 
    WAT HIER BEWUST NIET IN STAAT: het tijdpaneel en het detailvenster. Die
    hebben geen groep en geen knop die gemarkeerd moet worden, en dan levert
@@ -7603,7 +7630,13 @@ function setPanelOpen(open) {
    sluiten, noch markeren. Ze aanmelden zou coördinatie suggereren die er niet
    is. Ze houden hun eigen open/dicht-functie (`setTimePanelOpen`,
    `showDetail`/`hideDetail`) met dezelfde drie sluitwegen.
-   Krijgt een van de twee ooit wél een groepsgenoot, dan hoort hij hier alsnog.
+
+   EN DAT BLIJFT ZO, óók nu het detailvenster en Navigate dezelfde hoek delen.
+   Een `group` is WEDERZIJDS — wie binnenkomt gooit de rest eruit — en wat die
+   twee nodig hebben is gericht: het venster laat Navigate wijken, niet andersom.
+   Aanmelden zou bovendien het openen van Layers het venster laten sluiten, wat
+   juist de weg is waarlangs je er komt. De afspraak staat in navYield() /
+   navRestore(), naast `hideDetail`.
 
    HET NAVIGATE-PANEEL ZELF WORDT PAS IN HET INIT-BLOK GEBOUWD, want dat
    heeft `viewStates` nodig en die bestaat hier nog niet. De KNOP en zijn
@@ -7935,10 +7968,58 @@ const detail = createDetailPanel({
   onClose: hideDetail
 });
 
+/* ---- Navigate wijkt voor het detailvenster (sessie 26) -------------------
+   Sinds Navigate rechtsonder staat, deelt hij zijn hoek met het detailvenster.
+   Ze passen daar niet allebei: `--z-panel` (10) ligt onder `--z-detail` (40), dus
+   het paneel zou onder het venster verdwijnen — en een paneel dat je niet ziet
+   maar dat wél kliks vangt is erger dan een paneel dat netjes opzij gaat.
+
+   WAAROM DIT HIER STAAT EN NIET IN `js/ui/panels.js`. Die module kent `group`, en
+   een groep is WEDERZIJDS: wie binnenkomt gooit de rest eruit. Wat hier nodig is,
+   is GERICHT — het venster laat Navigate wijken, Navigate laat het venster niet
+   wijken. Zou het venster zich als groepsgenoot aanmelden, dan sloot het openen
+   ervan óók Layers en Details, en sloot het openen van Layers het venster: precies
+   de weg waarlangs je er via de bevingenlijst komt. Bovendien kent `panels.js`
+   alleen sluiten, niet terugzetten.
+
+   Drie functies, want de derde is geen detail: `clearView()` sluit eerst alle
+   panelen en roept dán `hideDetail()`. Zonder het geheugen te wissen zou dat
+   Navigate OPENEN — het omgekeerde van "maak het beeld vrij".
+
+   BEKEND EN GEACCEPTEERD: opent iemand Navigate zélf terwijl het venster open
+   staat en sluit hij hem daarna weer, dan komt Navigate bij het sluiten van het
+   venster alsnog één keer terug. Repareren kost een schaduwvariabele die de
+   nav-stand bijhoudt, en dat is de tweede waarheid waar `panels.js` juist voor
+   waarschuwt. */
+let navWasOpen = false;
+
+function navYield() {
+  // Staat het venster al open, dan staat de herinnering er al. Zonder deze uitgang
+  // overschrijft een klik van beving A naar beving B hem met "dicht" — een stand
+  // die de eerste klik zelf heeft veroorzaakt.
+  if (detailVisible) return;
+  navWasOpen = panels.isOpen('nav');
+  if (navWasOpen) panels.close('nav');
+}
+
+function navRestore() {
+  const wasOpen = navWasOpen;
+  navWasOpen = false;
+  /* ALLEEN ALS DE PLEK NOG VRIJ IS. `panels.open()` sluit zijn groepsgenoten, dus
+     zonder deze toets gooit het terugzetten van Navigate er iets uit dat de
+     bezoeker intussen zélf heeft geopend. GEMETEN: Navigate open → een beving
+     aantikken → Layers openen → het venster sluiten, en Layers klapte dicht.
+     Terugzetten is een gunst; die mag nooit een latere keuze overrulen. */
+  if (wasOpen && !panels.openInGroup('dock').length) panels.open('nav');
+}
+
+function navForget() { navWasOpen = false; }
+
 function hideDetail() {
   if (!detailVisible) return;
   detailVisible = false;
   detail.hide();
+  navRestore();
 }
 
 const EVENT_NAMES = { region:'Active region', quake:'Earthquake', volcano:'Volcano',
@@ -7996,8 +8077,11 @@ function eventTijd(t) {
 const ICON_PLEK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><path d="M12 1v3M12 20v3M1 12h3M20 12h3"/></svg>';
 const ICON_MOMENT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/></svg>';
 
-function maakBeeldVrij() {
+function clearView() {
   if (!isNarrow()) return;
+  // Eerst vergeten, dan pas sluiten: hieronder gaat `hideDetail()` langs, en die
+  // zou Navigate anders terugzetten terwijl je juist om een vrij beeld vroeg.
+  navForget();
   for (const k of panels.openKeys()) panels.close(k);
   // Het tijdpaneel en het detailvenster staan bewust NIET in de beheerder (zie de
   // noot bij panels.register), dus die twee moeten hier apart. Allebei zijn ze op
@@ -8010,7 +8094,7 @@ function maakBeeldVrij() {
    stilzetten, de slider herschalen en het datumveld gelijktrekken. Het spoor en
    het trackvenster blijven staan — die horen bij wat je aan het bekijken was, en
    een gebeurtenis heeft geen eigen tijdschaal zoals een eclips die heeft. */
-function gaNaarMoment(t) {
+function goToMoment(t) {
   stopPlay();
   baseMoment = new Date(t);
   timeOffsetMs = 0;
@@ -8019,18 +8103,18 @@ function gaNaarMoment(t) {
   refreshTimeUI();
 }
 
-function detailActies(d) {
+function detailActions(d) {
   const acties = [];
   const heeftPlek = d && d.lat != null && d.lng != null;
   if (heeftPlek) {
     acties.push({ label: 'Show on globe', icon: ICON_PLEK,
       title: 'Fly to this place. The scene keeps showing now.',
-      run: () => { flyTo(d); maakBeeldVrij(); } });
+      run: () => { flyTo(d); clearView(); } });
   }
   if (d && d.time) {
     acties.push({ label: 'Go to this moment', icon: ICON_MOMENT,
       title: 'Set the scene to the moment this was recorded. Live layers lock while you travel.',
-      run: () => { gaNaarMoment(d.time); if (heeftPlek) flyTo(d); maakBeeldVrij(); } });
+      run: () => { goToMoment(d.time); if (heeftPlek) flyTo(d); clearView(); } });
   }
   return acties;
 }
@@ -8049,6 +8133,9 @@ function detailActies(d) {
    de view die híéronder ligt, waardoor de sluitknop een terugpijl wordt. Alleen de
    zonnegebieden geven hem mee; overal elders is hij afwezig en sluit de knop gewoon. */
 function showDetail(d, opts) {
+  // Vóór beide takken, want allebei zetten ze `detailVisible` — en navYield() leest
+  // die vlag om te weten of de herinnering al staat.
+  navYield();
   if (d.kind && d.kind !== 'event') { detailVisible = true; detail.show(d, opts); return; }
 
   // EMSC bundelt tientallen instituten; `agency` noemt wie de meting daadwerkelijk
@@ -8070,7 +8157,7 @@ function showDetail(d, opts) {
       // vertellen heeft: positie, twee classificaties en drie flare-kansen.
       ...(d.extra || [])
     ],
-    actions: detailActies(d),
+    actions: detailActions(d),
     // Bevingen komen uit twee catalogi, dus het label kan niet vastliggen per laag.
     link: d.url ? { href: d.url,
       label: d.layer === 'quake' ? 'View on ' + d.source : (DETAIL_LINK_LABELS[d.layer] || 'More info') } : null

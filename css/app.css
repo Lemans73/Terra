@@ -486,6 +486,10 @@
     display: flex;
     align-items: center; gap: 8px;
   }
+  /* De tweede hoek (sessie 26): Back to Earth en Navigate. `left: auto` is niet
+     overbodig — zonder dat blijft de 28px van hierboven staan en wordt het blok
+     schermbreed, waarna `right` niets meer doet. */
+  .dock-right { left: auto; right: 28px; }
   .dock-btn {
     display: flex;
     align-items: center; gap: 8px;
@@ -551,10 +555,18 @@
 
   /* ---- Het Navigate-paneel ----------------------------------------------
      Boven de knoppenrij, in dezelfde glastaal als `.panel`. Smaller, want het
-     draagt een handvol rijen en geen accordeons. */
+     draagt een handvol rijen en geen accordeons.
+
+     RECHTSONDER SINDS SESSIE 26, boven zijn eigen knop — en daarmee in dezelfde
+     hoek als `.readout`. Die twee kunnen er niet allebei staan: `--z-panel` (10)
+     ligt onder `--z-detail` (40), dus dit paneel zou onder het venster verdwijnen.
+     Het WIJKT daarom, en komt terug zodra het venster sluit. Die afspraak staat in
+     `index.html` bij navYield()/navRestore(), want het is een gerichte relatie —
+     het venster laat dit paneel wijken, niet andersom — en dat past niet in de
+     groepen van `js/ui/panels.js`, die per definitie wederzijds zijn. */
   .nav-panel {
     position: fixed;
-    left: 28px;
+    right: 28px;
     bottom: var(--panel-lift);   /* zelfde onderrand als .panel — zie :root */
     z-index: var(--z-panel);
     width: 214px;
@@ -2140,7 +2152,11 @@
      het bereik onder de slider is de eerste die valt, want de slider zelf zegt al
      hoe ver hij reikt. */
   @media (max-width: 1100px) {
-    .time-island { left: 316px; right: 44px; }   /* readout is hier meestal dicht */
+    /* HIER STOND `right: 44px`, met als reden "readout is hier meestal dicht". Dat
+       gold tot sessie 26: sindsdien staat er rechtsonder een knoppenkolom die NOOIT
+       dicht is, op dezelfde `--dock-bottom` als dit eiland. Op 1024 px liep het
+       eiland er dwars doorheen. `right: 316px` is het desktopgetal en laat de
+       kolom met ruimte over vrij; wat we hier winnen is alleen de `.ti-span`. */
     .ti-span { display: none; }
   }
 
@@ -2245,13 +2261,18 @@
        wordmark en bel 211 px vrij: ruim genoeg, en het scheelt een verdieping. */
     .mode-switch { top: 12px; }
     .dock { left: 12px; }
+    .dock-right { left: auto; right: 12px; }
     /* GEMETEN op 375x812, slechtste stand (Space aan + Layers open): de rij werd
        363 px breed in een beeld van 375, en de knoppen werden daarbij al
        samengeknepen — 140 px viel terug naar 131. Op een 360 px scherm loopt hij
        eroverheen. Het label op de OPEN knop vervalt daarom hier; welk paneel open
        staat blijft zichtbaar aan de accentrand, én aan het paneel zelf.
        `Back to Earth` houdt zijn label wel: die is geen schakelaar maar een
-       handeling, en zonder tekst is een pijltje niet te raden. */
+       handeling, en zonder tekst is een pijltje niet te raden.
+
+       Sinds de splitsing van sessie 26 is die 363 px verdeeld over twee hoeken —
+       de klem hieronder blijft staan, want de rechterkolom draagt in zijn zwaarste
+       stand nog altijd een label plus een knop. */
     .dock-btn.active .dock-label { display: none; }
     .nav-panel {
       left: 12px; right: 12px; width: auto;

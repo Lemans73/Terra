@@ -84,6 +84,18 @@ export function createPanelManager() {
 
   const openKeys = () => [...panels.keys()].filter(isOpen);
 
+  /* Welke panelen uit ÉÉN groep staan open? Bestaat omdat `open(key)` zijn
+     groepsgenoten sluit zonder dat te melden: wie een paneel ongevraagd wil
+     terugzetten, moet eerst weten of de plek nog vrij is. Anders gooit dat
+     terugzetten er iets uit dat de bezoeker daarna zelf heeft geopend, en dat
+     is precies wat sessie 26 met Navigate en het detailvenster tegenkwam.
+
+     Het staat HIER en niet bij de aanroeper, want deze module weet als enige
+     welke sleutels een groep delen. Diezelfde lijst in `index.html` nog eens
+     uitschrijven is de tweede waarheid waar de kop hierboven voor waarschuwt. */
+  const openInGroup = (group) =>
+    [...panels.entries()].filter(([key, p]) => p.group === group && isOpen(key)).map(([key]) => key);
+
   function open(key) {
     const p = panels.get(key);
     if (!p) return false;
@@ -125,7 +137,7 @@ export function createPanelManager() {
   }
 
   return {
-    register, open, close, toggle, isOpen, openKey, openKeys, sync,
+    register, open, close, toggle, isOpen, openKey, openKeys, openInGroup, sync,
     onChange: (fn) => { listeners.push(fn); return fn; }
   };
 }
