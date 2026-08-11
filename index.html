@@ -7667,29 +7667,32 @@ function setPanelOpen(open) {
    blijven de gemeten vangnetten hierboven staan waar ze staan — die zijn er
    voor een stilstaande `requestAnimationFrame` en dat probleem verandert niet.
 
-   TWEE GROEPEN, en een paneel sluit alleen wat in zijn eigen groep zit:
+   DRIE GROEPEN, ÉÉN PER HOEK, en een paneel sluit alleen wat in zijn eigen
+   groep zit:
 
-     'dock'   de onderrand  Layers & filters · Navigate · Details
-     'top'    rechtsboven   Notificaties · Bevingenlijst · Instellingen
+     'left'    linksonder    Layers & filters · Details
+     'right'   rechtsonder   Navigate · het DETAILVENSTER
+     'top'     rechtsboven   Notificaties · Bevingenlijst · Instellingen
 
-   De drie in 'dock' staan sinds sessie 26 niet meer in dezelfde hoek — Navigate
-   verhuisde naar rechts — maar ze delen nog altijd de verdieping boven de
-   knoppenrij, en twee schermbrede sheets over elkaar heen is op een telefoon
-   precies waar de groep voor bestaat.
+   DE GROEP IS DE PLEK, EN NIETS ANDERS (sessie 26, na Terry's test). Tot die
+   test heette de eerste groep 'dock' en zaten Layers, Details én Navigate erin —
+   een restant uit de tijd dat de knoppenrij één blok links was. Navigate staat
+   sindsdien rechts, en dan klopt dat niet meer op twee manieren tegelijk: Layers
+   openen sloot Navigate terwijl ze elkaar nergens raken, én Navigate openen liet
+   het detailvenster staan terwijl die twee dezelfde 280 px bezetten. Je zag dan
+   een knop die zichzelf actief noemde met een paneel dat onzichtbaar onder het
+   venster lag — `--z-panel` (10) tegen `--z-detail` (40).
 
-   WAT HIER BEWUST NIET IN STAAT: het tijdpaneel en het detailvenster. Die
-   hebben geen groep en geen knop die gemarkeerd moet worden, en dan levert
-   aanmelden letterlijk niets op — de beheerder zou ze noch sluiten, noch laten
-   sluiten, noch markeren. Ze aanmelden zou coördinatie suggereren die er niet
-   is. Ze houden hun eigen open/dicht-functie (`setTimePanelOpen`,
-   `showDetail`/`hideDetail`) met dezelfde drie sluitwegen.
+   HET DETAILVENSTER IS DUS WÉL AANGEMELD, en dat is precies de uitzondering die
+   de vorige noot hier voorspelde: "krijgt een van de twee ooit wél een
+   groepsgenoot, dan hoort hij hier alsnog." Hij heeft er nu een. Het tijdpaneel
+   niet — dat houdt zijn eigen `setTimePanelOpen()` en staat nergens in de weg.
 
-   EN DAT BLIJFT ZO, óók nu het detailvenster en Navigate dezelfde hoek delen.
-   Een `group` is WEDERZIJDS — wie binnenkomt gooit de rest eruit — en wat die
-   twee nodig hebben is gericht: het venster laat Navigate wijken, niet andersom.
-   Aanmelden zou bovendien het openen van Layers het venster laten sluiten, wat
-   juist de weg is waarlangs je er komt. De afspraak staat in navYield() /
-   navRestore(), naast `hideDetail`.
+   WAT DE BEHEERDER NIET OVERNEEMT is het ÓPENEN van dat venster: dat kan niet
+   zonder inhoud, en die komt van `showDetail(d)`. Alleen de sluitkant loopt
+   hierlangs. Dat het openen tóch Navigate wegzet, doet `navYield()` — die moet
+   het bovendien ONTHOUDEN, zodat Navigate terugkomt als het venster sluit, en
+   dat kan een groep niet.
 
    HET NAVIGATE-PANEEL ZELF WORDT PAS IN HET INIT-BLOK GEBOUWD, want dat
    heeft `viewStates` nodig en die bestaat hier nog niet. De KNOP en zijn
@@ -7697,7 +7700,7 @@ function setPanelOpen(open) {
 panels = createPanelManager();
 
 panels.register('layers', {
-  group: 'dock',
+  group: 'left',
   button: panelOpenBtn,
   isOpen: () => panelOpenWanted,
   open:   () => setPanelOpen(true),
@@ -7707,11 +7710,28 @@ panels.register('layers', {
 const navHost = document.getElementById('nav-panel');
 const navBtn = document.getElementById('nav-open');
 panels.register('nav', {
-  group: 'dock',
+  group: 'right',
   button: navBtn,
   isOpen: () => !navHost.hidden,
   open:   () => { navHost.hidden = false; },
   close:  () => { navHost.hidden = true; }
+});
+
+/* Het detailvenster, als groepsgenoot van Navigate. Geen `button`: er is geen
+   knop die hem opent, dus er valt ook niets te markeren.
+
+   `open()` IS EEN LEGE FUNCTIE EN DAT IS GEEN VERGISSING. De beheerder roept hem
+   alleen aan vanuit `panels.open('detail')`, en die aanroep bestaat nergens —
+   dit venster gaat open met inhoud of het gaat niet open, en die inhoud komt van
+   `showDetail(d)`. Wat we hier wél willen is de andere kant: `panels.open('nav')`
+   moet dit venster sluiten, en daarvoor heeft de beheerder alleen `isOpen` en
+   `close` nodig. Zou hier ooit een zinnige `open()` komen, dan hoort er ook een
+   knop bij en verandert dit van een venster in een paneel. */
+panels.register('detail', {
+  group: 'right',
+  isOpen: () => detailVisible,
+  open:   () => {},
+  close:  hideDetail
 });
 
 /* De drie rechtsboven. Ze delen dezelfde hoek van het scherm en dus dezelfde
@@ -7724,7 +7744,7 @@ panels.register('nav', {
 const detailsHost = document.getElementById('details-panel');
 const detailsBtn = document.getElementById('details-open');
 panels.register('details', {
-  group: 'dock',
+  group: 'left',
   button: detailsBtn,
   isOpen: () => !detailsHost.hidden,
   open:   () => { detailsHost.hidden = false; },
@@ -8024,23 +8044,21 @@ const detail = createDetailPanel({
   onClose: hideDetail
 });
 
-/* ---- Navigate wijkt voor het detailvenster (sessie 26) -------------------
-   Sinds Navigate rechtsonder staat, deelt hij zijn hoek met het detailvenster.
-   Ze passen daar niet allebei: `--z-panel` (10) ligt onder `--z-detail` (40), dus
-   het paneel zou onder het venster verdwijnen — en een paneel dat je niet ziet
-   maar dat wél kliks vangt is erger dan een paneel dat netjes opzij gaat.
+/* ---- Navigate wijkt voor het detailvenster, en komt terug (sessie 26) ------
+   Navigate en het detailvenster delen de rechteronderhoek. Ze passen daar niet
+   allebei: `--z-panel` (10) ligt onder `--z-detail` (40), dus het paneel zou
+   onder het venster verdwijnen — en een paneel dat je niet ziet maar dat wél
+   kliks vangt is erger dan een paneel dat netjes opzij gaat.
 
-   WAAROM DIT HIER STAAT EN NIET IN `js/ui/panels.js`. Die module kent `group`, en
-   een groep is WEDERZIJDS: wie binnenkomt gooit de rest eruit. Wat hier nodig is,
-   is GERICHT — het venster laat Navigate wijken, Navigate laat het venster niet
-   wijken. Zou het venster zich als groepsgenoot aanmelden, dan sloot het openen
-   ervan óók Layers en Details, en sloot het openen van Layers het venster: precies
-   de weg waarlangs je er via de bevingenlijst komt. Bovendien kent `panels.js`
-   alleen sluiten, niet terugzetten.
+   DAT ZE ELKAAR SLUITEN REGELT `js/ui/panels.js` INMIDDELS ZELF: ze zitten samen
+   in groep 'right'. Wat een groep NIET kan is onthouden, en dat is precies wat
+   hier nog overblijft — Navigate hoort terug te komen zodra het venster sluit,
+   en alleen als hij er stond. Drie functies dus, en geen enkele daarvan sluit
+   iets wat de beheerder al sluit.
 
-   Drie functies, want de derde is geen detail: `clearView()` sluit eerst alle
-   panelen en roept dán `hideDetail()`. Zonder het geheugen te wissen zou dat
-   Navigate OPENEN — het omgekeerde van "maak het beeld vrij".
+   `navForget()` is de derde, en die is geen detail: `clearView()` sluit eerst
+   alle panelen en komt dán bij het venster. Zonder het geheugen te wissen zou
+   dat Navigate OPENEN — het omgekeerde van "maak het beeld vrij".
 
    BEKEND EN GEACCEPTEERD: opent iemand Navigate zélf terwijl het venster open
    staat en sluit hij hem daarna weer, dan komt Navigate bij het sluiten van het
@@ -8061,12 +8079,11 @@ function navYield() {
 function navRestore() {
   const wasOpen = navWasOpen;
   navWasOpen = false;
-  /* ALLEEN ALS DE PLEK NOG VRIJ IS. `panels.open()` sluit zijn groepsgenoten, dus
+  /* ALLEEN ALS DE HOEK NOG VRIJ IS. `panels.open()` sluit zijn groepsgenoten, dus
      zonder deze toets gooit het terugzetten van Navigate er iets uit dat de
-     bezoeker intussen zélf heeft geopend. GEMETEN: Navigate open → een beving
-     aantikken → Layers openen → het venster sluiten, en Layers klapte dicht.
-     Terugzetten is een gunst; die mag nooit een latere keuze overrulen. */
-  if (wasOpen && !panels.openInGroup('dock').length) panels.open('nav');
+     bezoeker intussen zélf heeft geopend. Sinds de groepen per hoek lopen gaat het
+     alleen nog over 'right' — Layers linksonder mag gewoon open blijven staan. */
+  if (wasOpen && !panels.openInGroup('right').length) panels.open('nav');
 }
 
 function navForget() { navWasOpen = false; }
@@ -8135,15 +8152,14 @@ const ICON_MOMENT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" 
 
 function clearView() {
   if (!isNarrow()) return;
-  // Eerst vergeten, dan pas sluiten: hieronder gaat `hideDetail()` langs, en die
-  // zou Navigate anders terugzetten terwijl je juist om een vrij beeld vroeg.
+  // Eerst vergeten: de lus hieronder sluit ook het detailvenster, en dat zou
+  // Navigate terugzetten terwijl je juist om een vrij beeld vroeg.
   navForget();
+  // Het detailvenster zit sinds sessie 26 in de beheerder en gaat dus mee in deze
+  // lus. Het TIJDPANEEL niet — dat heeft geen groep en geen knop, en moet daarom
+  // apart. Op een telefoon is het schermbreed, en je vroeg om de bol.
   for (const k of panels.openKeys()) panels.close(k);
-  // Het tijdpaneel en het detailvenster staan bewust NIET in de beheerder (zie de
-  // noot bij panels.register), dus die twee moeten hier apart. Allebei zijn ze op
-  // een telefoon schermbreed, en je vroeg om de bol.
   setTimePanelOpen(false);
-  hideDetail();
 }
 
 /* Het moment verzetten. Zelfde vorm als de eclips- en conjunctiesprong: de klok

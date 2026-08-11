@@ -29,14 +29,24 @@
    Wat daarvan hier terechtkomt is één woord: `exclusive` (een
    boolean, alles of niets) is `group` geworden (een naam).
 
-     group: 'dock'    Layers & filters · Navigate · Details
-                      linksonder, dezelfde plek, dus een tegelijk
+   EEN GROEP IS EEN PLEK OP HET SCHERM, en niets anders (aangescherpt
+   in sessie 26). Zolang de naam iets anders betekent — een rij
+   knoppen, een soort venster — loopt hij uit de pas zodra er iets
+   verhuist, en dan sluit er iets wat je nergens ziet liggen.
+
+     group: 'left'    Layers & filters · Details
+     group: 'right'   Navigate · het detailvenster
      group: 'top'     Notificaties · Bevingenlijst · Instellingen
-                      rechtsboven, dezelfde hoek, dus een tegelijk
      group: null      sluit niets en wordt door niets gesloten.
-                      Het tijdpaneel en het detailvenster: die hebben
-                      een eigen laag en horen niet weg te vallen
-                      omdat je iets anders opende.
+                      Het tijdpaneel: die heeft een eigen laag en
+                      hoort niet weg te vallen omdat je iets
+                      anders opende.
+
+   Een lid hoeft geen knop te hebben, en zelfs geen zinnige `open()`:
+   het detailvenster meldt zich aan met alleen `isOpen` en `close`,
+   want hij gaat open met inhoud die de aanroeper aanlevert. Wat hij
+   van deze module wil is precies één ding — dat wie de hoek opeist
+   hem netjes wegzet.
 
    ER STAAT GEEN `isNarrow()` MEER IN DEZE MODULE, en dat moet zo
    blijven. Die tak was het mechanisme achter `setDockVisible()`, en
