@@ -899,6 +899,13 @@
 
   <div class="panel">
     <div class="panel-head">
+      <!-- Alleen zichtbaar waar de tabrij dat niet is: op portret en smal blijft er
+           maar één tab over, en een tabrij met één tab is ruis. Zonder deze titel
+           zou de kop daar een lege balk met een kruisje zijn, want de knop in de
+           rij toont op dat formaat ook geen label meer.
+           (Geen productnaam in deze noot — die zou de standalone-knip overleven en
+           de vangrail in tools/build-standalone.mjs laten afgaan.) -->
+      <span class="panel-title">Layers &amp; filters</span>
       <div class="tabs" role="tablist">
         <!-- Vier icoon-tabs. Alle vier als inline SVG met `stroke: currentColor`,
              zodat ze dezelfde lijndikte en kleur delen en vanzelf meekleuren met de
@@ -7795,6 +7802,10 @@ const ICON_MOMENT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" 
 function maakBeeldVrij() {
   if (!isNarrow()) return;
   for (const k of panels.openKeys()) panels.close(k);
+  // Het tijdpaneel en het detailvenster staan bewust NIET in de beheerder (zie de
+  // noot bij panels.register), dus die twee moeten hier apart. Allebei zijn ze op
+  // een telefoon schermbreed, en je vroeg om de bol.
+  setTimePanelOpen(false);
   hideDetail();
 }
 

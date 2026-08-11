@@ -667,6 +667,17 @@
   @keyframes aqi-spin { to { transform: rotate(360deg); } }
 
   /* ---- Tab-navigatie ---- */
+  /* De titel in de paneelkop. Staat er alleen wanneer de tabrij verborgen is —
+     zie de media query onderaan. */
+  .panel-title {
+    display: none;
+    /* `flex: 1` duwt de sluitknop naar rechts: de kop is een flexrij zonder
+       `space-between`, dus zonder dit staat het kruisje pal naast de titel. */
+    flex: 1;
+    font-size: 11px; font-weight: 600;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--ink-dim);
+  }
   .panel .tabs, .detail-panel .tabs {
     flex: 1 1 auto; min-width: 0;
     display: flex; gap: 4px; margin: 0; padding: 3px;
@@ -2475,6 +2486,6 @@
        in dit paneel precies ÉÉN tab over, en een tabrij met één tab is ruis. Het
        Details-paneel houdt zijn drie tabs; die staan hier niet tussen. */
     .panel .tabs { display: none !important; }
-    .panel .panel-head { justify-content: flex-end; }
+    .panel .panel-title { display: block; }
   }
   /* SKETCH:END */
