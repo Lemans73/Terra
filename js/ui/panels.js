@@ -16,18 +16,38 @@
    DRIE SLUITWEGEN, en alle drie komen hier uit:
      1. het kruisje in het paneel
      2. nog een keer op de knop die hem opende
-     3. een andere knop
+     3. een andere knop UIT DEZELFDE GROEP
+
+   PANELEN SLUITEN ELKAAR NIET — ZE STAPELEN (sessie 25, Terry).
+   Tot deze sessie sloot op een smal scherm alles alles, en dat is
+   precies waarom er drie plekken waren die de knoppenrij wegzetten:
+   een venster dat tot de onderrand loopt moest de knop wel afdekken.
+   De nieuwe regel is dat niets verdwijnt. Wat elkaar in de weg zit
+   wordt opgelost met een vaste z-volgorde in `css/app.css` en met
+   geometrie die zorgt dat er niets belangrijks onder ligt.
+
+   Wat daarvan hier terechtkomt is één woord: `exclusive` (een
+   boolean, alles of niets) is `group` geworden (een naam).
+
+     group: 'dock'    Layers & filters · Navigate · Details
+                      linksonder, dezelfde plek, dus een tegelijk
+     group: 'top'     Notificaties · Bevingenlijst · Instellingen
+                      rechtsboven, dezelfde hoek, dus een tegelijk
+     group: null      sluit niets en wordt door niets gesloten.
+                      Het tijdpaneel en het detailvenster: die hebben
+                      een eigen laag en horen niet weg te vallen
+                      omdat je iets anders opende.
+
+   ER STAAT GEEN `isNarrow()` MEER IN DEZE MODULE, en dat moet zo
+   blijven. Die tak was het mechanisme achter `setDockVisible()`, en
+   een module die de schermbreedte kent, kent ook een tweede
+   breedtegrens die uit de pas gaat lopen met de media query.
 
    WAT DEZE MODULE NIET DOET: animeren, plaatsen, of weten hoe een
    paneel eruitziet. Dat blijft bij het paneel zelf. Hij vervangt de
    bestaande open/dicht-functies dus niet, hij roept ze aan — daardoor
    blijven de gemeten vangnetten in `setPanelOpen()` (de `setTimeout`
    voor een stilstaande `requestAnimationFrame`) precies waar ze staan.
-
-   SESSIE 24 REGISTREERT ER TWEE: het lagenpaneel en Navigate. Het
-   detailvenster, de bel en de bevingenlijst komen in fase 2 — die
-   vragen elk nog een verbouwing aan hun eigen kant, en half migreren
-   levert precies de twee modellen op die dit moest opheffen.
    ============================================================ */
 
 export function createPanelManager() {
@@ -39,10 +59,14 @@ export function createPanelManager() {
      api:
        open()      het paneel tonen
        close()     het paneel verbergen
+       isOpen()    staat hij open? VERPLICHT — zonder deze telt het
+                   paneel permanent als dicht en wordt zijn knop nooit
+                   gemarkeerd
        button      knopelement dat hem bedient (optioneel, voor de markering)
-       exclusive   mag hij naast een ander open staan? (standaard: nee) */
+       group       met wie hij zijn plek deelt (optioneel; zonder
+                   groep sluit hij niets en wordt hij door niets gesloten) */
   function register(key, api) {
-    panels.set(key, Object.assign({ exclusive: true }, api));
+    panels.set(key, Object.assign({ group: null }, api));
   }
 
   const isOpen = (key) => {
@@ -50,18 +74,24 @@ export function createPanelManager() {
     return !!(p && p.isOpen && p.isOpen());
   };
 
+  /* De eerste open sleutel in registratievolgorde, of `null`. Sinds er
+     meerdere panelen tegelijk open mogen staan is dit niet meer "het"
+     open paneel — gebruik `openKeys()` wanneer je ze allemaal nodig hebt. */
   const openKey = () => {
     for (const [key] of panels) if (isOpen(key)) return key;
     return null;
   };
 
+  const openKeys = () => [...panels.keys()].filter(isOpen);
+
   function open(key) {
     const p = panels.get(key);
     if (!p) return false;
-    // Weg 3: een andere knop. Sluit alles wat niet naast dit paneel mag staan.
-    if (p.exclusive) {
+    // Weg 3: een andere knop uit dezelfde groep. Panelen zonder groep
+    // raken hier niemand, en worden hier door niemand geraakt.
+    if (p.group) {
       for (const [other, o] of panels) {
-        if (other !== key && o.exclusive && isOpen(other)) o.close();
+        if (other !== key && o.group === p.group && isOpen(other)) o.close();
       }
     }
     p.open();
@@ -90,12 +120,12 @@ export function createPanelManager() {
       p.button.classList.toggle('active', aan);
       p.button.setAttribute('aria-pressed', aan ? 'true' : 'false');
     }
-    const k = openKey();
-    for (const fn of listeners) fn(k);
+    const keys = openKeys();
+    for (const fn of listeners) fn(keys);
   }
 
   return {
-    register, open, close, toggle, isOpen, openKey, sync,
+    register, open, close, toggle, isOpen, openKey, openKeys, sync,
     onChange: (fn) => { listeners.push(fn); return fn; }
   };
 }

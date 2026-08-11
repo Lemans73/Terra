@@ -20,21 +20,69 @@
     --lightning: #bcd6ff;
     --accent: #ff6b3d;
 
-    /* ---- De knoppenrij, en wat eroverheen mag staan (sessie 24) ----------
-       De rij ligt onderaan en is ALTIJD zichtbaar. Elk zwevend paneel moet er
-       dus bovenop stoppen, en dat is geen schatting: `--dock-h` is GEMETEN op
-       39 px (11 px padding boven en onder, 15 px icoon, 2 px rand).
+    /* ---- De onderrand: knoppenrij, tijdrij, en wat daarboven stopt ---------
+       (sessie 24, uitgebreid in 25)
 
-       Waarom variabelen en geen ingetikte getallen: `.panel` en `.nav-panel`
-       moeten allebei dezelfde onderrand aanhouden, en de media query op 640 px
-       verzet de rij naar 12 px. Twee ingetikte reeksen zouden stil uiteenlopen
-       — precies wat er bij de keerkring en de scheefstand ook dreigde. */
+       ONDERAAN STAAN TWEE DINGEN DIE ALTIJD ZICHTBAAR ZIJN: de knoppenrij en de
+       tijdrij. Dat is sinds sessie 25 een belofte en geen toevalligheid — tot
+       dan verborg `body.sheet-open` het hele tijdeiland zodra er een paneel
+       openstond, en op een telefoon stond het lagenpaneel bij het opstarten
+       open. GEMETEN op 375x812: het eiland had daar `display: none` en hoogte 0.
+       De tijdslider was er dus niet, en dat is precies waarom hij over het hoofd
+       werd gezien.
+
+       Twee GEMETEN maten en drie lijnen die eruit volgen:
+
+         --dock-h  39 px   11 px padding boven en onder, 15 px icoon, 2 px rand
+         --time-h  40 px   de tijdrij, op desktop én op 375 px even hoog
+
+         --dock-lift    de lijn boven de knoppenrij  -> daar staat de tijdrij
+         --time-lift    de lijn boven de tijdrij     -> daar stopt een paneel
+                        dat schermbreed is en het eiland dus zou raken
+         --panel-lift   waar een paneel daadwerkelijk stopt
+
+       `--panel-lift` is op een breed scherm gelijk aan `--dock-lift`, en dat is
+       niet slordig maar uitgerekend: de tijdrij staat daar op `--dock-bottom`
+       (28) en is 40 hoog, dus hij eindigt op 68 — ónder `--dock-lift` (81).
+       Links overlapt hij sowieso niet: `.panel` loopt tot x=308 en het eiland
+       begint op 316. Pas onder 640 px wordt het eiland schermbreed, en dáár
+       schuift `--panel-lift` op naar `--time-lift`.
+
+       Waarom variabelen en geen ingetikte getallen: `.panel`, `.nav-panel`,
+       `.readout` en `.qlist` moeten allemaal dezelfde onderrand aanhouden, en
+       twee media queries verzetten de rij. Ingetikte reeksen lopen stil
+       uiteen — dat is in sessie 24 al één keer gebeurd, toen `.time-island` en
+       `.readout` op een eigen `bottom: 28px` bleven staan terwijl de rij naar
+       12 px ging. */
     --dock-bottom: 28px;
     --dock-h: 39px;
     --dock-gap: 14px;
-    --panel-lift: calc(var(--dock-bottom) + var(--dock-h) + var(--dock-gap));
+    --time-h: 40px;
+    --time-gap: 10px;
+    --dock-lift: calc(var(--dock-bottom) + var(--dock-h) + var(--dock-gap));
+    --time-lift: calc(var(--dock-lift) + var(--time-h) + var(--time-gap));
+    --panel-lift: var(--dock-lift);
     /* Vrije ruimte boven een paneel, zodat de masthead er niet onder verdwijnt. */
     --panel-top-gap: 38px;
+
+    /* ---- DE Z-LADDER (sessie 25) ----------------------------------------
+       Tot deze sessie stonden zeven vensters allemaal op 10 of 11, en won dus
+       de DOM-volgorde. Dat is geen ordening maar een toevalligheid, en met een
+       model waarin panelen elkaar niet meer sluiten maar stapelen, moet de
+       volgorde een besluit zijn:
+
+         eiland   het uitklapdeel hoort ACHTER de panelen weg te schuiven
+         paneel   de werkbladen: Layers, Navigate, Details
+         chroom   bel, bevingenlijst, instellingen — altijd bereikbaar
+         detail   wat je aantikte moet leesbaar zijn, ook met de lijst open
+                  (Terry's keuze: de lijst is de weg waarlangs je hier komt)
+         dock     de enige weg terug; mag onder niets liggen
+         toast    ongewijzigd, staat al op 40 in zijn eigen regel */
+    --z-island: 8;
+    --z-panel: 10;
+    --z-chrome: 35;
+    --z-detail: 40;
+    --z-dock: 45;
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -141,7 +189,7 @@
   .notif-panel {
     position: fixed;
     top: 62px; right: 24px;
-    z-index: 35;
+    z-index: var(--z-chrome);
     width: 300px;
     max-height: 52vh;
     display: none;
@@ -227,7 +275,7 @@
        rij tekende er bovenop. Zichtbaar als een knop die in het paneel lijkt te
        zweven. Zie `--panel-lift` in :root voor de opbouw van dit getal. */
     bottom: var(--panel-lift);
-    z-index: 10;
+    z-index: var(--z-panel);
     /* Breder en iets lager sinds sessie 17: de tabs dragen meer bediening dan bij
        248 px comfortabel paste. Alleen desktop — de query op 640 px zet `width: auto`
        en een eigen max-height, dus die blijft ongemoeid. */
@@ -319,7 +367,7 @@
     position: fixed;
     left: 28px;
     bottom: var(--dock-bottom);
-    z-index: 11;
+    z-index: var(--z-dock);
     display: flex;
     align-items: center; gap: 8px;
   }
@@ -363,7 +411,7 @@
     position: fixed;
     left: 28px;
     bottom: var(--panel-lift);   /* zelfde onderrand als .panel — zie :root */
-    z-index: 10;
+    z-index: var(--z-panel);
     width: 214px;
     max-height: calc(100dvh - var(--panel-lift) - var(--panel-top-gap));
     display: flex;
@@ -956,7 +1004,7 @@
     position: fixed;
     right: 28px;
     top: 62px;
-    z-index: 10;
+    z-index: var(--z-chrome);
     width: 268px;
     /* Tot ongeveer twee derde van de hoogte. Daaronder blijft het beeld vrij voor
        het detailvenster, dat rechtsonder opkomt. */
@@ -1050,7 +1098,11 @@
   .qlist-open svg { width: 15px; height: 15px; }
   /* Actieve stand voor beide schakelaars in de masthead. Ze sluiten elkaar uit, dus
      er brandt er hoogstens één. */
-  .qlist-open.on, .notif-btn.on { color: var(--accent); border-color: var(--accent); }
+  /* `.active` en niet `.on` sinds sessie 25: `panels.sync()` is nu de enige
+     schrijver van de knopstand, en die gebruikt dezelfde klasse als de dock-rij.
+     Twee klassen voor hetzelfde is precies hoe een knop uit de pas gaat lopen
+     zodra een ánder paneel uit de groep hem sluit. */
+  .qlist-open.active, .notif-btn.active { color: var(--accent); border-color: var(--accent); }
   .notif-close {
     margin-left: 2px;
     background: none; border: 0; padding: 0 2px;
@@ -1386,8 +1438,12 @@
   .readout {
     position: fixed;
     right: 28px;
-    bottom: 28px;
-    z-index: 10;
+    /* `--panel-lift` en niet de ingetikte 28 px die hier tot sessie 25 stond: onder
+       1100 px loopt het tijdeiland door tot `right: 44px` en overlapt het dit
+       venster horizontaal. Op 81 px (breed) staat de onderrand boven de tijdrij,
+       die op 28 begint en 40 hoog is. */
+    bottom: var(--panel-lift);
+    z-index: var(--z-detail);
     width: 280px;
     background: rgba(11,16,24,0.72);
     backdrop-filter: blur(14px);
@@ -1637,12 +1693,15 @@
      botsen — ook niet op een smal venster, waar het gewoon meekrimpt. */
   .time-island {
     position: fixed;
-    bottom: 28px;
+    /* De variabele en niet de ingetikte 28 px: `@media (max-height: 480px)` zet
+       `--dock-bottom` op 12 en schoof de knoppenrij mee, maar het eiland bleef op
+       28 staan. Precies de val waar de noot in `:root` voor waarschuwt. */
+    bottom: var(--dock-bottom);
     left: 316px;
     right: 316px;
     margin: 0 auto;
     max-width: 560px;
-    z-index: 11;
+    z-index: var(--z-island);
     display: flex;
     flex-direction: column;
     gap: 8px;
@@ -1872,22 +1931,26 @@
 
   @media (max-width: 640px) {
     /* De knoppenrij schuift naar de rand, en alles wat erboven stopt schuift mee.
-       Eén plek om te verzetten in plaats van vier — zie de noot bij :root. */
+       Eén plek om te verzetten in plaats van vier — zie de noot bij :root.
+
+       HIER WORDT DE ONDERSTE STAPEL GEZET (sessie 25). Het eiland is op deze
+       breedte schermbreed en ligt dus wél in de weg, dus stopt een paneel niet
+       boven de knoppenrij maar boven de TIJDRIJ. Van onder naar boven:
+       knoppenrij (12..51) · tijdrij (61..101) · paneel (vanaf 111). */
     :root {
       --dock-bottom: 12px;
       --dock-gap: 10px;
+      --panel-lift: var(--time-lift);
     }
     /* Volle breedte, en GEEN transform die opgeheven moet worden — zie de noot bij
-       .time-island. Bij een open bottom sheet (paneel of readout) verdwijnt het
-       eiland; naast elkaar passen ze hier niet, dezelfde afspraak die paneel en
-       readout onderling al hebben. */
+       .time-island. `--dock-lift` en niet `--panel-lift`: het eiland stopt boven de
+       KNOPPENRIJ, de panelen stoppen boven het eiland. Tot sessie 25 waren die twee
+       hetzelfde getal, en dat kon alleen omdat het eiland verdween zodra er een
+       paneel openging. */
     .time-island {
       left: 10px; right: 10px; max-width: none;
-      /* BOVEN de knoppenrij, niet erop; zonder deze verhoging lag die over de
-         afspeelknoppen heen en waren die onbereikbaar. */
-      bottom: calc(var(--panel-lift) + env(safe-area-inset-bottom, 0px));
+      bottom: calc(var(--dock-lift) + env(safe-area-inset-bottom, 0px));
     }
-    body.sheet-open .time-island { display: none; }
     /* HET MOMENT STAAT WEER OP DEZELFDE REGEL (sessie 24, Terry's verzoek). Het
        stond op een eigen regel omdat een vaste kolom van 190 px op 355 px breed
        te weinig overliet voor de slider. De oplossing is niet het moment
@@ -1927,14 +1990,22 @@
     .panel-body { padding: 14px 16px 16px; }
     /* Was tot 2026-07-31 `display: none`. De klik op een label wérkte, maar er
        verscheen niets, en dat las als "aanklikken doet niks". Nu een bottom sheet:
-       het venster komt van onderen op over de volle breedte. Het paneel sluit dan
-       vanzelf (zie setPanelOpen/showDetail), want naast elkaar passen ze hier niet. */
+       het venster komt van onderen op over de volle breedte.
+
+       HET RAAKT DE ONDERRAND NIET MEER (sessie 25). Het stond op `bottom: 0` met
+       een afgeknipte onderrand, en dat is wat `setDockVisible(false)` nodig maakte:
+       het venster lag over de knoppenrij heen, dus moest die weg. Nu stopt het op
+       `--panel-lift`, boven de tijdrij, en is de rij gewoon bereikbaar terwijl je
+       leest. Daarmee komen ook de volledige afronding en de onderrand terug — die
+       hoorden bij een sheet die tegen de schermrand plakt, en dat doet hij niet
+       meer. Het paneel hoeft er niet meer voor te wijken; dit venster ligt in de
+       z-ladder erbovenop. */
     .readout {
-      left: 0; right: 0; bottom: 0; width: auto;
-      border-radius: 14px 14px 0 0;
-      border-bottom: 0;
+      /* 10 px inspringing, gelijk aan .panel, .qlist en .notif-panel: nu de hoeken
+         weer helemaal rond zijn, zouden ze op 0 tegen de schermrand aan liggen. */
+      left: 10px; right: 10px; width: auto;
+      bottom: calc(var(--panel-lift) + env(safe-area-inset-bottom, 0px));
       padding: 18px;
-      padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px));
       max-height: 60vh;
       max-height: 60dvh;
       overflow-y: auto;
@@ -2025,7 +2096,10 @@
        bepalen top en bottom samen de hoogte, onder de bedieningsstrook door. */
     .qlist {
       top: 92px;
-      bottom: 12px;
+      /* GEEN 12 px meer (sessie 25): dat is precies de plek van de knoppenrij, en
+         de lijst liep er tot dan toe achter door. Dat werd gemaskeerd doordat
+         `setQuakeListOpen()` de rij wegzette; die functie is er niet meer. */
+      bottom: var(--panel-lift);
       max-height: none;
     }
   }

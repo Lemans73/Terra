@@ -5244,7 +5244,9 @@ document.getElementById('qlist-more').addEventListener('click', () => {
 // De samenvatting is de enige plek waar de lijst iets over filters zegt, en hij
 // brengt je naar de echte bediening in plaats van die te dupliceren.
 document.getElementById('qlist-summary').addEventListener('click', () => {
-  setPanelOpen(true);
+  // Via de beheerder en niet rechtstreeks via setPanelOpen(): die zou het paneel
+  // wel openen maar Navigate open laten staan, en dan liggen er twee over elkaar.
+  panels.open('layers');
   document.querySelector('.tab[data-tab="lagen"]')?.click();
   const acc = document.querySelector('[data-acc="layers-list"]');
   if (acc && !acc.classList.contains('open')) acc.querySelector('.acc-head')?.click();
@@ -5254,37 +5256,20 @@ document.getElementById('qlist-summary').addEventListener('click', () => {
     ?.scrollIntoView({ behavior: REDUCED_MOTION ? 'auto' : 'smooth', block: 'nearest' });
 });
 
+/* Alleen nog tonen en verbergen (sessie 25). Wat hier stond en weg is: de
+   uitsluiting met de bel (die twee zitten nu in de groep 'top', dus de beheerder
+   doet het), de knopklasse en `aria-pressed` (dat doet `panels.sync()`, en één
+   schrijver houdt een knop in de pas terwijl twee dat niet doen), en de hele
+   `isNarrow()`-tak die het lagenpaneel sloot en de knoppenrij wegzette. */
 function setQuakeListOpen(open) {
   if (open === listOpen) return;
   listOpen = open;
-  const el = document.getElementById('qlist'), knop = document.getElementById('qlist-open');
-  el.style.display = open ? 'flex' : 'none';
-  // De knop blijft staan en wordt een schakelaar: hij is de derde manier om de
-  // lijst te sluiten, naast het kruisje en de meldingenknop.
-  knop.classList.toggle('on', open);
-  knop.setAttribute('aria-pressed', String(open));
-  if (open) setNotifOpen(false);   // maar één van de twee tegelijk
-  // Op een smal scherm is er ruimte voor precies één venster — zelfde afspraak als
-  // bij de readout. De sheet loopt tot de onderrand en dekt de knop "Layers &
-  // filters" af; die knop is daar dus onbruikbaar en hoort weg, anders staat hij
-  // over "Load more" heen.
-  if (isNarrow()) {
-    if (open) {
-      setPanelOpen(false);
-      setDockVisible(false);
-    } else if (!panelOpenWanted) {
-      // Alleen terughalen als het paneel óók dicht staat — anders zou de rij
-      // naast een open paneel komen te staan. Zelfde afweging als in hideDetail().
-      setDockVisible(true);
-    }
-  }
+  document.getElementById('qlist').style.display = open ? 'flex' : 'none';
 }
-document.getElementById('qlist-collapse').addEventListener('click', () => setQuakeListOpen(false));
-document.getElementById('qlist-open').addEventListener('click', () => setQuakeListOpen(!listOpen));
-// De beginstand op een telefoon staat in het init-blok onderaan, NIET hier:
-// `isNarrow` wordt pas ~800 regels verderop gedeclareerd en een aanroep op
-// top-level zou hier een temporal dead zone raken. Dat is dezelfde fout die in
-// sessie 11 de hele demo op het laadscherm liet hangen.
+// Drie sluitwegen, alle drie via de beheerder: het kruisje, de knop zelf, of de
+// bel/instellingen uit dezelfde groep.
+document.getElementById('qlist-collapse').addEventListener('click', () => panels.close('qlist'));
+document.getElementById('qlist-open').addEventListener('click', () => panels.toggle('qlist'));
 
 // ---- Meldingen-geschiedenis (bel-menu) ----
 const notifHistory = [];
@@ -5316,29 +5301,39 @@ function renderNotifList() {
            '<span class="ntime">' + tm + '</span></div>';
   }).join('');
 }
-// De meldingen en de aardbevingenlijst delen dezelfde hoek van het scherm en
-// dezelfde bovenkant. Er kan er dus maar ÉÉN open staan. Beide setters sluiten de
-// ander alleen bij het OPENEN — dat is wat de wederzijdse aanroep eindig houdt.
+/* De meldingen en de aardbevingenlijst delen dezelfde hoek van het scherm en
+   dezelfde bovenkant, dus kan er maar ÉÉN open staan. Sinds sessie 25 regelt de
+   groep 'top' dat, en niet de wederzijdse aanroep die hier stond; de knopklasse
+   en `aria-pressed` komen mee uit `panels.sync()`.
+
+   HET VANGNET IS NIEUW (sessie 25) en heeft dezelfde reden als dat in
+   finishPanelClose(): GSAP hangt aan `requestAnimationFrame`, en dat staat stil
+   zodra het tabblad naar de achtergrond gaat. Zonder net blijft dit paneel dan
+   halfdoorzichtig op `display: block` staan en vangt het nog kliks af ook. Het
+   lagenpaneel en de readout hadden zo'n net al; dit paneel viel er tussenuit. */
+function finishNotifClose() {
+  if (notifOpen) return;   // ondertussen weer geopend: niets doen
+  const panel = document.getElementById('notif-panel');
+  gsap.set(panel, { opacity: 0, y: -12 });
+  panel.style.display = 'none';
+}
 function setNotifOpen(open) {
   if (open === notifOpen) return;
   const panel = document.getElementById('notif-panel');
-  const btn = document.getElementById('notif-btn');
   notifOpen = open;
-  btn.classList.toggle('on', open);
-  btn.setAttribute('aria-pressed', String(open));
   if (notifOpen) {
-    setQuakeListOpen(false);
     renderNotifList();
     panel.style.display = 'block';
     gsap.fromTo(panel, { opacity: 0, y: -12, scale: 0.97 },
       { opacity: 1, y: 0, scale: 1, duration: 0.35, ease: 'back.out(1.4)', transformOrigin: 'top right' });
     notifUnread = 0; updateNotifBadge();
   } else {
-    gsap.to(panel, { opacity: 0, y: -12, duration: 0.22, ease: 'power2.in', onComplete: () => { panel.style.display = 'none'; } });
+    gsap.to(panel, { opacity: 0, y: -12, duration: 0.22, ease: 'power2.in', onComplete: finishNotifClose });
+    setTimeout(finishNotifClose, 600);   // vangnet, zie hierboven
   }
 }
-document.getElementById('notif-btn').addEventListener('click', () => setNotifOpen(!notifOpen));
-document.getElementById('notif-close').addEventListener('click', () => setNotifOpen(false));
+document.getElementById('notif-btn').addEventListener('click', () => panels.toggle('notif'));
+document.getElementById('notif-close').addEventListener('click', () => panels.close('notif'));
 document.getElementById('notif-clear').addEventListener('click', () => {
   notifHistory.length = 0; notifUnread = 0; updateNotifBadge(); renderNotifList();
 });
@@ -6987,13 +6982,12 @@ document.getElementById('time-reset')?.addEventListener('click', terugNaarNu);
    waarheid. `aria-expanded` stuurt bovendien de CSS: welk icoon de chevron-knop
    toont hangt eraan, dus vergeten bij te werken is meteen zichtbaar.
 
-   GEEN BLOCK-SCOPE MEER: `panels.register('time', …)` verderop roept deze functie
-   aan, en een functiedeclaratie in een `{ }` is in een module niet bereikbaar
-   buiten dat blok.
-
-   `if (panels)` — de paneelbeheerder wordt honderden regels hieronder pas
-   aangemaakt, dus tijdens het opbouwen bestaat hij nog niet. Zelfde guard en
-   zelfde reden als in setPanelOpen(). */
+   DIT PANEEL IS BEWUST NIET AANGEMELD BIJ `js/ui/panels.js`. Het heeft geen
+   groepsgenoten en geen knop die een `.active`-markering hoort te krijgen — de
+   twee knoppen hier dragen `aria-expanded`, wat de juiste ARIA is voor een
+   uitklapper en niet voor een schakelaar. Aanmelden zou dus niets sluiten, niets
+   markeren en niets coördineren; het zou alleen suggereren dat het meedoet.
+   Zie de noot bij `panels.register` verderop. */
 const tiPanelEl = document.getElementById('ti-panel');
 const tiMoreBtn = document.getElementById('ti-more');
 const tiValBtn  = document.getElementById('time-val');
@@ -7008,7 +7002,6 @@ function setTimePanelOpen(open) {
   const vlag = open ? 'true' : 'false';
   tiMoreBtn?.setAttribute('aria-expanded', vlag);
   tiValBtn?.setAttribute('aria-expanded', vlag);
-  if (panels) panels.sync();
 }
 
 // Weg 2 en 3: nog een keer op de chevron, of op het moment zelf.
@@ -7235,20 +7228,27 @@ if (fogToggleEl) {
 const panelEl = document.querySelector('.panel');
 const panelOpenBtn = document.getElementById('panel-open');
 
-// Eén bron van waarheid voor "is dit een smal scherm". Het paneel en het
-// detailvenster passen daar niet naast elkaar, dus daar sluit de een de ander.
-// Bewust dezelfde grens als de media query in css/app.css; twee losse checks
-// zouden uit de pas kunnen lopen zodra iemand er één aanpast.
+/* Eén bron van waarheid voor "is dit een smal scherm". Bewust dezelfde grens als
+   de media query in css/app.css; twee losse checks zouden uit de pas kunnen lopen
+   zodra iemand er één aanpast.
+
+   ER IS NOG ÉÉN GEBRUIKER OVER (sessie 25): de knop "Show on globe" in het
+   detailvenster, die op een telefoon de panelen opzij zet zodat je de bol echt
+   ziet. Alle andere takken zijn weg — die sloten panelen omdat er "geen ruimte"
+   was, en dat is nu een zaak van de z-ladder en van --panel-lift.
+   Wie hier een gebruiker bij zet: dat mag alleen als de gebruiker er zelf om
+   vraagt met een klik, niet als stille regel achter iets anders. */
 const narrowMQ = window.matchMedia('(max-width: 640px)');
 const isNarrow = () => narrowMQ.matches;
 
 // De gewenste toestand, los van wat er op het scherm staat. Tijdens de sluitanimatie
 // is `display` nog `flex`, dus die kun je niet als bron van waarheid gebruiken.
 let panelOpenWanted = true;
-// Staat hier en niet bij showDetail/hideDetail verderop: borgSheetKlasse() leest hem
-// vanuit setPanelOpen(), en dat is honderden regels eerder. Vandaag gaat dat goed
-// omdat elke aanroep uit een event handler komt, maar één top-level aanroep zou er
-// een temporal dead zone van maken — de vierde in dit project.
+// Staat hier en niet bij showDetail/hideDetail verderop, waar hij thuishoort: de
+// lezer zat honderden regels eerder. Die lezer (borgSheetKlasse) is in sessie 25
+// verdwenen, maar de declaratie blijft hier staan — verplaatsen zou hem ónder
+// showDetail/hideDetail brengen, en dat is precies hoe je een temporal dead zone
+// maakt. Dit project heeft er al drie gehad.
 let detailVisible = false;
 
 // Eindtoestand forceren. GSAP hangt aan requestAnimationFrame, en dat staat stil
@@ -7271,55 +7271,30 @@ function finishPanelOpen() {
   // panels.sync().
 }
 
-// Op een smal scherm liggen paneel en readout als bottom sheet over de volle breedte
-// en dus over het tijdeiland heen. De klasse wordt altijd gezet; alleen de media query
-// op 640 px doet er iets mee, zodat er geen tweede breedtegrens in JS ontstaat die uit
-// de pas kan lopen met de CSS.
-/* `sheet-open` zegt: er ligt een venster over de volle breedte, dus het
-   tijdeiland moet wijken. Alleen de media query op 640 px doet er iets mee,
-   zodat er geen tweede breedtegrens in JS ontstaat die uit de pas loopt met
-   de CSS.
+/* HIER STONDEN `borgSheetKlasse()` EN `setDockVisible()` (weg in sessie 25).
 
-   ELK zwevend paneel telt mee, niet alleen het lagenpaneel (sessie 24).
-   GEMETEN toen Navigate erbij kwam en dit nog `panelOpenWanted || detailVisible`
-   was: op 375x812 liep het Navigate-paneel van 577 tot 746 en het tijdeiland
-   van 692 tot 751 — 54 px overlap, allebei bijna schermbreed. Dat is precies de
-   regel die Terry stelde: knoppenrij altijd zichtbaar, plus precies één van
-   paneel of tijdslider.
+   Allebei waren ze uitvloeisels van dezelfde regel: op een smal scherm sluit
+   alles alles. `sheet-open` verborg het hele tijdeiland zodra er een paneel
+   openstond, en `setDockVisible(false)` haalde de knoppenrij weg zodra een
+   bottom sheet tot de onderrand liep.
 
-   `panels &&` is geen overdaad: deze functie wordt aangeroepen vanuit
-   `setPanelOpen()`, en die kan draaien vóór de regel die de beheerder aanmaakt. */
-function borgSheetKlasse() {
-  const paneelOpen = !!(panels && panels.openKey()) || panelOpenWanted;
-  document.body.classList.toggle('sheet-open', paneelOpen || detailVisible);
-}
+   GEMETEN op 375x812 vlak voor de sloop: bij het opstarten staat het
+   lagenpaneel open, dus `sheet-open` stond er meteen, en het tijdeiland had
+   `display: none` en hoogte 0. Op een telefoon was de tijdslider dus onzichtbaar
+   tot je zelf het paneel sloot — precies de klacht dat het eiland over het hoofd
+   werd gezien.
 
-/* De knoppenrij wegzetten op een smal scherm, waar een bottom sheet tot de
-   onderrand loopt en er dus overheen ligt. Drie plekken deden dit tot sessie 24
-   met `panelOpenBtn.style.display`; dat werkte toen er één knop stond, maar met
-   een rij zou het alleen `Layers & filters` verbergen en `Navigate` en
-   `Back to Earth` los laten zweven.
-
-   DIT IS EEN TUSSENSTAP. Fase 2 schaft het verbergen helemaal af — de regel
-   wordt dan: knoppenrij altijd zichtbaar, plus precies één van paneel of
-   tijdslider. Zolang de sheet nog tot de onderrand loopt, is wegzetten het
-   minste kwaad; de knoppen zouden er anders onbereikbaar onder liggen.
-
-   Een FUNCTIEDECLARATIE en geen `const`: hij wordt aangeroepen op regels ver
-   boven deze plek, en een `const` is daar een temporal dead zone. */
-function setDockVisible(on) {
-  const d = document.getElementById('dock');
-  if (d) d.style.display = on ? 'flex' : 'none';
-}
+   De regel is nu omgekeerd (Terry, sessie 25): NIETS VERDWIJNT. De tijdrij
+   blijft altijd staan, de knoppenrij ook, en wat elkaar in de weg zit wordt
+   opgelost met de z-ladder in `css/app.css` plus `--panel-lift`, dat de panelen
+   boven de tijdrij laat stoppen. Wie hier ooit iets wil verbergen omdat het
+   elders in de weg zit: dat is de weg die we net verlaten hebben. */
 
 function setPanelOpen(open) {
-  // Niets te doen: scheelt een overbodige animatie wanneer showDetail() op een
-  // smal scherm sluit terwijl het paneel al dicht is.
+  // Niets te doen: scheelt een overbodige animatie wanneer iets anders sluit
+  // terwijl het paneel al dicht is.
   if (open === panelOpenWanted) return;
   panelOpenWanted = open;
-  borgSheetKlasse();
-  // Op een smal scherm is er ruimte voor precies één venster.
-  if (open && isNarrow()) hideDetail();
   if (open) {
     panelEl.style.display = 'flex';   // flexkolom: vaste kop + scrollend middendeel
     gsap.fromTo(panelEl, { x: -16, opacity: 0 }, { x: 0, opacity: 1, duration: 0.38, ease: 'power2.out' });
@@ -7331,14 +7306,24 @@ function setPanelOpen(open) {
   if (panels) panels.sync();
 }
 
-/* ---- Paneelbeheer (sessie 24) ------------------------------------------
+/* ---- Paneelbeheer (sessie 24, groepen sinds 25) -------------------------
    `js/ui/panels.js` bepaalt WELK paneel open staat en houdt de knoppen in de
    pas; hij vervangt de open/dicht-functies niet maar roept ze aan. Daardoor
    blijven de gemeten vangnetten hierboven staan waar ze staan — die zijn er
    voor een stilstaande `requestAnimationFrame` en dat probleem verandert niet.
 
-   Twee bewoners deze sessie. Het detailvenster, de bel en de bevingenlijst
-   volgen in fase 2; die vragen elk nog een verbouwing aan hun eigen kant.
+   TWEE GROEPEN, en een paneel sluit alleen wat in zijn eigen groep zit:
+
+     'dock'   linksonder  Layers & filters · Navigate · (Details, fase 3)
+     'top'    rechtsboven Notificaties · Bevingenlijst · Instellingen
+
+   WAT HIER BEWUST NIET IN STAAT: het tijdpaneel en het detailvenster. Die
+   hebben geen groep en geen knop die gemarkeerd moet worden, en dan levert
+   aanmelden letterlijk niets op — de beheerder zou ze noch sluiten, noch laten
+   sluiten, noch markeren. Ze aanmelden zou coördinatie suggereren die er niet
+   is. Ze houden hun eigen open/dicht-functie (`setTimePanelOpen`,
+   `showDetail`/`hideDetail`) met dezelfde drie sluitwegen.
+   Krijgt een van de twee ooit wél een groepsgenoot, dan hoort hij hier alsnog.
 
    HET NAVIGATE-PANEEL ZELF WORDT PAS IN HET INIT-BLOK GEBOUWD, want dat
    heeft `viewStates` nodig en die bestaat hier nog niet. De KNOP en zijn
@@ -7346,6 +7331,7 @@ function setPanelOpen(open) {
 panels = createPanelManager();
 
 panels.register('layers', {
+  group: 'dock',
   button: panelOpenBtn,
   isOpen: () => panelOpenWanted,
   open:   () => setPanelOpen(true),
@@ -7355,25 +7341,44 @@ panels.register('layers', {
 const navHost = document.getElementById('nav-panel');
 const navBtn = document.getElementById('nav-open');
 panels.register('nav', {
+  group: 'dock',
   button: navBtn,
   isOpen: () => !navHost.hidden,
   open:   () => { navHost.hidden = false; },
   close:  () => { navHost.hidden = true; }
 });
 
-// Elk paneel dat opengaat of dichtvalt raakt de sheet-regel — zie borgSheetKlasse().
-panels.onChange(borgSheetKlasse);
+/* De drie rechtsboven. Ze delen dezelfde hoek van het scherm en dus dezelfde
+   groep; de handmatige uitsluiting die de bel en de lijst tot sessie 24 zelf
+   bijhielden (`if (open) setNotifOpen(false)`) is daarmee weg.
 
-// Weg 2 en 3: nog een keer op dezelfde knop, of op een andere.
+   `button` staat er wél bij, ook al zetten deze drie hun eigen `.on`-klasse in
+   hun setter: `sync()` zet daarnaast `.active` en `aria-pressed`, en dat is
+   precies wat een knop uit de pas laat lopen zodra een ánder paneel hem sluit. */
+panels.register('notif', {
+  group: 'top',
+  button: document.getElementById('notif-btn'),
+  isOpen: () => notifOpen,
+  open:   () => setNotifOpen(true),
+  close:  () => setNotifOpen(false)
+});
+
+panels.register('qlist', {
+  group: 'top',
+  button: document.getElementById('qlist-open'),
+  isOpen: () => listOpen,
+  open:   () => setQuakeListOpen(true),
+  close:  () => setQuakeListOpen(false)
+});
+
+// Weg 2 en 3: nog een keer op dezelfde knop, of op een andere uit dezelfde groep.
 panelOpenBtn.addEventListener('click', () => panels.toggle('layers'));
 navBtn.addEventListener('click', () => panels.toggle('nav'));
 // Weg 1: het kruisje in het paneel zelf.
 document.getElementById('panel-collapse').addEventListener('click', () => panels.close('layers'));
 
-// Ook de BEGINSTAND moet kloppen. setPanelOpen() keert vroeg terug wanneer de gevraagde
-// stand al geldt, dus bij het opstarten komt hij daar nooit langs — en op een telefoon
-// staat het paneel open, waardoor het eiland eronder verdween.
-borgSheetKlasse();
+// Ook de BEGINSTAND van de knoppen moet kloppen: setPanelOpen() keert vroeg terug
+// wanneer de gevraagde stand al geldt, dus bij het opstarten komt hij daar nooit langs.
 panels.sync();
 document.getElementById('r-close').addEventListener('click', hideDetail);
 
@@ -7612,11 +7617,8 @@ modeOptEls.forEach(btn => {
 function hideDetail() {
   if (!detailVisible) return;
   detailVisible = false;
-  borgSheetKlasse();
   const r = document.getElementById('readout');
   r.style.pointerEvents = 'none';   // meteen, wacht niet op de animatie
-  // De knoppenrij mag weer, mits het paneel óók dicht staat.
-  if (!panelOpenWanted) setDockVisible(true);
   const settle = () => { if (!detailVisible) gsap.set(r, { opacity: 0, y: 0 }); };
   if (REDUCED_MOTION) {
     gsap.to(r, { opacity: 0, duration: 0.15, overwrite: true, onComplete: settle });
@@ -7626,18 +7628,13 @@ function hideDetail() {
   setTimeout(settle, 500);   // vangnet bij een stilstaande requestAnimationFrame
 }
 
+/* HET DETAILVENSTER SLUIT NIETS MEER (sessie 25). Hier stond een `isNarrow()`-tak
+   die het lagenpaneel dichtdeed en de knoppenrij wegzette, omdat dit venster op
+   een telefoon tot de onderrand liep. Het stopt nu boven de tijdrij en ligt in de
+   z-ladder bovenop, dus het is leesbaar zonder dat er iets voor hoeft te wijken —
+   ook met de bevingenlijst open, wat juist de weg is waarlangs je hier komt. */
 function showDetail(d) {
   const r = document.getElementById('readout');
-  // Zie setPanelOpen: op een smal scherm past er maar één venster tegelijk.
-  // Zonder dit bleef het paneel over het detailvenster heen staan.
-  if (isNarrow()) {
-    setPanelOpen(false);
-    // De bottom sheet loopt tot de onderrand en dekt de plek van de knoppenrij
-    // af. Die is daar dus onbruikbaar; de weg terug loopt via de sluitknop van
-    // dit venster. Fase 2 haalt dit weg door de sheet boven de rij te laten
-    // stoppen — zie de noot bij setDockVisible().
-    setDockVisible(false);
-  }
   const names = { region:'Active region', quake:'Earthquake', volcano:'Volcano', storm:'Storm', ice:'Sea ice', wildfire:'Wildfire', aqi:'Air quality', lightning:'Lightning' };
   document.getElementById('r-kicker').textContent = names[d.layer].toUpperCase();
   document.getElementById('r-kicker').style.color =
@@ -7692,7 +7689,6 @@ function showDetail(d) {
   }
   r.style.pointerEvents = 'auto'; // readout klikbaar maken voor de links
   detailVisible = true;
-  borgSheetKlasse();
   // GSAP: dialoogvenster soepel in beeld (pop met lichte overshoot). Bij
   // minder-beweging alleen invaden, zonder verschuiven of overshoot.
   if (REDUCED_MOTION) {
@@ -8390,9 +8386,8 @@ applyZoomRange();
 
 // De lijst begint overal dicht; de knop in de masthead haalt hem op. De beginstand
 // staat in de markup (display:none) én in `listOpen`, zodat er bij het laden geen
-// lijst opflitst. Hier alleen de knop met die stand gelijkzetten.
-document.getElementById('qlist-open').classList.toggle('on', listOpen);
-document.getElementById('qlist-open').setAttribute('aria-pressed', String(listOpen));
+// lijst opflitst. De knop gelijkzetten hoeft hier niet meer: `panels.sync()` doet
+// dat sinds sessie 25 voor álle aangemelde knoppen in één keer.
 
 // Twee overlays staan standaard aan. Via setOverlay() en niet via `overlayOn`,
 // want de GeoJSON wordt pas op dat moment opgehaald — de stand ZET de lading in
