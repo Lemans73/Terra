@@ -117,16 +117,27 @@ export function scaleToPixels(THREE, sprite, camera, heightPx) {
 
    Ligt een van beide binnen de bol, dan is er geen horizon te berekenen;
    we klemmen op 1 en behandelen dat als "op het oppervlak".
+
+   DE DREMPEL STAAT APART omdat niet elke aanroeper een positie heeft. Wie een
+   hele pool labels op DEZELFDE straal plaatst — de beving-labels, de as-labels —
+   heeft per label alleen een richting, en de drempel is dan één getal voor het
+   hele frame. Die uitrekenen per label zou tweemaal `Math.hypot` per label per
+   frame kosten voor een waarde die niet verandert. Vandaar drie scalars in en
+   een scalar uit: geen allocatie, geen three.js, en dezelfde wiskunde.
 ------------------------------------------------------------ */
+export function limbThreshold(R, pointRadius, cameraDist) {
+  const a = Math.min(1, R / pointRadius);
+  const b = Math.min(1, R / cameraDist);
+  return a * b - Math.sqrt(1 - a * a) * Math.sqrt(1 - b * b);
+}
+
 export function occludedByGlobe(position, cameraPos, R) {
   const lp = Math.hypot(position.x, position.y, position.z);
   const lc = Math.hypot(cameraPos.x, cameraPos.y, cameraPos.z);
   if (!lp || !lc) return false;
 
-  const a = Math.min(1, R / lp);
-  const b = Math.min(1, R / lc);
   const cosPC = (position.x * cameraPos.x + position.y * cameraPos.y
                + position.z * cameraPos.z) / (lp * lc);
 
-  return cosPC < a * b - Math.sqrt(1 - a * a) * Math.sqrt(1 - b * b);
+  return cosPC < limbThreshold(R, lp, lc);
 }

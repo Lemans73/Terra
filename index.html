@@ -1600,6 +1600,7 @@ import { createViewStates } from './js/core/view-state.js';
 import { createNavPanel } from './js/ui/nav.js';
 import { createPanelManager } from './js/ui/panels.js';
 import { createDetailPanel } from './js/ui/detail.js';
+import { limbThreshold } from './js/core/label-sprite.js';
 import { PLANETS, PLANET_INFO, nextConjunction,
          previousConjunction, heliocentricState } from './js/compute/planets.js';
 // Deskundig (schematische) weergavemodus (Fase 1).
@@ -4696,7 +4697,18 @@ const raycaster = new THREE.Raycaster();
 const ndc = new THREE.Vector2();
 let mouseClient = null, mouseMoved = false;
 
-// ligt een oppervlaktepunt aan de naar-ons-gekeerde kant (niet door de bol verdekt)?
+/* Ligt een OPPERVLAKTEPUNT aan de naar-ons-gekeerde kant (niet door de bol verdekt)?
+
+   HET WOORD "OPPERVLAKTE" IS DE HELE VOORWAARDE. Deze toets rekent op straal 100,
+   en dat klopt alleen voor iets dat ÓP de bol ligt. Een punt dat erboven hangt
+   steekt over de horizon heen en verdwijnt hiermee te vroeg — dat is precies wat de
+   beving-labels op straal 142 deden, 45 graden te streng. Gebruik daarvoor
+   `limbThreshold()` uit js/core/label-sprite.js.
+
+   Er is nog één gebruiker over: pickAt(). Daar is de strenge vorm juist correct —
+   de glyphs staan op alt 0,002 tot 0,013, en je klikt op de glyph, niet op iets dat
+   erboven zweeft. Deze functie verruimen zou de picking om de bolrand heen laten
+   grijpen. */
 function nearSide(v3) {
   const cam = world.camera();
   const horizon = 100 / cam.position.length(); // globe-straal = 100
@@ -4708,6 +4720,9 @@ const _wp = new THREE.Vector3();
 // Hergebruikt in positionLabels() voor de near-side-toets van de hele labelpool; een
 // verse Vector3 per frame zou daar een allocatie per label betekenen.
 const _camDir = new THREE.Vector3();
+// Idem voor het hover-label, dat als enige zijn richting per frame opnieuw uit een
+// lat/lon moet halen — de vaste labels hebben hun `__dir` al liggen.
+const _hoverDir = new THREE.Vector3();
 function pickAt(clientX, clientY) {
   const rect = globeEl.getBoundingClientRect();
   ndc.x = ((clientX - rect.left) / rect.width) * 2 - 1;
@@ -4892,18 +4907,26 @@ function setHoverQuake(d) {
   hoverLabelEl.innerHTML = quakeLabelHTML(d);
 }
 
-function positionHoverLabel(lblScale, verborgen) {
+/* `camDir` en `threshold` komen van de aanroeper en worden hier niet zelf berekend.
+   Twee redenen: het zijn per frame constanten die positionLabels() toch al heeft,
+   en dit label MOET dezelfde grens aanhouden als de vaste labels — één dat blijft
+   hangen terwijl de rest al weg is, leest als een storing. Vier losse parameters
+   en geen object: dit draait in de renderlus, en een objectliteral is daar een
+   allocatie per frame. */
+function positionHoverLabel(lblScale, verborgen, camDir, threshold) {
   if (!hoverLabelEl) return;
   const q = hoverQuake;
   // Heeft deze beving al een eigen zichtbaar label, dan zou dit een tweede kopie
   // op dezelfde plek zijn.
   const eigen = q && q.__label && q.__label.style.display !== 'none';
   let zicht = false, tip = null, base = null;
-  // `verborgen` komt uit labelZoomStand(): voorbij die afstand valt er niets meer te
+  // `verborgen` komt uit labelZoomState(): voorbij die afstand valt er niets meer te
   // lezen, en dan hoort ook dit label weg te blijven.
   if (q && !eigen && !verborgen) {
     const epi = world.getCoords(q.lat, q.lng, 0.0);
-    if (nearSide(new THREE.Vector3(epi.x, epi.y, epi.z))) {
+    // NIET nearSide(): die rekent op straal 100 en dit label hangt op labelAltitude.
+    // Zie de noot bij `threshold` in positionLabels().
+    if (_hoverDir.set(epi.x, epi.y, epi.z).normalize().dot(camDir) > threshold) {
       tip = world.getScreenCoords(q.lat, q.lng, PARAMS.labelAltitude);
       base = world.getScreenCoords(q.lat, q.lng, 0.0);
       zicht = true;
@@ -4940,7 +4963,7 @@ function positionHoverLabel(lblScale, verborgen) {
    leest `camera.aspect`, zodat portret en landschap allebei hun eigen ijkpunt
    krijgen. GLOBE_R is 100, dezelfde straal die de horizontoets hieronder gebruikt. */
 const GLOBE_R = 100;
-function labelZoomStand() {
+function labelZoomState() {
   const camLen = world.camera().position.length() || 1;
   const past = fitDistance(GLOBE_R);
   const uit = past * PARAMS.labelHideFactor;
@@ -4953,12 +4976,23 @@ function labelZoomStand() {
 }
 
 function positionLabels() {
-  const zoom = labelZoomStand();
+  const zoom = labelZoomState();
+  const camPos = world.camera().position;
+  const camDir = _camDir.copy(camPos).normalize();
+  /* DE HORIZON LIGT VERDER DAN DE LIMBUS, want dit label hangt niet op de bol.
+     Hier stond `100 / |cam|` — de toets van nearSide(), en die geldt voor een punt
+     ÓP het oppervlak. Het labelpunt zit op `labelAltitude` 0,42, dus op straal 142,
+     en steekt daarmee over de horizon heen: het blijft zichtbaar tot de SOM van de
+     twee raakhoeken, acos(R/tipR) + acos(R/|cam|). De eerste term is hier een
+     constante 45,2 graden, en precies zoveel te vroeg verdwenen de labels aan de
+     rand. Zelfde correctie als bij de as-labels (positionAxisLabels), en de formule
+     staat nu één keer in js/core/label-sprite.js in plaats van drie keer. */
+  const threshold = limbThreshold(GLOBE_R, GLOBE_R * (1 + PARAMS.labelAltitude), camPos.length());
   // Het hover-label hangt niet aan labelQuakes en moet ook werken wanneer het
   // plafond op 0 staat of er nog geen data is — dus vóór de vroege return.
   // Het volgt dezelfde zoomregel: één label dat blijft hangen terwijl de rest weg
   // is, leest als een bug.
-  positionHoverLabel(zoom.schaal, zoom.verborgen);
+  positionHoverLabel(zoom.schaal, zoom.verborgen, camDir, threshold);
   if (!labelQuakes.length) return;
   const lblScale = zoom.schaal;
   const frac = zoom.frac;
@@ -4974,9 +5008,7 @@ function positionLabels() {
   // gingen labels aan de achterkant van de bol wél van het plafond af terwijl je ze
   // nooit zag — bij een ongunstige stand bleven er van 25 een handvol over. Nu telt
   // alleen wat in beeld komt, en is het aantal constant terwijl je draait.
-  const camPos = world.camera().position;
-  const camDir = _camDir.copy(camPos).normalize();
-  const horizon = 100 / camPos.length();   // globe-straal = 100, zelfde toets als nearSide()
+  // `camDir` en `threshold` staan bovenaan, want het hover-label heeft ze ook nodig.
   const items = [];
   let getoond = 0;
   for (let idx = 0; idx < labelQuakes.length; idx++) {
@@ -4987,7 +5019,7 @@ function positionLabels() {
     // redenen om niets te tonen — de schakelaar in Settings, en te ver uitgezoomd om
     // nog iets te kunnen lezen. De INDICATOREN op de bol blijven in beide gevallen
     // gewoon staan; alleen de tekst gaat weg.
-    const near = labelsOn && !zoom.verborgen && q.__dir && q.__dir.dot(camDir) > horizon;
+    const near = labelsOn && !zoom.verborgen && q.__dir && q.__dir.dot(camDir) > threshold;
     const visible = near && getoond < K;
     if (visible) getoond++;
     el.style.display = visible ? 'block' : 'none';
@@ -6248,9 +6280,10 @@ function positionAxisLabels(cam) {
   // blijft dus langer zichtbaar. De exacte grens is de som van twee raakhoeken:
   //   zichtbaar  <=>  hoek(P, cam) < acos(R/|P|) + acos(R/|cam|)
   // De oude toets is daar het bijzondere geval van met |P| = R, waar de eerste term
-  // nul wordt. |P| ligt vast, dus die acos kost per frame niets.
-  const drempel = camLen > R
-    ? Math.cos(Math.acos(R / tipR) + Math.acos(R / camLen))
+  // nul wordt. `limbThreshold` rekent dat algebraïsch uit — zonder acos, en gedeeld
+  // met de beving-labels en de drie sprite-lagen.
+  const threshold = camLen > R
+    ? limbThreshold(R, tipR, camLen)
     : 1;   // camera binnen de bol: niets tonen
   _axCam.copy(cam.position).divideScalar(camLen || 1);
 
@@ -6271,7 +6304,7 @@ function positionAxisLabels(cam) {
     _axDir.copy(l.as === 'rot' ? geomag.rotationAxisVector : geomag.dipoleAxisVector)
           .transformDirection(geomag.group.matrixWorld)
           .multiplyScalar(l.teken);
-    if (_axDir.dot(_axCam) <= drempel) { l.el.style.display = 'none'; continue; }
+    if (_axDir.dot(_axCam) <= threshold) { l.el.style.display = 'none'; continue; }
     _axPos.copy(_axDir).multiplyScalar(tipR).project(cam);
     const x = (_axPos.x * 0.5 + 0.5) * window.innerWidth;
     const y = (-_axPos.y * 0.5 + 0.5) * window.innerHeight;
@@ -8646,7 +8679,8 @@ if (IS_LOCAL) {
     // zodra `document.hidden` waar is. Zonder deze twee is hun zoomgedrag van
     // buitenaf niet vast te stellen: de labels staan dan wel in de DOM, maar op de
     // stand van het laatste frame dat ooit liep.
-    labelZoomStand, positionLabels,
+    labelZoomState, positionLabels,
+    get labelQuakes() { return labelQuakes; },
     get world() { return world; }
   };
 }
