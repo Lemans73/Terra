@@ -1294,26 +1294,11 @@
   }
   .notif-close:hover { color: var(--ink); }
 
-  /* ---- Zonneactiviteit (Cosmos-tab) ---- */
-  .sunstat-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    gap: 10px;
-    padding: 5px 0;
-    font-size: 12px;
-    color: var(--ink-dim);
-  }
-  .sunstat-row b {
-    color: var(--ink);
-    font-weight: 600;
-    font-variant-numeric: tabular-nums;
-  }
-  .sunstat h3 { margin-top: 12px; }
-  /* Verschijnt zodra de tijdkiezer ergens anders staat. De waarden zelf blijven staan
-     — weghalen zou lezen als een storing, terwijl er niets mis is: deze bron kent
-     alleen het heden. Zelfde amber taal als .cosmos-warn en .src-switch. */
-  .sa-stale { border-top-color: rgba(255,209,102,0.22) !important; color: #e4cd9a !important; }
+  /* `.sunstat-row`, `.sunstat h3` en `.sa-stale` stonden hier tot sessie 26. Ze
+     hoorden bij de acht vaste regels zonneactiviteit in de Sun & Moon-tab, en die
+     staan nu in het detailvenster — waar `.row` / `.k` / `.v` ze tekent en het
+     voorbehoud een gewone rij is. `.sunstat-note` blijft: die wordt nog gebruikt
+     bij de schaaluitleg in de Space-sectie. */
   .sunstat-note {
     margin-top: 10px;
     padding-top: 10px;

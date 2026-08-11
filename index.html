@@ -855,20 +855,19 @@
       data and nothing else. Sizes are exaggerated to be visible; their
       proportions are true.
       </div>
-      <div class="sunstat" id="sun-activity">
-      <div class="sunstat-row"><span>Sunspot number</span><b id="sa-ssn">&#8212;</b></div>
-      <div class="sunstat-row"><span>Active regions</span><b id="sa-regions">&#8212;</b></div>
-      <div class="sunstat-row"><span>Solar flux 10.7 cm</span><b id="sa-flux">&#8212;</b></div>
-      <div class="sunstat-row"><span>X-ray flux now</span><b id="sa-xray">&#8212;</b></div>
-      <div class="sunstat-row"><span>Strongest today</span><b id="sa-flare">&#8212;</b></div>
-      <h3>Flare probability, next 24 h</h3>
-      <div class="sunstat-row"><span>C class</span><b id="sa-pc">&#8212;</b></div>
-      <div class="sunstat-row"><span>M class</span><b id="sa-pm">&#8212;</b></div>
-      <div class="sunstat-row"><span>X class</span><b id="sa-px">&#8212;</b></div>
-      <div class="sunstat-note" id="sa-note">&#8212;</div>
-      <div class="sunstat-note sa-stale" id="sa-stale" hidden>Current conditions &#8212; solar
-      activity is a snapshot from NOAA and does not follow the time picker.</div>
-      </div>
+      <!-- DE ACHT WAARDEN STONDEN HIER (sessie 26 verhuisd). Zonnevlekgetal, actieve
+      gebieden, radioflux, rontgenflux, de zwaarste uitbarsting van vandaag en drie
+      flare-kansen: elf regels die altijd stonden, in een paneel dat je opent om
+      iets AAN te zetten. Dezelfde behandeling als het magneetveld hierboven — de
+      getallen naar het venster waar je een ding tegelijk leest, de weg erheen
+      blijft hier. Wat óók blijft is de schakelaar erboven, want die tekent iets.
+
+      De readings openen bovendien vanzelf bij Navigate -> Sun; deze knop is de
+      tweede ingang, voor wie ze wil lezen zonder naar de zon te vliegen. -->
+      <p class="space-uitleg">The sunspot number, how many active regions NOAA counts
+      today, the radio and X-ray flux, and the odds of a flare in the next 24 hours.
+      A snapshot of now &#8212; solar activity does not follow the time picker.</p>
+      <button class="apply" id="solar-open">Read the activity</button>
       <!-- `Observe the Sun` stond hier tot sessie 24 en zit nu in het
       Navigate-paneel; zie de noot bij de Space-sectie hieronder. -->
       </div>
@@ -5224,7 +5223,12 @@ function rebuildRegionLabels() {
     el.innerHTML = '<b>' + r.region + '</b><span>' +
                    (r.spots == null ? 'no spots' : r.spots + (r.spots === 1 ? ' spot' : ' spots')) +
                    '</span>';
-    el.addEventListener('click', () => showDetail(regionItem(r)));
+    /* Een gebied VERVANGT de zonneactiviteit en zet de sluitknop op terug — maar
+       alleen als die activiteit er ook echt onder lag. Kom je hier met een
+       aardbeving in het venster, of met een leeg venster, dan is er niets om naar
+       terug te keren en hoort de knop gewoon te sluiten. */
+    el.addEventListener('click', () => showDetail(regionItem(r),
+      detail.kind() === 'solar' ? { backTo: showSolarActivity } : null));
     labelLayer.appendChild(el);
     const line = document.createElementNS(SVG_NS, 'line');
     line.setAttribute('class', 'rline');
@@ -5622,7 +5626,7 @@ for (const el of utcToggles) {
 
    Een functiedeclaratie en geen const: updateSunUniform() roept hem aan, en die
    draait al tijdens de opbouw van de scene. Zelfde reden als bij momentNow(). */
-function magneetveldView() {
+function geomagView() {
   const d = geomag && geomag.last;
   if (!d) return null;
   return {
@@ -5659,8 +5663,8 @@ function magneetveldView() {
   };
 }
 
-function toonMagneetveld() {
-  const v = magneetveldView();
+function showGeomag() {
+  const v = geomagView();
   if (v) showDetail(v);
 }
 
@@ -5670,7 +5674,7 @@ function toonMagneetveld() {
    met een magneetveld waar niemand om vroeg. */
 function updateGeomagReadout() {
   if (detail.kind() !== 'field') return;
-  const v = magneetveldView();
+  const v = geomagView();
   // `refresh` en niet `show`: dit venster staat al, en `show` zou het bij elke
   // sliderstap opnieuw laten invliegen. Het laat bovendien de ondergrond met rust.
   if (v) detail.refresh(v);
@@ -6619,7 +6623,7 @@ function bouwPlanetenLijst() {
       werkSpoorNootBij();
       // De readings staan sinds sessie 25 in het detailvenster, dus kiezen ís
       // openen. Zonder deze regel kies je wel een lichaam maar zie je niets.
-      if (planets.focus()) toonPlaneet(planets.focus()); else hideDetail();
+      if (planets.focus()) showPlanet(planets.focus()); else hideDetail();
     });
     host.appendChild(rij);
   }
@@ -6713,7 +6717,7 @@ function planeetView(f) {
   ] });
 }
 
-function toonPlaneet(f) {
+function showPlanet(f) {
   const v = planeetView(f);
   if (v) showDetail(v);
 }
@@ -6909,23 +6913,26 @@ document.getElementById('globe')?.addEventListener('click', (e) => {
   werkSpoorNootBij();
   // Tweede ingang naar dezelfde readings, en de natuurlijkste: je tikt het
   // lichaam aan dat je in beeld ziet staan.
-  if (planets.focus()) toonPlaneet(planets.focus()); else hideDetail();
+  if (planets.focus()) showPlanet(planets.focus()); else hideDetail();
 });
 
-// Zet de gemeten zonnetoestand in beeld: de getallen in de Cosmos-tab en de
-// vlekken op de bol. Wordt aangeroepen zodra één van de vier NOAA-bestanden
-// binnen is, dus nooit met een volledig gevulde toestand.
-function applySolarState() {
-  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+/* ---- De zonneactiviteit in het detailvenster (sessie 26) -----------------
+   Dezelfde drieslag als bij het magneetveld — view / tonen / bijwerken — en om
+   dezelfde reden: elf regels die altijd stonden hoorden niet in een paneel dat je
+   opent om iets aan te zetten. Wat in het paneel blijft is de schakelaar voor de
+   vlekken, want die tekent iets op de zon.
+
+   `kind: 'solar'` is een EIGEN soort en niet 'event'. Zonder dat zou de eerste de
+   beste NOAA-poll (elke 5 tot 15 minuten) het detail overschrijven van het gebied
+   waar je net op klikte — precies waar `detail.kind()` voor bestaat.
+
+   De kleur is die van een actief gebied. Dat is geen willekeur: het gebied dat je
+   hieruit opent is de volgende stap, en twee kleuren zouden ze uit elkaar trekken
+   terwijl ze bij elkaar horen. */
+function solarView() {
   const s = solarState;
-  set('sa-ssn', s.ssn == null ? '—' : s.ssn);
-  set('sa-regions', s.regions.length || '—');
-  set('sa-flux', s.flux == null ? '—' : s.flux + ' sfu');
-  set('sa-xray', (s.xray && s.xray.now) || '—');
-  set('sa-flare', (s.xray && s.xray.max) || '—');
-  set('sa-pc', s.prob ? s.prob.c + '%' : '—');
-  set('sa-pm', s.prob ? s.prob.m + '%' : '—');
-  set('sa-px', s.prob ? s.prob.x + '%' : '—');
+  // Nog niets binnen van NOAA: geen leeg venster met acht streepjes openen.
+  if (!s.date && s.ssn == null && !s.regions.length) return null;
   // Gebieden voorbij de rand staan op de afgewende helft. Ze zijn er wel, maar
   // niemand kan ze zien — dat hoort er eerlijk bij te staan in plaats van dat de
   // teller en het beeld onverklaarbaar uiteenlopen.
@@ -6933,10 +6940,56 @@ function applySolarState() {
   // Ruwe datumstring van NOAA, die al in UTC publiceert. Gaat daarom niet door
   // fmtStamp: er valt niets te converteren en een Date eromheen zou de dag kunnen
   // verschuiven bij een bezoeker ten westen van Greenwich.
-  set('sa-note', s.date
+  const bron = s.date
     ? 'NOAA SWPC · ' + String(s.date).slice(0, 10) +
       (far ? ' · ' + far + (far > 1 ? ' regions' : ' region') + ' past the limb' : '')
-    : '—');
+    : 'NOAA SWPC';
+  const rows = [
+    ['Sunspot number', s.ssn == null ? '—' : s.ssn],
+    ['Active regions', s.regions.length || '—'],
+    ['Solar flux 10.7 cm', s.flux == null ? '—' : s.flux + ' sfu'],
+    ['X-ray flux now', (s.xray && s.xray.now) || '—'],
+    ['Strongest today', (s.xray && s.xray.max) || '—'],
+    ['Flare odds 24 h · C', s.prob ? s.prob.c + '%' : '—'],
+    ['Flare odds 24 h · M', s.prob ? s.prob.m + '%' : '—'],
+    ['Flare odds 24 h · X', s.prob ? s.prob.x + '%' : '—'],
+    ['Source', bron]
+  ];
+  // Het voorbehoud stond als eigen regel onder de getallen en verscheen zodra je
+  // de tijd verzette. Hier hoort het bij de rij die het aangaat: alles hierboven
+  // is een momentopname en verandert niet mee met de tijdkiezer.
+  if (!bijNu()) rows.push(['Note', 'Current conditions — this does not follow the time picker']);
+  return {
+    kind: 'solar',
+    kicker: 'SUN ACTIVITY',
+    color: COLORS.region,
+    headline: 'The Sun today',
+    rows,
+    link: { href: 'https://www.swpc.noaa.gov/products/solar-region-summary',
+            label: 'Solar region summary' }
+  };
+}
+
+function showSolarActivity() {
+  const v = solarView();
+  if (v) showDetail(v);
+}
+
+/* Vier NOAA-adapters vullen `solarState` op hun eigen ritme, en elk van de vier
+   komt hier langs. Alleen hertekenen als dit venster de zonneactiviteit toont —
+   anders overschrijft een poll het gebied dat je net opende. */
+function updateSolarReadout() {
+  if (detail.kind() !== 'solar') return;
+  const v = solarView();
+  if (v) detail.refresh(v);
+}
+
+// Zet de gemeten zonnetoestand in beeld: de vlekken op de bol, en het venster als
+// dat de activiteit toont. Wordt aangeroepen zodra één van de vier NOAA-bestanden
+// binnen is, dus nooit met een volledig gevulde toestand.
+function applySolarState() {
+  const s = solarState;
+  updateSolarReadout();
   if (!sunMoon) return;
   sunMoon.setSunspots(s.regions);
   // Zonder dit verschijnen verse vlekken pas bij de volgende tick — zie dezelfde
@@ -7184,7 +7237,7 @@ function refreshTimeUI() {
   // Wat niet mee terug kan, gaat op slot. Staat vóór render() zodat de kaart in één
   // keer klopt in plaats van een frame lang lagen te tonen die er niet horen.
   borgTijdsloten();
-  borgZonneNoot();
+  syncSolarNote();
   // Om dezelfde reden vóór render(): voorraad die bij een ander tijdvak hoort is geen
   // achterstand maar een onwaarheid. Hier en niet in plandataVerversing(), want die
   // draait hieronder ná render() — dan zou de kaart eerst nog een frame lang de
@@ -7711,7 +7764,10 @@ document.getElementById('panel-collapse').addEventListener('click', () => panels
 document.getElementById('details-collapse').addEventListener('click', () => panels.close('details'));
 // De weg van Details naar het magneetveld-detail. De readings zelf staan in het
 // venster; dit is de rij die je erheen brengt.
-document.getElementById('geomag-open')?.addEventListener('click', toonMagneetveld);
+document.getElementById('geomag-open')?.addEventListener('click', showGeomag);
+// Idem voor de zonneactiviteit. Tweede ingang: bij Navigate → Sun openen de readings
+// vanzelf, zie de onChange-haak in het init-blok.
+document.getElementById('solar-open')?.addEventListener('click', showSolarActivity);
 
 // Ook de BEGINSTAND van de knoppen moet kloppen: setPanelOpen() keert vroeg terug
 // wanneer de gevraagde stand al geldt, dus bij het opstarten komt hij daar nooit langs.
@@ -8382,12 +8438,16 @@ function toonBrandNoot() {
   el.innerHTML = tekst;
 }
 
-// De zonneactiviteit is een momentopname van NOAA en reist niet mee. De waarden laten
-// staan en het voorbehoud erbij zetten is eerlijker dan ze weghalen: weg zou lezen als
-// een storing, terwijl er niets mis is.
-function borgZonneNoot() {
-  const el = document.getElementById('sa-stale');
-  if (el) el.hidden = bijNu();
+/* De zonneactiviteit is een momentopname van NOAA en reist niet mee. De waarden laten
+   staan en het voorbehoud erbij zetten is eerlijker dan ze weghalen: weg zou lezen als
+   een storing, terwijl er niets mis is.
+
+   Sinds sessie 26 zijn de waarden én dat voorbehoud één ding: `solarView()` zet de
+   noot zelf als laatste rij zodra `bijNu()` niet meer geldt. Deze functie hoeft
+   daarom alleen nog te laten hertekenen. Hij staat in `refreshTimeUI()`, dus de
+   noot volgt de tijdkiezer zonder eigen bedrading. */
+function syncSolarNote() {
+  updateSolarReadout();
 }
 
 function vensterGedekt(adapter) {
@@ -8755,6 +8815,18 @@ viewStates.onChange((actief) => { backBtn.hidden = !actief; });
 // zonnestelsel. Zie borgTrackPresets() waarom dit aan `onChange` hangt en niet aan
 // setSpaceView().
 viewStates.onChange(borgTrackPresets);
+/* NAAR DE ZON GAAN IS DE READINGS OPENEN (sessie 26). Je vliegt er niet heen om
+   naar een bol te kijken maar om te zien wat hij doet, en de acht getallen stonden
+   tot nu toe in een paneeltab die je apart moest opzoeken.
+
+   Aan `onChange` en niet aan de `enter()` van de state: die hoort bij de scene —
+   glow, environment, camera — en dit is interface. Bovendien dekt `onChange` alle
+   vier de wegen waarlangs de state verandert, waar `enter()` er maar één van is.
+
+   Het venster laat hiermee ook Navigate wijken (zie navYield), en dat is precies de
+   bedoeling: je hebt Sun aangetikt, dus je bent er. Sluit je de readings, dan staat
+   Navigate er weer. */
+viewStates.onChange((actief) => { if (actief === 'sun') showSolarActivity(); });
 borgTrackPresets();
 backBtn.hidden = !viewStates.activeState();
 
@@ -8791,7 +8863,8 @@ if (IS_LOCAL) {
     get labelQuakes() { return labelQuakes; },
     get detail() { return detail; },
     get panels() { return panels; },
-    showDetail, hideDetail, toonMagneetveld,
+    showDetail, hideDetail, showGeomag, showSolarActivity,
+    get solarState() { return solarState; },
     get world() { return world; }
   };
 }
