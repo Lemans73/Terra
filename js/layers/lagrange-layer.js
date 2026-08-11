@@ -56,7 +56,7 @@ export function createLagrangeLayer(THREE, opts = {}) {
   // en een breed canvas zou de tekst alleen maar kleiner maken bij dezelfde
   // schermhoogte. De opbouw zelf staat sinds sessie 23 in core/label-sprite.js.
   const makeLabel = (tekst) =>
-    createLabelSprite(THREE, tekst, cfg.color, { width: 128, height: 56, font: 40 });
+    createLabelSprite(THREE, tekst, cfg.color, { height: 56, font: 40 });
 
   // Kladvector voor de horizontoets in redrawLabels(), boven zijn gebruiker.
   const _world = new THREE.Vector3();

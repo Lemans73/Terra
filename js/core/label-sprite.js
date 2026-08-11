@@ -22,13 +22,38 @@
    meldde keurig dat het label er stond. Hoe voller het canvas, hoe meer
    schermpixels de tekst bij dezelfde spritehoogte krijgt. Meet bij een
    sprite dus altijd de schermmaat van de INHOUD, niet de vlag.
+
+   DE BREEDTE WORDT GEMETEN, NIET OPGEGEVEN (sessie 26). Tot deze sessie
+   gaf elke aanroeper een `width` mee — 96, 128, 192, 256 — met de hand
+   geraden op de langste tekst die hij verwachtte. Gevolg: de sprite van
+   "Mars" was even breed als die van "Neptune", en 71 van de 110 px was
+   doorzichtig. Zolang dat zo is kan geen enkele botsingstoets kloppen:
+   die zou labels laten wegvallen die elkaar nooit raken. `measureText`
+   weet het precies, dus niemand hoeft het meer te raden.
+
+   DE WEERGAVE VERANDERT DAAR NIET VAN, en dat is uitgerekend: bij een
+   canvas van 256 met tekst van 150 is de sprite 110 px breed en beslaat
+   de tekst 150/256 x 110 = 64 px. Bij een canvas van 162 wordt de sprite
+   69 px en beslaat de tekst 150/162 x 69 = 64 px. Dezelfde letters op
+   dezelfde plek; alleen de doorzichtige rand eromheen is weg.
    ============================================================ */
 
-const DEFAULTS = { width: 256, height: 56, font: 40, weight: 600, stroke: 'rgba(0,0,0,0.8)' };
+const DEFAULTS = { height: 56, font: 40, weight: 600, stroke: 'rgba(0,0,0,0.8)' };
+
+/* De stroke is 6 px breed en loopt aan weerszijden 3 px buiten de letters.
+   Zonder deze marge knipt het canvas de omlijning van de eerste en laatste
+   letter af — precies bij een label boven een lichte planeet, waar die
+   omlijning het meeste werk doet. */
+const PAD = 6;
 
 /* Een label als sprite. `color` mag een hex-getal (0x8fd0ff) of een
    CSS-string ('#8fd0ff') zijn — de twee bestaande aanroepers deden het
    ieder op hun eigen manier en allebei is redelijk.
+
+   `opts.width` BESTAAT NIET MEER; de breedte volgt uit de tekst. Wie hem
+   toch meegeeft krijgt hem stil genegeerd, en dat is het enige stukje
+   van deze module dat je zou kunnen missen bij een verhuizing — vandaar
+   deze regel.
 
    De maten komen op `sprite.userData.labelCanvas` te staan, want
    `scaleToPixels()` heeft de verhouding nodig en die uit de textuur
@@ -37,29 +62,36 @@ export function createLabelSprite(THREE, text, color, opts = {}) {
   const cfg = Object.assign({}, DEFAULTS, opts);
   const cv = document.createElement('canvas');
   const dpr = Math.min(2, window.devicePixelRatio || 1);
-  cv.width = cfg.width * dpr;
-  cv.height = cfg.height * dpr;
+  const fontSpec = cfg.weight + ' ' + cfg.font + 'px ui-sans-serif, system-ui, sans-serif';
 
   const ctx = cv.getContext('2d');
+  // Meten vóór het canvas zijn maat krijgt. Een canvas dat van formaat
+  // verandert WIST zijn hele contexttoestand, dus de font moet daarna
+  // opnieuw — dat is geen dubbel werk maar een eigenschap van canvas.
+  ctx.font = fontSpec;
+  const w = Math.ceil(ctx.measureText(text).width) + PAD * 2;
+
+  cv.width = w * dpr;
+  cv.height = cfg.height * dpr;
   ctx.scale(dpr, dpr);
-  ctx.font = cfg.weight + ' ' + cfg.font + 'px ui-sans-serif, system-ui, sans-serif';
+  ctx.font = fontSpec;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.lineWidth = 6;
   ctx.strokeStyle = cfg.stroke;
-  ctx.strokeText(text, cfg.width / 2, cfg.height / 2);
+  ctx.strokeText(text, w / 2, cfg.height / 2);
   ctx.fillStyle = typeof color === 'number'
     ? '#' + color.toString(16).padStart(6, '0')
     : (color || '#ffffff');
-  ctx.fillText(text, cfg.width / 2, cfg.height / 2);
+  ctx.fillText(text, w / 2, cfg.height / 2);
 
   const tex = new THREE.CanvasTexture(cv);
   tex.minFilter = THREE.LinearFilter;
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
     map: tex, transparent: true, depthTest: false
   }));
-  sprite.userData.labelCanvas = { width: cfg.width, height: cfg.height };
-  sprite.scale.set(1, cfg.height / cfg.width, 1);   // scaleToPixels() zet de echte maat
+  sprite.userData.labelCanvas = { width: w, height: cfg.height };
+  sprite.scale.set(1, cfg.height / w, 1);   // scaleToPixels() zet de echte maat
   return sprite;
 }
 

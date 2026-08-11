@@ -184,7 +184,7 @@ export function createSkyDisksLayer(THREE, opts = {}) {
     if (lang) {
       const uur = d / 15;
       const sp = createLabelSprite(THREE, uur + 'h', cfg.equatorColor,
-                                   { width: 96, height: 56, font: 40 });
+                                   { height: 56, font: 40 });
       sp.position.set(sx * (cfg.tickLong + 8), 0, sz * (cfg.tickLong + 8));
       sp.renderOrder = 4;
       gradGroup.add(sp);
@@ -217,7 +217,7 @@ export function createSkyDisksLayer(THREE, opts = {}) {
     m.renderOrder = 4;
     equinoxGroup.add(m);
     const sp = createLabelSprite(THREE, naam, cfg.equinoxColor,
-                                 { width: 192, height: 56, font: 36 });
+                                 { height: 56, font: 36 });
     sp.position.set(0, 6, teken * cfg.inner);
     sp.renderOrder = 4;
     equinoxGroup.add(sp);
@@ -254,7 +254,7 @@ export function createSkyDisksLayer(THREE, opts = {}) {
 
     if (lang) {
       const sp = createLabelSprite(THREE, d + '°', cfg.eclipticColor,
-                                   { width: 128, height: 56, font: 40 });
+                                   { height: 56, font: 40 });
       sp.position.set(sx * (cfg.eclTickLong + 7), 0, sz * (cfg.eclTickLong + 7));
       sp.renderOrder = 4;
       eclipticGradGroup.add(sp);

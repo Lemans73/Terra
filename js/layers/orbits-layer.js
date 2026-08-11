@@ -93,6 +93,26 @@ export function createOrbitsLayer(THREE, opts = {}) {
     orbitOpacity:  0.42,
     dimOpacity:    0.28,   // buiten focus
     labelHeightPx:  24,
+    /* IN SCHERMPIXELS, want dit is een schermprobleem (sessie 26). Hier stond
+       een wereldmaat — `bodyRadius * 2.2` — en die leverde GEMETEN 7 tot 13
+       schermpixels op, terwijl het label zelf 24 px hoog is. Het lag dus over
+       de bol heen. Dezelfde klasse fout als de labelschaal van sessie 25 en de
+       occlusiedrempel van deze sessie: een maat in de verkeerde eenheid.
+       18 px is de vrije ruimte TUSSEN de bolrand en de onderkant van de tekst. */
+    labelGapPx:     18,
+    /* Een grens op die vrije ruimte, want de bolstraal groeit onbeperkt zodra je
+       inzoomt: van dichtbij zou het label honderden pixels boven zijn planeet
+       gaan zweven en niet meer als bijschrift lezen. GEMETEN op de vier standen
+       in Space: de bol is daar 3 tot 21 px, dus deze klem doet niets — hij is er
+       voor wie later dichter naar een lichaam toe vliegt. */
+    labelLiftMaxPx: 64,
+    /* Hoeveel labels mogen elkaar raken voordat er een wegvalt. GEMETEN in de
+       Edge-stand op 1280x800: de acht lichamen staan daar over 318 px verdeeld
+       terwijl hun namen samen 422 px meten. Zonder deze toets is een derde van
+       het beeld onleesbaar; met deze toets vallen de labels weg die het minst
+       te vertellen hebben. De marge is wat er MINIMAAL tussen twee labels moet
+       zitten, bovenop hun eigen breedte. */
+    labelMarginPx:   4,
     rebuildAfterT: 0.01    // 1 jaar; baanelementen verlopen in decennia
   }, opts);
 
@@ -200,6 +220,15 @@ export function createOrbitsLayer(THREE, opts = {}) {
   ---------------------------------------------------------- */
   const bodies = {};
 
+  /* Per lichaam: mag zijn label getoond worden, of valt het weg tegen een label
+     dat vóór ligt? APART van `B.visible`, want dat is een andere vraag — die
+     zegt of de planeet zelf aanstaat. Twee redenen om iets te verbergen op één
+     vlag zetten breekt zodra ze uit elkaar gaan lopen, en dat doen ze hier per
+     camerabeweging. Alles begint zichtbaar; `resolveLabelCollisions()` is de
+     enige schrijver. */
+  const labelVisible = {};
+  for (const k of BODIES) labelVisible[k] = true;
+
   for (const k of BODIES) {
     const info = PLANET_INFO[k];
 
@@ -223,7 +252,7 @@ export function createOrbitsLayer(THREE, opts = {}) {
       track(new THREE.SphereGeometry(cfg.bodyRadius, 24, 16)), bodyMat);
 
     const label = createLabelSprite(THREE, info.name, info.color,
-                                    { width: 256, height: 56, font: 40 });
+                                    { height: 56, font: 40 });
 
     group.add(orbit, mesh, label);
     bodies[k] = { orbit, orbitMat, positions, geo, mesh, bodyMat, label,
@@ -261,15 +290,16 @@ export function createOrbitsLayer(THREE, opts = {}) {
                                           opacity: 0.9, wireframe: true })));
     mesh.raycast = () => {};
     const label = createLabelSprite(THREE, naam, L_COLOR,
-                                    { width: 128, height: 56, font: 40 });
+                                    { height: 56, font: 40 });
     lagrangeGroup.add(mesh, label);
     lagrangeMarks[naam] = { mesh, label };
   }
   group.add(lagrangeGroup);
 
   /* Werkvectoren. Ze staan BOVEN hun gebruikers — die zijn hoisted
-     functiedeclaraties, deze `const`s niet. `_labelLift` wordt ook door
-     update() gelezen, verderop. */
+     functiedeclaraties, deze `const`s niet. `_labelLift` hoort sinds sessie 26
+     alleen nog bij de Lagrange-punten: de planeetlabels worden in placeLabels()
+     in SCHERMPIXELS getild, en die 12 hieronder is een wereldmaat. */
   const _earth = new THREE.Vector3();
   const _lag = new THREE.Vector3();
   const _poleAxis = new THREE.Vector3(0, 1, 0);
@@ -335,8 +365,8 @@ export function createOrbitsLayer(THREE, opts = {}) {
   }
 
   /* ---- de lichamen plaatsen ----
-     De werkvectoren die update() leest (`_labelLift`) staan bij de
-     Lagrange-blok hierboven, ruim boven deze functie. Zie de noot daar. */
+     Alleen de BOLLEN; de labels gaan sinds sessie 26 door placeLabels(), want
+     hun plaatsing hangt van de camera af en niet van de datum. */
   let lastEph = null;
   let focus = null;
 
@@ -351,21 +381,105 @@ export function createOrbitsLayer(THREE, opts = {}) {
       const B = bodies[key];
       const h = heliocentric(date, key);
       B.mesh.position.set(h.y * B.k, h.z * B.k, h.x * B.k);
-      // Het label komt LOODRECHT OP HET BAANVLAK boven het lichaam te staan
-      // (lokaal +Y is de ecliptica-pool), niet radiaal naar buiten: radiaal
-      // zou de binnenste vier labels naar elkaar toe duwen, want daar liggen
-      // de banen maar twintig eenheden uit elkaar.
-      B.label.position.copy(B.mesh.position)
-        .add(_labelLift.set(0, cfg.bodyRadius * 2.2, 0));
       B.au = h.r;
       out[key] = { au: h.r, x: h.x, y: h.y, z: h.z,
                    lambda: (Math.atan2(h.y, h.x) * 180 / Math.PI + 360) % 360 };
-      if (camera) scaleToPixels(THREE, B.label, camera, cfg.labelHeightPx);
     }
     lastEph = out;
+    placeLabels(camera);
     placeLagrange(camera);
     applyFocus();
     return out;
+  }
+
+  /* ---- de labels: tillen, schalen, en laten wegvallen ----------------------
+     ÉÉN FUNCTIE VOOR ALLE DRIE, want ze hangen aan elkaar. De lift wordt in
+     schermpixels gerekend en heeft dus de schaal nodig; de botsingstoets heeft
+     de plaatsing nodig. Uit elkaar getrokken zouden ze om de beurt met een
+     frame achterstand werken.
+
+     TWEE AANROEPERS: `update()` (de tik, en bij elke tijdstap) en
+     `redrawLabels()` (elke camerabeweging). Beide moeten, want de plaatsing
+     hangt van de posities én van de camera af. */
+  function placeLabels(camera) {
+    if (!camera) return;
+    for (const key of BODIES) {
+      const B = bodies[key];
+      // HET LABEL STAAT OP DE PLANEET ZELF, en wordt daarna in SCHERMRUIMTE
+      // omhoog geduwd met `sprite.center`. Hier stond een verplaatsing langs
+      // lokaal +Y — de ecliptica-pool — en die werkt precies zolang je van
+      // opzij kijkt. GEMETEN in de Top-stand, waar je er loodrecht op kijkt:
+      // die richting wijst dan naar de camera toe, dus het label kwam niet
+      // omhoog maar naar VOREN, pal over de bol heen. Een sprite hangt altijd
+      // recht naar de kijker toe, dus zijn anker is de enige plek waar een
+      // "omhoog" bestaat die in elke camerastand hetzelfde betekent.
+      B.label.position.copy(B.mesh.position);
+      const h = scaleToPixels(THREE, B.label, camera, cfg.labelHeightPx);
+      // `scaleToPixels` geeft de WERELDhoogte terug, en die is per definitie
+      // `labelHeightPx` schermpixels. De omrekening is dus gratis.
+      const perPixel = h / cfg.labelHeightPx;
+      const bodyPx = Math.min(cfg.bodyRadius / perPixel, cfg.labelLiftMaxPx);
+      // `center` is de plek waar de sprite aan zijn positie hangt, in eenheden
+      // van zijn eigen hoogte. 0,5 is het midden (de standaard), 0 de onderkant.
+      // Negatief tilt hem er helemaal bovenuit: precies de bolrand plus de vrije
+      // ruimte, gedeeld door de spritehoogte.
+      B.label.center.set(0.5, -(bodyPx + cfg.labelGapPx) / cfg.labelHeightPx);
+      B.labelLiftPx = bodyPx + cfg.labelGapPx + cfg.labelHeightPx / 2;
+    }
+    resolveLabelCollisions(camera);
+  }
+
+  /* WELK LABEL WINT ALS ER TWEE OVER ELKAAR VALLEN. Hetzelfde patroon dat de
+     landnamen sinds sessie 9 gebruiken en de beving-labels sinds 25: eerst een
+     rangorde, dan van hoog naar laag toelaten wat nog past.
+
+     De rangorde is (1) het lichaam in FOCUS, altijd — dat is wat je zelf
+     aanwees — en daarna (2) wie het DICHTST BIJ DE CAMERA staat. Die tweede is
+     zelf-verklarend: draai je het stelsel, dan wisselen de namen mee, en de
+     planeet die vooraan ligt is ook degene die je het beste ziet. Een vaste
+     volgorde (Mercurius eerst) zou betekenen dat Neptunus zijn naam nooit
+     krijgt zodra het krap wordt, ook niet als hij pal voor je staat.
+
+     `visible` blijft ongemoeid — die vlag is van `applyFocus()` en betekent
+     "deze planeet staat aan". Wegvallen gaat via de opacity van het
+     LABELmateriaal, zodat de twee redenen om iets niet te tonen los blijven. */
+  const _labelNDC = new THREE.Vector3();
+  function resolveLabelCollisions(camera) {
+    const W = window.innerWidth, H = window.innerHeight;
+    const candidates = [];
+    for (const key of BODIES) {
+      const B = bodies[key];
+      if (!B.visible) continue;
+      B.label.getWorldPosition(_labelNDC).project(camera);
+      if (_labelNDC.z > 1) continue;                    // achter de camera
+      const c = B.label.userData.labelCanvas;
+      candidates.push({
+        key,
+        x: (_labelNDC.x * 0.5 + 0.5) * W,
+        // Het ANKER staat op de planeet; de tekst zelf hangt er `labelLiftPx`
+        // bovenuit via `center`. De botsingstoets moet die verschuiving
+        // meenemen, anders vergelijkt hij rechthoeken die nergens staan.
+        y: (-_labelNDC.y * 0.5 + 0.5) * H - (B.labelLiftPx || 0),
+        w: cfg.labelHeightPx * c.width / c.height + cfg.labelMarginPx,
+        h: cfg.labelHeightPx + cfg.labelMarginPx,
+        // Kleinere NDC-z = dichter bij de camera. De focus krijgt -2, dus altijd
+        // vóór alles wat er echt staat (NDC-z loopt van -1 tot 1).
+        rank: key === focus ? -2 : _labelNDC.z
+      });
+    }
+    candidates.sort((a, b) => a.rank - b.rank);
+
+    const placed = [];
+    for (const c of candidates) {
+      const collides = placed.some(p =>
+        Math.abs(p.x - c.x) < (p.w + c.w) / 2 && Math.abs(p.y - c.y) < (p.h + c.h) / 2);
+      if (!collides) placed.push(c);
+      labelVisible[c.key] = !collides;
+    }
+    // Wat buiten beeld of achter de camera viel, staat niet in `candidates` en
+    // houdt zijn vorige stand. Die labels zie je toch niet; ze opnieuw zetten
+    // zou alleen betekenen dat er per frame meer geschreven wordt.
+    applyFocus();
   }
 
   const _up = new THREE.Vector3();
@@ -381,10 +495,14 @@ export function createOrbitsLayer(THREE, opts = {}) {
       B.bodyMat.opacity = B.visible ? (full ? 1 : 0.5) : 0;
       B.orbitMat.opacity = B.visible
         ? (full ? cfg.orbitOpacity : cfg.dimOpacity) : 0;
-      B.label.material.opacity = B.visible ? (full ? 1 : 0.55) : 0;
       B.mesh.visible = B.visible;
       B.orbit.visible = B.visible;
-      B.label.visible = B.visible;
+      // Twee redenen waarom een label er niet is, en ze staan hier naast elkaar:
+      // de planeet staat uit, of zijn naam viel weg tegen een label dat vóór
+      // ligt. Zie labelVisible bij zijn declaratie.
+      const toonLabel = B.visible && labelVisible[key];
+      B.label.material.opacity = toonLabel ? (full ? 1 : 0.55) : 0;
+      B.label.visible = toonLabel;
     }
   }
 
@@ -402,9 +520,14 @@ export function createOrbitsLayer(THREE, opts = {}) {
 
   function setVisible(on) { group.visible = !!on; }
 
+  /* Elke camerabeweging: opnieuw schalen, opnieuw tillen, opnieuw uitzoeken wie
+     er past. Dat laatste is nieuw sinds sessie 26 en het is de reden dat dit
+     `placeLabels()` aanroept in plaats van alleen te schalen — bij het draaien
+     van het stelsel schuiven de labels langs elkaar heen, en dan verandert per
+     frame wie er wegvalt. */
   function redrawLabels(camera) {
     if (!group.visible || !camera) return;
-    for (const key of BODIES) scaleToPixels(THREE, bodies[key].label, camera, cfg.labelHeightPx);
+    placeLabels(camera);
   }
 
   /* Welk lichaam ligt het dichtst bij een schermpunt? Voor klikken, en met dezelfde

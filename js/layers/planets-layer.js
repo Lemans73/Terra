@@ -99,7 +99,7 @@ export function createPlanetsLayer(THREE, opts = {}) {
      De opbouw zelf staat sinds sessie 23 in core/label-sprite.js; deze
      maten blijven hier omdat ze bij DEZE laag horen — planeetnamen zijn
      langer dan "L1" en vragen een breder canvas. */
-  const LABEL_CANVAS = { width: 256, height: 56, font: 40 };
+  const LABEL_CANVAS = { height: 56, font: 40 };
 
   /* Een label is een sprite met een canvas-textuur, en schermvast geschaald.
      Beide staan sinds sessie 23 in core/label-sprite.js met de gemeten uitleg
