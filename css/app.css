@@ -71,6 +71,10 @@
        model waarin panelen elkaar niet meer sluiten maar stapelen, moet de
        volgorde een besluit zijn:
 
+         labels   de beving-labels horen BIJ DE BOL, niet bij de app. Ze stonden op
+                  een ingetikte 9, dus boven het tijdeiland, en dekten daar de
+                  datumvelden af. Nu onderaan: ze mogen alles wat je bedient laten
+                  staan, want er komt vanzelf een volgende in beeld
          eiland   het uitklapdeel hoort ACHTER de panelen weg te schuiven
          paneel   de werkbladen: Layers, Navigate, Details
          chroom   bel, bevingenlijst, instellingen — altijd bereikbaar
@@ -78,6 +82,7 @@
                   (Terry's keuze: de lijst is de weg waarlangs je hier komt)
          dock     de enige weg terug; mag onder niets liggen
          toast    ongewijzigd, staat al op 40 in zijn eigen regel */
+    --z-labels: 6;
     --z-island: 8;
     --z-panel: 10;
     --z-chrome: 35;
@@ -1706,11 +1711,19 @@
     color: var(--ink-faint);
   }
 
-  /* ---- Leader-line labels voor de zwaarste bevingen ---- */
+  /* ---- Leader-line labels voor de zwaarste bevingen ----
+     ONDERAAN IN DE LADDER (sessie 25). Dit stond op een ingetikte 9 — tussen het
+     tijdeiland (8) en de panelen (10) in — en dat las als een keuze, maar het
+     gevolg was dat een label over het datumveld van het tijdpaneel schoof en de
+     tekst eronder onleesbaar maakte.
+     Deze labels horen bij de BOL en niet bij de app: ze komen en gaan met de data,
+     en er komt vanzelf een volgende in beeld. Wat je bedient hoort daar altijd
+     bovenop te liggen. Let op: `.rlabel` (zonnegebieden) en `.alabel` (de aspolen)
+     wonen in dezelfde container en erven deze laag. */
   #quake-labels {
     position: fixed;
     inset: 0;
-    z-index: 9;
+    z-index: var(--z-labels);
     pointer-events: none;
     overflow: hidden;
   }

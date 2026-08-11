@@ -4853,14 +4853,16 @@ function setHoverQuake(d) {
   hoverLabelEl.innerHTML = quakeLabelHTML(d);
 }
 
-function positionHoverLabel(lblScale) {
+function positionHoverLabel(lblScale, verborgen) {
   if (!hoverLabelEl) return;
   const q = hoverQuake;
   // Heeft deze beving al een eigen zichtbaar label, dan zou dit een tweede kopie
   // op dezelfde plek zijn.
   const eigen = q && q.__label && q.__label.style.display !== 'none';
   let zicht = false, tip = null, base = null;
-  if (q && !eigen) {
+  // `verborgen` komt uit labelZoomStand(): voorbij die afstand valt er niets meer te
+  // lezen, en dan hoort ook dit label weg te blijven.
+  if (q && !eigen && !verborgen) {
     const epi = world.getCoords(q.lat, q.lng, 0.0);
     if (nearSide(new THREE.Vector3(epi.x, epi.y, epi.z))) {
       tip = world.getScreenCoords(q.lat, q.lng, PARAMS.labelAltitude);
@@ -4879,20 +4881,48 @@ function positionHoverLabel(lblScale) {
   hoverLabelDot.setAttribute('cx', base.x); hoverLabelDot.setAttribute('cy', base.y);
 }
 
+/* ---- Hoe de zoomstand de labels stuurt (sessie 25) ------------------------
+   ÉÉN BRON VOOR DRIE DINGEN — de schaal, het aantal, en of ze er überhaupt zijn.
+   De schaal stond tot deze sessie op twee plekken uitgeschreven (hier en in het
+   hover-label), en die twee liepen bij elke aanpassing het risico uiteen te gaan.
+   Zelfde reden waarom `quakeLabelHTML()` gedeeld is.
+
+   HET IJKPUNT IS `fitAarde`: de camera-afstand waarop de hele aarde nét in beeld
+   past. Dichterbij dan dat kijk je naar een PLEK en mogen de labels vol formaat
+   hebben; verder weg kijk je naar de PLANEET, en dan hoort een label mee te krimpen
+   in plaats van de bol te bedekken die het aanwijst.
+
+   Drie zones:
+     camLen <= fitAarde          vol formaat (de klem op labelScaleMax)
+     fitAarde .. 1,7 x fitAarde  krimpen tot de bodem van 0,80
+     >= 1,7 x fitAarde           weg — op desktop ~403, net vóór de zon op 420
+
+   `fitDistance()` staat verderop maar is een functiedeclaratie en dus gehesen; hij
+   leest `camera.aspect`, zodat portret en landschap allebei hun eigen ijkpunt
+   krijgen. GLOBE_R is 100, dezelfde straal die de horizontoets hieronder gebruikt. */
+const GLOBE_R = 100;
+function labelZoomStand() {
+  const camLen = world.camera().position.length() || 1;
+  const past = fitDistance(GLOBE_R);
+  const uit = past * PARAMS.labelHideFactor;
+  const schaal = Math.min(PARAMS.labelScaleMax,
+                          Math.max(PARAMS.labelScaleMin, past / camLen));
+  // 0 = ingezoomd, 1 = op de uitgang. Stuurt het AANTAL: vol budget van dichtbij,
+  // terug naar labelCountMin op het moment dat ze verdwijnen.
+  const t = Math.min(1, Math.max(0, (camLen - past) / Math.max(1, uit - past)));
+  return { schaal, verborgen: camLen >= uit, frac: 1 - t };
+}
+
 function positionLabels() {
+  const zoom = labelZoomStand();
   // Het hover-label hangt niet aan labelQuakes en moet ook werken wanneer het
   // plafond op 0 staat of er nog geen data is — dus vóór de vroege return.
-  {
-    const cam = world.camera().position.length() || 1;
-    const s = Math.min(PARAMS.labelScaleMax, Math.max(PARAMS.labelScaleMin, cam / PARAMS.labelScaleRef));
-    positionHoverLabel(s);
-  }
+  // Het volgt dezelfde zoomregel: één label dat blijft hangen terwijl de rest weg
+  // is, leest als een bug.
+  positionHoverLabel(zoom.schaal, zoom.verborgen);
   if (!labelQuakes.length) return;
-  // zoom-afhankelijke label-schaal — leesbaarheid eerst (nauwelijks krimpen) +
-  // zoom-afhankelijk aantal (meer labels bij inzoomen).
-  const camLen = world.camera().position.length() || 1;
-  const lblScale = Math.min(PARAMS.labelScaleMax, Math.max(PARAMS.labelScaleMin, camLen / PARAMS.labelScaleRef));
-  const frac = (PARAMS.labelScaleMax - lblScale) / Math.max(0.001, PARAMS.labelScaleMax - PARAMS.labelScaleMin);
+  const lblScale = zoom.schaal;
+  const frac = zoom.frac;
   // De curve interpoleert naar `labelBudget`, niet naar PARAMS.labelCountMax: anders
   // bouwt rebuildLabels() er wel meer, maar toont deze lus er nooit meer dan 12 en
   // doet de slider boven die waarde niets. De vorm van de curve blijft ongewijzigd.
@@ -4914,7 +4944,11 @@ function positionLabels() {
     const q = labelQuakes[idx];
     const el = q.__label, line = q.__line, dot = q.__dot;
     if (!el) continue;
-    const near = labelsOn && q.__dir && q.__dir.dot(camDir) > horizon;
+    // `!zoom.verborgen` staat naast `labelsOn` en niet ervoor: het zijn twee losse
+    // redenen om niets te tonen — de schakelaar in Settings, en te ver uitgezoomd om
+    // nog iets te kunnen lezen. De INDICATOREN op de bol blijven in beide gevallen
+    // gewoon staan; alleen de tekst gaat weg.
+    const near = labelsOn && !zoom.verborgen && q.__dir && q.__dir.dot(camDir) > horizon;
     const visible = near && getoond < K;
     if (visible) getoond++;
     el.style.display = visible ? 'block' : 'none';
@@ -4927,7 +4961,12 @@ function positionLabels() {
   }
   // pass 2: stapelen — nabije aardbeving-labels worden verticaal uit elkaar geduwd,
   // OMHOOG (weg van de indicatoren op de kaart); elk houdt zijn dotted leader-line.
-  const gapY = PARAMS.labelStackGapY, gapX = PARAMS.labelStackGapX;
+  // DE TUSSENRUIMTE SCHAALT MEE (sessie 25). Deze lus rekent in schermpixels, maar
+  // het label wordt met `scale(lblScale)` getekend. Met een vaste 30 px zou een
+  // gekrompen label ineens in een veel te ruime kolom staan — en zou een groter
+  // label juist overlappen. De gap hoort bij de HOOGTE van het label, dus schaalt hij
+  // mee met precies dezelfde factor.
+  const gapY = PARAMS.labelStackGapY * lblScale, gapX = PARAMS.labelStackGapX * lblScale;
   items.sort((a, b) => b.y - a.y); // onderste eerst → kolom groeit naar boven
   for (let i = 0; i < items.length; i++) {
     items[i].diepte = 0;
@@ -8490,6 +8529,11 @@ if (IS_LOCAL) {
     get spaceVoorheen() { return spaceVoorheen; },
     setSpaceView, setSunView, momentNow,
     bouwPlanetenLijst,
+    // De beving-labels worden ALLEEN in de renderlus geplaatst, en die staat stil
+    // zodra `document.hidden` waar is. Zonder deze twee is hun zoomgedrag van
+    // buitenaf niet vast te stellen: de labels staan dan wel in de DOM, maar op de
+    // stand van het laatste frame dat ooit liep.
+    labelZoomStand, positionLabels,
     get world() { return world; }
   };
 }

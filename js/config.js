@@ -254,11 +254,26 @@ export const PARAMS = {
   iconScalePow: 1.55,  // steilheid (>1 = agressiever; diep inzoomen krimpt sneller)
   iconScaleMin: 0.4,   // ondergrens (sterk ingezoomd)
   iconScaleMax: 1.9,   // bovengrens (ver uitgezoomd)
-  // labels schalen mee met zoom (kleiner bij inzoomen → ruimte voor meer events).
-  // gentiler dan de iconen. schaal = clamp(camDist / ref, min, max).
-  labelScaleRef: 350,  // camDist waarbij label-schaal = 1
-  labelScaleMin: 0.95, // ondergrens — leesbaarheid eerst, dus nauwelijks krimpen
-  labelScaleMax: 1.1,  // bovengrens (uitgezoomd)
+  /* DE LABELS KRIMPEN MEE MET DE BOL (sessie 25) — schaal = clamp(fitAarde/camDist,
+     min, max), met `fitAarde` de afstand waarop de hele aarde net in beeld past.
+
+     TOT SESSIE 25 LIEP DIT PRECIES DE VERKEERDE KANT OP: de formule was
+     `camDist / 350`, dus verder weg gaf een GROTER label — tot 1,1 keer. Uitgezoomd
+     bedekten acht labels van volle grootte de aarde die ze zouden moeten aanwijzen.
+     Nu is 1,0 het plafond en krimpen ze mee zodra je voorbij "de hele aarde past in
+     beeld" komt.
+
+     `fitAarde` is aspect-afhankelijk (fitDistance in index.html) en dus geen vast
+     getal meer: op een telefoon in portret is de horizontale beeldhoek de krappe, en
+     past de aarde pas op ongeveer twee keer de desktop-afstand. Een ingetikte
+     referentie zou daar het ene of het andere formaat straffen. */
+  labelScaleMin: 0.80, // bodem: 11px x 0,80 = 8,8px — daaronder valt er niets meer te lezen
+  labelScaleMax: 1.0,  // nooit groter dan ingezoomd; zie de noot hierboven
+  /* WAAR DE LABELS HELEMAAL UITGAAN, als veelvoud van `fitAarde`. Op een 16:9-desktop
+     past de aarde op ~237, dus dit landt op ~403 — net vóór de zon op 420, precies
+     waar Terry hem wilde. Als factor en niet als afstand, want op een telefoon ligt
+     `fitAarde` op ~475 en zou een ingetikte 403 de labels overal uitzetten. */
+  labelHideFactor: 1.7,
   // Sinds sessie 16 tellen alleen labels aan de NAAR-ONS-GEKEERDE kant mee voor het
   // plafond (positionLabels filtert op nearSide vóór het budget, niet erna). Daardoor
   // is het aantal in beeld constant terwijl je de bol draait, en mocht dit bereik
