@@ -35,6 +35,38 @@
    een leeg element waar de aanroeper in mag tekenen. Dezelfde haak
    bedient later de maanfase-schijf.
 
+   ------------------------------------------------------------
+   ÉÉN ONDERGROND, EN DE SLUITKNOP WORDT EEN PIJL (sessie 26)
+
+   Nieuw is dat een view onder een andere kan liggen. Aanleiding: de
+   zonneactiviteit staat in dit venster, en een klik op een actief gebied
+   VERVANGT die readings — waarna je terug wilt kunnen naar waar je
+   vandaan kwam. Sluiten is dan de verkeerde uitgang.
+
+   HET IS ÉÉN NIVEAU EN GEEN STAPEL. Eén klik terug, nog een klik dicht.
+   Een echte stapel roept meteen de vraag op wanneer hij geleegd wordt,
+   en maakt van deze knop een browser-history die niemand hier verwacht.
+
+   WAT BEWAARD WORDT IS EEN BOUWER, GEEN VIEW. Een view is een
+   momentopname: het magneetveld en een planeet worden herrekend zodra
+   de tijd verschuift, en `rows` bevat echte DOM-Nodes die je dan tussen
+   twee vensters heen en weer zou verhuizen. Een `() => void` roept de
+   bestaande bouwfunctie opnieuw aan en levert per constructie verse
+   getallen.
+
+   DE SLUITKNOP HOORT HIER EN NIET IN index.html. Hij verandert van
+   betekenis op grond van staat die alleen in deze module leeft. Zou de
+   app hem bedienen, dan moest die na élke show/refresh/hide/back de
+   knopstand bijwerken — een tweede waarheid, en precies wat
+   `js/ui/panels.js` als les opschrijft: de knoppen volgen de stand.
+
+   `refresh()` EN NIET `show(view, { replace: true })`. De aanroepers die
+   zichzelf verversen staan al achter een `kind()`-guard die letterlijk
+   "ik ververs mezelf" betekent; een optie die je moet ónthouden mee te
+   geven, loopt bij vergeten stil vol. Bijvangst: `refresh()` slaat de
+   in-animatie over, zodat het venster niet bij elke tijdstap opnieuw
+   invliegt terwijl het al staat.
+
    DE VANGNETTEN BLIJVEN. GSAP hangt aan `requestAnimationFrame` en dat
    staat stil zodra het tabblad naar de achtergrond gaat. Een `fromTo`
    zet dan alleen de BEGINwaarde — opacity 0 — en er blijft een
@@ -51,9 +83,12 @@
      gsap           de animatiebibliotheek
      reducedMotion  bool: alleen invaden, niet verschuiven
      onShow()       optioneel, na het tonen (Terra pauzeert hier het draaien)
+     onClose()      optioneel, NA een sluiting door de gebruiker zelf. Niet
+                    vanuit `hide()`: die wordt ook door de app aangeroepen,
+                    en dan zou dit een lus met `hideDetail()` opleveren
 ------------------------------------------------------------ */
 export function createDetailPanel(env) {
-  const { host, gsap, reducedMotion, onShow } = env;
+  const { host, gsap, reducedMotion, onShow, onClose } = env;
 
   const kickerEl = host.querySelector('.kicker');
   const headEl   = host.querySelector('.headline');
@@ -61,9 +96,11 @@ export function createDetailPanel(env) {
   const plotEl   = host.querySelector('.detail-plot');
   const actEl    = host.querySelector('.detail-actions');
   const linkEl   = host.querySelector('.more-link');
+  const closeBtn = host.querySelector('.readout-close');
 
   let open = false;
-  let laatsteSoort = null;
+  let lastKind = null;
+  let backTo = null;
 
   /* Een waarde mag tekst zijn, een link, of een kant-en-klare Node. Meer
      vormen zijn er niet, en `innerHTML` staat er bewust NIET bij: zodra dit
@@ -71,7 +108,7 @@ export function createDetailPanel(env) {
      dat uit een API komt. Wie opmaak nodig heeft, bouwt zelf een Node — dan
      is het de aanroeper die de stukjes kiest, en niet een string uit een
      antwoord van derden. */
-  function waardeNode(v) {
+  function valueNode(v) {
     if (v instanceof Node) return v;
     if (v && typeof v === 'object' && v.href) {
       const a = document.createElement('a');
@@ -84,19 +121,19 @@ export function createDetailPanel(env) {
     return document.createTextNode(v == null || v === '' ? '—' : String(v));
   }
 
-  function tekenRijen(rows) {
+  function drawRows(rows) {
     rowsEl.replaceChildren();
     for (const [k, v] of rows || []) {
-      const rij = document.createElement('div');
-      rij.className = 'row';
-      const ks = document.createElement('span');
-      ks.className = 'k';
-      ks.textContent = k;
-      const vs = document.createElement('span');
-      vs.className = 'v';
-      vs.appendChild(waardeNode(v));
-      rij.append(ks, vs);
-      rowsEl.appendChild(rij);
+      const rowEl = document.createElement('div');
+      rowEl.className = 'row';
+      const keyEl = document.createElement('span');
+      keyEl.className = 'k';
+      keyEl.textContent = k;
+      const valEl = document.createElement('span');
+      valEl.className = 'v';
+      valEl.appendChild(valueNode(v));
+      rowEl.append(keyEl, valEl);
+      rowsEl.appendChild(rowEl);
     }
   }
 
@@ -104,11 +141,11 @@ export function createDetailPanel(env) {
      alleen als de beschrijving ze meegeeft — een AQI-station heeft geen
      gebeurtenistijd, een planeet geen registratiemoment, en een knop die
      niets kan doen is erger dan geen knop. */
-  function tekenActies(actions) {
+  function drawActions(actions) {
     actEl.replaceChildren();
-    const lijst = actions || [];
-    actEl.hidden = lijst.length === 0;
-    for (const a of lijst) {
+    const list = actions || [];
+    actEl.hidden = list.length === 0;
+    for (const a of list) {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'detail-act';
@@ -122,25 +159,35 @@ export function createDetailPanel(env) {
     }
   }
 
-  /* ----------------------------------------------------------
-     view:
-       kind      'event' | 'body' | 'field'   (label; zie de kop)
-       kicker    tekst bovenaan
-       color     kleur van die tekst
-       headline  de naam van het ding
-       rows      [[label, waarde], …]   waarde: string of {text, href}
-       plot      (el) => void           optioneel, tekent in een leeg element
-       actions   [{label, title, icon, run}]  optioneel
-       link      { href, label }        optioneel, de "meer info"-link
-  ---------------------------------------------------------- */
-  function show(view) {
-    laatsteSoort = view.kind || 'event';
+  /* Eén schrijver voor drie dingen tegelijk: welk teken je ziet, wat de
+     tooltip zegt, en wat een schermlezer voorleest. Uit elkaar getrokken
+     gaan die drie een keer uit de pas lopen. */
+  function syncCloseButton() {
+    if (!closeBtn) return;
+    const terug = !!backTo;
+    closeBtn.dataset.mode = terug ? 'back' : 'close';
+    closeBtn.title = terug ? 'Back' : 'Close';
+    closeBtn.setAttribute('aria-label', terug ? 'Back to the previous reading' : 'Close detail panel');
+  }
+
+  if (closeBtn) {
+    closeBtn.addEventListener('click', () => {
+      if (backTo) { back(); return; }
+      hide();
+      if (onClose) onClose();
+    });
+  }
+
+  /* De inhoud tekenen. Apart van `show()` omdat `refresh()` precies dit doet
+     en verder niets — geen animatie, geen ondergrond, geen `onShow`. */
+  function draw(view) {
+    lastKind = view.kind || 'event';
     kickerEl.textContent = view.kicker || '';
     kickerEl.style.color = view.color || '';
-    kickerEl.dataset.kind = laatsteSoort;
+    kickerEl.dataset.kind = lastKind;
     headEl.textContent = view.headline || '';
 
-    tekenRijen(view.rows);
+    drawRows(view.rows);
 
     // De plot krijgt elke keer een LEEG element. Hergebruiken zou de aanroeper
     // dwingen zijn eigen vorige tekening op te ruimen, en dat is precies het
@@ -149,7 +196,7 @@ export function createDetailPanel(env) {
     plotEl.hidden = !view.plot;
     if (view.plot) view.plot(plotEl);
 
-    tekenActies(view.actions);
+    drawActions(view.actions);
 
     if (view.link && view.link.href) {
       linkEl.href = view.link.href;
@@ -158,6 +205,28 @@ export function createDetailPanel(env) {
     } else {
       linkEl.hidden = true;
     }
+  }
+
+  /* ----------------------------------------------------------
+     view:
+       kind      'event' | 'body' | 'field' | 'solar'   (label; zie de kop)
+       kicker    tekst bovenaan
+       color     kleur van die tekst
+       headline  de naam van het ding
+       rows      [[label, waarde], …]   waarde: string, {text, href} of Node
+       plot      (el) => void           optioneel, tekent in een leeg element
+       actions   [{label, title, icon, run}]  optioneel
+       link      { href, label }        optioneel, de "meer info"-link
+
+     opts:
+       backTo    () => void   optioneel. De bouwer van de view die HIERONDER
+                              ligt. Zolang hij er is toont de sluitknop een
+                              pijl en brengt hij je daarheen terug.
+  ---------------------------------------------------------- */
+  function show(view, opts) {
+    backTo = (opts && opts.backTo) || null;
+    draw(view);
+    syncCloseButton();
 
     host.style.pointerEvents = 'auto';   // de links moeten aanklikbaar zijn
     open = true;
@@ -171,6 +240,18 @@ export function createDetailPanel(env) {
     if (onShow) onShow();
   }
 
+  /* Hertekenen wat er al staat. Voor de LEVENDE soorten: het magneetveld en een
+     planeet worden herrekend zodra de tijd verschuift, en die update-functies
+     komen hier per tijdstap langs. Twee dingen die `show()` wél doet en dit
+     bewust niet: de ondergrond aanraken (die hoort bij hoe je hier kwam, niet
+     bij de getallen) en opnieuw invliegen (een venster dat al staat hoort niet
+     te flikkeren terwijl je aan de slider trekt). */
+  function refresh(view) {
+    if (!open) return false;
+    draw(view);
+    return true;
+  }
+
   /* Sluiten: terug naar de begintoestand uit css/app.css (opacity 0, geen
      pointer-events). GSAP mag hier alleen `opacity` en `y` aanraken; de
      plaatsing komt uit left/right/bottom en niet uit een transform. Zou de
@@ -179,6 +260,8 @@ export function createDetailPanel(env) {
   function hide() {
     if (!open) return;
     open = false;
+    backTo = null;
+    syncCloseButton();
     host.style.pointerEvents = 'none';   // meteen, wacht niet op de animatie
     const settle = () => { if (!open) gsap.set(host, { opacity: 0, y: 0 }); };
     if (reducedMotion) {
@@ -189,10 +272,29 @@ export function createDetailPanel(env) {
     setTimeout(settle, 500);   // vangnet, zie de kop
   }
 
+  /* Eén stap terug. `backTo` gaat op null vóór de aanroep, zodat de bouwer
+     desgewenst zelf weer een nieuwe ondergrond mag zetten zonder dat wij die
+     er meteen weer afhalen. Het venster blijft open — dat is het verschil met
+     sluiten, en de reden dat `onClose` hier niet langskomt. */
+  function back() {
+    if (!backTo) return false;
+    const herstel = backTo;
+    backTo = null;
+    herstel();
+    syncCloseButton();
+    return true;
+  }
+
   /* `kind()` bestaat voor de LEVENDE soorten. Een gebeurtenis is een momentopname
      en verandert niet meer, maar het magneetveld en een planeet worden opnieuw
      berekend zodra de tijd verschuift. Hun update-functies moeten dus kunnen
      vragen: sta ik nog in beeld? Zonder dit zouden ze in het wilde weg schrijven
      in een venster dat inmiddels iets heel anders toont. */
-  return { show, hide, isOpen: () => open, kind: () => (open ? laatsteSoort : null), element: host };
+  return {
+    show, refresh, hide, back,
+    isOpen: () => open,
+    canGoBack: () => !!backTo,
+    kind: () => (open ? lastKind : null),
+    element: host
+  };
 }

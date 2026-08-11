@@ -1641,6 +1641,12 @@
     cursor: pointer;
   }
   .readout-close:hover { background: rgba(255,255,255,0.08); color: var(--ink); }
+  /* Sluiten of terug — dezelfde plek, dezelfde knop. Wisselen op `data-mode` en niet
+     op `hidden`: dit is `display: flex`, en dan doet `hidden` niets. Vijfde keer in
+     dit project; zie ook `.ti-panel`, `.ti-reset`, `.dock-btn`, `.detail-plot`. */
+  .readout-close .rc-back { display: none; width: 15px; height: 15px; }
+  .readout-close[data-mode="back"] .rc-close { display: none; }
+  .readout-close[data-mode="back"] .rc-back { display: block; }
   /* De kicker mag niet onder de sluitknop doorlopen. */
   .readout .kicker { padding-right: 26px; }
   .readout .kicker {

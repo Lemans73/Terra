@@ -1509,7 +1509,13 @@
        rijen, en dan is een vaste rij die soms leeg blijft alleen maar ruis.
        `js/ui/detail.js` bouwt ze; wat erin staat bepaalt showDetail() hieronder. -->
   <div class="readout" id="readout">
-    <button class="readout-close" id="r-close" title="Close" aria-label="Close detail panel">×</button>
+    <!-- ÉÉN KNOP MET TWEE GEZICHTEN (sessie 26). Ligt er een view onder deze — de
+         zonneactiviteit onder een actief gebied — dan brengt hij je daarheen terug
+         in plaats van het venster te sluiten. Welk van de twee je ziet hangt aan
+         `data-mode` en niet aan `hidden`, want de knop is `display: flex` en een
+         klasse met display verslaat `hidden`. `js/ui/detail.js` is de enige
+         schrijver; hier staan alleen de twee tekens. -->
+    <button class="readout-close" id="r-close" data-mode="close" title="Close" aria-label="Close detail panel"><span class="rc-close">×</span><svg class="rc-back" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg></button>
     <div class="kicker">EVENT</div>
     <div class="headline"></div>
     <div class="detail-rows"></div>
@@ -5643,7 +5649,9 @@ function toonMagneetveld() {
 function updateGeomagReadout() {
   if (detail.kind() !== 'field') return;
   const v = magneetveldView();
-  if (v) detail.show(v);
+  // `refresh` en niet `show`: dit venster staat al, en `show` zou het bij elke
+  // sliderstap opnieuw laten invliegen. Het laat bovendien de ondergrond met rust.
+  if (v) detail.refresh(v);
 }
 
 // De herkomstregel. Drie standen, en alleen de derde krijgt de gele markering: dat
@@ -6716,7 +6724,9 @@ function updateSpaceReadout() {
   const f = planets.focus();
   if (!f) { hideDetail(); return; }   // focus losgelaten: het venster heeft geen onderwerp meer
   const v = planeetView(f);
-  if (v) detail.show(v);
+  // Zie updateGeomagReadout(): hertekenen zonder de in-animatie en zonder de
+  // ondergrond aan te raken.
+  if (v) detail.refresh(v);
 }
 
 // De sprong van de aarde naar de zon is 400 eenheden; ineens is dat een harde
@@ -7673,7 +7683,10 @@ document.getElementById('geomag-open')?.addEventListener('click', toonMagneetvel
 // Ook de BEGINSTAND van de knoppen moet kloppen: setPanelOpen() keert vroeg terug
 // wanneer de gevraagde stand al geldt, dus bij het opstarten komt hij daar nooit langs.
 panels.sync();
-document.getElementById('r-close').addEventListener('click', hideDetail);
+// `#r-close` wordt NIET hier gebonden: die knop is sinds sessie 26 ook de
+// terugknop, en `js/ui/detail.js` weet als enige of er iets onder ligt. Een
+// tweede handler hierbovenop zou het venster sluiten op het moment dat je juist
+// een stap terug wilde. De `onClose`-haak bij createDetailPanel vervangt hem.
 
 // ---- Tijdvenster: presets ----
 const sliderEl = document.getElementById('slider');
@@ -7915,7 +7928,11 @@ const detail = createDetailPanel({
   host: document.getElementById('readout'),
   gsap,
   reducedMotion: REDUCED_MOTION,
-  onShow: pauseAutoRotate
+  onShow: pauseAutoRotate,
+  // De sluitknop zit ín de module, want hij is óók de terugknop en die stand
+  // leeft daar. Deze haak is er alleen om `detailVisible` gelijk te trekken;
+  // sluit de app zelf (via hideDetail), dan komt hij hier niet langs.
+  onClose: hideDetail
 });
 
 function hideDetail() {
@@ -8026,9 +8043,13 @@ function detailActies(d) {
 
    `kind` ontbreekt bij alle bestaande aanroepers en valt dan terug op 'event'.
    Dat is met opzet: de zes plekken die dit venster openden hoefden geen regel te
-   veranderen toen de soorten erbij kwamen. */
-function showDetail(d) {
-  if (d.kind && d.kind !== 'event') { detailVisible = true; detail.show(d); return; }
+   veranderen toen de soorten erbij kwamen.
+
+   `opts` reist ongewijzigd door naar de module. Daar zit `backTo` in: de bouwer van
+   de view die híéronder ligt, waardoor de sluitknop een terugpijl wordt. Alleen de
+   zonnegebieden geven hem mee; overal elders is hij afwezig en sluit de knop gewoon. */
+function showDetail(d, opts) {
+  if (d.kind && d.kind !== 'event') { detailVisible = true; detail.show(d, opts); return; }
 
   // EMSC bundelt tientallen instituten; `agency` noemt wie de meting daadwerkelijk
   // deed. "EMSC · BMKG" is eerlijker dan alleen de aggregator noemen.
@@ -8053,7 +8074,7 @@ function showDetail(d) {
     // Bevingen komen uit twee catalogi, dus het label kan niet vastliggen per laag.
     link: d.url ? { href: d.url,
       label: d.layer === 'quake' ? 'View on ' + d.source : (DETAIL_LINK_LABELS[d.layer] || 'More info') } : null
-  });
+  }, opts);
 }
 
 // ---- Fetch loop ----------------------------------------------
@@ -8681,6 +8702,9 @@ if (IS_LOCAL) {
     // stand van het laatste frame dat ooit liep.
     labelZoomState, positionLabels,
     get labelQuakes() { return labelQuakes; },
+    get detail() { return detail; },
+    get panels() { return panels; },
+    showDetail, hideDetail, toonMagneetveld,
     get world() { return world; }
   };
 }
