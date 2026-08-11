@@ -530,6 +530,11 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polygon points="15.5 8.5 10.5 10.5 8.5 15.5 13.5 13.5 15.5 8.5" fill="currentColor" stroke="none"/></svg>
       <span class="dock-label">Navigate</span>
     </button>
+    <button class="dock-btn" id="details-open" type="button" aria-pressed="false"
+            title="Details" aria-label="Details">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16.5"/><circle cx="12" cy="7.8" r="0.9" fill="currentColor" stroke="none"/></svg>
+      <span class="dock-label">Details</span>
+    </button>
     <button class="dock-btn dock-back" id="back-earth" type="button" hidden
             title="Back to Earth" aria-label="Back to Earth">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 19l-7-7 7-7"/><path d="M3 12h11a7 7 0 0 1 7 7v1"/></svg>
@@ -538,6 +543,359 @@
   </div>
 
   <div id="nav-panel" hidden></div>
+
+  <!-- ==================== DETAILS ====================
+       DE VIERDE KNOP IN DE RIJ (sessie 25). Dit was de Almanac-tab in het
+       lagenpaneel, en die tab is daarmee weg. Wat hier staat is uitkomst en geen
+       bediening: het paneel is waar je iets aan- en uitzet, dit is waar je leest
+       wat er staat te gebeuren.
+
+       DRIE TABS, GEORDEND VAN DICHTBIJ NAAR VER — dezelfde ordening die het
+       lagenpaneel sinds sessie 21 aanhoudt en die het Navigate-paneel uit het
+       register overneemt. Earth, dan Sun & Moon, dan Planets.
+
+       WAT ER NIET IN ZIT: de readings zelf. De planeet-readings en de
+       magneetveld-readout zijn naar het detailvenster verhuisd, waar je één ding
+       tegelijk leest. Hier staan de rijen die je erheen brengen, en de
+       schakelaars die iets opleveren dat NIET op de bol staat — een plot of een
+       sprong in de tijd. Alles wat wél op de bol tekent, staat bij Layers. -->
+  <div class="detail-panel" id="details-panel" hidden>
+    <div class="panel-head">
+      <div class="tabs" role="tablist">
+        <button class="tab active" data-tab="d-earth" title="Earth" aria-label="Earth">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>
+          <span class="tab-label">Earth</span>
+        </button>
+        <button class="tab" data-tab="d-sunmoon" title="Sun &amp; Moon" aria-label="Sun and Moon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20z" fill="currentColor" stroke="none"/></svg>
+          <span class="tab-label">Sun &amp; Moon</span>
+        </button>
+        <button class="tab" data-tab="d-planets" title="Planets" aria-label="Planets">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><ellipse cx="12" cy="12" rx="10" ry="4.2" transform="rotate(-24 12 12)"/></svg>
+          <span class="tab-label">Planets</span>
+        </button>
+      </div>
+      <button class="panel-collapse" id="details-collapse" title="Close panel" aria-label="Close details panel">&#215;</button>
+    </div>
+
+    <div class="panel-body">
+
+    <div class="tabpanel show" data-panel="d-earth">
+
+      <section class="acc" data-acc="rot-axis">
+      <button class="acc-head" type="button" aria-expanded="false">
+      <span>Earth&#8217;s axis</span>
+      <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="acc-body">
+      <!-- CONDITIONEEL PANEEL. `body.magneto-on` toont de camerastanden, die buiten
+      de state niets te besturen hebben — wat in een stand niets doet hoort er ook
+      niet te staan. (Tot sessie 21 wisselde deze klasse tussen twee sets, met de
+      laagschakelaars als tegenhanger; die staan nu in Layers en hebben geen
+      state-wissel nodig, want ze werken in beide standen.)
+
+      DE KNOP BLIJFT HIER en gaat niet naar Magnetic field, hoe verleidelijk de naam
+      "magneto" ook is: wat deze state toont is de scheefstand van 23,44°, en dat is
+      een eigenschap van de ROTATIE-as. De dipoolas wordt door de draaiing meegevoerd
+      en stuurt niets aan — een misverstand dat in sessie 18 al één keer is
+      rechtgezet. -->
+      <button class="apply" id="magneto-btn">Enter magneto view</button>
+      <div class="magneto-only">
+      <p class="magneto-uitleg">The Earth in space, tilted by its real 23.4&#176; obliquity.
+      Meridian and Top are locked to the Earth&#8211;Sun plane, so the Earth turns
+      beneath a Sun that stays put.</p>
+      <h3>View</h3>
+      <div class="presets" id="magneto-views">
+      <button class="preset active" data-view="meridian">Meridian</button>
+      <button class="preset" data-view="top">Top</button>
+      <button class="preset" data-view="3d">3D</button>
+      </div>
+      <p class="magneto-uitleg" id="magneto-lock"></p>
+      </div>
+      <!-- POLAR MOTION STAAT HIER, SCHAKELAAR ÉN PLOT, en dat is na één misstap in
+      sessie 21 bewust zo. Hij ging even naar Layers, met de andere as-lagen mee, en
+      dat was fout: deze laag tekent NIETS op de bol. Gerekend met de scene-waarden —
+      camera op zoomMinDistance 155, dus 3504 km hoog, fov 50 — beslaat één pixel 2,3
+      tot 4,5 km, terwijl de hele poolcirkel 40 METER breed is: 1/57 tot 1/113 pixel.
+      Zichtbaar maken vraagt 2300 tot 4500x uitvergroting, en dan toont het beeld een
+      pool die over een continent zwiept terwijl hij nooit verder dan 20 m van huis
+      komt. Vandaar sinds sessie 19 een plot mét schaalbalk, en géén geometrie.
+
+      Gevolg voor de indeling: een schakelaar hoort bij wat hij oplevert. Levert hij
+      iets op de bol, dan hoort hij in Layers; levert hij alleen deze plot, dan hoort
+      hij hier. Niet opnieuw naar Layers verplaatsen zonder de plot mee. -->
+      <div class="elayer expandable" id="polarmotion-toggle">
+      <span class="edot"></span>Polar motion
+      <button class="row-expand" data-note="polarmotion-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <span class="estat" id="es-polarmotion">off</span>
+      </div>
+      <div class="layer-detail" id="polarmotion-note">
+      The rotation axis does not sit still in the crust. It spirals around a mean
+      position: the <b>Chandler wobble</b>, a free nutation with a period of about
+      1.19 years, plus an annual term driven by water, snow and air moving around
+      the planet.
+      <br /><br />
+      The scale is the whole story. The pole travels roughly <b>25 metres a year</b>
+      but never gets further than about <b>20 metres</b> from home &#8212; a spiral
+      inside a circle 40 m across. That is why this is a plot and not a mark on the
+      globe: at maximum zoom one pixel spans several kilometres, so the whole circle
+      is a hundredth of a pixel.
+      <br /><br />
+      Measured, not modelled. Values before 1962 carry an uncertainty of roughly
+      30&#160;mas &#8212; about a metre &#8212; so the early part of the long track
+      is rougher than it looks.
+      </div>
+      <!-- Alles hieronder hangt aan de schakelaar hierboven, en dat is niet cosmetisch: de
+      reeks is 225 KB en wordt pas opgehaald als de laag aangaat. Staat de rij uit,
+      dan raakt de app CelesTrak niet aan. `hidden` op een kale div is veilig — er
+      staat geen eigen `display` op, dus de user-agent-regel wint (les sessie 14). -->
+      <div id="pm-block" hidden>
+      <!-- Vensterkeuze. Het venster is een PLOTINSTELLING en geen app-staat: het
+      raakt de tijdkiezer niet en de scene niet. Vandaar losse knoppen in het
+      idioom van de trackvensters, en geen tweede tijdmachine. -->
+      <div class="presets" id="pm-windows">
+      <button class="preset" data-pm="51">51 d</button>
+      <button class="preset active" data-pm="365">1 yr</button>
+      <button class="preset" data-pm="1825">5 yr</button>
+      <button class="preset" data-pm="long">1900&#8211;</button>
+      </div>
+      <dl class="cosmos-readout">
+      <!-- De plot. Zelfde bouw als de maanfase en het poolbovenaanzicht: een vast
+      canvas dat klein wordt getoond, met één functie die volledig hertekent. Hij
+      is wél groter, want er moet een schaalbalk in — zonder die balk is een plot
+      van dit verschijnsel een leugen. -->
+      <dt id="pm-title">Path of the pole</dt>
+      <dd class="pm-row"><canvas id="pm-canvas" width="256" height="256" aria-hidden="true"></canvas></dd>
+      <dt>Pole offset</dt>
+      <dd id="pm-offset">&#8212;</dd>
+      <dt id="pm-travel-label">Travelled</dt>
+      <dd id="pm-travel">&#8212;</dd>
+      <dt>Length of day</dt>
+      <dd id="pm-lod">&#8212;</dd>
+      <dt>Data</dt>
+      <dd id="pm-source">&#8212;</dd>
+      </dl>
+      </div>
+      </div>
+      </section>
+
+      <!-- HET MAGNEETVELD IS EEN RIJ EN GEEN SECTIE (sessie 25). De vier waarden en
+           de poolplot stonden hier als accordeon; ze staan nu in het detailvenster,
+           waar je één ding tegelijk leest. Wat hier blijft is de weg erheen. De twee
+           SCHAKELAARS van dit veld staan sinds sessie 21 in Layers -> Axes & poles,
+           en die blijven daar: ze tekenen iets op de bol. -->
+      <section class="acc" data-acc="geomag-open">
+      <button class="acc-head" type="button" aria-expanded="false">
+      <span>Magnetic field</span>
+      <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="acc-body">
+      <p class="space-uitleg">Where the dipole poles sit, how far the magnetic axis
+      leans away from the rotation axis, and how strong the field is &#8212; read from
+      IGRF for the moment you are looking at.</p>
+      <button class="apply" id="geomag-open">Read the field</button>
+      </div>
+      </section>
+    </div>
+
+    <div class="tabpanel" data-panel="d-sunmoon">
+
+<section class="acc" data-acc="cosmos-readings">
+      <button class="acc-head" type="button" aria-expanded="false">
+      <!-- "Sun & Moon readings" en niet "Moon readings": het sub-solaire punt staat er
+      ook in. Zo vormt hij bovendien een paar met `Sun & Moon layers` in de Layers-tab
+      — daar de schakelaars, hier de getallen. -->
+      <span>Sun &amp; Moon readings</span>
+      <span class="acc-sub" id="readout-head">right now</span>
+      <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="acc-body">
+      <dl class="cosmos-readout">
+      <dt>Sub-solar point</dt>
+      <dd id="rd-subsolar">&#8212;</dd>
+      <dt>Sub-lunar point</dt>
+      <dd id="rd-sublunar">&#8212;</dd>
+      <dt>Moon phase</dt>
+      <dd class="phase-row">
+      <canvas id="phase-canvas" width="128" height="128" aria-hidden="true"></canvas>
+      <span id="rd-phase">&#8212;</span>
+      </dd>
+      <dt>Illuminated</dt>
+      <dd id="rd-fraction">&#8212;</dd>
+      <dt>Elongation</dt>
+      <dd id="rd-elongation">&#8212;</dd>
+      <dt>Moon distance</dt>
+      <dd id="rd-distance">&#8212;</dd>
+      <!-- DAGLENGTE OP VIER BREEDTEGRADEN en niet op één plek, want Terra heeft
+      geen waarnemerslocatie en die komt er ook niet (besluit sessie 22). Vier
+      regels tonen bovendien het PATROON, en dat is waar het om gaat: naar de
+      pool toe waaiert het uit, op de evenaar staat het stil. Drie van de vier
+      breedtegraden zijn AFGELEID van de scheefstand — de keerkring ís de
+      scheefstand en de poolcirkel is 90 graden min diezelfde hoek — dus ze
+      kunnen niet uit de pas lopen met de rest van de app. -->
+      <dt id="rd-day-eq-l">Day at equator</dt>
+      <dd id="rd-day-eq">&#8212;</dd>
+      <dt id="rd-day-tropic-l">Day at tropic</dt>
+      <dd id="rd-day-tropic">&#8212;</dd>
+      <dt id="rd-day-mid-l">Day at 52&#176; N</dt>
+      <dd id="rd-day-mid">&#8212;</dd>
+      <dt id="rd-day-polar-l">Day at polar circle</dt>
+      <dd id="rd-day-polar">&#8212;</dd>
+      </dl>
+      <div class="cosmos-note">
+      Positions are calculated in the browser from Meeus&#39; algorithms &#8212; no feed,
+      no key. Sun and Moon are drawn at compressed distances so both stay
+      readable; the real Moon distance is in the readout above.
+      </div>
+      <div class="cosmos-note">
+      Day length counts from the Sun&#8217;s upper edge clearing the horizon, at
+      &#8722;0.833&#176; &#8212; refraction lifts the image about half a degree, and half a
+      solar disc is added on top. That is why the equator gets 12h 07m rather
+      than a flat twelve hours, every day of the year, and why the polar circle
+      still sees the Sun briefly at midwinter instead of nothing at all.
+      Southern latitudes read the same table with the seasons reversed.
+      </div>
+      </div>
+      </section>
+
+<section class="acc" data-acc="cosmos-eclipse">
+      <button class="acc-head" type="button" aria-expanded="false">
+      <span>Eclipse</span>
+      <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="acc-body">
+      <div class="elayer on" id="eclipse-toggle"><span class="edot"></span>Shadow on Earth<span class="estat" id="es-eclipse">on</span></div>
+      <div class="eclipse-state" id="eclipse-state">No eclipse at this moment.</div>
+      <!-- Zonder deze knoppen zou vrijwel niemand de schaduw ooit te zien
+      krijgen: er zijn twee tot vijf zonsverduisteringen per jaar, elk een
+      uur of twee lang. -->
+      <div class="eclipse-nav">
+      <button class="play-btn" id="eclipse-prev" title="Previous eclipse">&#9664; Previous</button>
+      <button class="play-btn" id="eclipse-jump" title="Next eclipse">Next &#9654;</button>
+      </div>
+      </div>
+      </section>
+
+<section class="acc" data-acc="cosmos-activity">
+      <button class="acc-head" type="button" aria-expanded="false">
+      <span>Sun activity</span>
+      <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="acc-body">
+      <!-- Standaard AAN: dit is een meting, en die hoort te staan; de
+      geschilderde zontextuur is dat niet. -->
+      <div class="elayer on expandable" id="sunspots-toggle">
+      <span class="edot"></span>Sunspots
+      <button class="row-expand" data-note="sunspots-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <span class="estat" id="es-sunspots">on</span>
+      </div>
+      <div class="layer-detail" id="sunspots-note">
+      Drawn automatically from whatever NOAA published today, at the measured
+      heliographic position. The painted texture steps aside so you see the
+      data and nothing else. Sizes are exaggerated to be visible; their
+      proportions are true.
+      </div>
+      <div class="sunstat" id="sun-activity">
+      <div class="sunstat-row"><span>Sunspot number</span><b id="sa-ssn">&#8212;</b></div>
+      <div class="sunstat-row"><span>Active regions</span><b id="sa-regions">&#8212;</b></div>
+      <div class="sunstat-row"><span>Solar flux 10.7 cm</span><b id="sa-flux">&#8212;</b></div>
+      <div class="sunstat-row"><span>X-ray flux now</span><b id="sa-xray">&#8212;</b></div>
+      <div class="sunstat-row"><span>Strongest today</span><b id="sa-flare">&#8212;</b></div>
+      <h3>Flare probability, next 24 h</h3>
+      <div class="sunstat-row"><span>C class</span><b id="sa-pc">&#8212;</b></div>
+      <div class="sunstat-row"><span>M class</span><b id="sa-pm">&#8212;</b></div>
+      <div class="sunstat-row"><span>X class</span><b id="sa-px">&#8212;</b></div>
+      <div class="sunstat-note" id="sa-note">&#8212;</div>
+      <div class="sunstat-note sa-stale" id="sa-stale" hidden>Current conditions &#8212; solar
+      activity is a snapshot from NOAA and does not follow the time picker.</div>
+      </div>
+      <!-- `Observe the Sun` stond hier tot sessie 24 en zit nu in het
+      Navigate-paneel; zie de noot bij de Space-sectie hieronder. -->
+      </div>
+      </section>
+    </div>
+
+    <div class="tabpanel" data-panel="d-planets">
+
+<section class="acc" data-acc="space">
+      <button class="acc-head" type="button" aria-expanded="false">
+      <span>Space</span>
+      <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="acc-body">
+      <p class="space-uitleg">The seven planets on their true direction in the sky,
+      each with the point on Earth it stands over. Brightness follows real
+      apparent magnitude, so what stands out here stands out overhead.</p>
+      <!-- DE INGANG EN DE CAMERASTANDEN ZIJN HIER WEG (sessie 24). Ze staan nu in
+      het Navigate-paneel, dat zichzelf uit het view-state-register bouwt — samen
+      met `Observe the Sun`, die dezelfde behandeling kreeg. Reden: een ingang per
+      state, elk in een andere tab, betekende dat je eerst moest weten in welke tab
+      de knop stond om terug te kunnen naar de aarde.
+
+      Wat hieronder staat blijft: de lijst, het spoor, de conjuncties en de
+      readout gaan over de planeten ZOALS WIJ ZE ZIEN — dat hoort bij de gewone
+      weergave, waar de indicatoren leven, en niet bij de Space-state. -->
+      <h3>Bodies</h3>
+      <div class="planet-list" id="planet-list"></div>
+      <!-- HET HEMELSPOOR. Hoort bij het lichaam in focus en niet bij alle
+      zeven tegelijk: zeven lussen over elkaar is geen uitleg meer. -->
+      <h3>Path through the sky</h3>
+      <div class="presets" id="spoor-venster">
+      <button class="preset active" data-dagen="0">off</button>
+      <button class="preset" data-dagen="30">30 d</button>
+      <button class="preset" data-dagen="90">90 d</button>
+      <button class="preset" data-dagen="180">180 d</button>
+      <button class="preset" data-dagen="orbit">orbit</button>
+      </div>
+      <p class="space-uitleg" id="spoor-noot">Select a body to draw its path.
+      Around opposition a planet appears to reverse for weeks &#8212; that
+      backwards loop is the reason a Sun-centred solar system had to replace
+      an Earth-centred one. <b>orbit</b> draws the whole orbit instead: where
+      that body can ever appear.</p>
+      <!-- CONJUNCTIES. De knoppen staan hier en niet bij het spoor, omdat ze
+      het moment verzetten en niet de weergave. Ze zetten wél het spoor mee
+      goed: een sprong die je op het juiste moment in het verkeerde beeld
+      achterlaat is geen sprong. -->
+      <h3>Conjunctions</h3>
+      <div class="presets" id="conj-knoppen">
+      <button class="preset" id="conj-prev">&#8592; previous</button>
+      <button class="preset" id="conj-next">next &#8594;</button>
+      </div>
+      <p class="space-uitleg" id="conj-uitkomst">Two planets passing within three
+      degrees of each other, close enough to see as a pair. Sunlit pairings are
+      skipped &#8212; geometrically a conjunction, but nothing to see.</p>
+      <h3>Lagrange points</h3>
+      <div class="elayer off" id="lagrange-toggle">
+      <span class="edot"></span>Sun&#8211;Earth L-points
+      <span class="estat" id="es-lagrange">off</span>
+      </div>
+      <p class="space-uitleg">L1 and L2 sit 1.5 million km away &#8212; one
+      percent of the way to the Sun, so they are drawn nearer than they are.
+      L4 and L5 are on the true solar distance. Solar wind is measured at L1
+      before it reaches us.</p>
+      <!-- DE READINGS STAAN IN HET DETAILVENSTER (sessie 25). Hier stond een blok
+      `Reading` met twee helften — geocentrisch en heliocentrisch — dat van frame
+      meewisselde met de weergave. Dat blok maakte deze sectie twee keer zo lang
+      voor getallen die je maar af en toe leest, en het toonde ze ook wanneer je
+      er niet om had gevraagd.
+
+      Nu opent een klik op een lichaam — hier in de lijst, of op de planeet in
+      beeld — het detailvenster met dezelfde getallen. Het frame wisselt daar nog
+      steeds mee, en de eerste rij zegt welk frame je leest. -->
+      <div class="sunstat-note">On the globe, distances are ordered rather than
+      scaled &#8212; the whole solar system cannot share a frame with a
+      recognisable Earth. In space view every orbit is a true ellipse with the
+      Sun at one focus; only the spacing between orbits is compressed.</div>
+      </div>
+      </section>
+    </div>
+
+    </div>
+  </div>
 
   <div class="panel">
     <div class="panel-head">
@@ -560,13 +918,6 @@
              onder zon en maan. De sleutel blijft `cosmos` — die zit op tientallen
              plekken in vier bestanden, en hij is nergens zichtbaar. Zelfde afweging
              als bij `expert` voor "Schematic" (sessie 9). -->
-        <button class="tab" data-tab="cosmos" title="Almanac" aria-label="Almanac">
-          <!-- Halfgevulde cirkel: de ene helft licht, de andere donker. Leest als
-               dag en nacht én als maanfase, en blijft kloppen voor een tab die de
-               berekende stand van hemel en aardas draagt. -->
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20z" fill="currentColor" stroke="none"/></svg>
-          <span class="tab-label">Almanac</span>
-        </button>
 <!-- SKETCH:START — derde tab, vóór Settings.
 
      Gemeten op 2026-08-05, twee keer: bij de oude paneelbreedte van 248px was de
@@ -934,399 +1285,6 @@
 
     </div>
 
-    <div class="tabpanel" data-panel="cosmos">
-      <!-- ---------- DE ASSEN VAN DE AARDE ----------
-           WAT DEZE TAB BINDT, HERZIEN IN SESSIE 21. Tot dan was het "alles hierin is
-           berekend in plaats van waargenomen". Dat hield geen stand: `Sun & Moon
-           layers` stond al bij Layers, en daarmee was er precies één sectie waar
-           schakelaar en readout in verschillende tabs leefden. De ordening loopt nu
-           langs de soort BEDIENING: Layers is wat je aanzet, Almanac is wat het je
-           vertelt. De vier as-schakelaars zijn daarom naar Layers verhuisd, naar twee
-           groepen die net zo heten als de twee secties hier.
-
-           Wat er van de oude reden overblijft, klopt nog steeds: deze getallen komen
-           uit een berekening, hebben geen teller en geen bron die kan uitvallen.
-
-           "Statics" is bewust afgewezen: in het Engels is dat de tak van de mechanica
-           over lichamen in rust, niet "de statische dingen". Een almanak gaf
-           historisch zon- en maanstanden, tijd én de magnetische variatie voor
-           navigatie, en dekt dus letterlijk wat hier staat.
-
-           TWEE SECTIES sinds sessie 19, en dat is geen cosmetica: de rotatie-as
-           stond in een blok dat "Magnetic field" heet, en polar motion — de
-           wiebeling van juist die as — maakte dat onhoudbaar. Wat hier staat is de
-           DRAAIING; het magnetische veld staat in de sectie eronder.
-
-           De magneto-knop hoort hier omdat die state de scheefstand van 23,4 graden
-           toont, en dat is een eigenschap van de rotatie-as. -->
-      <section class="acc" data-acc="rot-axis">
-      <button class="acc-head" type="button" aria-expanded="false">
-      <span>Earth&#8217;s axis</span>
-      <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-      </button>
-      <div class="acc-body">
-      <!-- CONDITIONEEL PANEEL. `body.magneto-on` toont de camerastanden, die buiten
-      de state niets te besturen hebben — wat in een stand niets doet hoort er ook
-      niet te staan. (Tot sessie 21 wisselde deze klasse tussen twee sets, met de
-      laagschakelaars als tegenhanger; die staan nu in Layers en hebben geen
-      state-wissel nodig, want ze werken in beide standen.)
-
-      DE KNOP BLIJFT HIER en gaat niet naar Magnetic field, hoe verleidelijk de naam
-      "magneto" ook is: wat deze state toont is de scheefstand van 23,44°, en dat is
-      een eigenschap van de ROTATIE-as. De dipoolas wordt door de draaiing meegevoerd
-      en stuurt niets aan — een misverstand dat in sessie 18 al één keer is
-      rechtgezet. -->
-      <button class="apply" id="magneto-btn">Enter magneto view</button>
-      <div class="magneto-only">
-      <p class="magneto-uitleg">The Earth in space, tilted by its real 23.4&#176; obliquity.
-      Meridian and Top are locked to the Earth&#8211;Sun plane, so the Earth turns
-      beneath a Sun that stays put.</p>
-      <h3>View</h3>
-      <div class="presets" id="magneto-views">
-      <button class="preset active" data-view="meridian">Meridian</button>
-      <button class="preset" data-view="top">Top</button>
-      <button class="preset" data-view="3d">3D</button>
-      </div>
-      <p class="magneto-uitleg" id="magneto-lock"></p>
-      </div>
-      <!-- POLAR MOTION STAAT HIER, SCHAKELAAR ÉN PLOT, en dat is na één misstap in
-      sessie 21 bewust zo. Hij ging even naar Layers, met de andere as-lagen mee, en
-      dat was fout: deze laag tekent NIETS op de bol. Gerekend met de scene-waarden —
-      camera op zoomMinDistance 155, dus 3504 km hoog, fov 50 — beslaat één pixel 2,3
-      tot 4,5 km, terwijl de hele poolcirkel 40 METER breed is: 1/57 tot 1/113 pixel.
-      Zichtbaar maken vraagt 2300 tot 4500x uitvergroting, en dan toont het beeld een
-      pool die over een continent zwiept terwijl hij nooit verder dan 20 m van huis
-      komt. Vandaar sinds sessie 19 een plot mét schaalbalk, en géén geometrie.
-
-      Gevolg voor de indeling: een schakelaar hoort bij wat hij oplevert. Levert hij
-      iets op de bol, dan hoort hij in Layers; levert hij alleen deze plot, dan hoort
-      hij hier. Niet opnieuw naar Layers verplaatsen zonder de plot mee. -->
-      <div class="elayer expandable" id="polarmotion-toggle">
-      <span class="edot"></span>Polar motion
-      <button class="row-expand" data-note="polarmotion-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-      </button>
-      <span class="estat" id="es-polarmotion">off</span>
-      </div>
-      <div class="layer-detail" id="polarmotion-note">
-      The rotation axis does not sit still in the crust. It spirals around a mean
-      position: the <b>Chandler wobble</b>, a free nutation with a period of about
-      1.19 years, plus an annual term driven by water, snow and air moving around
-      the planet.
-      <br /><br />
-      The scale is the whole story. The pole travels roughly <b>25 metres a year</b>
-      but never gets further than about <b>20 metres</b> from home &#8212; a spiral
-      inside a circle 40 m across. That is why this is a plot and not a mark on the
-      globe: at maximum zoom one pixel spans several kilometres, so the whole circle
-      is a hundredth of a pixel.
-      <br /><br />
-      Measured, not modelled. Values before 1962 carry an uncertainty of roughly
-      30&#160;mas &#8212; about a metre &#8212; so the early part of the long track
-      is rougher than it looks.
-      </div>
-      <!-- Alles hieronder hangt aan de schakelaar hierboven, en dat is niet cosmetisch: de
-      reeks is 225 KB en wordt pas opgehaald als de laag aangaat. Staat de rij uit,
-      dan raakt de app CelesTrak niet aan. `hidden` op een kale div is veilig — er
-      staat geen eigen `display` op, dus de user-agent-regel wint (les sessie 14). -->
-      <div id="pm-block" hidden>
-      <!-- Vensterkeuze. Het venster is een PLOTINSTELLING en geen app-staat: het
-      raakt de tijdkiezer niet en de scene niet. Vandaar losse knoppen in het
-      idioom van de trackvensters, en geen tweede tijdmachine. -->
-      <div class="presets" id="pm-windows">
-      <button class="preset" data-pm="51">51 d</button>
-      <button class="preset active" data-pm="365">1 yr</button>
-      <button class="preset" data-pm="1825">5 yr</button>
-      <button class="preset" data-pm="long">1900&#8211;</button>
-      </div>
-      <dl class="cosmos-readout">
-      <!-- De plot. Zelfde bouw als de maanfase en het poolbovenaanzicht: een vast
-      canvas dat klein wordt getoond, met één functie die volledig hertekent. Hij
-      is wél groter, want er moet een schaalbalk in — zonder die balk is een plot
-      van dit verschijnsel een leugen. -->
-      <dt id="pm-title">Path of the pole</dt>
-      <dd class="pm-row"><canvas id="pm-canvas" width="256" height="256" aria-hidden="true"></canvas></dd>
-      <dt>Pole offset</dt>
-      <dd id="pm-offset">&#8212;</dd>
-      <dt id="pm-travel-label">Travelled</dt>
-      <dd id="pm-travel">&#8212;</dd>
-      <dt>Length of day</dt>
-      <dd id="pm-lod">&#8212;</dd>
-      <dt>Data</dt>
-      <dd id="pm-source">&#8212;</dd>
-      </dl>
-      </div>
-      </div>
-      </section>
-
-      <!-- ---------- MAGNETISCH VELD ---------- -->
-      <section class="acc" data-acc="geomag-layers">
-      <button class="acc-head" type="button" aria-expanded="false">
-      <span>Magnetic field</span>
-      <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-      </button>
-      <div class="acc-body">
-      <!-- Alleen de uitkomst. De twee schakelaars (magnetische as, pooldrift) staan
-      sinds sessie 21 in de Layers-tab, in de groep die net zo heet. -->
-      <dl class="cosmos-readout">
-      <dt>Geomagnetic north</dt>
-      <dd id="gm-north">&#8212;</dd>
-      <dt>Geomagnetic south</dt>
-      <dd id="gm-south">&#8212;</dd>
-      <dt>Tilt from rotation axis</dt>
-      <dd id="gm-tilt">&#8212;</dd>
-      <dt>Dipole strength</dt>
-      <dd id="gm-strength">&#8212;</dd>
-      <!-- Bovenaanzicht op de noordpool. Zelfde bouw als de maanfase-indicator:
-      een vast canvas van 128 px dat klein wordt getoond, met één teken-functie
-      die volledig hertekent. -->
-      <dt>Seen from above the pole</dt>
-      <dd class="polar-row">
-      <canvas id="polar-canvas" width="128" height="128" aria-hidden="true"></canvas>
-      <span id="gm-gap">&#8212;</span>
-      </dd>
-      <!-- Herkomst. Staat er omdat deze laag niet visueel te controleren is: je
-      kunt een magnetische as niet zien liggen, dus moet de app zeggen waar hij
-      vandaan komt en hoe hard de waarde is. -->
-      <dt>Model</dt>
-      <dd id="gm-source">&#8212;</dd>
-      </dl>
-      </div>
-      </section>
-
-<section class="acc" data-acc="cosmos-readings">
-      <button class="acc-head" type="button" aria-expanded="false">
-      <!-- "Sun & Moon readings" en niet "Moon readings": het sub-solaire punt staat er
-      ook in. Zo vormt hij bovendien een paar met `Sun & Moon layers` in de Layers-tab
-      — daar de schakelaars, hier de getallen. -->
-      <span>Sun &amp; Moon readings</span>
-      <span class="acc-sub" id="readout-head">right now</span>
-      <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-      </button>
-      <div class="acc-body">
-      <dl class="cosmos-readout">
-      <dt>Sub-solar point</dt>
-      <dd id="rd-subsolar">&#8212;</dd>
-      <dt>Sub-lunar point</dt>
-      <dd id="rd-sublunar">&#8212;</dd>
-      <dt>Moon phase</dt>
-      <dd class="phase-row">
-      <canvas id="phase-canvas" width="128" height="128" aria-hidden="true"></canvas>
-      <span id="rd-phase">&#8212;</span>
-      </dd>
-      <dt>Illuminated</dt>
-      <dd id="rd-fraction">&#8212;</dd>
-      <dt>Elongation</dt>
-      <dd id="rd-elongation">&#8212;</dd>
-      <dt>Moon distance</dt>
-      <dd id="rd-distance">&#8212;</dd>
-      <!-- DAGLENGTE OP VIER BREEDTEGRADEN en niet op één plek, want Terra heeft
-      geen waarnemerslocatie en die komt er ook niet (besluit sessie 22). Vier
-      regels tonen bovendien het PATROON, en dat is waar het om gaat: naar de
-      pool toe waaiert het uit, op de evenaar staat het stil. Drie van de vier
-      breedtegraden zijn AFGELEID van de scheefstand — de keerkring ís de
-      scheefstand en de poolcirkel is 90 graden min diezelfde hoek — dus ze
-      kunnen niet uit de pas lopen met de rest van de app. -->
-      <dt id="rd-day-eq-l">Day at equator</dt>
-      <dd id="rd-day-eq">&#8212;</dd>
-      <dt id="rd-day-tropic-l">Day at tropic</dt>
-      <dd id="rd-day-tropic">&#8212;</dd>
-      <dt id="rd-day-mid-l">Day at 52&#176; N</dt>
-      <dd id="rd-day-mid">&#8212;</dd>
-      <dt id="rd-day-polar-l">Day at polar circle</dt>
-      <dd id="rd-day-polar">&#8212;</dd>
-      </dl>
-      <div class="cosmos-note">
-      Positions are calculated in the browser from Meeus&#39; algorithms &#8212; no feed,
-      no key. Sun and Moon are drawn at compressed distances so both stay
-      readable; the real Moon distance is in the readout above.
-      </div>
-      <div class="cosmos-note">
-      Day length counts from the Sun&#8217;s upper edge clearing the horizon, at
-      &#8722;0.833&#176; &#8212; refraction lifts the image about half a degree, and half a
-      solar disc is added on top. That is why the equator gets 12h 07m rather
-      than a flat twelve hours, every day of the year, and why the polar circle
-      still sees the Sun briefly at midwinter instead of nothing at all.
-      Southern latitudes read the same table with the seasons reversed.
-      </div>
-      </div>
-      </section>
-
-<section class="acc" data-acc="cosmos-eclipse">
-      <button class="acc-head" type="button" aria-expanded="false">
-      <span>Eclipse</span>
-      <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-      </button>
-      <div class="acc-body">
-      <div class="elayer on" id="eclipse-toggle"><span class="edot"></span>Shadow on Earth<span class="estat" id="es-eclipse">on</span></div>
-      <div class="eclipse-state" id="eclipse-state">No eclipse at this moment.</div>
-      <!-- Zonder deze knoppen zou vrijwel niemand de schaduw ooit te zien
-      krijgen: er zijn twee tot vijf zonsverduisteringen per jaar, elk een
-      uur of twee lang. -->
-      <div class="eclipse-nav">
-      <button class="play-btn" id="eclipse-prev" title="Previous eclipse">&#9664; Previous</button>
-      <button class="play-btn" id="eclipse-jump" title="Next eclipse">Next &#9654;</button>
-      </div>
-      </div>
-      </section>
-
-
-
-<section class="acc" data-acc="cosmos-activity">
-      <button class="acc-head" type="button" aria-expanded="false">
-      <span>Sun activity</span>
-      <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-      </button>
-      <div class="acc-body">
-      <!-- Standaard AAN: dit is een meting, en die hoort te staan; de
-      geschilderde zontextuur is dat niet. -->
-      <div class="elayer on expandable" id="sunspots-toggle">
-      <span class="edot"></span>Sunspots
-      <button class="row-expand" data-note="sunspots-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-      </button>
-      <span class="estat" id="es-sunspots">on</span>
-      </div>
-      <div class="layer-detail" id="sunspots-note">
-      Drawn automatically from whatever NOAA published today, at the measured
-      heliographic position. The painted texture steps aside so you see the
-      data and nothing else. Sizes are exaggerated to be visible; their
-      proportions are true.
-      </div>
-      <div class="sunstat" id="sun-activity">
-      <div class="sunstat-row"><span>Sunspot number</span><b id="sa-ssn">&#8212;</b></div>
-      <div class="sunstat-row"><span>Active regions</span><b id="sa-regions">&#8212;</b></div>
-      <div class="sunstat-row"><span>Solar flux 10.7 cm</span><b id="sa-flux">&#8212;</b></div>
-      <div class="sunstat-row"><span>X-ray flux now</span><b id="sa-xray">&#8212;</b></div>
-      <div class="sunstat-row"><span>Strongest today</span><b id="sa-flare">&#8212;</b></div>
-      <h3>Flare probability, next 24 h</h3>
-      <div class="sunstat-row"><span>C class</span><b id="sa-pc">&#8212;</b></div>
-      <div class="sunstat-row"><span>M class</span><b id="sa-pm">&#8212;</b></div>
-      <div class="sunstat-row"><span>X class</span><b id="sa-px">&#8212;</b></div>
-      <div class="sunstat-note" id="sa-note">&#8212;</div>
-      <div class="sunstat-note sa-stale" id="sa-stale" hidden>Current conditions &#8212; solar
-      activity is a snapshot from NOAA and does not follow the time picker.</div>
-      </div>
-      <!-- `Observe the Sun` stond hier tot sessie 24 en zit nu in het
-      Navigate-paneel; zie de noot bij de Space-sectie hieronder. -->
-      </div>
-      </section>
-
-<!-- SPACE — de ingang naar de state, en zijn bediening zodra hij aanstaat.
-
-     ONDERAAN IN ALMANAC, volgens de ordening van sessie 21: van dichtbij naar
-     ver. De planeten staan verder dan de zon, dus verder dan alles wat
-     hierboven staat.
-
-     DE KOP HEET `Space` EN NIET `Planets`, hoewel er nu alleen planeten in
-     zitten. De state is bedoeld als plek voor alles buiten de aarde — de
-     magnetosfeer en de instrumenten op L1 horen hier later bij te komen — en
-     een kop die dan mee moet veranderen is een kop die nu al fout is. -->
-<section class="acc" data-acc="space">
-      <button class="acc-head" type="button" aria-expanded="false">
-      <span>Space</span>
-      <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-      </button>
-      <div class="acc-body">
-      <p class="space-uitleg">The seven planets on their true direction in the sky,
-      each with the point on Earth it stands over. Brightness follows real
-      apparent magnitude, so what stands out here stands out overhead.</p>
-      <!-- DE INGANG EN DE CAMERASTANDEN ZIJN HIER WEG (sessie 24). Ze staan nu in
-      het Navigate-paneel, dat zichzelf uit het view-state-register bouwt — samen
-      met `Observe the Sun`, die dezelfde behandeling kreeg. Reden: een ingang per
-      state, elk in een andere tab, betekende dat je eerst moest weten in welke tab
-      de knop stond om terug te kunnen naar de aarde.
-
-      Wat hieronder staat blijft: de lijst, het spoor, de conjuncties en de
-      readout gaan over de planeten ZOALS WIJ ZE ZIEN — dat hoort bij de gewone
-      weergave, waar de indicatoren leven, en niet bij de Space-state. -->
-      <h3>Bodies</h3>
-      <div class="planet-list" id="planet-list"></div>
-      <!-- HET HEMELSPOOR. Hoort bij het lichaam in focus en niet bij alle
-      zeven tegelijk: zeven lussen over elkaar is geen uitleg meer. -->
-      <h3>Path through the sky</h3>
-      <div class="presets" id="spoor-venster">
-      <button class="preset active" data-dagen="0">off</button>
-      <button class="preset" data-dagen="30">30 d</button>
-      <button class="preset" data-dagen="90">90 d</button>
-      <button class="preset" data-dagen="180">180 d</button>
-      <button class="preset" data-dagen="orbit">orbit</button>
-      </div>
-      <p class="space-uitleg" id="spoor-noot">Select a body to draw its path.
-      Around opposition a planet appears to reverse for weeks &#8212; that
-      backwards loop is the reason a Sun-centred solar system had to replace
-      an Earth-centred one. <b>orbit</b> draws the whole orbit instead: where
-      that body can ever appear.</p>
-      <!-- CONJUNCTIES. De knoppen staan hier en niet bij het spoor, omdat ze
-      het moment verzetten en niet de weergave. Ze zetten wél het spoor mee
-      goed: een sprong die je op het juiste moment in het verkeerde beeld
-      achterlaat is geen sprong. -->
-      <h3>Conjunctions</h3>
-      <div class="presets" id="conj-knoppen">
-      <button class="preset" id="conj-prev">&#8592; previous</button>
-      <button class="preset" id="conj-next">next &#8594;</button>
-      </div>
-      <p class="space-uitleg" id="conj-uitkomst">Two planets passing within three
-      degrees of each other, close enough to see as a pair. Sunlit pairings are
-      skipped &#8212; geometrically a conjunction, but nothing to see.</p>
-      <h3>Lagrange points</h3>
-      <div class="elayer off" id="lagrange-toggle">
-      <span class="edot"></span>Sun&#8211;Earth L-points
-      <span class="estat" id="es-lagrange">off</span>
-      </div>
-      <p class="space-uitleg">L1 and L2 sit 1.5 million km away &#8212; one
-      percent of the way to the Sun, so they are drawn nearer than they are.
-      L4 and L5 are on the true solar distance. Solar wind is measured at L1
-      before it reaches us.</p>
-      <!-- DE READOUT WISSELT VAN FRAME MEE MET DE WEERGAVE, en de kop zegt
-      welk frame je leest. Dezelfde getallen naast elkaar zetten zou van de
-      bezoeker vragen dat hij zelf uitzoekt welke helft bij het beeld hoort;
-      dat is precies de verwarring die de splitsing van sessie 23 wegnam.
-
-      Wat GEDEELD is, staat buiten allebei de blokken: het gekozen lichaam is
-      hetzelfde lichaam, welk frame je er ook omheen zet. -->
-      <h3 id="sp-frame">Reading &#8212; from Earth</h3>
-      <div class="sunstat" id="space-readout">
-      <div class="sunstat-row"><span>Selected</span><b id="sp-naam">&#8212;</b></div>
-
-      <div id="sp-geo">
-      <div class="sunstat-row"><span>Distance</span><b id="sp-afstand">&#8212;</b></div>
-      <div class="sunstat-row"><span>Apparent magnitude</span><b id="sp-mag">&#8212;</b></div>
-      <!-- ELONGATIE staat hier omdat het de weergave eerlijk houdt. Mercurius
-      komt nooit verder dan 28 graden van de zon en Venus niet verder dan 47:
-      die twee zitten eraan vast omdat hun banen BINNEN die van de aarde
-      liggen. Mars, Jupiter en Saturnus halen wel 180 graden. Wie dit veld
-      een tijdje volgt, ziet het verschil tussen binnen- en buitenplaneet
-      zonder dat het uitgelegd hoeft te worden. -->
-      <div class="sunstat-row"><span>Elongation from Sun</span><b id="sp-elong">&#8212;</b></div>
-      <div class="sunstat-row"><span>Illuminated</span><b id="sp-fase">&#8212;</b></div>
-      <div class="sunstat-row"><span>Right ascension</span><b id="sp-ra">&#8212;</b></div>
-      <div class="sunstat-row"><span>Declination</span><b id="sp-dec">&#8212;</b></div>
-      <div class="sunstat-row"><span>Stands over</span><b id="sp-sub">&#8212;</b></div>
-      </div>
-
-      <!-- HET HELIOCENTRISCHE BLOK. Zes rijen die alle zes uit de baan zelf
-      volgen, en niet uit een waarnemer: in dit beeld staat er geen. De ware
-      anomalie zegt waar op de getekende ellips het lichaam staat, en het
-      perihelium-aphelium-bereik waartussen zijn afstand heen en weer loopt —
-      samen maken die twee de eerste wet van Kepler afleesbaar op het scherm
-      dat hem tekent. -->
-      <div id="sp-helio" hidden>
-      <div class="sunstat-row"><span>Distance from Sun</span><b id="sp-sun-dist">&#8212;</b></div>
-      <div class="sunstat-row"><span>Ranges between</span><b id="sp-range">&#8212;</b></div>
-      <div class="sunstat-row"><span>Orbital period</span><b id="sp-period">&#8212;</b></div>
-      <div class="sunstat-row"><span>Orbital speed</span><b id="sp-speed">&#8212;</b></div>
-      <div class="sunstat-row"><span>Heliocentric longitude</span><b id="sp-lambda">&#8212;</b></div>
-      <div class="sunstat-row"><span>True anomaly</span><b id="sp-anomaly">&#8212;</b></div>
-      </div>
-
-      <div class="sunstat-note">On the globe, distances are ordered rather than
-      scaled &#8212; the whole solar system cannot share a frame with a
-      recognisable Earth. In space view every orbit is a true ellipse with the
-      Sun at one focus; only the spacing between orbits is compressed.</div>
-      </div>
-      </div>
-      </section>
-    </div>
 
 
 <!-- SKETCH:START — de Sketch-tab. Drie accordions, dezelfde standen-logica als de
@@ -1498,19 +1456,22 @@
        Twee losse inputs zouden hetzelfde doen met dubbele bedrading. -->
   <input type="file" id="ctex-file" accept="image/*" hidden>
 
+  <!-- HET DETAILVENSTER IS LEEG IN DE MARKUP (sessie 25). Hier stonden vier vaste
+       rijen — Type · Value · Time · Source — plus een `#r-extra` voor de rest. Dat
+       werkte zolang er één soort was: een gebeurtenis uit een datalaag. Sinds dit
+       venster ook een planeet en het magneetveld toont, heeft elke soort zijn eigen
+       rijen, en dan is een vaste rij die soms leeg blijft alleen maar ruis.
+       `js/ui/detail.js` bouwt ze; wat erin staat bepaalt showDetail() hieronder. -->
   <div class="readout" id="readout">
     <button class="readout-close" id="r-close" title="Close" aria-label="Close detail panel">×</button>
-    <div class="kicker" id="r-kicker">EVENT</div>
-    <div class="headline" id="r-headline"></div>
-    <div class="row"><span class="k">Type</span><span class="v" id="r-type"></span></div>
-    <div class="row"><span class="k">Value</span><span class="v" id="r-value"></span></div>
-    <div class="row"><span class="k">Time</span><span class="v" id="r-time"></span></div>
-    <div class="row"><span class="k">Source</span><span class="v"><a id="r-source" target="_blank" rel="noopener"></a></span></div>
-    <!-- Vrije regels. Een aardbeving past in de vaste rijen hierboven; een actief
-         zonnegebied heeft meer te vertellen (positie, twee classificaties, drie
-         flare-kansen). `d.extra` vult dit, en leeg laten is het normale geval. -->
-    <div id="r-extra"></div>
-    <a class="more-link" id="r-link" target="_blank" rel="noopener" hidden></a>
+    <div class="kicker">EVENT</div>
+    <div class="headline"></div>
+    <div class="detail-rows"></div>
+    <!-- Ruimte voor iets getekends: de poolplot van het magneetveld is een canvas
+         en past niet in een sleutel/waarde-rij. -->
+    <div class="detail-plot" hidden></div>
+    <div class="detail-actions" hidden></div>
+    <a class="more-link" target="_blank" rel="noopener" hidden></a>
   </div>
 
   <div class="boot" id="boot">
@@ -1592,6 +1553,7 @@ import { skyFrame } from './js/compute/frames.js';
 import { createViewStates } from './js/core/view-state.js';
 import { createNavPanel } from './js/ui/nav.js';
 import { createPanelManager } from './js/ui/panels.js';
+import { createDetailPanel } from './js/ui/detail.js';
 import { PLANETS, PLANET_INFO, nextConjunction,
          previousConjunction, heliocentricState } from './js/compute/planets.js';
 // Deskundig (schematische) weergavemodus (Fase 1).
@@ -4215,19 +4177,31 @@ document.getElementById('aqi-refresh').addEventListener('click', e => {
   refreshAqiInView();
 });
 
-// ---- Tab-navigatie (Lagen / Aarde / Instellingen) ----
-document.querySelectorAll('.panel .tab').forEach(tab => {
-  tab.addEventListener('click', () => {
-    const name = tab.dataset.tab;
-    document.querySelectorAll('.panel .tab').forEach(t => t.classList.toggle('active', t === tab));
-    document.querySelectorAll('.panel .tabpanel').forEach(p => p.classList.toggle('show', p.dataset.panel === name));
-    // Nu de kop vaststaat kun je van tab wisselen terwijl je halverwege bent
-    // weggescrold. De nieuwe tab moet dan bovenaan beginnen, niet op de scrollstand
-    // van de vorige.
-    const body = document.querySelector('.panel-body');
-    if (body) body.scrollTop = 0;
+/* ---- Tab-navigatie -------------------------------------------------------
+   PER CONTAINER BEDRAAD sinds sessie 25, niet meer met één selector op `.panel`.
+   Er zijn nu twee panelen met tabs — het lagenpaneel en Details — en met een
+   globale selector zou een klik in het ene paneel de tabs van het andere
+   meeschakelen. Dat is precies het soort koppeling dat pas opvalt wanneer iemand
+   toevallig allebei openzet. */
+function bedraadTabs(root) {
+  if (!root) return;
+  const tabs = root.querySelectorAll('.tab');
+  const panelen = root.querySelectorAll('.tabpanel');
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      const name = tab.dataset.tab;
+      tabs.forEach(t => t.classList.toggle('active', t === tab));
+      panelen.forEach(p => p.classList.toggle('show', p.dataset.panel === name));
+      // Nu de kop vaststaat kun je van tab wisselen terwijl je halverwege bent
+      // weggescrold. De nieuwe tab moet dan bovenaan beginnen, niet op de scrollstand
+      // van de vorige.
+      const body = root.querySelector('.panel-body');
+      if (body) body.scrollTop = 0;
+    });
   });
-});
+}
+bedraadTabs(document.querySelector('.panel'));
+bedraadTabs(document.getElementById('details-panel'));
 
 // ---- Uitklapbare laag-filters (chevron in een laag-rij) ----
 // SELECTOR OP `[data-expand]`, niet op `.layer .row-expand`. Er bestaat een tweede
@@ -5494,41 +5468,73 @@ for (const el of utcToggles) {
 //  Magnetisch veld — de twee assen (sessie 18)
 // ============================================================
 
-// Een functiedeclaratie en geen const: updateSunUniform() roept hem aan, en die
-// draait al tijdens de opbouw van de scene. Zelfde reden als bij momentNow().
-function updateGeomagReadout() {
+/* DE READOUT STAAT IN HET DETAILVENSTER (sessie 25), niet meer als accordeon in
+   de Almanac-tab. Reden, en het is dezelfde als bij de planeet-readings: het
+   paneel is waar je iets aan- en uitzet, het detailvenster is waar je de getallen
+   over één ding leest. De twee SCHAKELAARS van dit veld (magnetische as,
+   pooldrift) staan sinds sessie 21 al in Layers → Axes & poles en blijven daar —
+   die tekenen iets op de bol, en dat hoort bij de lagen.
+
+   Een functiedeclaratie en geen const: updateSunUniform() roept hem aan, en die
+   draait al tijdens de opbouw van de scene. Zelfde reden als bij momentNow(). */
+function magneetveldView() {
   const d = geomag && geomag.last;
-  const zet = (id, tekst) => {
-    const el = document.getElementById(id);
-    if (el) el.textContent = tekst;
+  if (!d) return null;
+  return {
+    kind: 'field',
+    kicker: 'MAGNETIC FIELD',
+    color: '#7fd4ff',
+    headline: 'Geomagnetic dipole',
+    rows: [
+      // De coördinaten zijn GEOCENTRISCH, gelijk aan waar de markering staat. Het
+      // verschil met de gepubliceerde geodetische waarde staat in de uitleg bij de rij.
+      ['Geomagnetic north', formatLatLon(d.north.lat, d.north.lon)],
+      ['Geomagnetic south', formatLatLon(d.south.lat, d.south.lon)],
+      ['Tilt from rotation axis', d.tilt.toFixed(2) + '°'],
+      // De kanteling in kilometers over het oppervlak. Een hoek van negen graden
+      // zegt weinig; duizend kilometer wel.
+      ['Poles apart', Math.round(d.tilt * Math.PI / 180 * 6371).toLocaleString('en-GB') + ' km'],
+      // De sterkte hoort bij een jaartal: hij zakt al een eeuw, en dat is de reden
+      // dat de as überhaupt beweegt. Buiten het modelbereik zeggen we dat erbij.
+      ['Dipole strength', Math.round(d.B0).toLocaleString('en-GB') + ' nT'],
+      // Herkomst. Staat er omdat deze laag niet visueel te controleren is: je kunt
+      // een magnetische as niet zien liggen, dus moet de app zeggen waar hij
+      // vandaan komt en hoe hard de waarde is.
+      ['Model', herkomstNode(d)]
+    ],
+    // Bovenaanzicht op de noordpool. Een canvas past niet in een sleutel/waarde-rij
+    // en gaat daarom door de plot-haak — zie js/ui/detail.js.
+    plot: (el) => {
+      const c = document.createElement('canvas');
+      c.width = 128; c.height = 128;
+      c.setAttribute('aria-hidden', 'true');
+      el.appendChild(c);
+      drawPolarView(d, c);
+    }
   };
-  if (!d) {
-    ['gm-north','gm-south','gm-tilt','gm-strength','gm-gap','gm-source']
-      .forEach(i => zet(i, '—'));
-    return;
-  }
-  // De coördinaten zijn GEOCENTRISCH, gelijk aan waar de markering staat. Het
-  // verschil met de gepubliceerde geodetische waarde staat in de uitleg bij de rij.
-  zet('gm-north', formatLatLon(d.north.lat, d.north.lon));
-  zet('gm-south', formatLatLon(d.south.lat, d.south.lon));
-  zet('gm-tilt', d.tilt.toFixed(2) + '°');
-  // De sterkte hoort bij een jaartal: hij zakt al een eeuw, en dat is de reden
-  // dat de as überhaupt beweegt. Buiten het modelbereik zeggen we dat erbij.
-  zet('gm-strength', Math.round(d.B0).toLocaleString('en-GB') + ' nT');
-  toonHerkomst(d);
-  // De kanteling in kilometers over het oppervlak. Een hoek van negen graden zegt
-  // weinig; duizend kilometer wel.
-  zet('gm-gap', Math.round(d.tilt * Math.PI / 180 * 6371).toLocaleString('en-GB') +
-    ' km apart');
-  drawPolarView(d);
+}
+
+function toonMagneetveld() {
+  const v = magneetveldView();
+  if (v) showDetail(v);
+}
+
+/* Het veld beweegt met de tijd mee, dus zodra de scene een ander moment toont
+   klopt wat er staat niet meer. Alleen HERTEKENEN ALS DIT VENSTER HET VELD TOONT:
+   zonder die toets zou een tijdsprong het detail van een aardbeving overschrijven
+   met een magneetveld waar niemand om vroeg. */
+function updateGeomagReadout() {
+  if (detail.kind() !== 'field') return;
+  const v = magneetveldView();
+  if (v) detail.show(v);
 }
 
 // De herkomstregel. Drie standen, en alleen de derde krijgt de gele markering: dat
 // is de enige waarin je naar een voorspelling kijkt in plaats van naar een
 // vastgestelde waarde.
-function toonHerkomst(d) {
-  const el = document.getElementById('gm-source');
-  if (!el) return;
+function herkomstNode(d) {
+  const el = document.createElement('span');
+  el.className = 'gm-model';
   const h = d.herkomst;
   const geel = h.soort === 'extrapolated';
   let kop, noot;
@@ -5546,7 +5552,6 @@ function toonHerkomst(d) {
     noot = 'Predicted from the secular variation — the pole has moved ' +
            Math.round(driftSindsEpoche(d.jaar)) + ' km since that epoch.';
   }
-  el.innerHTML = '';
   const b = document.createElement('span');
   b.textContent = kop;
   if (geel) b.className = 'readout-warn';
@@ -5561,6 +5566,7 @@ function toonHerkomst(d) {
     c.textContent = 'Date outside the model range — clamped to ' + d.jaar.toFixed(1) + '.';
     el.append(c);
   }
+  return el;
 }
 
 // Bovenaanzicht op de noordpool, recht van boven gezien. Het raster loopt tot 15
@@ -5570,9 +5576,11 @@ function toonHerkomst(d) {
 // Oriëntatie: kijkend langs -Y omlaag ligt lengte 0 ONDERAAN en 90 oost rechts,
 // wat de gebruikelijke stand van een poolkaart is. Vandaar sin voor x en cos voor y
 // en niet andersom.
+// Het canvas komt sinds sessie 25 als ARGUMENT binnen in plaats van uit een vast
+// id. Het venster bouwt zijn plot-sleuf elke keer opnieuw, dus een `getElementById`
+// zou naar een canvas wijzen dat al uit de DOM is.
 const POLAR_GRID = 15;              // graden vanaf de pool die de rand voorstelt
-function drawPolarView(d) {
-  const c = document.getElementById('polar-canvas');
+function drawPolarView(d, c) {
   if (!c) return;
   const ctx = c.getContext('2d');
   const S = c.width, cx = S / 2, cy = S / 2, R = S / 2 - 6;
@@ -6461,6 +6469,9 @@ function bouwPlanetenLijst() {
       markeerPlaneetFocus();
       updateSpaceReadout();
       werkSpoorNootBij();
+      // De readings staan sinds sessie 25 in het detailvenster, dus kiezen ís
+      // openen. Zonder deze regel kies je wel een lichaam maar zie je niets.
+      if (planets.focus()) toonPlaneet(planets.focus()); else hideDetail();
     });
     host.appendChild(rij);
   }
@@ -6480,12 +6491,6 @@ function markeerPlaneetFocus() {
   if (orbits) orbits.setFocus(f);
 }
 
-/* De readout. Toont het lichaam in focus; zonder focus blijft hij leeg in
-   plaats van iets willekeurigs te kiezen — een getal zonder gekozen bron
-   leest als een meting die het niet is. */
-const GEO_VELDEN   = ['sp-afstand','sp-mag','sp-elong','sp-fase','sp-ra','sp-dec','sp-sub'];
-const HELIO_VELDEN = ['sp-sun-dist','sp-range','sp-period','sp-speed','sp-lambda','sp-anomaly'];
-
 /* DE OMLOOPTIJD KOMT UIT KEPLER 3 OP DEZELFDE `a` DIE DE ELLIPS TEKENT, en niet
    uit een tabel met gepubliceerde perioden. Dat scheelt bij de buitenplaneten
    iets — Neptunus komt op 165,2 jaar waar de literatuur 164,8 noemt, want die
@@ -6503,44 +6508,21 @@ function formatPeriode(jaren) {
   return Math.round(jaren) + ' yr';
 }
 
-/* De readout. Toont het lichaam in focus in het frame van de HUIDIGE weergave;
-   zonder focus blijft hij leeg in plaats van iets willekeurigs te kiezen — een
-   getal zonder gekozen bron leest als een meting die het niet is. */
-function updateSpaceReadout() {
-  if (!planets) return;
+/* DE PLANEET-READINGS STAAN IN HET DETAILVENSTER (sessie 25) en niet meer als
+   `Reading`-blok onder in de Space-sectie. Zelfde reden als bij het magneetveld:
+   het paneel is waar je iets aan- en uitzet, het detailvenster is waar je de
+   getallen over één ding leest. De bodylijst, het hemelspoor, de conjuncties en
+   de Lagrange-punten blijven wél in het paneel — die kiezen en tekenen iets.
+
+   HET FRAME BLIJFT MEEWISSELEN met de weergave, en de kop zegt welk frame je
+   leest. Dezelfde getallen naast elkaar zetten zou van de bezoeker vragen dat hij
+   zelf uitzoekt welke helft bij het beeld hoort; dat is precies de verwarring die
+   de splitsing van sessie 23 wegnam. */
+function planeetView(f) {
+  if (!planets || !f) return null;
   const helio = inSpaceAanzicht();
-  /* DE GUARD MOET HET FRAME VOLGEN, niet één laag. In Space is de planetenlaag
-     verborgen en de baanlaag zichtbaar — die twee staan nooit samen aan. De
-     oude toets `!planets.group.visible` stapte er in Space dus meteen uit, en
-     dat maakte de readout daar leeg nog vóór de vraag welk frame hij toont. */
-  if (!helio && !planets.group.visible) return;
-
-  const eph = planets.efemeriden();
-  const f = planets.focus();
-  const zet = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
-  const toon = (id, aan) => { const el = document.getElementById(id); if (el) el.hidden = !aan; };
-
-  toon('sp-geo', !helio);
-  toon('sp-helio', helio);
-  zet('sp-frame', helio ? 'Reading — from the Sun' : 'Reading — from Earth');
-
-  // De magnitudes lopen altijd mee, ook zonder focus: dat is de kolom die
-  // verklaart waarom het ene lichaam opvalt en het andere niet. Ze horen bij
-  // de aardse blik, dus ze blijven staan wat het readout-frame ook is — de
-  // lijst zelf is immers de lijst van wat er aan ONZE hemel staat.
-  if (eph) {
-    document.querySelectorAll('#planet-list .planet-row').forEach(r => {
-      const p = eph[r.dataset.planet];
-      const cel = r.querySelector('[data-mag]');
-      if (p && cel) cel.textContent = (p.magnitude > 0 ? '+' : '') + p.magnitude.toFixed(1);
-    });
-  }
-
-  if (!f) {
-    for (const id of ['sp-naam', ...GEO_VELDEN, ...HELIO_VELDEN]) zet(id, '—');
-    return;
-  }
-  zet('sp-naam', PLANET_INFO[f].name);
+  const kleur = '#' + PLANET_INFO[f].color.toString(16).padStart(6, '0');
+  const kop = { kind: 'body', kicker: 'PLANET', color: kleur, headline: PLANET_INFO[f].name };
 
   /* HELIOCENTRISCH — en dit blok kent de aarde. `ephemeris()` geeft er zeven,
      `BODIES` telt er acht: in het zonnestelsel-beeld is de aarde geen rekenpunt
@@ -6549,33 +6531,74 @@ function updateSpaceReadout() {
      leeg. `heliocentricState()` heeft die beperking niet. */
   if (helio) {
     const s = heliocentricState(momentNow(), f);
-    zet('sp-sun-dist', s.distanceAU.toFixed(3) + ' AU');
-    zet('sp-range', s.perihelionAU.toFixed(3) + ' – ' + s.aphelionAU.toFixed(3) + ' AU');
-    zet('sp-period', formatPeriode(s.periodYears));
-    zet('sp-speed', s.speedKmS.toFixed(2) + ' km/s');
-    zet('sp-lambda', s.lambda.toFixed(1) + '°');
-    // De ware anomalie telt vanaf het PERIHELIUM, niet vanaf het lentepunt.
-    // Zonder dat erbij is het een graadgetal naast een ander graadgetal.
-    zet('sp-anomaly', s.trueAnomaly.toFixed(1) + '° from perihelion');
-    return;
+    return Object.assign(kop, { rows: [
+      ['Frame', 'from the Sun'],
+      ['Distance from Sun', s.distanceAU.toFixed(3) + ' AU'],
+      ['Ranges between', s.perihelionAU.toFixed(3) + ' – ' + s.aphelionAU.toFixed(3) + ' AU'],
+      ['Orbital period', formatPeriode(s.periodYears)],
+      ['Orbital speed', s.speedKmS.toFixed(2) + ' km/s'],
+      ['Heliocentric longitude', s.lambda.toFixed(1) + '°'],
+      // De ware anomalie telt vanaf het PERIHELIUM, niet vanaf het lentepunt.
+      // Zonder dat erbij is het een graadgetal naast een ander graadgetal.
+      ['True anomaly', s.trueAnomaly.toFixed(1) + '° from perihelion']
+    ] });
   }
 
-  if (!eph || !eph[f]) { for (const id of GEO_VELDEN) zet(id, '—'); return; }
-  const p = eph[f];
+  const eph = planets.efemeriden();
+  const p = eph && eph[f];
+  if (!p) return Object.assign(kop, { rows: [['Frame', 'from Earth'], ['Reading', '—']] });
   const uur = p.ra / 15;
   const h = Math.floor(uur), m = Math.floor((uur - h) * 60);
-  zet('sp-afstand', p.distanceAU.toFixed(3) + ' AU');
-  zet('sp-mag', (p.magnitude > 0 ? '+' : '') + p.magnitude.toFixed(2));
   // Oost = avondster (ondergaand ná de zon), west = ochtendster. Bij bijna
   // nul of bijna 180 graden zegt die kant niets meer, dus dan valt hij weg.
-  const kant = (p.elongation < 3 || p.elongation > 177) ? ''
-             : (p.eastern ? ' E' : ' W');
-  zet('sp-elong', p.elongation.toFixed(1) + '°' + kant);
-  zet('sp-fase', (p.illuminated * 100).toFixed(0) + '%');
-  zet('sp-ra', h + 'h ' + String(m).padStart(2, '0') + 'm');
-  zet('sp-dec', (p.dec >= 0 ? '+' : '−') + Math.abs(p.dec).toFixed(1) + '°');
-  zet('sp-sub', Math.abs(p.sub.lat).toFixed(1) + '° ' + (p.sub.lat >= 0 ? 'N' : 'S') +
-                ', ' + Math.abs(p.sub.lon).toFixed(1) + '° ' + (p.sub.lon >= 0 ? 'E' : 'W'));
+  const kant = (p.elongation < 3 || p.elongation > 177) ? '' : (p.eastern ? ' E' : ' W');
+  return Object.assign(kop, { rows: [
+    ['Frame', 'from Earth'],
+    ['Distance', p.distanceAU.toFixed(3) + ' AU'],
+    ['Apparent magnitude', (p.magnitude > 0 ? '+' : '') + p.magnitude.toFixed(2)],
+    ['Elongation from Sun', p.elongation.toFixed(1) + '°' + kant],
+    ['Illuminated', (p.illuminated * 100).toFixed(0) + '%'],
+    ['Right ascension', h + 'h ' + String(m).padStart(2, '0') + 'm'],
+    ['Declination', (p.dec >= 0 ? '+' : '−') + Math.abs(p.dec).toFixed(1) + '°'],
+    ['Stands over', Math.abs(p.sub.lat).toFixed(1) + '° ' + (p.sub.lat >= 0 ? 'N' : 'S') +
+                    ', ' + Math.abs(p.sub.lon).toFixed(1) + '° ' + (p.sub.lon >= 0 ? 'E' : 'W')]
+  ] });
+}
+
+function toonPlaneet(f) {
+  const v = planeetView(f);
+  if (v) showDetail(v);
+}
+
+/* Wat er van de oude `updateSpaceReadout()` overblijft: de magnitudekolom in de
+   lijst, plus het bijwerken van het venster áls dat een planeet toont.
+
+   DE MAGNITUDES LOPEN ALTIJD MEE, ook zonder focus: dat is de kolom die verklaart
+   waarom het ene lichaam opvalt en het andere niet. Ze horen bij de aardse blik,
+   dus ze blijven staan wat het venster ook toont — de lijst is immers de lijst
+   van wat er aan ONZE hemel staat.
+
+   DE OUDE GUARD IS WEG. Die was `if (!helio && !planets.group.visible) return`
+   en hield de readout stil zodra de skyplanets-laag uitstond. Voor een blok dat
+   ongevraagd in een tab stond was dat juist; voor een venster dat je zelf opent
+   is het verkeerd — daar heb je er zelf om gevraagd. */
+function updateSpaceReadout() {
+  if (!planets) return;
+  const eph = planets.efemeriden();
+  if (eph) {
+    document.querySelectorAll('#planet-list .planet-row').forEach(r => {
+      const p = eph[r.dataset.planet];
+      const cel = r.querySelector('[data-mag]');
+      if (p && cel) cel.textContent = (p.magnitude > 0 ? '+' : '') + p.magnitude.toFixed(1);
+    });
+  }
+  // Alleen bijwerken als het venster ook echt een planeet toont — anders zou een
+  // tijdsprong het detail van een aardbeving overschrijven met een planeet.
+  if (detail.kind() !== 'body') return;
+  const f = planets.focus();
+  if (!f) { hideDetail(); return; }   // focus losgelaten: het venster heeft geen onderwerp meer
+  const v = planeetView(f);
+  if (v) detail.show(v);
 }
 
 // De sprong van de aarde naar de zon is 400 eenheden; ineens is dat een harde
@@ -6731,7 +6754,10 @@ document.getElementById('globe')?.addEventListener('click', (e) => {
   planets.setFocus(planets.focus() === k ? null : k, momentNow());
   markeerPlaneetFocus();
   updateSpaceReadout();
-      werkSpoorNootBij();
+  werkSpoorNootBij();
+  // Tweede ingang naar dezelfde readings, en de natuurlijkste: je tikt het
+  // lichaam aan dat je in beeld ziet staan.
+  if (planets.focus()) toonPlaneet(planets.focus()); else hideDetail();
 });
 
 // Zet de gemeten zonnetoestand in beeld: de getallen in de Cosmos-tab en de
@@ -7412,6 +7438,16 @@ panels.register('nav', {
    `button` staat er wél bij, ook al zetten deze drie hun eigen `.on`-klasse in
    hun setter: `sync()` zet daarnaast `.active` en `aria-pressed`, en dat is
    precies wat een knop uit de pas laat lopen zodra een ánder paneel hem sluit. */
+const detailsHost = document.getElementById('details-panel');
+const detailsBtn = document.getElementById('details-open');
+panels.register('details', {
+  group: 'dock',
+  button: detailsBtn,
+  isOpen: () => !detailsHost.hidden,
+  open:   () => { detailsHost.hidden = false; },
+  close:  () => { detailsHost.hidden = true; }
+});
+
 panels.register('notif', {
   group: 'top',
   button: document.getElementById('notif-btn'),
@@ -7439,8 +7475,13 @@ panels.register('settings', {
 // Weg 2 en 3: nog een keer op dezelfde knop, of op een andere uit dezelfde groep.
 panelOpenBtn.addEventListener('click', () => panels.toggle('layers'));
 navBtn.addEventListener('click', () => panels.toggle('nav'));
+detailsBtn.addEventListener('click', () => panels.toggle('details'));
 // Weg 1: het kruisje in het paneel zelf.
 document.getElementById('panel-collapse').addEventListener('click', () => panels.close('layers'));
+document.getElementById('details-collapse').addEventListener('click', () => panels.close('details'));
+// De weg van Details naar het magneetveld-detail. De readings zelf staan in het
+// venster; dit is de rij die je erheen brengt.
+document.getElementById('geomag-open')?.addEventListener('click', toonMagneetveld);
 
 // Ook de BEGINSTAND van de knoppen moet kloppen: setPanelOpen() keert vroeg terug
 // wanneer de gevraagde stand al geldt, dus bij het opstarten komt hij daar nooit langs.
@@ -7673,100 +7714,155 @@ modeOptEls.forEach(btn => {
   });
 });
 
-// Detailvenster sluiten: terug naar de begintoestand uit css/app.css
-// (opacity 0, geen pointer-events). GSAP mag hier alleen opacity en y aanraken;
-// de plaatsing komt uit left/right/bottom, niet uit een transform. Zou de plaatsing
-// ooit een transform worden, dan schiet dit venster net zo weg als de mode-switch.
-// (`detailVisible` staat bovenaan bij `panelOpenWanted` — zie de TDZ-noot daar.)
+/* ---- Het detailvenster ---------------------------------------------------
+   Tekenen, animeren en de vangnetten zitten in `js/ui/detail.js`. Wat hier
+   staat is de VERTALING: van een ruw item uit een adapter naar de beschrijving
+   die die module tekent. Die scheiding is het hele punt — de module kent geen
+   lagen, geen bronnen en geen eenheden, en kan daardoor ook een planeet en het
+   magneetveld tonen.
+
+   `detailVisible` blijft de waarheid voor de rest van de app en loopt gelijk
+   met `detail.isOpen()`. Zie de TDZ-noot bij zijn declaratie waarom hij daar
+   staat en niet hier. */
+const detail = createDetailPanel({
+  host: document.getElementById('readout'),
+  gsap,
+  reducedMotion: REDUCED_MOTION,
+  onShow: pauseAutoRotate
+});
 
 function hideDetail() {
   if (!detailVisible) return;
   detailVisible = false;
-  const r = document.getElementById('readout');
-  r.style.pointerEvents = 'none';   // meteen, wacht niet op de animatie
-  const settle = () => { if (!detailVisible) gsap.set(r, { opacity: 0, y: 0 }); };
-  if (REDUCED_MOTION) {
-    gsap.to(r, { opacity: 0, duration: 0.15, overwrite: true, onComplete: settle });
-  } else {
-    gsap.to(r, { opacity: 0, y: 10, duration: 0.22, ease: 'power2.in', overwrite: true, onComplete: settle });
-  }
-  setTimeout(settle, 500);   // vangnet bij een stilstaande requestAnimationFrame
+  detail.hide();
 }
 
-/* HET DETAILVENSTER SLUIT NIETS MEER (sessie 25). Hier stond een `isNarrow()`-tak
-   die het lagenpaneel dichtdeed en de knoppenrij wegzette, omdat dit venster op
-   een telefoon tot de onderrand liep. Het stopt nu boven de tijdrij en ligt in de
-   z-ladder bovenop, dus het is leesbaar zonder dat er iets voor hoeft te wijken —
-   ook met de bevingenlijst open, wat juist de weg is waarlangs je hier komt. */
-function showDetail(d) {
-  const r = document.getElementById('readout');
-  const names = { region:'Active region', quake:'Earthquake', volcano:'Volcano', storm:'Storm', ice:'Sea ice', wildfire:'Wildfire', aqi:'Air quality', lightning:'Lightning' };
-  document.getElementById('r-kicker').textContent = names[d.layer].toUpperCase();
-  document.getElementById('r-kicker').style.color =
-    d.layer === 'aqi' ? aqiHex(d.value) : COLORS[d.layer];
-  document.getElementById('r-headline').textContent = d.label;
-  document.getElementById('r-type').textContent = names[d.layer];
-  // Het magnitudetype staat erbij omdat de twee bronnen niet hetzelfde meten:
-  // EMSC levert vrijwel alles als `ml` (lokale magnitude), USGS meest `mb` of
-  // `mww`. M 3,0 uit de ene bron is dus niet exact M 3,0 uit de andere, en dat
-  // hoort zichtbaar te zijn zodra iemand op een enkele beving inzoomt.
-  document.getElementById('r-value').textContent =
-    d.layer === 'quake' && d.value != null
-      ? 'M ' + d.value.toFixed(1) + (d.magType ? ' ' + d.magType : '') +
-        (d.depth != null ? ' · ' + Math.round(d.depth) + ' km deep' : '')
-      : d.layer === 'aqi' && d.value != null
-        ? 'AQI ' + d.value + ' · ' + aqiBand(d.value).label
-      : d.layer === 'region'
-        ? (d.value == null ? 'no spots' : d.value + (d.value === 1 ? ' spot' : ' spots')) +
-          (d.area != null ? ' · ' + d.area + ' millionths' : '')
-        : '—';
-  // Niet elke bron geeft een tijdstip. Zonder deze controle toont een ontbrekende
-  // tijd "01 Jan, 01:00" (epoch), en dat is erger dan eerlijk niets tonen.
-  // MÉT jaartal, altijd. Zolang de app alleen het heden toonde was het jaar overbodig;
-  // sinds de tijdkiezer gebeurtenissen uit 1985 of 2016 kan opdiepen is "01 Jul, 12:00"
-  // ronduit misleidend — het leest als vandaag. Dit is de enige plek waar de tijd van
-  // een gebeurtenis zelf staat, dus hier mag geen twijfel over bestaan.
-  document.getElementById('r-time').textContent = d.time
-    ? fmtStamp(new Date(d.time),
-        { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' })
-    : '—';
-  // Vrije regels. Leeg voor alles behalve een zonnegebied — zie de noot bij r-extra.
-  const extraEl = document.getElementById('r-extra');
-  extraEl.innerHTML = (d.extra || []).map(([k, v]) =>
-    '<div class="row"><span class="k">' + k + '</span><span class="v">' + v + '</span></div>').join('');
+const EVENT_NAMES = { region:'Active region', quake:'Earthquake', volcano:'Volcano',
+  storm:'Storm', ice:'Sea ice', wildfire:'Wildfire', aqi:'Air quality', lightning:'Lightning' };
 
-  // Bron-link (homepage) + event-/station-specifieke link wanneer de API die geeft.
-  const srcEl = document.getElementById('r-source');
-  // EMSC bundelt tientallen instituten; `auth` noemt wie de meting daadwerkelijk
+/* De waarde van een gebeurtenis leest per laag anders. Het magnitudetype staat
+   erbij omdat de twee bronnen niet hetzelfde meten: EMSC levert vrijwel alles als
+   `ml` (lokale magnitude), USGS meest `mb` of `mww`. M 3,0 uit de ene bron is dus
+   niet exact M 3,0 uit de andere, en dat hoort zichtbaar te zijn zodra iemand op
+   een enkele beving inzoomt. */
+function eventWaarde(d) {
+  if (d.layer === 'quake' && d.value != null) {
+    return 'M ' + d.value.toFixed(1) + (d.magType ? ' ' + d.magType : '') +
+           (d.depth != null ? ' · ' + Math.round(d.depth) + ' km deep' : '');
+  }
+  if (d.layer === 'aqi' && d.value != null) return 'AQI ' + d.value + ' · ' + aqiBand(d.value).label;
+  if (d.layer === 'region') {
+    return (d.value == null ? 'no spots' : d.value + (d.value === 1 ? ' spot' : ' spots')) +
+           (d.area != null ? ' · ' + d.area + ' millionths' : '');
+  }
+  return '—';
+}
+
+/* Niet elke bron geeft een tijdstip. Zonder deze controle toont een ontbrekende
+   tijd "01 Jan, 01:00" (epoch), en dat is erger dan eerlijk niets tonen.
+   MÉT jaartal, altijd. Zolang de app alleen het heden toonde was het jaar
+   overbodig; sinds de tijdkiezer gebeurtenissen uit 1985 of 2016 kan opdiepen is
+   "01 Jul, 12:00" ronduit misleidend — het leest als vandaag. Dit is de enige plek
+   waar de tijd van een gebeurtenis zelf staat, dus hier mag geen twijfel over
+   bestaan. */
+function eventTijd(t) {
+  return t ? fmtStamp(new Date(t),
+    { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '—';
+}
+
+/* ---- De twee handelingsknoppen (sessie 25, Terry) ------------------------
+   Het venster vertelde wát er is, maar bood geen weg ernaartoe. Twee knoppen,
+   en het verschil ertussen is precies het verschil tussen plek en moment:
+
+     Show on globe     vliegt naar de plek. De scene blijft op nu staan.
+     Go to this moment ZET DE SCENE STIL op het registratiemoment, en vliegt.
+                       De live lagen gaan daarmee op slot met de gele markering
+                       — bestaand, gecommuniceerd gedrag, en precies wat je wilt
+                       bij "laat zien hoe het er toen uitzag". Dat verschil hoort
+                       in de tooltip te staan, want het is niet te zien.
+
+   ELKE KNOP VERSCHIJNT ALLEEN ALS HIJ IETS KAN DOEN. Een AQI-station heeft geen
+   gebeurtenistijd, een planeet geen registratiemoment. Een knop die niets doet
+   is erger dan geen knop.
+
+   DIT IS DE ENIGE PLEK DIE NOG PANELEN SLUIT, en alleen op een smal scherm. Dat
+   is geen terugkeer van `setDockVisible()`: daar was het een stille regel achter
+   iets anders, hier vraagt de gebruiker er zelf om. Je tikt "Show on globe"
+   omdat je de bol wilt zien, en op een telefoon ligt daar een sheet overheen. */
+const ICON_PLEK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><path d="M12 1v3M12 20v3M1 12h3M20 12h3"/></svg>';
+const ICON_MOMENT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/></svg>';
+
+function maakBeeldVrij() {
+  if (!isNarrow()) return;
+  for (const k of panels.openKeys()) panels.close(k);
+  hideDetail();
+}
+
+/* Het moment verzetten. Zelfde vorm als de eclips- en conjunctiesprong: de klok
+   stilzetten, de slider herschalen en het datumveld gelijktrekken. Het spoor en
+   het trackvenster blijven staan — die horen bij wat je aan het bekijken was, en
+   een gebeurtenis heeft geen eigen tijdschaal zoals een eclips die heeft. */
+function gaNaarMoment(t) {
+  stopPlay();
+  baseMoment = new Date(t);
+  timeOffsetMs = 0;
+  herschaalSlider();
+  if (timeInputEl) timeInputEl.value = naarVeldWaarde(baseMoment);
+  refreshTimeUI();
+}
+
+function detailActies(d) {
+  const acties = [];
+  const heeftPlek = d && d.lat != null && d.lng != null;
+  if (heeftPlek) {
+    acties.push({ label: 'Show on globe', icon: ICON_PLEK,
+      title: 'Fly to this place. The scene keeps showing now.',
+      run: () => { flyTo(d); maakBeeldVrij(); } });
+  }
+  if (d && d.time) {
+    acties.push({ label: 'Go to this moment', icon: ICON_MOMENT,
+      title: 'Set the scene to the moment this was recorded. Live layers lock while you travel.',
+      run: () => { gaNaarMoment(d.time); if (heeftPlek) flyTo(d); maakBeeldVrij(); } });
+  }
+  return acties;
+}
+
+/* HET VENSTER SLUIT NIETS MEER (sessie 25). Hier stond een `isNarrow()`-tak die
+   het lagenpaneel dichtdeed en de knoppenrij wegzette, omdat dit venster op een
+   telefoon tot de onderrand liep. Het stopt nu boven de tijdrij en ligt in de
+   z-ladder bovenop, dus het is leesbaar zonder dat er iets voor hoeft te wijken —
+   ook met de bevingenlijst open, wat juist de weg is waarlangs je hier komt.
+
+   `kind` ontbreekt bij alle bestaande aanroepers en valt dan terug op 'event'.
+   Dat is met opzet: de zes plekken die dit venster openden hoefden geen regel te
+   veranderen toen de soorten erbij kwamen. */
+function showDetail(d) {
+  if (d.kind && d.kind !== 'event') { detailVisible = true; detail.show(d); return; }
+
+  // EMSC bundelt tientallen instituten; `agency` noemt wie de meting daadwerkelijk
   // deed. "EMSC · BMKG" is eerlijker dan alleen de aggregator noemen.
-  srcEl.textContent = d.source + (d.agency ? ' · ' + d.agency : '');
-  srcEl.href = SOURCE_URLS[d.source] || '#';
-  const linkEl = document.getElementById('r-link');
-  if (d.url) {
-    linkEl.href = d.url;
-    // Bevingen komen uit twee catalogi, dus het label kan niet vastliggen per laag.
-    linkEl.textContent = (d.layer === 'quake'
-      ? 'View on ' + d.source
-      : (DETAIL_LINK_LABELS[d.layer] || 'More info')) + ' ↗';
-    linkEl.hidden = false;
-  } else {
-    linkEl.hidden = true;
-  }
-  r.style.pointerEvents = 'auto'; // readout klikbaar maken voor de links
+  const naam = EVENT_NAMES[d.layer];
   detailVisible = true;
-  // GSAP: dialoogvenster soepel in beeld (pop met lichte overshoot). Bij
-  // minder-beweging alleen invaden, zonder verschuiven of overshoot.
-  if (REDUCED_MOTION) {
-    gsap.fromTo(r, { opacity: 0 }, { opacity: 1, duration: 0.2, overwrite: true });
-  } else {
-    gsap.fromTo(r, { opacity: 0, y: 16, scale: 0.97 },
-      { opacity: 1, y: 0, scale: 1, duration: 0.4, ease: 'back.out(1.4)', overwrite: true });
-  }
-  // Vangnet. Een `fromTo` zet eerst de BEGINwaarde, dus opacity 0. Staat
-  // requestAnimationFrame stil, dan blijft het daar staan: een onzichtbaar venster
-  // dat door de pointer-events hierboven wél kliks opvangt. Erger dan geen venster.
-  setTimeout(() => { if (detailVisible) gsap.set(r, { opacity: 1, y: 0, scale: 1 }); }, 700);
-  pauseAutoRotate();
+  detail.show({
+    kind: 'event',
+    kicker: naam.toUpperCase(),
+    color: d.layer === 'aqi' ? aqiHex(d.value) : COLORS[d.layer],
+    headline: d.label,
+    rows: [
+      ['Type', naam],
+      ['Value', eventWaarde(d)],
+      ['Time', eventTijd(d.time)],
+      ['Source', { text: d.source + (d.agency ? ' · ' + d.agency : ''),
+                   href: SOURCE_URLS[d.source] || '#' }],
+      // Vrije regels. Leeg voor alles behalve een zonnegebied, dat meer te
+      // vertellen heeft: positie, twee classificaties en drie flare-kansen.
+      ...(d.extra || [])
+    ],
+    actions: detailActies(d),
+    // Bevingen komen uit twee catalogi, dus het label kan niet vastliggen per laag.
+    link: d.url ? { href: d.url,
+      label: d.layer === 'quake' ? 'View on ' + d.source : (DETAIL_LINK_LABELS[d.layer] || 'More info') } : null
+  });
 }
 
 // ---- Fetch loop ----------------------------------------------

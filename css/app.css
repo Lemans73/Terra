@@ -446,6 +446,36 @@
      `.time-reset` en `.ti-panel` — zie de noot daar. */
   .dock-btn[hidden] { display: none; }
 
+  /* ---- Het Details-paneel (sessie 25) ------------------------------------
+     Dezelfde plek, breedte en glastaal als `.panel` — het is het vierde paneel
+     in dezelfde hoek en het hoort er niet anders uit te zien. Het erft de kop,
+     de tabs en de accordeon-stijlen doordat het `.panel-head`, `.tabs`, `.tab`,
+     `.tabpanel` en `.panel-body` gebruikt.
+
+     LET OP: de tab-CSS was op `.panel .tab` gescopet. Die selectors zijn hier
+     uitgebreid met `.detail-panel`, want dit paneel heeft er ook drie. Wie er
+     een derde paneel met tabs bij zet, moet ze weer meenemen — of de scoping
+     helemaal laten vallen. */
+  .detail-panel {
+    position: fixed;
+    left: 28px;
+    bottom: var(--panel-lift);
+    z-index: var(--z-panel);
+    width: 280px;
+    max-height: calc(100vh - var(--panel-lift) - var(--panel-top-gap));
+    max-height: calc(100dvh - var(--panel-lift) - var(--panel-top-gap));
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: rgba(11,16,24,0.72);
+    backdrop-filter: blur(14px);
+    border: 1px solid var(--hair);
+    border-radius: 14px;
+  }
+  /* Eigen regel omdat de klasse hierboven `display: flex` zet — zelfde val als
+     bij .dock-btn, .ti-panel en .nav-panel. */
+  .detail-panel[hidden] { display: none; }
+
   /* ---- Het Navigate-paneel ----------------------------------------------
      Boven de knoppenrij, in dezelfde glastaal als `.panel`. Smaller, want het
      draagt een handvol rijen en geen accordeons. */
@@ -637,7 +667,7 @@
   @keyframes aqi-spin { to { transform: rotate(360deg); } }
 
   /* ---- Tab-navigatie ---- */
-  .panel .tabs {
+  .panel .tabs, .detail-panel .tabs {
     flex: 1 1 auto; min-width: 0;
     display: flex; gap: 4px; margin: 0; padding: 3px;
     background: rgba(255,255,255,0.04); border: 1px solid var(--hair); border-radius: 9px;
@@ -646,7 +676,7 @@
      icoon; de actieve groeit en schuift zijn label erbij. `flex: 0 0 auto` op de
      inactieve houdt ze op een vaste maat, zodat het label van de actieve de
      resterende ruimte krijgt in plaats van alle vier iets te verbreden. */
-  .panel .tab {
+  .panel .tab, .detail-panel .tab {
     flex: 0 0 auto;
     display: flex; align-items: center; justify-content: center; gap: 6px;
     padding: 6px 8px; font-family: inherit; font-size: 11px; font-weight: 600;
@@ -657,18 +687,18 @@
     -webkit-user-select: none; user-select: none;
     transition: color 0.15s, background 0.15s, flex-grow 0.18s;
   }
-  .panel .tab svg { width: 15px; height: 15px; flex-shrink: 0; display: block; }
-  .panel .tab:hover { color: var(--ink); }
-  .panel .tab.active {
+  .panel .tab svg, .detail-panel .tab svg { width: 15px; height: 15px; flex-shrink: 0; display: block; }
+  .panel .tab:hover, .detail-panel .tab:hover { color: var(--ink); }
+  .panel .tab.active, .detail-panel .tab.active {
     flex: 1 1 auto; color: var(--ink); background: rgba(255,255,255,0.10);
   }
   /* Icoon en label wisselen elkaar af: inactief alleen het icoon, actief alleen de
      tekst. Beide met `display: none` en niet met `opacity`, want een verborgen
      element dat ruimte blijft opeisen zou de rij laten overlopen. */
-  .panel .tab .tab-label { display: none; white-space: nowrap; }
-  .panel .tab.active .tab-label { display: inline; }
-  .panel .tab.active svg { display: none; }
-  @media (prefers-reduced-motion: reduce) { .panel .tab { transition: none; } }
+  .panel .tab .tab-label, .detail-panel .tab .tab-label { display: none; white-space: nowrap; }
+  .panel .tab.active .tab-label, .detail-panel .tab.active .tab-label { display: inline; }
+  .panel .tab.active svg, .detail-panel .tab.active svg { display: none; }
+  @media (prefers-reduced-motion: reduce) { .panel .tab, .detail-panel .tab { transition: none; } }
   .tabpanel { display: none; }
   .tabpanel.show { display: block; }
 
@@ -1564,6 +1594,36 @@
   .readout .more-link:hover { background: rgba(95,205,251,0.18); border-color: rgba(95,205,251,0.5); }
   .readout .more-link[hidden] { display: none; }
 
+  /* ---- De plot-sleuf en de handelingsknoppen (sessie 25) ------------------
+     De sleuf is leeg tenzij de soort er iets in tekent — het magneetveld zet er
+     zijn poolplot in, want een canvas past niet in een sleutel/waarde-rij.
+     Allebei krijgen ze een eigen `[hidden]`-regel mee: `display` uit een klasse
+     verslaat het attribuut, en die val heeft in dit project al vier keer
+     toegeslagen (.ti-panel, .ti-reset, .dock-btn, .time-reset). */
+  .readout .detail-plot { margin-top: 12px; display: flex; justify-content: center; }
+  .readout .detail-plot[hidden] { display: none; }
+  .readout .detail-plot canvas { max-width: 100%; height: auto; }
+
+  .readout .detail-actions { display: flex; gap: 8px; margin-top: 12px; }
+  .readout .detail-actions[hidden] { display: none; }
+  /* Twee knoppen naast elkaar in 280 px: `flex: 1` en `min-width: 0` samen, anders
+     duwt de langste tekst ("Go to this moment") de andere knop uit de rij. */
+  .detail-act {
+    flex: 1; min-width: 0;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 8px 6px;
+    background: transparent;
+    border: 1px solid var(--hair);
+    border-radius: 8px;
+    color: var(--ink-dim);
+    font-family: inherit; font-size: 11px; font-weight: 600; letter-spacing: 0.02em;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+  }
+  .detail-act span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .detail-act svg { width: 13px; height: 13px; flex-shrink: 0; }
+  .detail-act:hover { color: var(--ink); border-color: var(--ink-faint); background: rgba(255,255,255,0.05); }
+
   /* ---- Loading ---- */
   .boot {
     position: fixed;
@@ -2036,7 +2096,7 @@
     }
     .ti-val { font-size: 10px; }
 
-    .panel {
+    .panel, .detail-panel {
       left: 10px; right: 10px; width: auto;
       /* Boven de knoppenrij. De home-indicator van een iPhone is 20 px hoog en
          zat over de onderrand van het paneel heen; `env()` valt terug op 0 waar
@@ -2089,6 +2149,14 @@
        wordmark en bel 211 px vrij: ruim genoeg, en het scheelt een verdieping. */
     .mode-switch { top: 12px; }
     .dock { left: 12px; }
+    /* GEMETEN op 375x812, slechtste stand (Space aan + Layers open): de rij werd
+       363 px breed in een beeld van 375, en de knoppen werden daarbij al
+       samengeknepen — 140 px viel terug naar 131. Op een 360 px scherm loopt hij
+       eroverheen. Het label op de OPEN knop vervalt daarom hier; welk paneel open
+       staat blijft zichtbaar aan de accentrand, én aan het paneel zelf.
+       `Back to Earth` houdt zijn label wel: die is geen schakelaar maar een
+       handeling, en zonder tekst is een pijltje niet te raden. */
+    .dock-btn.active .dock-label { display: none; }
     .nav-panel {
       left: 12px; right: 12px; width: auto;
       bottom: calc(var(--panel-lift) + env(safe-area-inset-bottom, 0px));
@@ -2132,7 +2200,7 @@
        bij de rand: op 292 px hoogte telt elke pixel, en 28 px onderaan is dan
        een derde van wat het paneel overhoudt. */
     :root { --dock-bottom: 12px; --dock-gap: 8px; }
-    .panel {
+    .panel, .detail-panel {
       top: 92px;
       /* GEEN 12 px meer (sessie 24): dat is de plek van de knoppenrij, en het
          paneel liep er tot dan toe achter door. `--panel-lift` rekent de rij
@@ -2403,5 +2471,10 @@
     .panel .tab[data-tab="sketch"],
     .panel .tabpanel[data-panel="sketch"],
     .sketch-editor { display: none !important; }
+    /* Met Sketch verborgen en Settings en Almanac verhuisd (sessie 25) blijft er
+       in dit paneel precies ÉÉN tab over, en een tabrij met één tab is ruis. Het
+       Details-paneel houdt zijn drie tabs; die staan hier niet tussen. */
+    .panel .tabs { display: none !important; }
+    .panel .panel-head { justify-content: flex-end; }
   }
   /* SKETCH:END */
