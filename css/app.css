@@ -115,14 +115,39 @@
 
   /* Op een aanraakscherm is er geen muis om nauwkeurig mee te selecteren, en dan is
      press-and-hold vrijwel altijd per ongeluk: je krijgt een selectie of het
-     deel-menu van iOS over de bol heen. Op desktop blijft tekst gewoon te selecteren,
-     want daar is slepen een bewuste handeling. */
+     deel-menu van iOS over de bol heen. */
   @media (pointer: coarse) {
     html {
       -webkit-user-select: none;
       user-select: none;
       -webkit-touch-callout: none;   /* geen "kopieer / deel"-menu bij press-and-hold */
     }
+  }
+
+  /* ---- SELECTEREN KAN ALLEEN IN EEN PANEEL (sessie 25) -------------------
+     OOK OP DESKTOP. Hier stond dat slepen met een muis "een bewuste handeling" is,
+     en dat klopt niet voor deze app: draaien aan de bol ís slepen. Ging je daarbij
+     langs een beving-label, dan selecteerde je de tekst erin — en die selectie bleef
+     staan tot je ergens anders klikte.
+
+     Dus omgekeerd opgezet: niets is selecteerbaar, behalve waar er iets te LEZEN
+     valt. Dat is precies de scheiding uit deze sessie — de scene en zijn labels zijn
+     iets waar je aan draait, een paneel en het detailvenster zijn iets wat je leest
+     en waar je een coördinaat of een bronnaam uit wilt kunnen kopiëren.
+
+     De uitzondering staat op de INHOUD en niet op de hele container: een paneelkop,
+     een tab en een schakelaar zijn knoppen, en die hoeven niet selecteerbaar te zijn.
+     `.acc-head`, `.elayer` en `.tab` zetten hem verderop zelf al op `none`. */
+  html { -webkit-user-select: none; user-select: none; }
+  .panel-body,
+  .settings-body,
+  .nav-body,
+  .qlist-body,
+  .notif-list,
+  .readout,
+  .ti-panel {
+    -webkit-user-select: text;
+    user-select: text;
   }
 
   /* De bol handelt draaien én knijpen zelf af (OrbitControls). Hier mág `none`, want
@@ -366,14 +391,57 @@
        terug. Niet `auto`, want dan komt de knijp-zoom van de browser ook terug. */
     touch-action: pan-y;
     padding: 16px 18px 18px;
-    /* Eigen scrollbar in de huisstijl; nooit de systeembalk. */
+  }
+
+  /* ---- DE SCROLLBALK, OVERAL DEZELFDE (sessie 25) ------------------------
+     Dit stond alleen op `.panel-body`, en dat viel niet op zolang dat het enige
+     scrollende venster was. Met instellingen rechtsboven, een Details-paneel, de
+     bevingenlijst en de meldingen erbij hadden vier vensters ineens de systeembalk
+     — breed, lichtgrijs, en op macOS met een eigen achtergrond die door het glas
+     heen sneed.
+
+     Twee notaties naast elkaar, en dat is geen dubbelop: `scrollbar-width`/
+     `scrollbar-color` is de standaard (Firefox, en Chrome sinds 121), de
+     `::-webkit-`-regels dekken Safari en oudere Chromium. Wie hier een vijfde
+     scrollend venster bij zet, hoort in deze lijst. */
+  .panel-body,
+  .settings-body,
+  .nav-body,
+  .qlist-body,
+  .notif-list,
+  .readout,
+  .sk-inspector {
     scrollbar-width: thin;
     scrollbar-color: var(--hair) transparent;
   }
-  .panel-body::-webkit-scrollbar { width: 6px; }
-  .panel-body::-webkit-scrollbar-track { background: transparent; }
-  .panel-body::-webkit-scrollbar-thumb { background: var(--hair); border-radius: 3px; }
-  .panel-body::-webkit-scrollbar-thumb:hover { background: var(--ink-faint); }
+  .panel-body::-webkit-scrollbar,
+  .settings-body::-webkit-scrollbar,
+  .nav-body::-webkit-scrollbar,
+  .qlist-body::-webkit-scrollbar,
+  .notif-list::-webkit-scrollbar,
+  .readout::-webkit-scrollbar,
+  .sk-inspector::-webkit-scrollbar { width: 6px; }
+  .panel-body::-webkit-scrollbar-track,
+  .settings-body::-webkit-scrollbar-track,
+  .nav-body::-webkit-scrollbar-track,
+  .qlist-body::-webkit-scrollbar-track,
+  .notif-list::-webkit-scrollbar-track,
+  .readout::-webkit-scrollbar-track,
+  .sk-inspector::-webkit-scrollbar-track { background: transparent; }
+  .panel-body::-webkit-scrollbar-thumb,
+  .settings-body::-webkit-scrollbar-thumb,
+  .nav-body::-webkit-scrollbar-thumb,
+  .qlist-body::-webkit-scrollbar-thumb,
+  .notif-list::-webkit-scrollbar-thumb,
+  .readout::-webkit-scrollbar-thumb,
+  .sk-inspector::-webkit-scrollbar-thumb { background: var(--hair); border-radius: 3px; }
+  .panel-body::-webkit-scrollbar-thumb:hover,
+  .settings-body::-webkit-scrollbar-thumb:hover,
+  .nav-body::-webkit-scrollbar-thumb:hover,
+  .qlist-body::-webkit-scrollbar-thumb:hover,
+  .notif-list::-webkit-scrollbar-thumb:hover,
+  .readout::-webkit-scrollbar-thumb:hover,
+  .sk-inspector::-webkit-scrollbar-thumb:hover { background: var(--ink-faint); }
   .panel h2 {
     font-size: 10px;
     font-weight: 600;
@@ -810,21 +878,14 @@
      Ingeklapt via native <details>: geen JS nodig en toetsenbord-toegankelijk
      uit zichzelf. Bewust klein en gedempt; het hoort er te zijn, niet op te
      vallen. Volledige verantwoording staat in ATTRIBUTION.md. */
-  .credits { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--hair); }
-  .credits > summary {
-    display: flex; align-items: center; cursor: pointer; list-style: none;
-    font-size: 9px; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase;
-    color: var(--ink-dim); transition: color 0.15s;
-  }
-  .credits > summary::-webkit-details-marker { display: none; }
-  .credits > summary::after {
-    content: ''; margin-left: auto; width: 5px; height: 5px;
-    border-right: 1.4px solid currentColor; border-bottom: 1.4px solid currentColor;
-    transform: rotate(45deg); transition: transform 0.18s;
-  }
-  .credits[open] > summary::after { transform: rotate(-135deg); }
-  .credits > summary:hover { color: var(--ink); }
-  .credits dl { margin-top: 13px; font-size: 10px; line-height: 1.5; }
+  /* De bronvermelding. Was tot sessie 25 een `<details>` met een eigen `<summary>`,
+     een eigen chevron en een eigen bovenrand — een tweede uitklapmechaniek náást de
+     accordeons, binnen de body van Connections. Nu een gewone `.acc` als alle andere,
+     en dit blok houdt alleen nog de opmaak van de LIJST over. Weg zijn: de
+     `summary`-regels, de losse chevron via `::after`, en de eigen `margin-top`/
+     `border-top` — die deden het werk van `.acc` nog eens dunnetjes over en waren de
+     witruimte die eronder achterbleef. */
+  .credits dl { font-size: 10px; line-height: 1.5; }
   .credits dt {
     font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase;
     color: rgba(125,138,160,0.7); margin-top: 10px;
@@ -1061,6 +1122,11 @@
     cursor: pointer;
     transition: all 0.15s;
   }
+  /* De trackvenster-knoppen staan er in twee sets van vier, waarvan er één verborgen
+     is (zie `data-frame` in index.html). `.preset` zet zelf geen `display`, dus het
+     attribuut werkt hier — maar deze regel staat er zodat dat zo blijft. Vijfde keer
+     in dit project dat die val telt: .ti-panel, .ti-reset, .dock-btn, .detail-plot. */
+  .preset[hidden] { display: none; }
   .preset:hover { border-color: var(--ink-dim); color: var(--ink); }
   .preset.active {
     background: var(--accent);

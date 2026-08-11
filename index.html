@@ -235,11 +235,30 @@
            hier staat het ook inhoudelijk beter. -->
       <label class="ti-field">
         <span>Track window <i class="ti-span" id="time-span">&#177; 1 d 12 h</i></span>
+        <!-- ACHT KNOPPEN, VIER TEGELIJK (sessie 25). Het venster is de schaal van de
+             slider, en die schaal hoort bij wat je aankijkt: rond de aarde beweegt er
+             iets in dagen, in het zonnestelsel in jaren. Dagen aanbieden bij een
+             heliocentrisch beeld is een slider die niets doet — Neptunus verzet in
+             zeven dagen 0,04 graad.
+
+             DE JAARTALLEN ZIJN GEEN RONDE GETALLEN MAAR OMLOOPTIJDEN: 1 = de aarde,
+             12 = Jupiter, 30 = Saturnus, 165 = Neptunus. Elke knop laat dus precies
+             één lichaam een volledig rondje maken. Een ronde 100 zou tussen Saturnus
+             en Uranus in vallen en niets markeren.
+
+             `data-default` zegt welke knop geldt als je voor het eerst in dat frame
+             komt; `borgTrackPresets()` wisselt de twee sets om. Eén container en geen
+             twee, zodat de gedelegeerde klik-handler en de eclipssprong ongemoeid
+             blijven werken. -->
         <div class="presets" id="track-presets">
-          <button class="preset" data-days="1">1 d</button>
-          <button class="preset active" data-days="3">3 d</button>
-          <button class="preset" data-days="7">7 d</button>
-          <button class="preset" data-days="27.32">Month</button>
+          <button class="preset" data-frame="earth" data-days="1">1 d</button>
+          <button class="preset active" data-frame="earth" data-days="3" data-default>3 d</button>
+          <button class="preset" data-frame="earth" data-days="7">7 d</button>
+          <button class="preset" data-frame="earth" data-days="27.32">Month</button>
+          <button class="preset" data-frame="space" data-days="365.256" data-default hidden>1 yr</button>
+          <button class="preset" data-frame="space" data-days="4383.07" hidden>12 yr</button>
+          <button class="preset" data-frame="space" data-days="10957.7" hidden>30 yr</button>
+          <button class="preset" data-frame="space" data-days="60267.2" hidden>165 yr</button>
         </div>
       </label>
       <label class="ti-field">
@@ -475,8 +494,21 @@
       </div>
       </section>
 
-      <details class="credits" open>
-        <summary>Sources &amp; licenses</summary>
+
+      <!-- EEN EIGEN SECTIE, GEEN <details> BINNEN CONNECTIONS (rechtgezet in
+           sessie 25). Dit blok stond IN de body van Connections, met zijn eigen
+           uitklapmechaniek erbovenop. Twee gevolgen: het las alsof de bronnen bij de
+           verbindingen hoorden, en het liet witruimte achter omdat het niet meedeed
+           in de accordeon-rij. Bronvermelding staat op hetzelfde niveau als
+           Preferences, Earth textures en Connections — het is geen onderdeel van
+           een van drieën. Nu dezelfde `.acc`, dezelfde kop, dezelfde chevron. -->
+      <section class="acc" data-acc="settings-sources">
+      <button class="acc-head" type="button" aria-expanded="false">
+      <span>Sources &amp; licenses</span>
+      <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="acc-body">
+      <div class="credits">
         <dl>
           <dt>Textures</dt>
           <dd><a href="https://www.solarsystemscope.com/textures/" target="_blank" rel="noopener">Solar System Scope</a> · CC BY 4.0</dd>
@@ -501,7 +533,9 @@
           <dt>Built with</dt>
           <dd><a href="https://threejs.org/" target="_blank" rel="noopener">three.js</a>, <a href="https://github.com/vasturiano/globe.gl" target="_blank" rel="noopener">globe.gl</a> · MIT · <a href="https://gsap.com/" target="_blank" rel="noopener">GSAP</a></dd>
         </dl>
-      </details>
+      </div>
+      </div>
+      </section>
     </div>
   </div>
 
@@ -869,7 +903,12 @@
       degrees of each other, close enough to see as a pair. Sunlit pairings are
       skipped &#8212; geometrically a conjunction, but nothing to see.</p>
       <h3>Lagrange points</h3>
-      <div class="elayer off" id="lagrange-toggle">
+      <!-- GEEN `off`-klasse (rechtgezet in sessie 25). Die stond hier, maar
+           `.elayer.off` bestaat niet in css/app.css — alleen `.elayer.on` doet iets
+           (groene stip, heldere tekst). De rij bleef daardoor altijd grijs, hoe vaak
+           je hem ook aanzette. `.off` kwam in het hele project maar op deze ene plek
+           voor; `.layer.off` (zonder e) is een andere klasse en wél echt. -->
+      <div class="elayer" id="lagrange-toggle">
       <span class="edot"></span>Sun&#8211;Earth L-points
       <span class="estat" id="es-lagrange">off</span>
       </div>
@@ -6782,7 +6821,9 @@ function werkSpoorNootBij() {
    er staat er altijd maar één tegelijk. */
 document.getElementById('lagrange-toggle')?.addEventListener('click', () => {
   if (!lagrange) return;
-  const aan = document.getElementById('lagrange-toggle').classList.toggle('off') === false;
+  // `on` en niet `off`: dat is de klasse waar de opmaak aan hangt, en dezelfde die
+  // elke andere `.elayer` in dit project gebruikt.
+  const aan = document.getElementById('lagrange-toggle').classList.toggle('on');
   if (orbits) orbits.setLagrangeVisible(aan, momentNow(), world.camera());
   lagrange.setVisible(aan, momentNow(), world.camera());
   document.getElementById('es-lagrange').textContent = aan ? 'on' : 'off';
@@ -6941,7 +6982,7 @@ document.querySelectorAll('.row-expand[data-note]').forEach(btn => {
 //  bij `baseMoment === null` loopt hij mee, anders verandert er niets.
 // ============================================================
 
-const STAP_MS = 10 * 60 * 1000;      // slidereenheid: 10 minuten
+const STAP_MS = 10 * 60 * 1000;      // FIJNSTE slidereenheid; zie stapMs() hieronder
 let trackDays = 3;                   // ook de schaal van de slider, zie hieronder
 // (`baseMoment` en `timeOffsetMs` staan bovenaan bij de scene-state — zie de
 //  TDZ-noot daar; momentNow() wordt al tijdens de opbouw aangeroepen.)
@@ -6954,6 +6995,16 @@ function momentNow() {
 function formatOffset(ms) {
   if (ms === 0) return null;
   const teken = ms < 0 ? '−' : '+';
+  // BOVEN EEN JAAR ZIJN DAGEN RUIS (sessie 25). Met de jaar-vensters van de
+  // Space-weergave loopt de slider tot ±82 jaar, en "+30133 d" is dan geen maat meer
+  // die iemand leest. Deze functie vult zowel het momentlabel in de tijdrij als het
+  // ±-bereik onder Track window, dus de winst valt op beide plekken.
+  const JAAR_MS = 365.256 * 86400000;
+  if (Math.abs(ms) >= JAAR_MS) {
+    const jr = Math.floor(Math.abs(ms) / JAAR_MS);
+    const d = Math.round((Math.abs(ms) - jr * JAAR_MS) / 86400000);
+    return `${teken}${jr} yr` + (d ? ` ${d} d` : '');
+  }
   const totaalMin = Math.round(Math.abs(ms) / 60000);
   const d = Math.floor(totaalMin / 1440), u = Math.floor((totaalMin % 1440) / 60), m = totaalMin % 60;
   const delen = [];
@@ -6967,19 +7018,35 @@ function formatOffset(ms) {
 // van −3,5 tot +3,5 dag, en dat is precies het spoor dat op de bol getekend staat.
 // Slider en spoor vertellen daarmee hetzelfde verhaal: je schuift binnen het pad dat
 // je ziet. Bij 1 dag wordt de slider vanzelf fijn, bij een maanmaand grof.
+/* DE SLIDEREENHEID SCHAALT MEE BOVEN EEN ZEKER AANTAL STAPPEN (sessie 25).
+
+   `STAP_MS` van 10 minuten was prima zolang het grootste venster de maanmaand was:
+   dat gaf 1967 stappen. De jaar-vensters van de Space-weergave breken dat — 165 jaar
+   bij 10 minuten per stap is 4,3 MILJOEN stappen. Slepen zou nog werken (dat is
+   pixelbegrensd), maar een pijltjestoets verzet dan 10 minuten in een venster van
+   165 jaar, en dat is niet te merken.
+
+   DE BODEM HOUDT DE VIER AARDSE VENSTERS BIT VOOR BIT ZOALS ZE WAREN: 1 d, 3 d, 7 d
+   en de maanmaand blijven allemaal onder de 2000 stappen en houden dus hun 10
+   minuten. Alleen de jaar-vensters lopen tegen het plafond aan. */
+const SLIDER_STAPPEN_MAX = 2000;
+function stapMs() {
+  return Math.max(STAP_MS, (trackDays * 86400000 / 2) / SLIDER_STAPPEN_MAX);
+}
 function sliderStappen() {
-  return Math.round((trackDays * 86400000 / 2) / STAP_MS);
+  return Math.round((trackDays * 86400000 / 2) / stapMs());
 }
 function herschaalSlider() {
   const s = document.getElementById('time-slider');
   if (!s) return;
   const n = sliderStappen();
+  const eenheid = stapMs();
   s.min = String(-n);
   s.max = String(n);
   // De huidige stand meenemen, maar binnen het nieuwe bereik houden.
-  const grens = n * STAP_MS;
+  const grens = n * eenheid;
   timeOffsetMs = Math.max(-grens, Math.min(grens, timeOffsetMs));
-  s.value = String(Math.round(timeOffsetMs / STAP_MS));
+  s.value = String(Math.round(timeOffsetMs / eenheid));
   // Toon hoe ver de slider reikt, zodat zichtbaar is wat het venster met hem doet.
   const span = document.getElementById('time-span');
   if (span) span.textContent = `± ${formatOffset(grens).replace('+', '')}`;
@@ -7072,7 +7139,7 @@ function refreshTimeUI() {
 
 const timeSliderEl = document.getElementById('time-slider');
 timeSliderEl?.addEventListener('input', () => {
-  timeOffsetMs = parseInt(timeSliderEl.value, 10) * STAP_MS;
+  timeOffsetMs = parseInt(timeSliderEl.value, 10) * stapMs();
   refreshTimeUI();
 });
 
@@ -7168,9 +7235,12 @@ function springNaarEclips(richting, btn) {
     stopPlay();
     // Een venster van één dag maakt de slider fijn genoeg om de schaduw stap voor
     // stap over de aarde te zien trekken; de hele passage duurt maar een uur of twee.
+    // Alleen binnen het AARDSE stel knoppen markeren (sessie 25): sinds er ook
+    // jaar-vensters bestaan zou `b.dataset.days === '1'` er hoogstens één raken,
+    // maar de rest van de markering blijft dan in het verkeerde frame staan.
     trackDays = 1;
     document.querySelectorAll('#track-presets .preset').forEach(b =>
-      b.classList.toggle('active', b.dataset.days === '1'));
+      b.classList.toggle('active', b.dataset.frame === 'earth' && b.dataset.days === '1'));
     if (sunMoon) sunMoon.setTrackWindow(1);
     baseMoment = gevonden.date;
     timeOffsetMs = 0;
@@ -7249,18 +7319,56 @@ document.getElementById('conj-next')?.addEventListener('click',
 document.getElementById('conj-prev')?.addEventListener('click',
   (ev) => springNaarConjunctie(-1, ev.currentTarget));
 
-// ---- Trackvenster ----
-// Bepaalt zowel het spoor op de bol als het bereik van de slider hierboven.
-document.getElementById('track-presets')?.addEventListener('click', (ev) => {
-  const btn = ev.target.closest('.preset');
-  if (!btn || !sunMoon) return;
-  document.querySelectorAll('#track-presets .preset').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  trackDays = parseFloat(btn.dataset.days);
-  sunMoon.setTrackWindow(trackDays);
+/* ---- Trackvenster -------------------------------------------------------
+   Bepaalt zowel het spoor op de bol als het bereik van de slider hierboven.
+
+   HET SPOOR KRIJGT ALLEEN DE AARDSE VENSTERS (sessie 25), en dat is geen zuinigheid
+   maar noodzaak. `buildTrack()` in js/sunmoon-layer.js zet boven 7 dagen een tick per
+   24 uur; bij het venster van 165 jaar zouden dat er 60.000 zijn, elk met eigen
+   geometrie. En ze zouden nergens te zien zijn ook: het spoor ligt op de bol, en in
+   de Space-weergave is die verborgen. Daar is het venster puur de sliderschaal. */
+function zetTrackVenster(dagen, ruimte) {
+  trackDays = dagen;
+  if (sunMoon && !ruimte) sunMoon.setTrackWindow(dagen);
   herschaalSlider();
   refreshTimeUI();
+}
+
+document.getElementById('track-presets')?.addEventListener('click', (ev) => {
+  const btn = ev.target.closest('.preset');
+  if (!btn) return;
+  // De markering wordt PER FRAME gewist en niet over alle acht knoppen. Zo houdt elk
+  // frame zijn eigen keuze vast: kies je 165 jaar in Space, ga je naar de aarde en
+  // weer terug, dan staat 165 jaar er nog. Wiste dit alles, dan viel je elke keer
+  // terug op de standaard en las dat als een instelling die niet blijft hangen.
+  document.querySelectorAll('#track-presets .preset').forEach(b => {
+    if (b.dataset.frame === btn.dataset.frame) b.classList.remove('active');
+  });
+  btn.classList.add('active');
+  zetTrackVenster(parseFloat(btn.dataset.days), btn.dataset.frame === 'space');
 });
+
+/* Welke vier knoppen er staan, volgt de weergave. Aangeroepen vanuit
+   `viewStates.onChange` — dat is de enige haak die álle vier de wegen dekt waarlangs
+   de state verandert (het Navigate-paneel, Back to Earth, de eclipssprong, en de
+   `handedOver`-uitgang bij een klik op een melding). Pollen zou hier net zo misgaan
+   als bij het Navigate-paneel zelf. */
+function borgTrackPresets() {
+  const wil = inSpaceAanzicht() ? 'space' : 'earth';
+  const knoppen = [...document.querySelectorAll('#track-presets .preset')];
+  if (!knoppen.length) return;
+  knoppen.forEach(b => { b.hidden = b.dataset.frame !== wil; });
+  let actief = knoppen.find(b => !b.hidden && b.classList.contains('active'));
+  if (!actief) {
+    // Eerste keer in dit frame. Alleen bínnen dit frame markeren — zie de noot bij de
+    // klik-handler waarom de andere set zijn keuze houdt.
+    actief = knoppen.find(b => b.dataset.frame === wil && b.hasAttribute('data-default'));
+    knoppen.forEach(b => { if (b.dataset.frame === wil) b.classList.toggle('active', b === actief); });
+  }
+  if (!actief) return;
+  const dagen = parseFloat(actief.dataset.days);
+  if (dagen !== trackDays) zetTrackVenster(dagen, wil === 'space');
+}
 
 // ---- Afspelen ----
 // De snelheidsregelaar bepaalt UITSLUITEND hoe snel de tijd loopt tijdens het
@@ -7292,13 +7400,13 @@ function playStap(nu) {
   if (!playDir) return;
   const dt = Math.min(0.1, (nu - playVorigeTijd) / 1000);   // klem na een tabwissel
   playVorigeTijd = nu;
-  const grens = sliderStappen() * STAP_MS;
+  const grens = sliderStappen() * stapMs();
   timeOffsetMs += playDir * speedUurPerSec() * 3600000 * dt;
   // Aan de grens rondlopen in plaats van stoppen: dat maakt er een doorlopende
   // animatie van de dag/nacht-cyclus van, wat precies het effect is dat we willen.
   if (timeOffsetMs > grens) timeOffsetMs = -grens;
   if (timeOffsetMs < -grens) timeOffsetMs = grens;
-  if (timeSliderEl) timeSliderEl.value = String(Math.round(timeOffsetMs / STAP_MS));
+  if (timeSliderEl) timeSliderEl.value = String(Math.round(timeOffsetMs / stapMs()));
   refreshTimeUI();
   playRaf = requestAnimationFrame(playStap);
 }
@@ -8502,6 +8610,11 @@ backBtn.addEventListener('click', () => {
   if (actief) viewStates.set(actief, false);
 });
 viewStates.onChange((actief) => { backBtn.hidden = !actief; });
+// Het trackvenster hoort bij wat je aankijkt: dagen rond de aarde, jaren in het
+// zonnestelsel. Zie borgTrackPresets() waarom dit aan `onChange` hangt en niet aan
+// setSpaceView().
+viewStates.onChange(borgTrackPresets);
+borgTrackPresets();
 backBtn.hidden = !viewStates.activeState();
 
 /* MEETHAAK, ALLEEN LOKAAL. De inline module is een gesloten scope, dus er is
