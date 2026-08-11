@@ -302,11 +302,207 @@
     <button class="qlist-open" id="qlist-open" title="Earthquake list" aria-label="Earthquake list" aria-pressed="false">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="8" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="20" y2="12"/><line x1="8" y1="18" x2="20" y2="18"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg>
     </button>
+    <!-- Derde knop in dezelfde hoek (sessie 25). Hetzelfde tandwiel dat als tab in
+         het lagenpaneel stond; instellingen zijn app-chroom en horen bij de bel en
+         de lijst, niet bij de lagen en filters. `.masthead` staat op
+         `pointer-events: none`, dus elke knop daarin zet hem zelf weer aan. -->
+    <button class="settings-open" id="settings-open" title="Settings" aria-label="Settings" aria-pressed="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    </button>
   </div>
 
   <div class="notif-panel" id="notif-panel">
     <div class="notif-head"><span>Notifications</span><button id="notif-clear">clear</button><button class="notif-close" id="notif-close" title="Close notifications" aria-label="Close notifications">&#215;</button></div>
     <div class="notif-list" id="notif-list"><div class="notif-empty">No notifications yet</div></div>
+  </div>
+
+  <!-- INSTELLINGEN STAAN RECHTSBOVEN (sessie 25). Ze waren de vierde tab in het
+       lagenpaneel linksonder, en dat klopte niet met wat ze zijn: geen laag en geen
+       filter maar app-chroom, net als de bel en de bevingenlijst. Nu openen ze ook
+       daar, in dezelfde hoek en dus in dezelfde groep — er kan er maar een van de
+       drie open staan.
+
+       GEMETEN voor de derde knop: op 375 px is er tussen de wordmark en de twee
+       bestaande knoppen 211 px vrij, waarvan de weergavewissel er 76 opeist. Een
+       knop van ~35 px past daar ruim, ook op de smalste telefoon.
+
+       De inhoud is ONGEWIJZIGD uit de oude tab overgenomen. Let op de volgorde
+       binnen `settings-textures`: `#earth-layers` en `#aarde-empty` horen in
+       dezelfde sectie te blijven, want updateEarthLayers() verbergt het eerste en
+       toont het tweede zodra je naar de schematische weergave wisselt. -->
+  <div class="settings-panel" id="settings-panel">
+    <div class="settings-head"><span>Settings</span><button class="settings-close" id="settings-close" title="Close settings" aria-label="Close settings">&#215;</button></div>
+    <div class="settings-body">
+
+<section class="acc open" data-acc="settings-prefs">
+      <button class="acc-head" type="button" aria-expanded="true">
+      <span>Preferences</span>
+      <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="acc-body">
+      <div class="elayer on" id="sound-toggle"><span class="edot"></span>Notification sound<span class="estat" id="es-sound">on</span></div>
+      <!-- Het plafond staat in PARAMS (labelCountMax = beginstand,
+      labelCountCeiling = bovengrens); de JS zet `max` en `value` bij init uit die
+      waarden, zodat de markup ze niet kan tegenspreken. -->
+      <div class="elayer on expandable" id="label-toggle">
+      <span class="edot"></span>Quake labels
+      <button class="row-expand" data-note="label-count" title="Label settings" aria-label="Label settings" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <span class="estat" id="es-label">on</span>
+      </div>
+      <div class="layer-detail" id="label-count">
+      <div class="opt-slider">
+      <div class="ns-label">
+      <span>Maximum labels</span>
+      <span id="lc-val">12</span>
+      </div>
+      <input type="range" id="label-count-slider" class="range" min="0" max="40" step="1" value="12" />
+      </div>
+      </div>
+      <div class="elayer on" id="rotate-toggle"><span class="edot"></span>Auto-rotate<span class="estat" id="es-rotate">on</span></div>
+      <div class="elayer" id="utc-toggle" data-utc><span class="edot"></span>Show times in UTC<span class="estat" id="es-utc">off</span></div>
+      </div>
+      </section>
+
+      <!-- ---------- AARDE-TEXTUREN ----------
+           Earth layers en Texture quality zijn hier samengevoegd: het zijn allebei
+           instellingen over hoe de aarde WORDT GETEKEND, niet over wat je erop ziet.
+           Ze stonden in een eigen Aarde-tab, die daarmee overbodig werd.
+
+           #earth-layers en #aarde-empty moeten hier binnen blijven staan:
+           updateEarthLayers() verbergt het eerste en toont het tweede zodra je naar
+           de schematische weergave wisselt, waar texturen geen rol spelen. -->
+      <section class="acc" data-acc="settings-textures">
+        <button class="acc-head" type="button" aria-expanded="false">
+          <span>Earth textures</span>
+          <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="acc-body">
+          <div class="earth-layers" id="earth-layers">
+            <div class="elayer" data-tex="night"><span class="edot"></span>Night lights<span class="estat" id="es-night">&#8212;</span></div>
+            <div class="elayer" data-tex="clouds"><span class="edot"></span>Clouds<span class="estat" id="es-clouds">&#8212;</span></div>
+            <div class="elayer" data-tex="specular"><span class="edot"></span>Water reflection<span class="estat" id="es-specular">&#8212;</span></div>
+            <div class="elayer" data-tex="normal"><span class="edot"></span>Relief (normal map)<span class="estat" id="es-normal">&#8212;</span></div>
+            <!-- De oceaanbodem is geen extra laag maar een VARIANT van de
+                 dagtextuur: hij vervangt hem en kost dus niets extra aan
+                 downloads of textuureenheden. Vandaar dat hij hier staat en niet
+                 bij de kwaliteitskeuze eronder — je kiest wát er op de bol ligt,
+                 niet hoe scherp. -->
+            <div class="elayer expandable on" id="ocean-toggle">
+              <span class="edot"></span>Ocean floor
+              <button class="row-expand" data-note="ocean-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+              <span class="estat" id="es-ocean">on</span>
+            </div>
+            <div class="layer-detail" id="ocean-note">
+              The ocean in the standard texture is one flat colour &#8212; the Mariana
+              Trench and the North Sea are literally the same blue. This swaps it for
+              NASA's Blue Marble bathymetry, so ridges, trenches and shelves become
+              visible. The land is unchanged. It replaces the day map rather than
+              adding a layer, so it costs one download the first time you switch
+              it on &#8212; about 0.4 MB at 2K, about 4.9 MB at 8K.
+            </div>
+            <div class="elayer on" id="wave-toggle"><span class="edot"></span>Wave animation<span class="estat" id="es-wave">on</span></div>
+            <div class="elayer" id="wire-toggle"><span class="edot"></span>Earth wireframe<span class="estat" id="es-wire">off</span></div>
+            <div class="night-slider">
+              <div class="ns-label">
+                <span>Night side</span>
+                <span id="ns-val">12%</span>
+              </div>
+              <input type="range" id="night-slider" class="range" min="0" max="60" value="12" />
+            </div>
+            <h3>Texture quality</h3>
+            <div class="texq" id="texq">
+              <button class="texq-opt" data-q="2k">
+                <span class="texq-name">Standard</span>
+                <span class="texq-meta">2K &#183; ~2.5 MB</span>
+              </button>
+              <button class="texq-opt" data-q="8k">
+                <span class="texq-name">High resolution</span>
+                <span class="texq-meta">8K &#183; ~31 MB</span>
+              </button>
+            </div>
+            <div class="texq-note" id="texq-note">8K is sharper up close, but downloads about 29 MB extra.</div>
+
+            <!-- EIGEN TEXTUREN. Staat hier en niet bij de tekenlaag, om twee redenen:
+                 dit gaat over de aarde en niet over annoteren, en alles in díé tab
+                 wordt uit de standalone geknipt — terwijl juist dít daar werkt. Een
+                 lokaal gekozen bestand levert een blob-URL op, en die kent geen CORS
+                 en geen server.
+
+                 (Schrijf hier niet het Engelse woord voor tekenlaag: de bouw
+                 controleert daarop en kan een vermelding niet van een restant
+                 onderscheiden. Dat is terecht streng en heeft deze regel gevangen.)
+
+                 Alleen dag en nacht: de normal map en de specular map blijven van
+                 ons. Zie de noot bij `customTex` in het script. -->
+            <h3>Your own textures</h3>
+            <div class="ctex" id="ctex">
+              <div class="ctex-slot" data-slot="day">
+                <span class="ctex-label">Day map</span>
+                <span class="ctex-value" id="ctex-day-value">default</span>
+                <button class="ctex-pick" data-pick="day" type="button">Choose&#8230;</button>
+                <button class="ctex-clear" data-clear="day" type="button" title="Back to the default day map" aria-label="Remove custom day map" hidden>&#215;</button>
+              </div>
+              <div class="ctex-slot" data-slot="night">
+                <span class="ctex-label">Night map</span>
+                <span class="ctex-value" id="ctex-night-value">default</span>
+                <button class="ctex-pick" data-pick="night" type="button">Choose&#8230;</button>
+                <button class="ctex-clear" data-clear="night" type="button" title="Back to the default night map" aria-label="Remove custom night map" hidden>&#215;</button>
+              </div>
+            </div>
+            <button class="apply ctex-reset" id="ctex-reset" hidden>Remove all custom textures</button>
+            <div class="ctex-note" id="ctex-note">
+              Equirectangular images, 2:1. Relief and water reflection keep using
+              Terra's own maps, so they line up with a real Earth texture but not
+              with an invented one. Kept for this session only.
+            </div>
+          </div>
+          <div class="aarde-empty" id="aarde-empty">The Earth textures only apply in <b>Realistic</b> mode. Switch mode at the top to control them.</div>
+        </div>
+      </section>
+
+<section class="acc" data-acc="settings-connections">
+      <button class="acc-head" type="button" aria-expanded="false">
+      <span>Connections</span>
+      <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="acc-body">
+      <div class="health" id="health-list"></div>
+      <button class="health-test" id="health-test">Test now</button>
+      </div>
+      </section>
+
+      <details class="credits" open>
+        <summary>Sources &amp; licenses</summary>
+        <dl>
+          <dt>Textures</dt>
+          <dd><a href="https://www.solarsystemscope.com/textures/" target="_blank" rel="noopener">Solar System Scope</a> · CC BY 4.0</dd>
+
+          <dt>Ocean floor</dt>
+          <dd>Blue Marble Next Generation, <a href="https://visibleearth.nasa.gov/" target="_blank" rel="noopener">NASA Earth Observatory</a> (Reto Stöckli) · bathymetry from <a href="https://www.gebco.net/" target="_blank" rel="noopener">GEBCO</a></dd>
+
+          <dt>Plate boundaries</dt>
+          <dd>PB2002, Bird (2003) via <a href="https://github.com/fraxen/tectonicplates" target="_blank" rel="noopener">Ahlenius / Nordpil</a> · ODC-BY 1.0</dd>
+
+          <dt>Country borders</dt>
+          <dd><a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener">Natural Earth</a> · public domain</dd>
+
+          <dt>Live data</dt>
+          <dd><a href="https://earthquake.usgs.gov" target="_blank" rel="noopener">USGS</a> · <a href="https://www.emsc-csem.org" target="_blank" rel="noopener">EMSC-CSEM</a> and the reporting institute per event · <a href="https://eonet.gsfc.nasa.gov" target="_blank" rel="noopener">NASA EONET</a> · <a href="https://www.swpc.noaa.gov" target="_blank" rel="noopener">NOAA SWPC</a> · <a href="https://aqicn.org" target="_blank" rel="noopener">World Air Quality Index Project</a> and the measuring authority per station · <a href="https://www.blitzortung.org" target="_blank" rel="noopener">Blitzortung.org</a>. The last three: non-commercial use only</dd>
+
+          <dt>Magnetic field</dt>
+          <dd><a href="https://www.ngdc.noaa.gov/IAGA/vmod/igrf.html" target="_blank" rel="noopener">IGRF&#8209;14</a>, IAGA Working Group V&#8209;MOD via NOAA NCEI &#183; public domain</dd>
+
+          <dt>Earth orientation</dt>
+          <dd><a href="https://www.iers.org/" target="_blank" rel="noopener">IERS</a> Earth Orientation Centre (Observatoire de Paris) and <a href="https://www.usno.navy.mil/" target="_blank" rel="noopener">USNO</a>, distributed by <a href="https://celestrak.org/SpaceData/" target="_blank" rel="noopener">CelesTrak</a> &#183; the long track is IERS EOP&#160;C01, yearly means</dd>
+          <dt>Built with</dt>
+          <dd><a href="https://threejs.org/" target="_blank" rel="noopener">three.js</a>, <a href="https://github.com/vasturiano/globe.gl" target="_blank" rel="noopener">globe.gl</a> · MIT · <a href="https://gsap.com/" target="_blank" rel="noopener">GSAP</a></dd>
+        </dl>
+      </details>
+    </div>
   </div>
 
   <!-- DE KNOPPENRIJ (sessie 24). Was één knop `Layers & filters` die verdween
@@ -385,10 +581,6 @@
           <span class="tab-label">Sketch</span>
         </button>
 <!-- SKETCH:END -->
-        <button class="tab" data-tab="instellingen" title="Settings" aria-label="Settings">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
-          <span class="tab-label">Settings</span>
-        </button>
       </div>
       <button class="panel-collapse" id="panel-collapse" title="Close panel" aria-label="Close panel">×</button>
     </div>
@@ -1136,177 +1328,6 @@
       </section>
     </div>
 
-    <div class="tabpanel" data-panel="instellingen">
-
-<section class="acc open" data-acc="settings-prefs">
-      <button class="acc-head" type="button" aria-expanded="true">
-      <span>Preferences</span>
-      <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-      </button>
-      <div class="acc-body">
-      <div class="elayer on" id="sound-toggle"><span class="edot"></span>Notification sound<span class="estat" id="es-sound">on</span></div>
-      <!-- Het plafond staat in PARAMS (labelCountMax = beginstand,
-      labelCountCeiling = bovengrens); de JS zet `max` en `value` bij init uit die
-      waarden, zodat de markup ze niet kan tegenspreken. -->
-      <div class="elayer on expandable" id="label-toggle">
-      <span class="edot"></span>Quake labels
-      <button class="row-expand" data-note="label-count" title="Label settings" aria-label="Label settings" aria-expanded="false">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-      </button>
-      <span class="estat" id="es-label">on</span>
-      </div>
-      <div class="layer-detail" id="label-count">
-      <div class="opt-slider">
-      <div class="ns-label">
-      <span>Maximum labels</span>
-      <span id="lc-val">12</span>
-      </div>
-      <input type="range" id="label-count-slider" class="range" min="0" max="40" step="1" value="12" />
-      </div>
-      </div>
-      <div class="elayer on" id="rotate-toggle"><span class="edot"></span>Auto-rotate<span class="estat" id="es-rotate">on</span></div>
-      <div class="elayer" id="utc-toggle" data-utc><span class="edot"></span>Show times in UTC<span class="estat" id="es-utc">off</span></div>
-      </div>
-      </section>
-
-      <!-- ---------- AARDE-TEXTUREN ----------
-           Earth layers en Texture quality zijn hier samengevoegd: het zijn allebei
-           instellingen over hoe de aarde WORDT GETEKEND, niet over wat je erop ziet.
-           Ze stonden in een eigen Aarde-tab, die daarmee overbodig werd.
-
-           #earth-layers en #aarde-empty moeten hier binnen blijven staan:
-           updateEarthLayers() verbergt het eerste en toont het tweede zodra je naar
-           de schematische weergave wisselt, waar texturen geen rol spelen. -->
-      <section class="acc" data-acc="settings-textures">
-        <button class="acc-head" type="button" aria-expanded="false">
-          <span>Earth textures</span>
-          <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-        </button>
-        <div class="acc-body">
-          <div class="earth-layers" id="earth-layers">
-            <div class="elayer" data-tex="night"><span class="edot"></span>Night lights<span class="estat" id="es-night">&#8212;</span></div>
-            <div class="elayer" data-tex="clouds"><span class="edot"></span>Clouds<span class="estat" id="es-clouds">&#8212;</span></div>
-            <div class="elayer" data-tex="specular"><span class="edot"></span>Water reflection<span class="estat" id="es-specular">&#8212;</span></div>
-            <div class="elayer" data-tex="normal"><span class="edot"></span>Relief (normal map)<span class="estat" id="es-normal">&#8212;</span></div>
-            <!-- De oceaanbodem is geen extra laag maar een VARIANT van de
-                 dagtextuur: hij vervangt hem en kost dus niets extra aan
-                 downloads of textuureenheden. Vandaar dat hij hier staat en niet
-                 bij de kwaliteitskeuze eronder — je kiest wát er op de bol ligt,
-                 niet hoe scherp. -->
-            <div class="elayer expandable on" id="ocean-toggle">
-              <span class="edot"></span>Ocean floor
-              <button class="row-expand" data-note="ocean-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-              </button>
-              <span class="estat" id="es-ocean">on</span>
-            </div>
-            <div class="layer-detail" id="ocean-note">
-              The ocean in the standard texture is one flat colour &#8212; the Mariana
-              Trench and the North Sea are literally the same blue. This swaps it for
-              NASA's Blue Marble bathymetry, so ridges, trenches and shelves become
-              visible. The land is unchanged. It replaces the day map rather than
-              adding a layer, so it costs one download the first time you switch
-              it on &#8212; about 0.4 MB at 2K, about 4.9 MB at 8K.
-            </div>
-            <div class="elayer on" id="wave-toggle"><span class="edot"></span>Wave animation<span class="estat" id="es-wave">on</span></div>
-            <div class="elayer" id="wire-toggle"><span class="edot"></span>Earth wireframe<span class="estat" id="es-wire">off</span></div>
-            <div class="night-slider">
-              <div class="ns-label">
-                <span>Night side</span>
-                <span id="ns-val">12%</span>
-              </div>
-              <input type="range" id="night-slider" class="range" min="0" max="60" value="12" />
-            </div>
-            <h3>Texture quality</h3>
-            <div class="texq" id="texq">
-              <button class="texq-opt" data-q="2k">
-                <span class="texq-name">Standard</span>
-                <span class="texq-meta">2K &#183; ~2.5 MB</span>
-              </button>
-              <button class="texq-opt" data-q="8k">
-                <span class="texq-name">High resolution</span>
-                <span class="texq-meta">8K &#183; ~31 MB</span>
-              </button>
-            </div>
-            <div class="texq-note" id="texq-note">8K is sharper up close, but downloads about 29 MB extra.</div>
-
-            <!-- EIGEN TEXTUREN. Staat hier en niet bij de tekenlaag, om twee redenen:
-                 dit gaat over de aarde en niet over annoteren, en alles in díé tab
-                 wordt uit de standalone geknipt — terwijl juist dít daar werkt. Een
-                 lokaal gekozen bestand levert een blob-URL op, en die kent geen CORS
-                 en geen server.
-
-                 (Schrijf hier niet het Engelse woord voor tekenlaag: de bouw
-                 controleert daarop en kan een vermelding niet van een restant
-                 onderscheiden. Dat is terecht streng en heeft deze regel gevangen.)
-
-                 Alleen dag en nacht: de normal map en de specular map blijven van
-                 ons. Zie de noot bij `customTex` in het script. -->
-            <h3>Your own textures</h3>
-            <div class="ctex" id="ctex">
-              <div class="ctex-slot" data-slot="day">
-                <span class="ctex-label">Day map</span>
-                <span class="ctex-value" id="ctex-day-value">default</span>
-                <button class="ctex-pick" data-pick="day" type="button">Choose&#8230;</button>
-                <button class="ctex-clear" data-clear="day" type="button" title="Back to the default day map" aria-label="Remove custom day map" hidden>&#215;</button>
-              </div>
-              <div class="ctex-slot" data-slot="night">
-                <span class="ctex-label">Night map</span>
-                <span class="ctex-value" id="ctex-night-value">default</span>
-                <button class="ctex-pick" data-pick="night" type="button">Choose&#8230;</button>
-                <button class="ctex-clear" data-clear="night" type="button" title="Back to the default night map" aria-label="Remove custom night map" hidden>&#215;</button>
-              </div>
-            </div>
-            <button class="apply ctex-reset" id="ctex-reset" hidden>Remove all custom textures</button>
-            <div class="ctex-note" id="ctex-note">
-              Equirectangular images, 2:1. Relief and water reflection keep using
-              Terra's own maps, so they line up with a real Earth texture but not
-              with an invented one. Kept for this session only.
-            </div>
-          </div>
-          <div class="aarde-empty" id="aarde-empty">The Earth textures only apply in <b>Realistic</b> mode. Switch mode at the top to control them.</div>
-        </div>
-      </section>
-
-<section class="acc" data-acc="settings-connections">
-      <button class="acc-head" type="button" aria-expanded="false">
-      <span>Connections</span>
-      <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-      </button>
-      <div class="acc-body">
-      <div class="health" id="health-list"></div>
-      <button class="health-test" id="health-test">Test now</button>
-      </div>
-      </section>
-
-      <details class="credits" open>
-        <summary>Sources &amp; licenses</summary>
-        <dl>
-          <dt>Textures</dt>
-          <dd><a href="https://www.solarsystemscope.com/textures/" target="_blank" rel="noopener">Solar System Scope</a> · CC BY 4.0</dd>
-
-          <dt>Ocean floor</dt>
-          <dd>Blue Marble Next Generation, <a href="https://visibleearth.nasa.gov/" target="_blank" rel="noopener">NASA Earth Observatory</a> (Reto Stöckli) · bathymetry from <a href="https://www.gebco.net/" target="_blank" rel="noopener">GEBCO</a></dd>
-
-          <dt>Plate boundaries</dt>
-          <dd>PB2002, Bird (2003) via <a href="https://github.com/fraxen/tectonicplates" target="_blank" rel="noopener">Ahlenius / Nordpil</a> · ODC-BY 1.0</dd>
-
-          <dt>Country borders</dt>
-          <dd><a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener">Natural Earth</a> · public domain</dd>
-
-          <dt>Live data</dt>
-          <dd><a href="https://earthquake.usgs.gov" target="_blank" rel="noopener">USGS</a> · <a href="https://www.emsc-csem.org" target="_blank" rel="noopener">EMSC-CSEM</a> and the reporting institute per event · <a href="https://eonet.gsfc.nasa.gov" target="_blank" rel="noopener">NASA EONET</a> · <a href="https://www.swpc.noaa.gov" target="_blank" rel="noopener">NOAA SWPC</a> · <a href="https://aqicn.org" target="_blank" rel="noopener">World Air Quality Index Project</a> and the measuring authority per station · <a href="https://www.blitzortung.org" target="_blank" rel="noopener">Blitzortung.org</a>. The last three: non-commercial use only</dd>
-
-          <dt>Magnetic field</dt>
-          <dd><a href="https://www.ngdc.noaa.gov/IAGA/vmod/igrf.html" target="_blank" rel="noopener">IGRF&#8209;14</a>, IAGA Working Group V&#8209;MOD via NOAA NCEI &#183; public domain</dd>
-
-          <dt>Earth orientation</dt>
-          <dd><a href="https://www.iers.org/" target="_blank" rel="noopener">IERS</a> Earth Orientation Centre (Observatoire de Paris) and <a href="https://www.usno.navy.mil/" target="_blank" rel="noopener">USNO</a>, distributed by <a href="https://celestrak.org/SpaceData/" target="_blank" rel="noopener">CelesTrak</a> &#183; the long track is IERS EOP&#160;C01, yearly means</dd>
-          <dt>Built with</dt>
-          <dd><a href="https://threejs.org/" target="_blank" rel="noopener">three.js</a>, <a href="https://github.com/vasturiano/globe.gl" target="_blank" rel="noopener">globe.gl</a> · MIT · <a href="https://gsap.com/" target="_blank" rel="noopener">GSAP</a></dd>
-        </dl>
-      </details>
-    </div>
 
 <!-- SKETCH:START — de Sketch-tab. Drie accordions, dezelfde standen-logica als de
      andere tabs: wat je bij het openen nodig hebt staat open, delen staat dicht. -->
@@ -5342,6 +5363,38 @@ document.getElementById('notif-list').addEventListener('click', (e) => {
   if (item) flyTo(notifHistory[+item.dataset.idx]); // klik in het menu → vlieg ernaartoe
 });
 
+/* ---- Instellingen, rechtsboven (sessie 25) -----------------------------
+   Was de vierde tab in het lagenpaneel. Instellingen zijn geen laag en geen
+   filter maar app-chroom, en dat is precies wat de bel en de bevingenlijst ook
+   zijn — dus staan ze nu in dezelfde hoek en in dezelfde groep.
+
+   Dezelfde vorm als `setNotifOpen`, inclusief het vangnet: GSAP hangt aan
+   `requestAnimationFrame`, en zonder net blijft dit paneel bij een stilstaand
+   tabblad halfdoorzichtig staan en vangt het nog kliks af ook. */
+let settingsOpen = false;
+function finishSettingsClose() {
+  if (settingsOpen) return;   // ondertussen weer geopend: niets doen
+  const el = document.getElementById('settings-panel');
+  gsap.set(el, { opacity: 0, y: -12 });
+  el.style.display = 'none';
+}
+function setSettingsOpen(open) {
+  if (open === settingsOpen) return;
+  settingsOpen = open;
+  const el = document.getElementById('settings-panel');
+  if (open) {
+    el.style.display = 'flex';   // flexkolom: vaste kop + scrollend middendeel
+    gsap.fromTo(el, { opacity: 0, y: -12, scale: 0.97 },
+      { opacity: 1, y: 0, scale: 1, duration: 0.35, ease: 'back.out(1.4)', transformOrigin: 'top right' });
+    setTimeout(() => { if (settingsOpen) gsap.set(el, { opacity: 1, y: 0, scale: 1 }); }, 600);
+  } else {
+    gsap.to(el, { opacity: 0, y: -12, duration: 0.22, ease: 'power2.in', onComplete: finishSettingsClose });
+    setTimeout(finishSettingsClose, 600);
+  }
+}
+document.getElementById('settings-open').addEventListener('click', () => panels.toggle('settings'));
+document.getElementById('settings-close').addEventListener('click', () => panels.close('settings'));
+
 // korte, gesynthetiseerde "ping" (WebAudio) — geen extern bestand nodig
 function playPing(layer) {
   try {
@@ -6733,14 +6786,18 @@ bindCosmosToggle('twilight-toggle', 'es-twilight', on => sunMoon.setVisible({ tw
 // alleen de eerste rij 0fr en blijft de rest gewoon staan. Vandaar dat we de inhoud
 // hier in een wrapper zetten in plaats van in de markup: zo hoeft geen enkele tab
 // daar rekening mee te houden.
-document.querySelectorAll('.panel .acc-body').forEach(body => {
+// NIET MEER OP `.panel` GESCOPET (sessie 25): accordions leven sinds deze sessie
+// ook buiten het lagenpaneel — Instellingen staat rechtsboven en Details linksonder.
+// Een selector die de plek noemt in plaats van het patroon, laat elke verhuizing
+// stil kapotgaan; de accordion-kop zou dan gewoon niets meer doen.
+document.querySelectorAll('.acc-body').forEach(body => {
   if (body.children.length === 1 && body.firstElementChild.classList.contains('acc-inner')) return;
   const inner = document.createElement('div');
   inner.className = 'acc-inner';
   while (body.firstChild) inner.appendChild(body.firstChild);
   body.appendChild(inner);
 });
-document.querySelectorAll('.panel .acc-head').forEach(head => {
+document.querySelectorAll('.acc-head').forEach(head => {
   head.addEventListener('click', () => {
     const sec = head.closest('.acc');
     const open = sec.classList.toggle('open');
@@ -7369,6 +7426,14 @@ panels.register('qlist', {
   isOpen: () => listOpen,
   open:   () => setQuakeListOpen(true),
   close:  () => setQuakeListOpen(false)
+});
+
+panels.register('settings', {
+  group: 'top',
+  button: document.getElementById('settings-open'),
+  isOpen: () => settingsOpen,
+  open:   () => setSettingsOpen(true),
+  close:  () => setSettingsOpen(false)
 });
 
 // Weg 2 en 3: nog een keer op dezelfde knop, of op een andere uit dezelfde groep.
