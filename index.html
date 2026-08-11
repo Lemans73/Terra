@@ -197,6 +197,13 @@
        het naar BOVEN opent. Onder het eiland is geen ruimte — daar is het scherm op. -->
   <div class="time-island" id="time-island">
     <div class="ti-panel" id="ti-panel" hidden>
+      <!-- Het kruisje staat absoluut in de hoek en niet in een kop-rij zoals bij
+           Navigate en de meldingen. Reden: een kop kost hier een regel, en dit
+           paneel moet op een telefoon in landscape onder een strook van 92 px
+           passen. `.ti-note` houdt er rechts ruimte voor vrij — zelfde correctie
+           als `.readout .kicker`. -->
+      <button class="ti-close" id="ti-close" type="button" title="Close"
+      aria-label="Close time options">&#215;</button>
       <div class="ti-note">
         The moment drives the whole scene: the Sun and Moon, the day/night line, the
         axis and the window that events are shown in. Layers that only know the
@@ -253,14 +260,29 @@
         aria-label="Shift the moment within the track window" />
       </div>
       <div class="ti-now">
-        <span class="ti-val" id="time-val">now</span>
+        <!-- HET MOMENT IS EEN KNOP (sessie 25). Het was een <span>, en juist dit
+             woord is waar je naar kijkt als je de tijd wilt verzetten — het las
+             als een bijschrift terwijl het de tweede ingang naar het paneel is.
+             LET OP: refreshTimeUI() schrijft hier met `textContent` in, dus er
+             mag niets anders dan tekst in deze knop staan. Een icoon erin zou
+             bij de eerstvolgende verversing verdwijnen. -->
+        <button class="ti-val" id="time-val" type="button" aria-expanded="false"
+        aria-controls="ti-panel" title="Time options">now</button>
         <button class="ti-reset" id="time-reset" hidden title="Back to now"
         aria-label="Back to now">&#10005;</button>
       </div>
+      <!-- TWEE ICONEN IN ÉÉN KNOP (sessie 25). Dicht een klok, want een kale
+           chevron zei niet waar hij over ging en werd daardoor over het hoofd
+           gezien; open de chevron omlaag, die "klap weg" betekent. De oude
+           `transform: rotate(180deg)` is daarmee weg: een klok die een halve
+           slag draait betekent niets. Wisselen gaat via `display` op een klasse
+           en niet met `hidden` — zie de val bij .ti-panel[hidden]. -->
       <button class="ti-more" id="ti-more" type="button" aria-expanded="false"
-      title="More time controls" aria-label="More time controls">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
-        stroke-linecap="round" stroke-linejoin="round"><polyline points="6 15 12 9 18 15"/></svg>
+      aria-controls="ti-panel" title="More time controls" aria-label="More time controls">
+        <svg class="ti-ico-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+        stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/></svg>
+        <svg class="ti-ico-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+        stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
     </div>
   </div>
@@ -6953,19 +6975,47 @@ function terugNaarNu() {
 }
 document.getElementById('time-reset')?.addEventListener('click', terugNaarNu);
 
-// ---- Het uitklappaneel van het tijdeiland ----
-// Datumveld, sliderschaal en afspeelsnelheid zitten hierachter omdat ze zelden nodig
-// zijn; wat je tijdens het kijken gebruikt — schuiven, afspelen, terug naar nu — staat
-// altijd in de rij zelf.
-{
-  const knop = document.getElementById('ti-more');
-  const paneel = document.getElementById('ti-panel');
-  knop?.addEventListener('click', () => {
-    const open = paneel.hidden;
-    paneel.hidden = !open;
-    knop.setAttribute('aria-expanded', open ? 'true' : 'false');
-  });
+/* ---- Het uitklappaneel van het tijdeiland ----------------------------------
+   Datumveld, sliderschaal en afspeelsnelheid zitten hierachter omdat ze zelden
+   nodig zijn; wat je tijdens het kijken gebruikt — schuiven, afspelen, terug naar
+   nu — staat altijd in de rij zelf.
+
+   DRIE INGANGEN, ÉÉN WAARHEID (sessie 25). Dit was een anonieme arrow in een
+   block-scope, en dat kon toen de chevron de enige knop was. Nu openen zowel de
+   chevron als het momentlabel het paneel en sluit het kruisje het, en dan moeten
+   álle drie dezelfde stand melden — anders wordt de tweede ingang een tweede
+   waarheid. `aria-expanded` stuurt bovendien de CSS: welk icoon de chevron-knop
+   toont hangt eraan, dus vergeten bij te werken is meteen zichtbaar.
+
+   GEEN BLOCK-SCOPE MEER: `panels.register('time', …)` verderop roept deze functie
+   aan, en een functiedeclaratie in een `{ }` is in een module niet bereikbaar
+   buiten dat blok.
+
+   `if (panels)` — de paneelbeheerder wordt honderden regels hieronder pas
+   aangemaakt, dus tijdens het opbouwen bestaat hij nog niet. Zelfde guard en
+   zelfde reden als in setPanelOpen(). */
+const tiPanelEl = document.getElementById('ti-panel');
+const tiMoreBtn = document.getElementById('ti-more');
+const tiValBtn  = document.getElementById('time-val');
+
+function timePanelIsOpen() {
+  return !!tiPanelEl && !tiPanelEl.hidden;
 }
+
+function setTimePanelOpen(open) {
+  if (!tiPanelEl) return;
+  tiPanelEl.hidden = !open;
+  const vlag = open ? 'true' : 'false';
+  tiMoreBtn?.setAttribute('aria-expanded', vlag);
+  tiValBtn?.setAttribute('aria-expanded', vlag);
+  if (panels) panels.sync();
+}
+
+// Weg 2 en 3: nog een keer op de chevron, of op het moment zelf.
+tiMoreBtn?.addEventListener('click', () => setTimePanelOpen(!timePanelIsOpen()));
+tiValBtn?.addEventListener('click', () => setTimePanelOpen(!timePanelIsOpen()));
+// Weg 1: het kruisje in het paneel.
+document.getElementById('ti-close')?.addEventListener('click', () => setTimePanelOpen(false));
 
 // ---- Eclips ----
 const eclipseToggleEl = document.getElementById('eclipse-toggle');

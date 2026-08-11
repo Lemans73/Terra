@@ -850,24 +850,15 @@
   .planet-row .estat { font-variant-numeric: tabular-nums; }
   .readout-warn { color: #ffd166; }
   .readout-note { display: block; color: var(--ink-faint); margin-top: 2px; }
-  /* De tijdkiezer. `.shifted` is de niet te missen markering dat de scene een ander
-     moment toont dan het heden — de live datalagen doen dat namelijk niet. */
-  #time-val { font-variant-numeric: tabular-nums; }
-  #time-val.shifted { color: #ffd166; font-weight: 600; }
-  /* Sliders lopen over de VOLLE paneelbreedte; knoppen krijgen een eigen regel.
-     Eerder deelde "Back to now" de regel met het slider-label, waardoor de slider
-     zelf smaller oogde dan de rest van het paneel. */
-  .time-reset {
-    display: block; width: 100%; margin-top: 9px;
-    background: transparent; border: 1px solid var(--hair); border-radius: 5px;
-    color: var(--ink-dim); font: inherit; font-size: 10px; letter-spacing: 0.04em;
-    padding: 5px 7px; cursor: pointer; text-align: center;
-  }
-  .time-reset:hover { color: var(--ink); border-color: var(--ink-faint); }
-  /* Een expliciete `display` in CSS wint van het `hidden`-attribuut, dat immers
-     niets anders doet dan `display: none` als user-agent-stijl. Zonder deze regel
-     bleef "Back to now" zichtbaar terwijl de tijd gewoon op nu stond. */
-  .time-reset[hidden] { display: none; }
+  /* HIER STOND DE TIJDKIEZER (weggehaald in sessie 25). Twee blokken dood gewicht:
+     `#time-val` en `#time-val.shifted` dateerden van toen de kiezer nog in Settings
+     zat, en die ID-selector VERSLOEG `.ti-val.shifted` op specificiteit — het amber
+     dat je ziet kwam dus uit deze regel en niet uit de regel die erover ging. Het
+     amber is meeverhuisd naar `.ti-val.shifted`, waar de rest van het tijdeiland
+     staat. `.time-reset` hoorde bij geen enkel element meer: de knop draagt sinds
+     de verhuizing `.ti-reset`.
+     Les die blijft gelden: styling op een ID is een tijdbom zodra het element
+     verhuist, want de oude regel blijft stil winnen. */
   .time-input {
     display: block; width: 100%; box-sizing: border-box; margin-bottom: 10px;
     background: rgba(255,255,255,0.04); border: 1px solid var(--hair); border-radius: 6px;
@@ -1696,6 +1687,11 @@
      krimpen zonder dat de slider het merkt. Loopt het ooit over zijn kolom (een andere
      taal, een ander lettertype), dan kapt het netjes af in plaats van de rij te breken —
      layout-stabiliteit gaat hier voor de laatste letters van een uiterste geval. */
+  /* HET IS EEN <button> SINDS SESSIE 25, en de knopstijlen worden hier gewist zodat
+     hij precies zoveel ruimte inneemt als het <span> ervoor deed. Dat is geen
+     schoonheidsfoutje maar de kern: de kolombreedte in .ti-row is een GEMETEN getal
+     dat een sleepfout afdekt (zie de noot daar), en een knop met eigen padding zou
+     dat getal stilzwijgend ongeldig maken. */
   .ti-val {
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1704,10 +1700,22 @@
     color: var(--ink-dim);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
+    background: none;
+    border: 0;
+    padding: 0;
+    margin: 0;
+    font-family: inherit;
+    line-height: 1.2;
+    cursor: pointer;
+    transition: color 0.15s;
   }
-  /* Verschoven moment: dezelfde accentkleur die de app overal voor "dit is niet de
-     standaardstand" gebruikt. */
-  .ti-val.shifted { color: var(--accent); }
+  .ti-val:hover { color: var(--ink); }
+  /* Verschoven moment: de niet te missen markering dat de scene een ander moment
+     toont dan het heden — de live datalagen doen dat namelijk niet. Amber en niet
+     `--accent`: dat is wat er tot sessie 25 daadwerkelijk stond, via een
+     ID-selector die deze regel versloeg. Zie het blok bij .time-input. */
+  .ti-val.shifted { color: #ffd166; }
+  .ti-val.shifted:hover { color: #ffe1a0; }
   .ti-reset {
     display: flex; align-items: center; justify-content: center;
     width: 20px; height: 20px; padding: 0;
@@ -1737,9 +1745,19 @@
   }
   .ti-more:hover { color: var(--ink); }
   .ti-more svg { width: 15px; height: 15px; }
-  .ti-more[aria-expanded="true"] { color: var(--ink); transform: rotate(180deg); }
+  .ti-more[aria-expanded="true"] { color: var(--ink); }
+  /* TWEE ICONEN, ÉÉN ZICHTBAAR. Dicht een klok — die zegt waar de knop over gaat,
+     wat een kale chevron niet deed; open de chevron omlaag, want dat betekent
+     "klap weg". Hier stond `transform: rotate(180deg)` op de knop, en dat kan nu
+     niet meer: een klok een halve slag draaien betekent niets.
+     Wisselen met `display` en niet met het `hidden`-attribuut, zodat de val van
+     .ti-panel[hidden] hier niet eens kan optreden. */
+  .ti-more .ti-ico-chev { display: none; }
+  .ti-more[aria-expanded="true"] .ti-ico-clock { display: none; }
+  .ti-more[aria-expanded="true"] .ti-ico-chev { display: block; }
 
   .ti-panel {
+    position: relative;   /* anker voor .ti-close */
     padding: 13px 14px;
     background: rgba(11,16,24,0.82);
     backdrop-filter: blur(14px);
@@ -1751,9 +1769,28 @@
   }
   /* `display` uit een klasse wint van het `hidden`-attribuut, dat alleen een
      user-agent-stijl is. Zonder deze regel staat het paneel altijd open. Dezelfde val
-     als bij .time-reset[hidden] hierboven. */
+     als bij .ti-reset[hidden] hierboven. */
   .ti-panel[hidden] { display: none; }
-  .ti-note { font-size: 10px; line-height: 1.55; color: var(--ink-faint); }
+  /* Het kruisje van het tijdpaneel (sessie 25). Zelfde vorm en gedrag als
+     .readout-close; absoluut geplaatst omdat een kop-rij hier een regel kost die
+     een telefoon in landscape niet heeft. */
+  .ti-close {
+    position: absolute;
+    top: 6px; right: 8px;
+    width: 24px; height: 24px;
+    display: flex; align-items: center; justify-content: center;
+    background: transparent;
+    border: 0;
+    border-radius: 7px;
+    color: var(--ink-dim);
+    font-family: inherit; font-size: 16px; line-height: 1;
+    cursor: pointer;
+    transition: color 0.15s, background 0.15s;
+  }
+  .ti-close:hover { color: var(--ink); background: rgba(255,255,255,0.08); }
+  /* De uitleg mag niet onder het kruisje doorlopen — zelfde correctie als
+     `.readout .kicker { padding-right: 26px }`. */
+  .ti-note { font-size: 10px; line-height: 1.55; color: var(--ink-faint); padding-right: 24px; }
   .ti-field { display: flex; flex-direction: column; gap: 6px; }
   .ti-field > span {
     display: flex; align-items: baseline; justify-content: space-between;
@@ -1906,6 +1943,10 @@
     }
     /* Grotere raakvlakken: 28 px is met een duim aan de rand net te weinig. */
     .readout-close { top: 10px; right: 10px; width: 34px; height: 34px; }
+    /* Zelfde reden voor het tijdpaneel; de uitleg eronder houdt navenant meer
+       ruimte vrij. */
+    .ti-close { top: 4px; right: 5px; width: 32px; height: 32px; }
+    .ti-note { padding-right: 30px; }
     .masthead { padding: 12px 14px; gap: 10px; }
     .tagline { display: none; }
     /* Op smalle schermen alleen de iconen. Beide opties blijven zichtbaar; dat is juist
