@@ -466,8 +466,26 @@
     font-size: 16px; line-height: 1;
     cursor: pointer;
     transition: color 0.15s, background 0.15s;
+    /* Het raakvlak is groter dan de knop, zie ::after hieronder. */
+    position: relative;
   }
-  .panel-collapse:hover { color: var(--ink); background: rgba(255,255,255,0.08); }
+  /* HET TREFFERVLAK IS 44x44, DE KNOP BLIJFT 30x30 (sessie 27, Terry's melding dat
+     het kruisje op een telefoon niet reageerde). Gemeten op 375x812: dit was met 30 px
+     het kleinste doel in het paneel, terwijl de knoppenrij die bij hem wél werkt
+     43x39 is en een laagrij 321x30. Apple houdt 44 aan, Google 48; een duim die 8 px
+     naast het kruisje landt raakt `.panel-head`, en daar hangt niets aan.
+     Via een pseudo-element en niet via padding of een grotere knop: dan verandert er
+     niets aan de opmaak van de kop, die op vier plekken op deze maat is uitgelijnd.
+     -8 EN NIET -7: het bevattende blok van een absoluut kind is de PADDINGbox, en die
+     is 28 px omdat de knop een rand van 1 px heeft. Met -7 werd het 42 en niet 44 —
+     gemeten, want zelf uitgerekend had ik het mis. */
+  .panel-collapse::after { content: ''; position: absolute; inset: -8px; }
+  /* ALLEEN WAAR ER ECHT EEN AANWIJZER IS. Op een aanraakscherm laat iOS de eerste tik
+     soms opgaan aan het activeren van de hover-stand in plaats van aan de klik — de
+     tweede tik doet het dan pas. Dat is de andere verklaring voor dezelfde klacht. */
+  @media (hover: hover) {
+    .panel-collapse:hover { color: var(--ink); background: rgba(255,255,255,0.08); }
+  }
   /* ---- De knoppenrij (sessie 24) ----------------------------------------
      Was één knop `.panel-open` die op `display: none` ging zodra het paneel
      openging. Met twee panelen kan dat niet meer: een rij die verdwijnt zodra
