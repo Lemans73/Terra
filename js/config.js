@@ -243,6 +243,7 @@ export const PARAMS = {
      hoger. Let bij het opdraaien op de bloomdrempel (`bloomThreshold`, 0,75):
      kleur x helderheid daarboven wordt een gloeiende vlek in plaats van een boog. */
   auroraAltitude: 0.027,   // straal 102,7 — boven de wolken (102), fysiek ~170 km
+  auroraGain: 1.0,         // DE knop voor felheid: alpha wordt op 1 geklemd, de kleur niet
   auroraOpacity: 0.85,
   auroraGamma: 2.4,        // helderheid = kans^(1/gamma); hoger = zwak licht eerder zichtbaar
   auroraFloor: 0.02,       // onder 2 % kans niets tekenen

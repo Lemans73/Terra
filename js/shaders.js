@@ -448,6 +448,7 @@ export const AURORA_FRAG = `
   #define PI 3.141592653589793
   uniform sampler2D auroraMap;
   uniform vec2 sunPosition;
+  uniform float auroraGain;
   uniform float auroraOpacity;
   uniform float auroraGamma;
   uniform float auroraFloor;
@@ -491,6 +492,10 @@ export const AURORA_FRAG = `
 
     float alpha = bright * auroraOpacity;
     if (alpha < 0.01) discard;
-    gl_FragColor = vec4(col * bright, alpha);
+    // DE GAIN IS DE ENIGE KNOP DIE ECHT FELLER MAAKT. Additief blenden vermenigvuldigt
+    // met de alpha, en die wordt door GL op 1 geklemd — opacity opdraaien loopt dus
+    // vast zodra bright * opacity de 1 raakt. De kleur kent die grens niet: boven 1
+    // gaat hij door de bloomdrempel heen en krijgt de ovaal pas zijn halo.
+    gl_FragColor = vec4(col * bright * auroraGain, alpha);
   }
 `;

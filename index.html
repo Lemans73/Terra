@@ -1196,6 +1196,21 @@
       <b>This layer only works at &#8220;now&#8221;.</b> OVATION forecasts the coming
       thirty minutes and keeps no archive, so it locks the moment you move the
       time picker.
+      <!-- AURORA-TUNING:START — TIJDELIJK, sessie 27.
+           Zes schuiven om de felheid uit te zoeken, met onderaan het PARAMS-blok in
+           de vorm waarin het in js/config.js hoort. Alleen op localhost of met ?tune
+           in de URL, zodat een vergeten blok nooit op de demo staat.
+           WEG ZODRA DE WAARDEN VASTSTAAN: dit blok, het JS-blok en het CSS-blok met
+           dezelfde markers — meer is het niet. -->
+      <div class="atune" id="aurora-tune" hidden>
+      <div class="atune-head">Tuning <span>temporary</span></div>
+      <div class="atune-rows"></div>
+      <div class="atune-out">
+      <button type="button" class="atune-copy">Copy for config.js</button>
+      <pre></pre>
+      </div>
+      </div>
+      <!-- AURORA-TUNING:END -->
       </div>
       </div>
       </section>
@@ -7214,6 +7229,76 @@ function syncAuroraLayer() {
   // toch, dus dit loopt er alleen op vooruit.
   if (!wil && was) setHealth(ad.healthId || ad.id, 'warn', 'switched off');
 }
+
+/* AURORA-TUNING:START — TIJDELIJK, sessie 27.
+   De schuiven onder de aurora-notitie. Ze schrijven in PARAMS én duwen de waarden
+   meteen naar de shader, zodat je het effect ziet terwijl je sleept. PARAMS mee
+   bijwerken is nodig omdat de laag zijn beginwaarden daaruit leest: wordt de schil
+   ooit opnieuw gebouwd, dan houdt hij de ingestelde stand.
+   WEG ZODRA DE WAARDEN VASTSTAAN — dit blok, het markup-blok en het CSS-blok. */
+(() => {
+  const paneel = document.getElementById('aurora-tune');
+  // Localhost of ?tune. Een vergeten blok mag nooit op de demo verschijnen, en de
+  // ontsnapping via de URL is er zodat je ook op een telefoon kunt kijken.
+  if (!paneel || !(IS_LOCAL || location.search.includes('tune'))) return;
+  paneel.hidden = false;
+
+  const VELDEN = [
+    ['auroraGain',     'Gain',       0.2,  6,    0.05],
+    ['auroraOpacity',  'Opacity',    0.05, 1,    0.01],
+    ['auroraGamma',    'Gamma',      1,    6,    0.05],
+    ['auroraFloor',    'Floor',      0,    0.15, 0.005],
+    ['auroraDayFloor', 'Day floor',  0,    1,    0.01],
+    ['auroraRedFrom',  'Red from',   0.15, 1,    0.01]
+  ];
+
+  const rijen = paneel.querySelector('.atune-rows');
+  const uit = paneel.querySelector('pre');
+  const toon = {};
+
+  function schrijfUit() {
+    uit.textContent = VELDEN.map(([k]) => '  ' + k + ': ' + PARAMS[k] + ',').join('\n');
+  }
+
+  for (const [sleutel, label, min, max, stap] of VELDEN) {
+    const rij = document.createElement('label');
+    rij.className = 'atune-row';
+    const naam = document.createElement('span');
+    naam.textContent = label;
+    const schuif = document.createElement('input');
+    schuif.type = 'range';
+    schuif.className = 'range';
+    schuif.min = min; schuif.max = max; schuif.step = stap;
+    schuif.value = PARAMS[sleutel];
+    const waarde = document.createElement('b');
+    waarde.textContent = PARAMS[sleutel];
+    toon[sleutel] = waarde;
+    schuif.addEventListener('input', () => {
+      const v = Number(schuif.value);
+      PARAMS[sleutel] = v;
+      waarde.textContent = v;
+      if (aurora) aurora.applyParams(PARAMS);
+      schrijfUit();
+    });
+    // Niet de laag togglen: deze rij ligt binnen het uitklappaneel, maar een klik
+    // die doorlekt naar de rij erboven zet de aurora uit terwijl je sleept.
+    rij.addEventListener('click', e => e.stopPropagation());
+    rij.append(naam, schuif, waarde);
+    rijen.appendChild(rij);
+  }
+
+  paneel.querySelector('.atune-copy').addEventListener('click', e => {
+    e.stopPropagation();
+    const knop = e.currentTarget;
+    navigator.clipboard?.writeText(uit.textContent).then(() => {
+      knop.textContent = 'Copied';
+      setTimeout(() => { knop.textContent = 'Copy for config.js'; }, 1200);
+    }).catch(() => { knop.textContent = 'Select it by hand'; });
+  });
+
+  schrijfUit();
+})();
+/* AURORA-TUNING:END */
 bindCosmosToggle('leaders-toggle', 'es-leaders', on => sunMoon.setVisible({ leaders: on }));
 bindCosmosToggle('align-toggle', 'es-align', on => sunMoon.setVisible({ alignment: on }));
 bindCosmosToggle('tracks-toggle', 'es-tracks', on => sunMoon.setVisible({ tracks: on }));

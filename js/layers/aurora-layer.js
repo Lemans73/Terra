@@ -79,6 +79,7 @@ export function createAuroraLayer(THREE, opts = {}) {
   const uniforms = {
     auroraMap:      { value: texture },
     sunPosition:    cfg.sunUniform || { value: new THREE.Vector2(0, 0) },
+    auroraGain:     { value: 1.0 },
     auroraOpacity:  { value: 0.85 },
     auroraGamma:    { value: 2.4 },
     auroraFloor:    { value: 0.02 },
@@ -115,6 +116,7 @@ export function createAuroraLayer(THREE, opts = {}) {
   // Neem de bespeelbare waarden over uit PARAMS. Losse functie omdat de laag bij
   // het bouwen nog niet weet welke er gelden en een moduswissel ze opnieuw kan zetten.
   function applyParams(p = {}) {
+    if (p.auroraGain      != null) uniforms.auroraGain.value      = p.auroraGain;
     if (p.auroraOpacity   != null) uniforms.auroraOpacity.value   = p.auroraOpacity;
     if (p.auroraGamma     != null) uniforms.auroraGamma.value     = p.auroraGamma;
     if (p.auroraFloor     != null) uniforms.auroraFloor.value     = p.auroraFloor;
