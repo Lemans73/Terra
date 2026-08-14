@@ -240,14 +240,26 @@ export const PARAMS = {
      GEKALIBREERD OP EEN RUSTIGE DAG (2026-08-14): piek 37 %, gemiddelde 2,3, en
      29 % van de cellen niet nul. Een ramp die pas boven 80 % rood wordt zou dus
      vrijwel nooit rood tonen; vandaar dat `auroraRedFrom` op 0,55 staat en niet
-     hoger. Let bij het opdraaien op de bloomdrempel (`bloomThreshold`, 0,75):
-     kleur x helderheid daarboven wordt een gloeiende vlek in plaats van een boog. */
+     hoger.
+
+     DEZE WAARDEN ZIJN OP HET OOG GEKOZEN (Terry, sessie 27) en gelden voor BEIDE
+     weergaven — een aparte set voor de schematische kaart bleek niet nodig. De
+     twee die het meest afwijken van een eerste gok:
+
+       auroraDayFloor 0,85  De dagzijde dooft nauwelijks. Fysiek zie je overdag
+                            geen aurora, maar een ovaal die voor de helft wegvalt
+                            leest als een half geladen laag. Bijkomend voordeel:
+                            in de schematische weergave IS er geen dag/nacht op de
+                            bol (effen MeshBasic-oceaan), en daar zou een fade dus
+                            nergens op slaan.
+       auroraFloor 0        Geen ondergrens. Nodig is hij niet: cellen met waarde
+                            nul geven alpha nul en vallen al weg op de alfatoets. */
   auroraAltitude: 0.027,   // straal 102,7 — boven de wolken (102), fysiek ~170 km
-  auroraGain: 1.0,         // DE knop voor felheid: alpha wordt op 1 geklemd, de kleur niet
-  auroraOpacity: 0.85,
-  auroraGamma: 2.4,        // helderheid = kans^(1/gamma); hoger = zwak licht eerder zichtbaar
-  auroraFloor: 0.02,       // onder 2 % kans niets tekenen
-  auroraDayFloor: 0.25,    // wat er aan de DAGzijde overblijft (0 = hard afkappen)
+  auroraGain: 2.5,         // DE knop voor felheid: alpha wordt op 1 geklemd, de kleur niet
+  auroraOpacity: 1,
+  auroraGamma: 2,          // helderheid = kans^(1/gamma); hoger = zwak licht eerder zichtbaar
+  auroraFloor: 0,          // onder deze kans niets tekenen
+  auroraDayFloor: 0.85,    // wat er aan de DAGzijde overblijft (0 = hard afkappen)
   auroraRedFrom: 0.55,     // vanaf welke kans het rood begint te winnen
   auroraLow:  '#1fbf5a',   // 557 nm zuurstofgroen
   auroraMid:  '#8fe36b',
