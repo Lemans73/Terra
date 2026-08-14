@@ -18,6 +18,7 @@
     --wildfire: #ff3b30;
     --aqi: #a78bfa;
     --lightning: #bcd6ff;
+    --aurora: #1fbf5a;
     --accent: #ff6b3d;
 
     /* ---- De onderrand: knoppenrij, tijdrij, en wat daarboven stopt ---------
@@ -701,6 +702,7 @@
   .sw-wildfire { color: var(--wildfire); background: var(--wildfire); }
   .sw-aqi { color: var(--aqi); background: var(--aqi); }
   .sw-lightning { color: var(--lightning); background: var(--lightning); }
+  .sw-aurora { color: var(--aurora); background: var(--aurora); }
 
   /* ---- De lagenlijst als legenda (2026-07-31) -------------------------------
      Een nieuwe bezoeker ziet gekleurde vormen op een bol en weet niet wat ze
@@ -728,6 +730,13 @@
   .layer .sw-storm {
     background: transparent;
     box-shadow: 0 0 8px currentColor, inset 0 0 0 3px currentColor;
+  }
+  /* aurora: de ovaal zelf. Een RING, want dat is de vorm op de bol — en platgedrukt,
+     zodat hij niet te verwarren is met het ronde oog van de storm hierboven. */
+  .layer .sw-aurora {
+    background: transparent;
+    border-radius: 50% / 34%;
+    box-shadow: 0 0 7px currentColor, inset 0 0 0 2.5px currentColor;
   }
 
   /* DESKUNDIG: de vakgebied-symbolen uit js/symbols-expert.js */

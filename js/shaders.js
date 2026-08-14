@@ -414,3 +414,83 @@ export const FOG_FRAG = `
     gl_FragColor = vec4(fogColor, a);
   }
 `;
+
+// ---- Aurora-schil ----
+// De OVATION-ovaal van NOAA als schil boven de wolken. De kans per graadcel komt
+// binnen als een DataTexture van 360 x 181; deze shader leest die en maakt er
+// licht van.
+//
+// TWEE DINGEN DIE JE NIET MAG VERWISSELEN, allebei ingelopen bij het bouwen:
+//
+// 1. DE HALVE-TEXTUUR-VERSCHUIVING. Een equirectangulaire aardtextuur heeft
+//    lengte -180 op u=0, dus lengte 0 op u=0,5. Het NOAA-raster heeft kolom 0 op
+//    lengte 0. Voor een punt met lengte L geldt vUv.x = (L+180)/360, terwijl de
+//    data op fract(L/360) staat -- en dat is precies fract(vUv.x + 0.5). Zonder
+//    die regel ligt de ovaal 180 graden gespiegeld, pal op de dagzijde.
+//    De breedte klopt WEL rechtstreeks: three's bol heeft v=0 op de zuidpool en
+//    DataTexture zet flipY op false, dus rij 0 (lat -90) landt op v=0.
+//
+// 2. WERELDRUIMTE VOOR DE ZON, NIET DE CAMERASTAND. `vNormal` staat in
+//    view-ruimte en vraagt daarom om de globeRotation-truc die de wolkenschil
+//    hierboven uithaalt. Dat is nergens voor nodig als je in wereldruimte blijft:
+//    vWorldNormal tegen een ONGEDRAAIDE Polar2Cartesian(sunPosition) geeft direct
+//    de zonhoogte, dezelfde route die dayNightShader voor de eclips gebruikt.
+export const AURORA_VERT = `
+  varying vec3 vWorldNormal;
+  varying vec2 vUv;
+  void main() {
+    vWorldNormal = normalize(mat3(modelMatrix) * normal);
+    vUv = uv;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+export const AURORA_FRAG = `
+  #define PI 3.141592653589793
+  uniform sampler2D auroraMap;
+  uniform vec2 sunPosition;
+  uniform float auroraOpacity;
+  uniform float auroraGamma;
+  uniform float auroraFloor;
+  uniform float auroraDayFloor;
+  uniform float auroraRedFrom;
+  uniform vec3 auroraLow;
+  uniform vec3 auroraMid;
+  uniform vec3 auroraHigh;
+  varying vec3 vWorldNormal;
+  varying vec2 vUv;
+  float toRad(in float a) { return a * PI / 180.0; }
+  vec3 Polar2Cartesian(in vec2 c) {
+    float theta = toRad(90.0 - c.x);
+    float phi = toRad(90.0 - c.y);
+    return vec3(sin(phi) * cos(theta), cos(phi), sin(phi) * sin(theta));
+  }
+  void main() {
+    // Zie noot 1 hierboven: de data staat een halve textuur verschoven.
+    float p = texture2D(auroraMap, vec2(fract(vUv.x + 0.5), vUv.y)).r;
+    if (p < auroraFloor) discard;
+
+    // KLEUR VOLGT DE RAUWE KANS, HELDERHEID DE GAMMA DAARVAN. Die twee door
+    // elkaar halen (eerst gamma, dan de kleur van het vervormde getal aflezen)
+    // maakt de betekenis van een kleur afhankelijk van een instelling die
+    // nergens over kleur gaat. Groen is 557 nm zuurstof, rood is 630 nm: die
+    // grens ligt in de fysica, niet in de weergave.
+    vec3 col = mix(auroraLow, auroraMid, smoothstep(0.0, auroraRedFrom, p));
+    col = mix(col, auroraHigh, smoothstep(auroraRedFrom, 1.0, p));
+
+    float bright = pow(p, 1.0 / max(auroraGamma, 0.15));
+
+    // De nachtzijde weegt mee, maar zacht. Een aurora is overdag niet te zien,
+    // dus de ovaal dooft naar de dagkant toe en wordt een boog die met de
+    // terminator meedraait. Niet HARD afkappen: tijdens een storm wil je aan de
+    // dagzijde nog kunnen zien dat er iets gebeurt, en auroraDayFloor laat
+    // daar een kwart van over. De band is ruimer dan die van het oppervlak,
+    // want een aurora zit op ~170 km en vangt licht dat de grond al mist.
+    float sunEl = dot(normalize(vWorldNormal), normalize(Polar2Cartesian(sunPosition)));
+    float night = 1.0 - smoothstep(-0.34, 0.09, sunEl);
+    bright *= mix(auroraDayFloor, 1.0, night);
+
+    float alpha = bright * auroraOpacity;
+    if (alpha < 0.01) discard;
+    gl_FragColor = vec4(col * bright, alpha);
+  }
+`;

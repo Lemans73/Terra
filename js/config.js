@@ -86,6 +86,7 @@ export const COLORS = {
   wildfire: '#ff3b30',
   aqi:      '#a78bfa',  // identiteitskleur (legenda/melding); glyph zelf volgt de AQI-band
   lightning:'#bcd6ff',  // bliksem — zacht blauw-wit (minder fel dan puur wit)
+  aurora:   '#1fbf5a',  // poollicht — 557 nm zuurstofgroen, de kleur van een rustige ovaal
   region:   '#ffb347'   // actief gebied op de zon — warm oranje, kleur van de fotosfeer
 };
 
@@ -230,6 +231,26 @@ export const PARAMS = {
   // wolken — zwevende transparante schil + schaduw op het oppervlak
   cloudAltitude: 0.02,  // hoogte van de wolkenschil (fractie van de straal)
   cloudOpacity: 1.0, cloudShadow: 1.0, cloudSpeed: 0.001,
+  /* aurora — de OVATION-ovaal als schil boven de wolken.
+
+     KLEUR VOLGT DE RAUWE KANS, HELDERHEID DE GAMMA DAARVAN. Die twee gescheiden
+     houden: `auroraGamma` bijstellen mag nooit betekenen dat groen ineens ergens
+     anders begint. Groen is 557 nm zuurstof, rood 630 nm — dat is fysica.
+
+     GEKALIBREERD OP EEN RUSTIGE DAG (2026-08-14): piek 37 %, gemiddelde 2,3, en
+     29 % van de cellen niet nul. Een ramp die pas boven 80 % rood wordt zou dus
+     vrijwel nooit rood tonen; vandaar dat `auroraRedFrom` op 0,55 staat en niet
+     hoger. Let bij het opdraaien op de bloomdrempel (`bloomThreshold`, 0,75):
+     kleur x helderheid daarboven wordt een gloeiende vlek in plaats van een boog. */
+  auroraAltitude: 0.027,   // straal 102,7 — boven de wolken (102), fysiek ~170 km
+  auroraOpacity: 0.85,
+  auroraGamma: 2.4,        // helderheid = kans^(1/gamma); hoger = zwak licht eerder zichtbaar
+  auroraFloor: 0.02,       // onder 2 % kans niets tekenen
+  auroraDayFloor: 0.25,    // wat er aan de DAGzijde overblijft (0 = hard afkappen)
+  auroraRedFrom: 0.55,     // vanaf welke kans het rood begint te winnen
+  auroraLow:  '#1fbf5a',   // 557 nm zuurstofgroen
+  auroraMid:  '#8fe36b',
+  auroraHigh: '#e8483a',   // 630 nm rood, alleen bij een echte storm
   /* SKETCH:START — de tekenlaag zit niet in de standalone; zie tools/build-standalone.mjs */
   // Tekenlaag. De hoogte zit klem tussen twee grenzen: boven de land-polygons van
   // de schematische weergave (die liggen op 0,010 = straal 101) en onder de

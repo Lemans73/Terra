@@ -1171,6 +1171,32 @@
       </button>
       <span class="count" id="count-aqi">—</span>
       </div>
+      <!-- De aurora staat hier en niet bij `Axes & poles`, waar hij inhoudelijk
+      thuishoort: alleen een `.layer`-rij krijgt het slotje en de tijdreis-machinerie,
+      en de rijen daar zijn `.elayer`. Twee rij-grammatica's in één lijstje leest als
+      een fout. De teller toont geen aantal maar de PIEKKANS — zie updateAuroraCount(). -->
+      <div class="layer off expandable" data-layer="aurora">
+      <span class="swatch sw-aurora"></span>
+      <span class="name">Aurora</span>
+      <button class="row-expand" data-note="aurora-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <span class="count" id="count-aurora">—</span>
+      </div>
+      <div class="layer-detail" id="aurora-note">
+      NOAA&#8217;s OVATION model, which estimates the chance of visible aurora for
+      every degree of the globe. The number on the right is the highest chance
+      anywhere &#8212; on a quiet day around 30&#8239;%, during a storm well over 90&#8239;%.
+      <br /><br />
+      Green is oxygen at 557&#8239;nm, the colour of an ordinary display; red is the
+      same gas higher up at 630&#8239;nm, and it only appears when the oval gets
+      strong. The ring leans towards the night side, because that is where the
+      tail of Earth&#8217;s magnetic field feeds it.
+      <br /><br />
+      <b>This layer only works at &#8220;now&#8221;.</b> OVATION forecasts the coming
+      thirty minutes and keeps no archive, so it locks the moment you move the
+      time picker.
+      </div>
       </div>
       </section>
 
@@ -1627,6 +1653,7 @@ import { createPlanetsLayer } from './js/layers/planets-layer.js';
 import { createSkyDisksLayer } from './js/layers/sky-disks.js';
 import { createLagrangeLayer, LAGRANGE_POINTS } from './js/layers/lagrange-layer.js';
 import { createOrbitsLayer } from './js/layers/orbits-layer.js';
+import { createAuroraLayer } from './js/layers/aurora-layer.js';
 import { createSpaceState } from './js/states/space.js';
 import { createEnvironmentToggle } from './js/core/globe-root.js';
 import { skyFrame } from './js/compute/frames.js';
@@ -2139,6 +2166,17 @@ const QUAKE_FLOOR_MAG = 1;
 // niet vast.
 const solarState = { date: null, regions: [], ssn: null, prob: null, xray: null, flux: null };
 
+// ---- Aurora (NOAA SWPC OVATION) -------------------------------
+// De ruwe voorspelling, apart van de laag zelf. Dat is nodig omdat de twee op een
+// ANDER MOMENT bestaan: de adapter kan al data binnen hebben terwijl de schil nog
+// niet gebouwd is (die wacht op de aarde-mesh van globe.gl). Zonder deze tussenstap
+// zou zo'n eerste antwoord verloren gaan en bleef de bol leeg tot de volgende poll.
+//
+// Het raster gaat NIET in `store`: 65.160 cellen zijn geen 65.160 gebeurtenissen.
+// Zelfde afspraak als bij `solarState` hierboven — `normalize` schrijft hier en
+// geeft een lege array terug.
+const auroraState = { coordinates: null, forecast: null, observed: null, peak: null };
+
 // Twee adapters delen de laag `quake`, maar er staat er sinds 2026-08-05 altijd
 // maar één aan. Deze merge blijft toch: hij vervangt alleen de events van zijn
 // eigen `src`, en dat is precies wat een bronwissel veilig maakt. Zonder hem zou
@@ -2432,6 +2470,40 @@ const Adapters = {
     }
   },
 
+  // NOAA SWPC OVATION — de aurora-ovaal. DE ZWAARSTE BRON VAN DE APP: 924 KB per
+  // antwoord, tegen enkele kilobytes voor de vier hierboven. Twee dingen volgen
+  // daaruit, en allebei zijn ze gemeten en geen voorzorg.
+  //
+  // 1. `enabled: false` OM TE BEGINNEN. `pull()` slaat een adapter niet over omdat
+  //    zijn lagen uitstaan — `active` komt in het hele haalpad niet voor. Zonder
+  //    deze vlag haalt Terra dus bij élke paginastart bijna een megabyte op voor een
+  //    laag die standaard uit staat. `syncAuroraFetch()` zet hem om zodra de
+  //    bezoeker de laag aanzet; dat is dezelfde rem die de bronkeuze bij de
+  //    aardbevingen gebruikt.
+  //
+  // 2. EEN EIGEN HEALTH-ID, en niet het gedeelde 'swpc' van de vier hierboven. Een
+  //    uitgezette adapter schrijft `warn · switched off` naar zijn health-id, dus
+  //    met een gedeelde id zou de NOAA-regel permanent op "switched off" staan
+  //    terwijl de zonnevlekken gewoon binnenkomen. Bijkomend voordeel: deze fetch
+  //    loopt door zijn omvang eerder in de timeout van 15 s, en dan zie je dát ook
+  //    in plaats van dat een geslaagde xray-poll het een halve minuut later wegpoetst.
+  ovation: {
+    layers: ['aurora'], healthId: 'ovation', interval: 5 * 60_000,
+    enabled: false,
+    optional: true,
+    offlineNote: 'OVATION unreachable',
+    url: 'https://services.swpc.noaa.gov/json/ovation_aurora_latest.json',
+    normalize(json) {
+      const coords = json && Array.isArray(json.coordinates) ? json.coordinates : null;
+      if (!coords) return [];
+      auroraState.coordinates = coords;
+      auroraState.forecast = json['Forecast Time'] || null;
+      auroraState.observed = json['Observation Time'] || null;
+      applyAuroraState();
+      return [];
+    }
+  },
+
   // NASA EONET — natural events, ÉÉN AANROEP PER CATEGORIE.
   // ---------------------------------------------------------------------------
   // Niet terugdraaien naar één gedeeld venster. EONET's venster telt niet hoe oud een
@@ -2592,7 +2664,10 @@ const Adapters = {
 //               Wat hier ooit wél nieuws kan zijn is een station dat van band wisselt
 //               (goed → ongezond). Dat is een andere functie dan "ik zie je voor het
 //               eerst" en vraagt een vergelijking met de vorige meetwaarde.
-const NO_TOAST_LAYERS = new Set(['lightning', 'aqi']);
+//   aurora    — een raster van 65.160 cellen is geen gebeurtenis met een id. De
+//               laag levert bovendien niets aan `store`, dus er valt sowieso
+//               niets te melden.
+const NO_TOAST_LAYERS = new Set(['lightning', 'aqi', 'aurora']);
 
 // Geef elke adapter zijn sleutel als id (voor de verbindingsstatus).
 Object.entries(Adapters).forEach(([id, a]) => { a.id = id; });
@@ -2603,6 +2678,10 @@ const HEALTH_SOURCES = [
   { id:'emsc',      label:'EMSC',              sub:'Earthquakes (Euro-Med)' },
   { id:'eonet',     label:'NASA EONET',        sub:'Volcano · fire · storm · sea ice' },
   { id:'swpc',      label:'NOAA SWPC',         sub:'Sunspots · flares · solar flux' },
+  // Eigen regel, hoewel het dezelfde NOAA-dienst is. Reden: deze adapter staat
+  // standaard uit en schrijft dan `warn · switched off` naar zijn health-id — met
+  // de gedeelde 'swpc' zou die regel permanent verkeerd staan. Zie de adapter.
+  { id:'ovation',   label:'NOAA SWPC OVATION', sub:'Aurora oval (30-min forecast)' },
   { id:'waqi',      label:'WAQI',              sub:'Air quality' },
   { id:'lightning', label:'Blitzortung relay', sub:'Lightning (local relay)' }
 ];
@@ -2629,7 +2708,7 @@ function renderHealth() {
 // ---- State ----------------------------------------------------
 
 let store = [];                    // alle genormaliseerde events
-const active = { quake:true, volcano:true, storm:true, ice:true, wildfire:true, aqi:false, lightning:true };
+const active = { quake:true, volcano:true, storm:true, ice:true, wildfire:true, aqi:false, lightning:true, aurora:false };
 
 // Lagen waarop het tijdvenster (preset + slider) van toepassing is. Alleen de
 // aardbevingsstroom is een echte tijdreeks van mómentgebeurtenissen. EONET-lagen
@@ -2656,7 +2735,7 @@ const BRAND_KANTELT = 2023;
 // het heden en zullen dat altijd doen. De EONET-lagen stonden hier tot sessie 21 ook
 // in; die volgen het moment nu wél, maar gaan per laag op slot zodra het moment vóór
 // hun gemeten dekking valt — zie borgTijdsloten().
-const TIJDREIS_ONMOGELIJK = ['aqi', 'lightning'];
+const TIJDREIS_ONMOGELIJK = ['aqi', 'lightning', 'aurora'];
 
 // referenties naar de actieve 3D-glyph-objecten (voor per-frame animatie)
 let glyphList = [];
@@ -3351,6 +3430,11 @@ let pmVenster = 365;          // dagen, of 'long' voor de jaargemiddelden sinds 
 // Het magneto-perspectief. Zelfde TDZ-afspraak als sunMoon en geomag.
 let magneto = null;
 let magnetoView = false;
+// De aurora-schil (sessie 27). Zelfde TDZ-afspraak, met één verschil dat ertoe
+// doet: deze hangt niet in de scene maar aan de AARDE-MESH, en die bestaat pas
+// als globe.gl zijn materiaal heeft toegepast. Hij blijft dus ook ná het
+// init-blok nog even null — zie de mount bij whenEarthMeshReady().
+let aurora = null;
 let sunLight = null;        // globe.gl's eigen DirectionalLight, opgezocht bij init
 let lastEphemeris = null;   // laatste efemeride, voor de readout
 // Verschuiving van de tijdkiezer, in ms ten opzichte van nu. 0 = het heden.
@@ -3629,6 +3713,39 @@ function setupFog() {
   earthMesh.add(fogMesh);
 }
 
+// ---- Aurora-schil ----
+// De OVATION-ovaal van NOAA, op straal 102,7 — boven de wolken, wat fysiek klopt
+// (een aurora zit op 100 tot 300 km) en de schil vrijhoudt van alles eronder.
+//
+// KIND VAN DE AARDE-MESH, en dat is hier geen gemak maar de enige werkende weg:
+// three-globe draait die mesh -90 graden zodat textuur-lengte 0 op +Z ligt, en een
+// kind erft die draai. In `world.scene()` zou de ovaal een kwartslag verkeerd staan.
+//
+// De zon-uniform komt als GEDEELDE referentie mee, net als bij de wolkenschil: dan
+// volgt de dagzijde van de aurora vanzelf de terminator, zonder eigen bijwerking.
+//
+// ANDERS DAN DE WOLKEN BLIJFT DEZE SCHIL IN DE SCHEMATISCHE WEERGAVE STAAN
+// (Terry, sessie 27). Er is dus nergens een `globeMode`-toets voor de aurora. Bloom
+// staat daar uit, dus hij wordt vlakker en harder — dat hoort bij die weergave en
+// wordt niet gecompenseerd.
+function setupAuroraShell() {
+  if (aurora || !shaderMaterial) return;
+  const earthMesh = findEarthMesh();
+  if (!earthMesh) return;
+  aurora = createAuroraLayer(THREE, {
+    earthRadius: 100,
+    altitude: PARAMS.auroraAltitude,
+    sunUniform: shaderMaterial.uniforms.sunPosition,
+    params: PARAMS
+  });
+  aurora.setVisible(!!active.aurora);
+  earthMesh.add(aurora.mesh);
+  // Er kan al data binnen zijn voordat de aarde-mesh bestond: de adapter bewaart
+  // hem daarom in `auroraState` in plaats van hem aan de laag te geven, en hier
+  // halen we hem op. Zonder dit blijft de schil leeg tot de volgende poll.
+  if (auroraState.coordinates) applyAuroraState();
+}
+
 function applyGlobeMode() {
   updateEarthLayers(); // toont/verbergt het Earth-lagen blok per modus
   renderOverlays(true); // overlays blijven in béíde modi staan, maar wisselen van stijl én hoogte
@@ -3653,8 +3770,9 @@ function applyGlobeMode() {
           applyLayerToggles();
           // pas bouwen zodra globe.gl ons materiaal echt op de aarde-mesh heeft gezet
           whenEarthMeshReady(() => {
-            setupCloudSphere(); // losse wolkenschil opbouwen
-            setupFog();         // mist-schil opbouwen
+            setupCloudSphere();  // losse wolkenschil opbouwen
+            setupFog();          // mist-schil opbouwen
+            setupAuroraShell();  // aurora-ovaal erboven
           });
         });
       } else {
@@ -3930,6 +4048,9 @@ document.querySelectorAll('.layer').forEach(el => {
     active[layer] = !active[layer];
     el.classList.toggle('off', !active[layer]);
     render();
+    // De aurora is de enige laag die zijn bron pas bevraagt als hij aanstaat; zie
+    // de noot bij die functie. Idempotent, dus onvoorwaardelijk aanroepen mag.
+    syncAuroraLayer();
   });
 });
 
@@ -3966,6 +4087,13 @@ const LOCK_INFO = {
              'cannot run on serverless hosting, so this layer needs your own relay.',
       href: REPO_URL,
       linkTekst: 'How to set one up'
+    },
+    aurora: {
+      kop: 'NOAA is not answering',
+      tekst: 'The aurora oval comes from NOAA’s OVATION model. It needs no key — ' +
+             'the service is simply out of reach right now.',
+      href: 'https://services.swpc.noaa.gov/products/ovation-aurora-30-minute-forecast/',
+      linkTekst: 'About OVATION'
     }
   },
   // Vergrendelen en niet waarschuwen: een kaart die deels 1985 en deels vandaag toont
@@ -3980,6 +4108,11 @@ const LOCK_INFO = {
       kop: 'The present only',
       tekst: 'Lightning arrives over a live stream from Blitzortung. Strikes that ' +
              'were not observed while it ran cannot be recovered.'
+    },
+    aurora: {
+      kop: 'The next half hour only',
+      tekst: 'OVATION is a forecast, not a record: it describes the coming thirty ' +
+             'minutes and nothing else. There is no past oval to travel back to.'
     },
     // De vier EONET-lagen komen er hieronder bij, elk met zijn eigen beginjaar. Ze
     // stonden hier tot sessie 21 met een vaste tekst die zei dat Terra de historie nog
@@ -4063,6 +4196,11 @@ function setLayerLocked(layer, vergrendeld, reden = 'source') {
       rij.classList.remove('off');
       render();
     }
+    // Een slot zet `active` RECHTSTREEKS om, buiten de klik-lus die de aurora-poort
+    // normaal bedient. Zonder deze twee aanroepen blijft de app 924 KB per vijf
+    // minuten halen voor een laag die op slot staat — en na het ontgrendelen zou
+    // hij juist niets halen terwijl de rij weer aan staat.
+    syncAuroraLayer();
     return;
   }
 
@@ -4071,6 +4209,7 @@ function setLayerLocked(layer, vergrendeld, reden = 'source') {
   rij.classList.add('locked', 'off');
   active[layer] = false;
   render();
+  syncAuroraLayer();
 
   // Staat het uitklappen uit (LOCK_DETAILS), dan is dit geen knop maar een teken.
   // Een <button> die niets doet is erger dan geen knop: hij belooft een handeling.
@@ -7022,6 +7161,58 @@ function applySolarState() {
   // PAS HIERNA de labels: rebuildRegionLabels() leest `userData.dir`, en die wordt
   // gezet door placeSunspots() binnen update(). Andersom slaat hij elk gebied over.
   rebuildRegionLabels();
+}
+
+// Zet de binnengekomen voorspelling in beeld. Kan met een lege schil overweg: de
+// adapter kan eerder klaar zijn dan globe.gl met zijn aarde-mesh, en dan haalt
+// `setupAuroraShell()` de bewaarde voorspelling alsnog op.
+function applyAuroraState() {
+  if (aurora && auroraState.coordinates) {
+    auroraState.peak = aurora.setData(auroraState.coordinates, { forecastTime: auroraState.forecast });
+  }
+  updateAuroraCount();
+}
+
+// De teller van de aurora-rij loopt BUITEN `updateCounts()` om, en dat moet ook:
+// die telt items in `store`, en de aurora zet daar niets in. Wat er staat is de
+// piekkans uit het raster — één getal dat zegt hoe actief het nu is, waar bij de
+// andere lagen een aantal staat.
+function updateAuroraCount() {
+  const el = document.getElementById('count-aurora');
+  if (!el) return;
+  el.textContent = auroraState.peak == null ? '—' : Math.round(auroraState.peak) + '%';
+}
+
+/* DE POORT VOOR DE ZWAARSTE BRON VAN DE APP.
+
+   OVATION is 924 KB per antwoord en de laag staat standaard uit. `pull()` slaat
+   een adapter echter niet over omdat zijn lagen uitstaan — `active` komt in het
+   hele haalpad niet voor — dus zonder deze functie haalt Terra dat bij elke
+   paginastart op voor iets wat niemand aanzette.
+
+   AANROEPEN OP TWEE PLEKKEN, en dat is geen overdaad: de klik-lus (de bezoeker
+   zet hem aan) én `setLayerLocked()`, want een tijdslot zet `active[layer]`
+   RECHTSTREEKS op false, buiten die lus om, en het ontgrendelen zet hem via
+   `activeVoorSlot` net zo rechtstreeks terug. Zonder de tweede aanroep blijft de
+   app een megabyte per vijf minuten halen voor een laag die op slot staat.
+
+   Idempotent, dus onvoorwaardelijk aanroepen mag: alleen een echte overgang van
+   uit naar aan zet een pull in gang. */
+function syncAuroraLayer() {
+  const ad = Adapters.ovation;
+  if (!ad) return;
+  const wil = !!active.aurora;
+  const was = ad.enabled !== false;
+  ad.enabled = wil;
+  if (aurora) aurora.setVisible(wil);
+  // Meteen halen bij het aanzetten: vijf minuten op het interval wachten zou
+  // lezen als een kapotte schakelaar.
+  if (wil && !was) pull(ad);
+  // En bij het uitzetten meteen de verbindingsregel bijwerken. Zonder dit blijft
+  // daar `live` staan tot het interval langskomt, en dat is een regel die zegt dat
+  // we een bron bevragen die we net hebben losgelaten. `pull()` zet hem daarna
+  // toch, dus dit loopt er alleen op vooruit.
+  if (!wil && was) setHealth(ad.healthId || ad.id, 'warn', 'switched off');
 }
 bindCosmosToggle('leaders-toggle', 'es-leaders', on => sunMoon.setVisible({ leaders: on }));
 bindCosmosToggle('align-toggle', 'es-align', on => sunMoon.setVisible({ alignment: on }));
