@@ -1654,6 +1654,7 @@ import { createSkyDisksLayer } from './js/layers/sky-disks.js';
 import { createLagrangeLayer, LAGRANGE_POINTS } from './js/layers/lagrange-layer.js';
 import { createOrbitsLayer } from './js/layers/orbits-layer.js';
 import { createAuroraLayer } from './js/layers/aurora-layer.js';
+import { createAntipodeLayer, antipodeOf } from './js/layers/antipode-layer.js';
 import { createSpaceState } from './js/states/space.js';
 import { createEnvironmentToggle } from './js/core/globe-root.js';
 import { skyFrame } from './js/compute/frames.js';
@@ -3433,6 +3434,15 @@ let sunMoon = null;
 // Geomagnetische assen (sessie 18). Zelfde afspraak als sunMoon hierboven: blijft
 // null tot het init-blok onderaan hem maakt, dus overal op null controleren.
 let geomag = null;
+// De antipode-doorkijk (sessie 28). Zelfde afspraak als sunMoon en geomag: blijft
+// null tot het init-blok onderaan hem maakt, dus overal op null controleren.
+let antipode = null;
+// Stond de wireframe al aan toen de antipode werd aangezet? Dan zetten we hem bij
+// het sluiten NIET uit — de gebruiker had hem zelf aan en verwacht hem terug.
+let antipodeWireWasOn = false;
+// De gebeurtenis waar de koorde bij hoort. Nodig om het detailvenster te kunnen
+// hertekenen als de koorde van buitenaf verdwijnt (de wireframe-schakelaar).
+let antipodeEvent = null;
 // Het driftspoor voor het bovenaanzicht. Verandert nooit, dus één keer berekend.
 // Staat hier en niet bij drawPolarView(): die wordt bereikt vanuit
 // updateSunUniform(), en dat is precies het pad dat al tijdens de opbouw van de
@@ -4962,6 +4972,7 @@ function animateShader() {
 
   positionRegionLabels(_cam);   // labels bij de actieve gebieden op de zon
   positionAxisLabels(_cam);     // N en S bij de uiteinden van de assen
+  if (antipode) antipode.update(_cam); // schermvaste coördinaat op het tegenpunt
   updateHover();      // raycaster-highlight bijwerken
   positionLabels();   // leader-line labels herpositioneren
   requestAnimationFrame(animateShader);
@@ -7882,6 +7893,18 @@ if (wireToggleEl) {
   wireToggleEl.addEventListener('click', () => {
     wireframeOn = !wireframeOn;
     applyWireframe(); // zet zelf de schakelaar gelijk, via syncWireToggle()
+    /* Zet de bezoeker de doorkijk zélf uit terwijl er een antipode ligt, dan gaat
+       die mee. De koorde loopt dan binnen een ondoorzichtige bol: onzichtbaar, maar
+       nog steeds "aan" volgens de knop in het venster — een actieve stand die je
+       niet kunt zien is een val. */
+    if (!wireframeOn && antipode && antipode.isOn()) {
+      const ev = antipodeEvent;
+      antipode.hide();   // rechtstreeks, want hideAntipode() zou de wireframe wéér omzetten
+      // Het venster staat dan per definitie op déze gebeurtenis (een ander detail
+      // openen ruimt de koorde al op), dus hertekenen zet de knop terug op
+      // "Through the Earth".
+      if (detailVisible && ev) showDetail(ev);
+    }
   });
 }
 
@@ -8413,6 +8436,12 @@ function hideDetail() {
   detailVisible = false;
   detail.hide();
   navRestore();
+  /* HIER EN NIET IN `detail.onClose` (sessie 28). Die haak vuurt alleen bij een
+     sluiting door de gebruiker zélf, niet vanuit `hide()` — en `hide()` is precies
+     de weg die de app neemt bij `clearView()`, een state-wissel of een sprong naar
+     Space. Aangehaakt op `onClose` zou de koorde dus blijven liggen zodra je het
+     venster niet met het kruisje sluit. */
+  hideAntipode();
 }
 
 const EVENT_NAMES = { region:'Active region', quake:'Earthquake', volcano:'Volcano',
@@ -8469,6 +8498,10 @@ function eventTijd(t) {
    omdat je de bol wilt zien, en op een telefoon ligt daar een sheet overheen. */
 const ICON_PLEK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><path d="M12 1v3M12 20v3M1 12h3M20 12h3"/></svg>';
 const ICON_MOMENT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/></svg>';
+// De antipode: een bol met een koorde er dwars doorheen en een punt aan elk uiteinde.
+// Bewust GEEN pijl — die zou een richting suggereren, en er gaat niets van de ene
+// kant naar de andere.
+const ICON_ANTIPODE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="6.4" y1="17.6" x2="17.6" y2="6.4"/><circle cx="6.4" cy="17.6" r="1.6" fill="currentColor" stroke="none"/><circle cx="17.6" cy="6.4" r="1.6" fill="currentColor" stroke="none"/></svg>';
 
 function clearView() {
   if (!isNarrow()) return;
@@ -8508,7 +8541,65 @@ function detailActions(d) {
       title: 'Set the scene to the moment this was recorded. Live layers lock while you travel.',
       run: () => { goToMoment(d.time); if (heeftPlek) flyTo(d); clearView(); } });
   }
+  // Alleen bevingen: meetkundig heeft elk punt een tegenpunt, maar leesbaar is het
+  // alleen bij een gebeurtenis met een scherpe plek. Een storm is een gebied en een
+  // AQI-station is een meting; een koorde vanuit het "midden" daarvan zou een
+  // precisie voorwenden die er niet is.
+  if (heeftPlek && d.layer === 'quake' && antipode) {
+    const aan = antipodeIsOn(d);
+    acties.push({ label: aan ? 'Hide the antipode' : 'Through the Earth', icon: ICON_ANTIPODE,
+      title: 'Show the point on the exact opposite side of the globe.',
+      // Het venster tekent de knoppenrij opnieuw uit de beschrijving, dus na het
+      // omzetten moet de view opnieuw langs `refresh()` — anders blijft er "Through
+      // the Earth" staan terwijl de koorde er al ligt. `refresh()` hertekent zonder
+      // in-animatie (sessie 26) en is hier precies voor bedoeld.
+      run: () => { toggleAntipode(d); showDetail(d); } });
+  }
   return acties;
+}
+
+/* ---- De antipode-doorkijk ----------------------------------------------------
+
+   DRIE DINGEN MOETEN SAMEN AAN EN SAMEN UIT: de koorde, de wireframe en de
+   schakelaar in Details → Earth. Zonder de wireframe loopt de koorde binnen een
+   ondoorzichtige bol en zie je niets; zonder de schakelaar gelijk te trekken zegt
+   het paneel "off" terwijl je dwars door de aarde kijkt.
+
+   Wie de wireframe ZELF al aan had, houdt hem: `antipodeWireWasOn` onthoudt dat.
+   Anders zou het sluiten van een venster de weergave omzetten die de gebruiker er
+   niet voor had aangezet. */
+function antipodeIsOn(d) {
+  if (!antipode || !antipode.isOn()) return false;
+  const p = antipode.point();
+  const doel = antipodeOf(d.lat, d.lng);
+  // Op de gebeurtenis zelf toetsen en niet op identiteit: `showDetail` krijgt bij
+  // een hertekening een nieuw object voor dezelfde beving.
+  return !!p && Math.abs(p.lat - doel.lat) < 1e-6 && Math.abs(p.lng - doel.lng) < 1e-6;
+}
+
+function showAntipode(d) {
+  if (!antipode) return;
+  const t = antipodeOf(d.lat, d.lng);
+  // `world.getCoords()` is de ENIGE omrekening van lengte/breedte naar 3D in deze
+  // app; de laag doet het bewust niet zelf. Twee omrekeningen lopen ooit uit de pas.
+  const van = world.getCoords(d.lat, d.lng, 0);
+  const naar = world.getCoords(t.lat, t.lng, 0);
+  antipode.show(new THREE.Vector3(van.x, van.y, van.z),
+                new THREE.Vector3(naar.x, naar.y, naar.z), t);
+  antipodeEvent = d;
+  antipodeWireWasOn = wireframeOn;
+  if (!wireframeOn) { wireframeOn = true; applyWireframe(); }
+}
+
+function hideAntipode() {
+  if (!antipode || !antipode.isOn()) return;
+  antipode.hide();
+  antipodeEvent = null;
+  if (!antipodeWireWasOn && wireframeOn) { wireframeOn = false; applyWireframe(); }
+}
+
+function toggleAntipode(d) {
+  if (antipodeIsOn(d)) hideAntipode(); else showAntipode(d);
 }
 
 /* HET VENSTER SLUIT NIETS MEER (sessie 25). Hier stond een `isNarrow()`-tak die
@@ -8528,6 +8619,11 @@ function showDetail(d, opts) {
   // Vóór beide takken, want allebei zetten ze `detailVisible` — en navYield() leest
   // die vlag om te weten of de herinnering al staat.
   navYield();
+  /* Een ander onderwerp betekent een andere antipode. Toetsen op de PLEK en niet
+     blindweg opruimen: `showDetail(d)` wordt ook aangeroepen om dezelfde beving te
+     hertekenen nadat de knop is omgezet, en een blinde `hideAntipode()` zou de
+     koorde dan meteen weer weghalen — de knop zou niets doen. */
+  if (antipode && antipode.isOn() && !antipodeIsOn(d)) hideAntipode();
   if (d.kind && d.kind !== 'event') { detailVisible = true; detail.show(d, opts); return; }
 
   // EMSC bundelt tientallen instituten; `agency` noemt wie de meting daadwerkelijk
@@ -9004,6 +9100,17 @@ world.scene().add(lagrange.group);
 // hij in de standalone-variant van het CDN komt.
 orbits = createOrbitsLayer(THREE, { sunTextureUrl: asset('assets/planets/2k_sun.jpg') });
 world.scene().add(orbits.group);
+
+// De antipode-koorde (sessie 28). In de SCENE en niet aan de aarde-mesh: die gaat
+// in wireframe op `visible = false` en neemt élk kind mee — precies de weergave
+// waarin deze laag moet staan. Zie de kop van de module.
+antipode = createAntipodeLayer(THREE, {
+  color:        PARAMS.antipodeColor,
+  chordRadius:  PARAMS.antipodeChordRadius,
+  markerRadius: PARAMS.antipodeMarkerRadius,
+  labelHeightPx: PARAMS.antipodeLabelPx
+});
+world.scene().add(antipode.group);
 
 // De omgevingsschakelaar zet globe.gl's bol plus alles wat aan de aarde
 // vastzit weg, en geeft precies terug wat er stond. Zie js/core/globe-root.js

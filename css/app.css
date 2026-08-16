@@ -1724,12 +1724,25 @@
   .readout .detail-plot[hidden] { display: none; }
   .readout .detail-plot canvas { max-width: 100%; height: auto; }
 
-  .readout .detail-actions { display: flex; gap: 8px; margin-top: 12px; }
+  .readout .detail-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
   .readout .detail-actions[hidden] { display: none; }
-  /* Twee knoppen naast elkaar in 280 px: `flex: 1` en `min-width: 0` samen, anders
-     duwt de langste tekst ("Go to this moment") de andere knop uit de rij. */
+  /* ÉÉN ACTIE PER REGEL (sessie 28). Hier stond `flex: 1` met de knoppen naast
+     elkaar, en dat kapte ze allemaal af. GEMETEN in het venster van 280 px: de rij
+     is 231 px breed, dus twee knoppen krijgen er 112 elk, en daarvan blijft na de
+     rand (2), de padding (12), het icoon (13) en de tussenruimte (6) precies 79 px
+     tekst over. "Go to this moment" meet 102 en "Show on globe" 81 — allebei te
+     lang, en dat was al zo vóór de antipode-knop erbij kwam; die maakte het alleen
+     zichtbaar door er een derde bij te zetten (75 px per stuk).
+
+     Twee wegen eruit: de labels inkorten of ze onder elkaar zetten. Inkorten laat
+     de gebruiker raden wat een knop doet, en het is bovendien niet aan de layout om
+     de tekst te herschrijven. Onder elkaar kost hoogte — GEMETEN 109 px voor drie
+     knoppen tegen 31 voor één rij — maar dit venster is een LEESvenster met hooguit
+     drie acties, en hoogte is er goedkoper dan onduidelijkheid. Bijvangst: een
+     treffervlak van 231×31 in plaats van 112×31. Alleen de BREEDTE wint daarmee; de
+     31 px hoogte blijft onder de 44 van Apple en is een eigen punt. */
   .detail-act {
-    flex: 1; min-width: 0;
+    flex: 1 1 100%; min-width: 0;
     display: flex; align-items: center; justify-content: center; gap: 6px;
     padding: 8px 6px;
     background: transparent;

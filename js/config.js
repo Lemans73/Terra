@@ -581,6 +581,14 @@ export const PARAMS = {
   // oriëntatie, de kust is inhoud. De achterkant van de bol tekent mee, dus dit
   // moet leesbaar blijven waar twee kustlijnen elkaar kruisen.
   wireCoast: '#7fd4e6',
+  // antipode-doorkijk — koel, want het tegenpunt is nadrukkelijk NIET de
+  // gebeurtenis zelf. De bevingen zijn oranje (#ff6b3d) en dat onderscheid moet
+  // je in één blik zien; helderder dan de kustlijn eronder, want de koorde loopt
+  // er dwars doorheen.
+  antipodeColor: '#6fe3ff',
+  antipodeChordRadius: 0.45, // straal van de koorde-cilinder (geen THREE.Line: die is 1 px)
+  antipodeMarkerRadius: 2.4, // buitenstraal van de ring op het tegenpunt
+  antipodeLabelPx: 20,       // schermvaste hoogte van de coördinaat
   expertEdgeWidth: 0.22,    // absolute randbreedte (units) — dun/subtiel, high-end
   // basis-hoogte voor ÁLLE indicatoren in deskundig modus: net boven de land-
   // polygons (0.01) zodat symbolen nooit door de kaart worden afgedekt. De
