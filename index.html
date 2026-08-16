@@ -3423,7 +3423,8 @@ function sunPositionAt(dt) {
 let shaderMaterial = null;
 let cloudMesh = null;       // losse zwevende wolkenschil-mesh
 let cloudsTexture = null;   // gedeelde wolkentextuur (schaduw + schil)
-let wireMesh = null;        // wireframe-aardbol (test-laag)
+let wireMesh = null;        // het grove lengte/breedte-rooster van de doorkijk (15°)
+let wireFineMesh = null;    // het fijne rooster (5°), alleen ingezoomd zichtbaar
 let wireframeOn = false;
 let fogMesh = null;         // fresnel-mistschil (vertroebelt de randen)
 let fogOn = false;
@@ -3720,13 +3721,32 @@ function whenEarthMeshReady(fn, tries = 90) {
    deze codebase loopt ooit uit de pas met de eerste. */
 function setupWireframe() {
   if (wireMesh) return;
+  const coords = (lat, lng) => world.getCoords(lat, lng, 0);
   wireMesh = new THREE.LineSegments(
-    graticuleGeometry(THREE, (lat, lng) => world.getCoords(lat, lng, 0)),
+    graticuleGeometry(THREE, coords),
     new THREE.LineBasicMaterial({ color: PARAMS.wireGrid, transparent: true,
                                   opacity: PARAMS.wireGridOpacity, depthWrite: false })
   );
   wireMesh.visible = false;
   world.scene().add(wireMesh); // concentrisch met de aarde (beide op de oorsprong)
+
+  /* HET FIJNE ROOSTER, en waarom het er is. 15 graden is op de grond 1670 km, dus
+     zodra je op een land inzoomt staat er hooguit één lijn in beeld en houdt een
+     rooster op een schaalverdeling te zijn. Dit vult dat op vanaf `wireGridFineDistance`
+     en verdwijnt daarboven weer — over de hele bol zou 5 graden 72 meridianen geven
+     en dan is de doorkijk dicht.
+
+     Eén keer bouwen en per frame alleen `visible` omzetten. Een rooster dat bij elke
+     zoomtick opnieuw wordt opgebouwd is exact de fout die de landnamen in sessie 9
+     maakten: p90 van 357 ms tijdens het zoomen. */
+  wireFineMesh = new THREE.LineSegments(
+    graticuleGeometry(THREE, coords, { latStep: PARAMS.wireGridFineStep,
+                                       lngStep: PARAMS.wireGridFineStep }),
+    new THREE.LineBasicMaterial({ color: PARAMS.wireGrid, transparent: true,
+                                  opacity: PARAMS.wireGridFineOpacity, depthWrite: false })
+  );
+  wireFineMesh.visible = false;
+  world.scene().add(wireFineMesh);
 }
 /* DE ENIGE SCHRIJVER OP `world.polygonsData` (sessie 28).
    Twee onafhankelijke dingen willen dezelfde land-features tekenen: de schematische
@@ -3774,6 +3794,8 @@ function applyWireframe() {
   setupWireframe();
   const earthMesh = findEarthMesh();
   if (wireMesh) wireMesh.visible = wireframeOn;
+  // Het fijne rooster hangt óók aan de camera-afstand; die kant regelt de renderlus.
+  if (wireFineMesh && !wireframeOn) wireFineMesh.visible = false;
   if (earthMesh) earthMesh.visible = !wireframeOn;
   // De wolken- én de mistschil zijn KINDEREN van de aarde-mesh, dus ze gaan met
   // `earthMesh.visible = false` vanzelf mee — three's zichtbaarheid erft. De regel
@@ -4991,6 +5013,10 @@ function animateShader() {
   positionRegionLabels(_cam);   // labels bij de actieve gebieden op de zon
   positionAxisLabels(_cam);     // N en S bij de uiteinden van de assen
   if (antipode) antipode.update(_cam); // schermvaste coördinaat op het tegenpunt
+  // Het fijne rooster verschijnt zodra je op een gebied inzoomt. Hier en niet in
+  // `world.onZoom`: die haak is een SETTER met één handler die al bezet is (sessie 7),
+  // en `_camLen` staat hier toch al klaar. Alleen een vlag omzetten, niets herbouwen.
+  if (wireFineMesh) wireFineMesh.visible = wireframeOn && _camLen < PARAMS.wireGridFineDistance;
   updateHover();      // raycaster-highlight bijwerken
   positionLabels();   // leader-line labels herpositioneren
   requestAnimationFrame(animateShader);

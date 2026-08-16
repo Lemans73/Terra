@@ -38,7 +38,7 @@
 /* GRID_ en niet kaal `DEFAULTS`: `label-sprite.js` heeft er ook een, en de
    standalone-build gooit alle modules in ÉÉN scope. De vangrail ving dit
    (`Identifier 'DEFAULTS' has already been declared`) — vandaar de voorvoegsel-regel. */
-const GRID_DEFAULTS = { latStep: 15, lngStep: 15, arcSegments: 4 };
+const GRID_DEFAULTS = { latStep: 15, lngStep: 15, maxArcDeg: 3.75 };
 
 /* Lijnstukken en geen doorlopende lijnen: `LineSegments` neemt de punten twee
    aan twee, dus elk paar is een eigen stukje en er lopen geen sprongen van het
@@ -48,10 +48,16 @@ export function graticuleGeometry(THREE, coords, opts = {}) {
   const cfg = Object.assign({}, GRID_DEFAULTS, opts);
   const pos = [];
 
-  // `arcSegments` is het aantal stukjes per 15 graden boog. Vier is genoeg: een
-  // koorde over 3,75 graden wijkt 0,05% van de bol af, ruim onder een pixel op
-  // elke zoomstand die deze app toelaat.
-  const stap = cfg.latStep / cfg.arcSegments;
+  /* `maxArcDeg` is hoe LANG een recht stukje mag zijn, niet hoeveel stukjes er per
+     lijn komen. Dat onderscheid is het verschil tussen 20.448 en 6.816 lijnstukken:
+     hier stond `latStep / arcSegments`, en dan schaalt de boogresolutie mee met de
+     roosterstap — het fijne rooster van 5 graden kreeg stukjes van 1,25 graden
+     terwijl 3,75 er net zo rond uitziet. De ronding van de bol hangt niet af van
+     hoe dicht je de lijnen zet.
+
+     3,75 graden is genoeg: de koorde over die hoek wijkt 0,05 % van de bol af, ruim
+     onder een pixel op elke zoomstand die deze app toelaat. */
+  const stap = Math.min(cfg.maxArcDeg, cfg.latStep);
 
   const zet = (lat, lng) => {
     const c = coords(lat, lng);

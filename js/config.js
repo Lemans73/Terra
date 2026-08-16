@@ -584,8 +584,27 @@ export const PARAMS = {
   // Het rooster zelf: doffer dan de kustlijn, want het is oriëntatie en geen inhoud.
   // Je ziet altijd de voor- én de achterkant, dus alles wat hier te fel staat telt
   // dubbel op de limbus.
+  //
+  // OPACITY GING VAN 0,35 NAAR 0,55 (sessie 28, Terry's tweede test). GEMETEN met
+  // twee frames naast elkaar, één met en één zonder rooster: op 0,35 raakte het
+  // grove rooster ingezoomd 0,99 % van de pixels met een gemiddelde delta van 102
+  // op 765. Het oude mesh-wireframe leek feller omdat het DICHTER was (7,5° in de
+  // lengte, 5,6° in de breedte, plus een diagonaal per vak) — niet omdat de lijnen
+  // sterker waren. Met de diagonalen eruit valt die dekking weg, en dan moet de
+  // helderheid het overnemen.
   wireGrid: '#3a8fa0',
-  wireGridOpacity: 0.35,
+  wireGridOpacity: 0.55,
+  // Het FIJNE rooster, dat alleen ingezoomd verschijnt. 15 graden is op de grond
+  // 1670 km: kijk je naar een gebied ter grootte van Colombia, dan staat er hooguit
+  // één lijn in beeld en is een rooster geen schaalverdeling meer. Vijf graden vult
+  // dat op zodra je dichtbij komt, en verdwijnt weer zodra de hele bol in beeld is —
+  // daar zou het juist dichtslibben.
+  wireGridFineStep: 5,
+  wireGridFineOpacity: 0.22,
+  // Onder deze camera-afstand komt het fijne rooster erbij. De bol past op ~237 in
+  // beeld (desktop) en dichterbij dan 140 laat OrbitControls niet toe, dus 210 ligt
+  // net binnen "ik kijk naar een gebied" en buiten "ik kijk naar de aarde".
+  wireGridFineDistance: 210,
   // antipode-doorkijk — koel, want het tegenpunt is nadrukkelijk NIET de
   // gebeurtenis zelf. De bevingen zijn oranje (#ff6b3d) en dat onderscheid moet
   // je in één blik zien; helderder dan de kustlijn eronder, want de koorde loopt
