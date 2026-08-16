@@ -15,7 +15,7 @@
 let oceanMat = null; // gecachet vlak oceaan-materiaal (één keer bouwen)
 
 // Schakel naar de schematische weergave.
-export function enterExpertMode({ world, THREE, bloomPass, gradePass, PARAMS, landFeatures }) {
+export function enterExpertMode({ world, THREE, bloomPass, gradePass, PARAMS }) {
   // 1. post-processing uit — geen bloom/gloed/aberratie in deskundig modus
   if (bloomPass) bloomPass.enabled = false;
   if (gradePass) gradePass.enabled = false;
@@ -33,14 +33,14 @@ export function enterExpertMode({ world, THREE, bloomPass, gradePass, PARAMS, la
   }
   world.globeMaterial(oceanMat);
 
-  // 4. land-polygons met effen fill + harde kustlijn-stroke (globe.gl native).
-  //    Hogere lift (0.01) → ruime z-buffer-scheiding van de oceaan-bol, anders ontstaat
-  //    bij grazende kijkhoeken (polen/limbus) z-fighting = donkere "smudge"-vlekken.
-  world.polygonsData(landFeatures || [])
-    .polygonCapColor(() => PARAMS.expertLand)
-    .polygonSideColor(() => 'rgba(0,0,0,0)') // geen zichtbare extrusie-zijkanten
-    .polygonStrokeColor(() => PARAMS.expertCoast)
-    .polygonAltitude(() => 0.01);
+  // 4. het land tekent deze module NIET meer (sessie 28). `polygonsData` had twee
+  //    schrijvers gekregen — deze modus én de wireframe-doorkijk, die dezelfde
+  //    kustlijnen nodig heeft — en dan wist de `polygonsData([])` van exitExpertMode
+  //    stilletjes de omtrek van de ander. Zelfde klasse als `world.onZoom`, dat ook
+  //    een setter is en geen abonnement (sessie 7). Er is nu één schrijver:
+  //    `syncLandPolygons()` in index.html, die uit `globeMode` en `wireframeOn`
+  //    afleidt welke van de drie standen geldt. Wie hier weer een polygon-regel
+  //    neerzet, verliest hem bij de eerstvolgende moduswissel.
 
   // 5. lat/lng-raster
   if (world.showGraticules) world.showGraticules(true);
@@ -54,6 +54,8 @@ export function exitExpertMode({ world, bloomPass, gradePass, starsUrl }) {
   if (world.showAtmosphere) world.showAtmosphere(true);
   // starsUrl komt mee omdat de sterrenhemel bij de gekozen textuurkwaliteit hoort.
   if (starsUrl) world.backgroundImageUrl(starsUrl);
-  world.polygonsData([]);
+  // Het land wordt hier NIET leeggemaakt — zie de noot bij stap 4 van enterExpertMode.
+  // De aanroeper draait `syncLandPolygons()` en die beslist of er nog kustlijnen
+  // moeten staan (dat is zo zodra de wireframe aan is).
   if (world.showGraticules) world.showGraticules(false);
 }

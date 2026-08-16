@@ -576,6 +576,11 @@ export const PARAMS = {
   expertCoast: '#5e7488',   // harde kustlijn-stroke
   expertBg:    '#080b11',   // platte achtergrond (i.p.v. sterren)
   expertEdge:  '#dfe8f2',   // lichte contrast-rand ("casing") rond elk symbool
+  // wireframe-doorkijk (realistische weergave) — kustlijn als omtrek zonder vulling.
+  // Helderder dan het rooster van wireMesh (#3a8fa0 op 0,35): het raster is
+  // oriëntatie, de kust is inhoud. De achterkant van de bol tekent mee, dus dit
+  // moet leesbaar blijven waar twee kustlijnen elkaar kruisen.
+  wireCoast: '#7fd4e6',
   expertEdgeWidth: 0.22,    // absolute randbreedte (units) — dun/subtiel, high-end
   // basis-hoogte voor ÁLLE indicatoren in deskundig modus: net boven de land-
   // polygons (0.01) zodat symbolen nooit door de kaart worden afgedekt. De

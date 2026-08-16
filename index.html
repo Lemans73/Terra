@@ -3648,9 +3648,17 @@ function setupCloudSphere() {
   earthMesh.add(cloudMesh); // erft exact de oriëntatie van de aarde → wolken op de juiste plek
 }
 
-// ---- Wireframe-aardbol (test-laag) ----
-// Toont een doorzichtig wireframe-rooster i.p.v. de getextureerde aarde, zodat de
-// indicatoren (staven/ringen) goed te inspecteren zijn zonder occlusie.
+// ---- Wireframe-aardbol ----
+// Toont een doorzichtig rooster i.p.v. de getextureerde aarde, zodat je dwars door
+// de bol heen kijkt: de indicatoren aan de achterkant en — sinds sessie 28 — de
+// antipode van een aardbeving.
+//
+// SESSIE 28: DE DOORKIJK TOONT NU OOK LAND. Het rooster van `wireMesh` is een kale
+// SphereGeometry met alleen meridianen en parallellen; de kustlijnen die je in de
+// schematische weergave ziet komen ergens anders vandaan (`world.polygonsData`).
+// In de realistische weergave stond dat kanaal leeg, dus keek je door een lege
+// draadbol — je zag wél dat er iets aan de andere kant lag, maar niet wáár.
+// `syncLandPolygons()` hieronder vult het nu in beide weergaven.
 function findEarthMesh() {
   let m = null;
   world.scene().traverse(o => { if (o.material === shaderMaterial) m = o; });
@@ -3678,16 +3686,72 @@ function setupWireframe() {
   wireMesh.visible = false;
   world.scene().add(wireMesh); // concentrisch met de aarde (beide op de oorsprong)
 }
+/* DE ENIGE SCHRIJVER OP `world.polygonsData` (sessie 28).
+   Twee onafhankelijke dingen willen dezelfde land-features tekenen: de schematische
+   weergave (effen vlakken met een kustlijn) en de wireframe-doorkijk (alleen de
+   omtrek). Zolang ze er allebei zelf in schreven, wiste de `polygonsData([])` van
+   exitExpertMode de omtrek van de ander — stil, want globe.gl klaagt niet over een
+   leeg kanaal. `polygonsData` is net als `world.onZoom` een SETTER: de laatste
+   aanroep wint, en dat is geen ordening maar volgorde-toeval.
+
+   Drie standen, afgeleid uit twee vlaggen:
+     schematisch          → effen land + harde kustlijn (het oude uiterlijk)
+     realistisch + wire   → alleen omtrek, geen vulling
+     realistisch          → leeg (de textuur is het land)
+
+   De omtrek ligt lager dan de schematische vulling (0,002 tegen 0,01): daar moest
+   de polygon van de effen oceaanbol op straal 100 wegblijven, hier is er geen bol
+   om mee te vechten — `earthMesh` staat immers uit. Hoger zou de lijn juist
+   zichtbaar boven het rooster gaan zweven. */
+function syncLandPolygons() {
+  const wire = wireframeOn && globeMode === 'realistic';
+  if (globeMode !== 'realistic') {
+    world.polygonsData(landFeatures || [])
+      .polygonCapColor(() => PARAMS.expertLand)
+      .polygonSideColor(() => 'rgba(0,0,0,0)')
+      .polygonStrokeColor(() => PARAMS.expertCoast)
+      .polygonAltitude(() => 0.01);
+  } else if (wire) {
+    world.polygonsData(landFeatures || [])
+      // Geen vulling: een dichtgeschilderd continent maakt van de doorkijk weer
+      // een ondoorzichtige bol, en dan is er niets gewonnen.
+      .polygonCapColor(() => 'rgba(0,0,0,0)')
+      .polygonSideColor(() => 'rgba(0,0,0,0)')
+      .polygonStrokeColor(() => PARAMS.wireCoast)
+      .polygonAltitude(() => 0.002);
+  } else {
+    world.polygonsData([]);
+  }
+}
+
 function applyWireframe() {
   setupWireframe();
   const earthMesh = findEarthMesh();
   if (wireMesh) wireMesh.visible = wireframeOn;
   if (earthMesh) earthMesh.visible = !wireframeOn;
+  // De wolken- én de mistschil zijn KINDEREN van de aarde-mesh, dus ze gaan met
+  // `earthMesh.visible = false` vanzelf mee — three's zichtbaarheid erft. De regel
+  // hieronder is er voor het geval de wolkenschil ooit een zusje wordt (zoals de
+  // aurora dat is), en kost verder niets.
   if (wireframeOn) {
-    if (cloudMesh) cloudMesh.visible = false; // wolken weg in wireframe-modus
+    if (cloudMesh) cloudMesh.visible = false;
   } else {
     applyLayerToggles(); // herstelt o.a. de wolken-schil-zichtbaarheid
   }
+  syncLandPolygons();
+  syncWireToggle();
+}
+
+/* Eén schrijver voor de drie dingen die de wireframe-schakelaar in Details → Earth
+   laten zien: de klasse, het woordje ernaast en wat een schermlezer hoort. Ze
+   stonden inline in de klik-handler, en dat werkte zolang de klik de enige weg was.
+   Sinds de antipode-knop de wireframe zelf aanzet, is dat niet meer zo — een
+   schakelaar die "off" zegt terwijl je dwars door de aarde kijkt, is een fout die
+   de gebruiker terecht niet vertrouwt. Zelfde patroon als `syncCloseButton()`. */
+function syncWireToggle() {
+  if (wireToggleEl) wireToggleEl.classList.toggle('on', wireframeOn);
+  const stat = document.getElementById('es-wire');
+  if (stat) stat.textContent = wireframeOn ? 'on' : 'off';
 }
 
 // ---- Mist-schil ----
@@ -3774,7 +3838,10 @@ function applyGlobeMode() {
       world.globeMaterial(shaderMaterial);
       world.atmosphereColor('#6bb3ff');
       updateSunUniform();
-      if (cloudMesh) cloudMesh.visible = true;
+      // Niet onvoorwaardelijk aan: staat de wireframe aan, dan hoort de wolkenschil
+      // weg te blijven. Zonder deze toets bracht een rondje Schematic → Realistic
+      // de wolken terug in een doorkijk waar ze net waren uitgezet.
+      if (cloudMesh) cloudMesh.visible = !wireframeOn;
     } else {
       // bouw eenmalig, daarna hergebruiken
       const built = buildRealisticMaterial();
@@ -3800,8 +3867,11 @@ function applyGlobeMode() {
   } else { // expert — schematische vector-kaart
     realisticActive = false;
     if (cloudMesh) cloudMesh.visible = false; // geen zwevende wolken in deskundig modus
-    enterExpertMode({ world, THREE, bloomPass, gradePass, PARAMS, landFeatures });
+    enterExpertMode({ world, THREE, bloomPass, gradePass, PARAMS });
   }
+  // NA beide takken, want de stand hangt van `globeMode` én `wireframeOn` af en
+  // enter/exitExpertMode raken het polygon-kanaal niet meer aan (sessie 28).
+  syncLandPolygons();
 }
 
 // Realistische tak: maak eerst alle deskundig-wijzigingen ongedaan
@@ -7793,9 +7863,7 @@ const wireToggleEl = document.getElementById('wire-toggle');
 if (wireToggleEl) {
   wireToggleEl.addEventListener('click', () => {
     wireframeOn = !wireframeOn;
-    wireToggleEl.classList.toggle('on', wireframeOn);
-    document.getElementById('es-wire').textContent = wireframeOn ? 'on' : 'off';
-    applyWireframe();
+    applyWireframe(); // zet zelf de schakelaar gelijk, via syncWireToggle()
   });
 }
 
