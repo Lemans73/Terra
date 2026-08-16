@@ -2737,6 +2737,24 @@ const BRAND_KANTELT = 2023;
 // hun gemeten dekking valt — zie borgTijdsloten().
 const TIJDREIS_ONMOGELIJK = ['aqi', 'lightning', 'aurora'];
 
+/* Lagen waar de knop `Go to this moment` in het detailvenster iets zichtbaars
+   oplevert (sessie 28). Hij stond er tot nu toe bij élke gebeurtenis met een tijd,
+   en dat is bij drie lagen niet alleen nutteloos maar zelf-ondermijnend: `aqi`,
+   `lightning` en `aurora` staan hierboven in TIJDREIS_ONMOGELIJK, dus zodra het
+   moment verschuift zet borgTijdsloten() ze op slot — je klikt de meting weg die
+   je aan het lezen was.
+
+   De twee die overblijven verdienen hun plek om verschillende redenen. Een BEVING
+   is één ogenblik en de catalogus reikt terug, dus "toen" is een echt ander beeld.
+   Een STORM verplaatst zich, dus "toen" is bovendien een andere plek.
+
+   Wat er bewust NIET in staat: `volcano` en `wildfire` dragen als tijd het laatste
+   EONET-méétpunt en niet hun begin, dus bij een gebeurtenis die nog loopt springt
+   de scene naar bijna-nu en gebeurt er niets. `seaice` is een uitgestrektheid en
+   geen gebeurtenis. `Show on globe` blijft wél overal staan — die knop heeft geen
+   bijwerking en werkt op alles met een coördinaat. */
+const MOMENT_LAYERS = new Set(['quake', 'storm']);
+
 // referenties naar de actieve 3D-glyph-objecten (voor per-frame animatie)
 let glyphList = [];
 let hovered = null;        // het 3D-object onder de muis (raycaster-highlight)
@@ -8485,7 +8503,7 @@ function detailActions(d) {
       title: 'Fly to this place. The scene keeps showing now.',
       run: () => { flyTo(d); clearView(); } });
   }
-  if (d && d.time) {
+  if (d && d.time && MOMENT_LAYERS.has(d.layer)) {
     acties.push({ label: 'Go to this moment', icon: ICON_MOMENT,
       title: 'Set the scene to the moment this was recorded. Live layers lock while you travel.',
       run: () => { goToMoment(d.time); if (heeftPlek) flyTo(d); clearView(); } });
