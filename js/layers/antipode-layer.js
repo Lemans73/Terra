@@ -42,6 +42,30 @@
    moet daarvoor in het textuurframe staan. Een punt op lengte en
    breedte heeft dat niet nodig — `getCoords()` doet die omrekening
    al.
+
+   ------------------------------------------------------------
+   DOOR ALLES HEEN: `depthTest: false` OP ALLE DRIE
+   ------------------------------------------------------------
+   Terry's test, en de reden is niet cosmetisch. De koorde is per
+   definitie een lijn DOOR de bol: hij loopt van het oppervlak naar
+   het middelpunt en er weer uit. Elk stukje aan de overkant ligt
+   dus achter iets — achter de land-polygons van de doorkijk, achter
+   het rooster, achter de indicatoren. Met een dieptetoets valt hij
+   telkens weg zodra hij achter een continent komt, en dan zie je
+   twee losse stukjes lijn in plaats van één verbinding. Dat is een
+   fout, want de verbinding IS wat de laag toont.
+
+   De markering hoort bij dezelfde uitzondering: hij ligt per
+   definitie aan de VERRE kant van de bol, dus met een dieptetoets
+   is hij per definitie onzichtbaar. `depthWrite` blijft wel uit —
+   niets mag zich achter deze laag verstoppen.
+
+   Waarom dit geen precedent schept voor de rest van de app: de
+   indicatoren op het oppervlak MOETEN wel wegvallen achter de bol,
+   want anders lees je een gebeurtenis aan de achterkant als een die
+   voor je ligt (de occlusietoets van sessie 26 gaat daarover). Deze
+   laag toont juist wat er aan de andere kant is, en dat is precies
+   het verschil.
    ============================================================ */
 
 import { createLabelSprite, scaleToPixels } from '../core/label-sprite.js';
@@ -88,7 +112,9 @@ export function createAntipodeLayer(THREE, opts = {}) {
      definitie van een antipode: de verbinding gaat door het middelpunt. */
   const chord = new THREE.Mesh(
     new THREE.CylinderGeometry(cfg.chordRadius, cfg.chordRadius, cfg.earthRadius * 2, 8, 1, true),
-    new THREE.MeshBasicMaterial({ color: kleur, transparent: true, opacity: 0.85, depthWrite: false })
+    // `depthTest: false` — zie de noot bij DOOR ALLES HEEN hieronder.
+    new THREE.MeshBasicMaterial({ color: kleur, transparent: true, opacity: 0.85,
+                                  depthWrite: false, depthTest: false })
   );
   chord.renderOrder = cfg.renderOrder;
   group.add(chord);
@@ -99,7 +125,7 @@ export function createAntipodeLayer(THREE, opts = {}) {
   const marker = new THREE.Mesh(
     new THREE.RingGeometry(cfg.markerRadius * 0.55, cfg.markerRadius, 32),
     new THREE.MeshBasicMaterial({ color: kleur, transparent: true, opacity: 0.95,
-                                  side: THREE.DoubleSide, depthWrite: false })
+                                  side: THREE.DoubleSide, depthWrite: false, depthTest: false })
   );
   marker.renderOrder = cfg.renderOrder + 1;
   group.add(marker);

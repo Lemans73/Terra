@@ -1655,6 +1655,7 @@ import { createLagrangeLayer, LAGRANGE_POINTS } from './js/layers/lagrange-layer
 import { createOrbitsLayer } from './js/layers/orbits-layer.js';
 import { createAuroraLayer } from './js/layers/aurora-layer.js';
 import { createAntipodeLayer, antipodeOf } from './js/layers/antipode-layer.js';
+import { graticuleGeometry } from './js/core/graticule.js';
 import { createSpaceState } from './js/states/space.js';
 import { createEnvironmentToggle } from './js/core/globe-root.js';
 import { skyFrame } from './js/compute/frames.js';
@@ -3705,11 +3706,24 @@ function whenEarthMeshReady(fn, tries = 90) {
   if (tries <= 0) { console.warn('Earth mesh not found — cloud shell and fog skipped.'); return; }
   requestAnimationFrame(() => whenEarthMeshReady(fn, tries - 1));
 }
+/* EEN ECHT LENGTE/BREEDTE-ROOSTER, GEEN MESH-WIREFRAME (sessie 28, Terry's test).
+   Hier stond `new SphereGeometry(100, 48, 32)` met `wireframe: true`, en dat gaf
+   DIAGONALEN: three tekent een wireframe als de randen van de driehoeken waaruit
+   de mesh bestaat, en elk vierhoekje van een bol bestaat uit twee driehoeken. Die
+   schuine lijn hoort dus bij de aanpak en is niet weg te stellen.
+
+   Zolang de doorkijk een testlaag was, viel dat mee. Nu je er dwars doorheen naar
+   iets anders kijkt telt het dubbel — je ziet de voor- én de achterkant van de bol,
+   dus elke betekenisloze lijn staat er twee keer. `graticuleGeometry()` tekent
+   alleen lijnen die iets zíjn: 24 meridianen en 11 parallellen, elk 15 graden uit
+   elkaar. De omrekening komt van `world.getCoords`, want een tweede bolformule in
+   deze codebase loopt ooit uit de pas met de eerste. */
 function setupWireframe() {
   if (wireMesh) return;
-  wireMesh = new THREE.Mesh(
-    new THREE.SphereGeometry(100, 48, 32),
-    new THREE.MeshBasicMaterial({ wireframe: true, color: '#3a8fa0', transparent: true, opacity: 0.35, depthWrite: false })
+  wireMesh = new THREE.LineSegments(
+    graticuleGeometry(THREE, (lat, lng) => world.getCoords(lat, lng, 0)),
+    new THREE.LineBasicMaterial({ color: PARAMS.wireGrid, transparent: true,
+                                  opacity: PARAMS.wireGridOpacity, depthWrite: false })
   );
   wireMesh.visible = false;
   world.scene().add(wireMesh); // concentrisch met de aarde (beide op de oorsprong)
@@ -3722,24 +3736,22 @@ function setupWireframe() {
    leeg kanaal. `polygonsData` is net als `world.onZoom` een SETTER: de laatste
    aanroep wint, en dat is geen ordening maar volgorde-toeval.
 
-   Drie standen, afgeleid uit twee vlaggen:
-     schematisch          → effen land + harde kustlijn (het oude uiterlijk)
-     realistisch + wire   → alleen omtrek, geen vulling
-     realistisch          → leeg (de textuur is het land)
+   Drie standen, en DE DOORKIJK WEEGT ZWAARDER DAN DE WEERGAVE (Terry's test):
+     wireframe (welke weergave dan ook) → alleen omtrek, geen vulling
+     schematisch                        → effen land + harde kustlijn
+     realistisch                        → leeg (de textuur is het land)
+
+   Die eerste regel stond eerst achter `globeMode === 'realistic'`, en dan hield de
+   schematische weergave zijn grijze vlakken in de doorkijk — je keek door de bol
+   heen tegen een dichtgeschilderd continent aan. "Doorkijk" is geen eigenschap van
+   een weergave maar een stand die er dwars doorheen gaat, dus hij hoort bovenaan.
 
    De omtrek ligt lager dan de schematische vulling (0,002 tegen 0,01): daar moest
    de polygon van de effen oceaanbol op straal 100 wegblijven, hier is er geen bol
    om mee te vechten — `earthMesh` staat immers uit. Hoger zou de lijn juist
    zichtbaar boven het rooster gaan zweven. */
 function syncLandPolygons() {
-  const wire = wireframeOn && globeMode === 'realistic';
-  if (globeMode !== 'realistic') {
-    world.polygonsData(landFeatures || [])
-      .polygonCapColor(() => PARAMS.expertLand)
-      .polygonSideColor(() => 'rgba(0,0,0,0)')
-      .polygonStrokeColor(() => PARAMS.expertCoast)
-      .polygonAltitude(() => 0.01);
-  } else if (wire) {
+  if (wireframeOn) {
     world.polygonsData(landFeatures || [])
       // Geen vulling: een dichtgeschilderd continent maakt van de doorkijk weer
       // een ondoorzichtige bol, en dan is er niets gewonnen.
@@ -3747,6 +3759,12 @@ function syncLandPolygons() {
       .polygonSideColor(() => 'rgba(0,0,0,0)')
       .polygonStrokeColor(() => PARAMS.wireCoast)
       .polygonAltitude(() => 0.002);
+  } else if (globeMode !== 'realistic') {
+    world.polygonsData(landFeatures || [])
+      .polygonCapColor(() => PARAMS.expertLand)
+      .polygonSideColor(() => 'rgba(0,0,0,0)')
+      .polygonStrokeColor(() => PARAMS.expertCoast)
+      .polygonAltitude(() => 0.01);
   } else {
     world.polygonsData([]);
   }
@@ -8359,10 +8377,21 @@ function updateModeButton() {
 modeOptEls.forEach(btn => {
   btn.addEventListener('click', () => {
     if (btn.dataset.mode === globeMode) return;   // al actief, niets herbouwen
+    /* DE DOORKIJK GAAT UIT BIJ EEN WEERGAVEWISSEL (sessie 28, Terry's keuze). Een
+       andere weergave is een ander onderwerp — dezelfde redenering waarmee een
+       state-wissel het detailvenster sluit. Het alternatief, de koorde meenemen,
+       laat de bezoeker met een doorkijk achter in een weergave die hij net om
+       andere redenen koos. Vóór de wissel, zodat `hideAntipode()` de wireframe nog
+       in de oude stand terugzet. */
+    const hadAntipode = antipodeEvent;   // vastleggen: hideAntipode() nult hem
+    hideAntipode();
     globeMode = btn.dataset.mode;
     applyGlobeMode();
     updateModeButton();
     forceRebuild(); // herbouw de symbolen in de stijl van de nieuwe modus
+    // Het venster staat dan nog op de beving waar de koorde bij hoorde; hertekenen
+    // zet de knop terug op "Through the Earth".
+    if (detailVisible && hadAntipode) showDetail(hadAntipode);
   });
 });
 

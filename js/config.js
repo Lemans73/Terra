@@ -581,6 +581,11 @@ export const PARAMS = {
   // oriëntatie, de kust is inhoud. De achterkant van de bol tekent mee, dus dit
   // moet leesbaar blijven waar twee kustlijnen elkaar kruisen.
   wireCoast: '#7fd4e6',
+  // Het rooster zelf: doffer dan de kustlijn, want het is oriëntatie en geen inhoud.
+  // Je ziet altijd de voor- én de achterkant, dus alles wat hier te fel staat telt
+  // dubbel op de limbus.
+  wireGrid: '#3a8fa0',
+  wireGridOpacity: 0.35,
   // antipode-doorkijk — koel, want het tegenpunt is nadrukkelijk NIET de
   // gebeurtenis zelf. De bevingen zijn oranje (#ff6b3d) en dat onderscheid moet
   // je in één blik zien; helderder dan de kustlijn eronder, want de koorde loopt
