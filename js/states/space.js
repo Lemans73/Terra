@@ -108,8 +108,8 @@ export function createSpaceState(THREE, deps) {
      die niet verouderen zodra je de tijd verschuift.
 
      Top, Edge en Side zijn VASTGEZET — de orientatie staat vast, maar
-     pannen en zoomen blijven toegestaan. Dat is het verschil met magneto's
-     "zoom only"; zie de kop van core/view-state.js.
+     pannen en zoomen blijven toegestaan. Dat is het verschil met de
+     "zoom only" waar dit uit voortkomt; zie de kop van core/view-state.js.
   ---------------------------------------------------------- */
   /* `label` en `note` staan sinds sessie 24 bij de view zelf en niet meer in
      de markup. Reden: js/ui/nav.js bouwt de knoppenrij uit het register, dus

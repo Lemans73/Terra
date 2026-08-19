@@ -1054,20 +1054,10 @@
   /* Een readout-waarde die een voorbehoud draagt. Zelfde geel als #time-val.shifted
      en om dezelfde reden: het zegt "wat je ziet is niet het gemetene". Die regel zat
      aan een id vast en was dus niet herbruikbaar; dit is de gedeelde vorm. */
-  /* Conditioneel paneel. De klasse staat op `body` en niet op de sectie, zodat
-     later ook andere plekken op de state kunnen reageren zonder een tweede vlag. */
-  .magneto-only { display: none; }
-  body.magneto-on .magneto-only { display: block; }
-  .magneto-uitleg {
-    margin: 10px 0 0; font-size: 11px; line-height: 1.5; color: var(--ink-faint);
-  }
-  #magneto-btn { margin-top: 2px; }
-  body.magneto-on #magneto-btn { border-color: var(--quake); color: var(--ink); }
-
   /* ---- Space (sessie 22) ----
-     Zelfde vorm als `.magneto-only` hierboven, en dat is opzet: het patroon
-     "klasse op body, blok verbergen wat in die stand niets betekent" is nu
-     de derde bewoner en hoort daarom herkenbaar hetzelfde te blijven.
+     Het patroon is "klasse op body, blok verbergen wat in die stand niets
+     betekent". Dat hoort bij elke volgende state herkenbaar hetzelfde te
+     blijven — dit blok is de vorm om na te volgen.
 
      LET OP bij uitbreiden: een expliciete `display` in een klasse verslaat het
      `hidden`-attribuut, want `hidden` is niet meer dan een user-agent-regel
@@ -2122,7 +2112,7 @@
 
   /* Wat in een weergave niet van toepassing is, wordt niet getoond — niet uitgegrijsd.
      De klasse staat met opzet op <body> en niet op de sectie, precies zoals
-     body.magneto-on, zodat een volgende state hier niets nieuws voor hoeft te bedenken.
+     body.space-on, zodat een volgende state hier niets nieuws voor hoeft te bedenken.
      In het zonaanzicht zijn de zonnevlekken een momentopname van NOAA; een tijdslider
      erbij zou iets beloven wat er niet is. */
   body.sun-view .time-island { display: none; }

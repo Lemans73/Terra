@@ -6,9 +6,10 @@
    bij het opzetten aangereikt.
 
    WAAROM DIT BESTAAT
-   Terra had in sessie 21 drie states — magneto, sun-view en straks
-   space — en elk daarvan voerde LETTERLIJK hetzelfde ritueel uit,
-   met een eigen kopie van dezelfde zeven velden:
+   Terra had in sessie 21 drie states — het toenmalige magneto-
+   perspectief, sun-view en straks space — en elk daarvan voerde
+   LETTERLIJK hetzelfde ritueel uit, met een eigen kopie van
+   dezelfde zeven velden:
 
      let xView = false
      const _xPrev = { pos, target, min, max, labels, autoRotate }
@@ -35,13 +36,15 @@
                        en een vlag of hij vastgezet is
 
    PANNEN BLIJFT TOEGESTAAN IN EEN VASTGEZETTE VIEW, en dat is het
-   verschil met de magneto-implementatie waar dit uit voortkomt.
-   Daar staat "zoom only" en kun je een uitvergroot beeld niet
-   verschuiven, wat precies dan knelt wanneer je iets van dichtbij
-   wilt bekijken. Vastzetten hoort de ORIENTATIE te bewaken, niet de
-   bewegingsvrijheid binnen die orientatie. Magneto erft dit zodra
-   hij hier op migreert — die state staat sinds sessie 20 uit achter
-   `MAGNETO_VIEW` en komt later terug vanuit een eigen PoC.
+   verschil met de state waar dit uit voortkomt: het magneto-
+   perspectief van sessie 18 stond op "zoom only", en dan kun je een
+   uitvergroot beeld niet verschuiven — wat precies dan knelt wanneer
+   je iets van dichtbij wilt bekijken. Vastzetten hoort de ORIENTATIE
+   te bewaken, niet de bewegingsvrijheid binnen die orientatie.
+
+   Die state is in sessie 29 gesloopt om zijn naam vrij te maken voor
+   de magnetosfeer, die uit een eigen PoC komt. Wat ervan overleeft is
+   de vorm hierboven, en die regel.
 
    DE VIEW WORDT GEZET BIJ HET KIEZEN, NIET ELK FRAME AFGEDWONGEN.
    Dat is wat pannen mogelijk maakt: een view die zichzelf per frame

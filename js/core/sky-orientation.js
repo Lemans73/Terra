@@ -17,10 +17,12 @@
    de RA-verdeling, het heliocentrische stelsel — is een functie van
    deze twee getallen en kan dus nooit onderling uit de pas lopen.
 
-   DIT IS DE CONJUGAAT VAN MAGNETO. Daar staat `rotZ(-eps)·rotY(gast)`,
-   want die weergave brengt de wereld naar een vaste zon; hier brengen
-   we een vast frame naar de wereld. Dezelfde meetkunde, andere kant op,
-   en dat is meteen de goedkoopste toets dat het klopt.
+   DE ANDERE KANT OP IS `rotZ(-eps)·rotY(gast)`. Die vorm brengt de
+   wereld naar een vaste zon — dat is wat het magneto-perspectief tot
+   sessie 29 deed, en wat elke weergave doet die de aarde laat draaien
+   onder iets dat stilstaat. Hier brengen we juist een vast frame naar
+   de wereld. Dezelfde meetkunde, andere kant op, en het conjugaat is
+   meteen de goedkoopste toets dat het klopt.
 
    WAAROM GEEN MATRIX. `setFromRotationMatrix()` op een zelfgebouwde
    basis vraagt een Matrix4 plus een polar decomposition; twee

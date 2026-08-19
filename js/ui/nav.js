@@ -7,14 +7,15 @@
    WAAROM DIT GEGENEREERD WORDT EN NIET GESCHREVEN
    Tot sessie 24 had elke state zijn eigen ingang in het infopaneel:
    `Enter space view` in de Space-accordeon, `Observe the Sun` bij de
-   zon, en magneto had er ook een. Drie knoppen, drie plekken, drie
-   keer dezelfde tekstwissel tussen "erheen" en "Back to Earth" — en
-   je moest eerst weten in welke tab de knop stond om terug te kunnen.
+   zon, en het magneto-perspectief had er ook een. Drie knoppen, drie
+   plekken, drie keer dezelfde tekstwissel tussen "erheen" en "Back to
+   Earth" — en je moest eerst weten in welke tab de knop stond om
+   terug te kunnen.
 
    `js/core/view-state.js` is een register, dus die lijst bestaat al.
    `list()` geeft hem in registratievolgorde, mét label, icoon en de
    camerastanden. Een state die zich aanmeldt verschijnt daarmee
-   vanzelf in de navigatie; magneto kost straks nul regels hier.
+   vanzelf in de navigatie; de magnetosfeer kost straks nul regels hier.
 
    EARTH IS GEEN GEREGISTREERDE STATE MAAR DE AFWEZIGHEID ERVAN.
    Hij staat als eerste rij en schakelt met `set(actief, false)`. Dat

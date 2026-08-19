@@ -5,10 +5,10 @@
    aan op objecten die de aanroeper aanlevert.
 
    WAAROM DIT BESTAAT
-   Twee states willen de aarde uit beeld hebben — magneto (die zijn
-   eigen bol tekent) en space (die heliocentrisch wordt en helemaal
-   geen aardbol nodig heeft). Beide moeten hem daarna teruggeven
-   precies zoals ze hem aantroffen. Dat is meer dan een vlag omzetten:
+   Een state kan de aarde uit beeld willen hebben — space wordt
+   heliocentrisch en heeft helemaal geen aardbol nodig, en het
+   magneto-perspectief tekende tot sessie 29 zijn eigen bol. Wie hem
+   wegzet moet hem daarna teruggeven precies zoals hij hem aantrof. Dat is meer dan een vlag omzetten:
    er hangen zes losse lagen naast de bol in de scene, en die hadden
    allemaal al hun eigen stand die de bezoeker zelf gekozen kan hebben.
 

@@ -40,21 +40,6 @@ export const REPO_URL = 'https://github.com/Lemans73/Terra#bring-your-own-data';
 // naar een functie in de app in plaats van naar de uitgang.
 export const LOCK_DETAILS = false;
 
-// Is de knop "Enter magneto view" te zien? Staat sinds 2026-08-09 UIT, en net als
-// LOCK_DETAILS hierboven is dat een tijdelijke stand met dezelfde redenering: niets
-// tonen wat de app nog niet kan waarmaken. De state werkt technisch — de aarde staat
-// er op zijn ware 23,44°, de standen zijn vastgezet aan het aarde-zonvlak — maar hij
-// is nog niet af genoeg om iemand in te sturen: geen pannen in de vastgezette standen,
-// geen tijdlijn over jaren, en de afstanden staan niet op ware schaal.
-//
-// WAT HIJ NIET UITZET: de drie as-lagen in `Axes & poles`. Die tekenen gewoon op de
-// bol en staan los van deze state — de rotatie-as, de dipoolas en de pooldrift blijven
-// dus volledig bruikbaar. Alleen de aparte camerastand verdwijnt.
-//
-// Zet dit op true zodra de state af is. De knop is de ENIGE ingang (geen sneltoets,
-// geen url-parameter), dus deze ene vlag volstaat.
-export const MAGNETO_VIEW = false;
-
 // ---- Bezoekersteller ----------------------------------------------------
 // Vercel Web Analytics: één scriptbestand dat Vercel zelf serveert vanaf hetzelfde
 // domein. Geen npm-pakket, geen build-stap, geen dependency — de nul-afhankelijkheden
