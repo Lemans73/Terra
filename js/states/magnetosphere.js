@@ -64,7 +64,21 @@ export function createMagnetosphereState(THREE, deps) {
   function fitDistance(S) {
     const cam = world.camera();
     const halfV = (cam.fov / 2) * Math.PI / 180;
-    const halfH = Math.atan(cam.aspect * Math.tan(halfV));
+    /* EEN CANVAS VAN NUL HOOG GEEFT aspect = 0/0 = NaN, EN DAN IS DE CAMERA WEG.
+
+       Niet theoretisch: gemeten in sessie 30. In een verborgen browserpaneel
+       klapt het canvas in tot clientWidth/Height 0, globe.gl zet dan
+       `camera.aspect = 0/0`, en deze formule geeft NaN. Die NaN gaat via
+       `targetFrom` rechtstreeks naar `camera.position` — en een positie van NaN
+       herstelt zich nergens meer, want elke volgende berekening gaat er weer
+       vanuit. Het beeld blijft zwart tot een herlaadbeurt.
+
+       Terugvallen op 1 geeft een iets te ruime kadrering in plaats van geen
+       kadrering. DEZELFDE FORMULE STAAT IN js/states/space.js en heeft daar
+       hetzelfde gat; dat is niet meegenomen omdat die state deze sessie niet
+       aangeraakt is. */
+    const aspect = Number.isFinite(cam.aspect) && cam.aspect > 0 ? cam.aspect : 1;
+    const halfH = Math.atan(aspect * Math.tan(halfV));
     return S / Math.sin(Math.min(halfV, halfH));
   }
 
