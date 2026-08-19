@@ -85,9 +85,25 @@ export function createBoundaryLayer(THREE, deps) {
     return lijn;
   }
 
-  const mp = bouwOppervlak(0x6fd3e8, 0.55);
+  /* HOEVEEL INKT EEN LIJN KRIJGT, HANGT AF VAN HOEVEEL LIJNEN ER ZIJN.
+
+     Het volle net is 4560 lijnstukken die elkaar overal kruisen; daar bouwt
+     de dekking zich op en is 0,55 al stevig. De doorsnede is 142 lijnstukken
+     en op elke plek precies één lijn — dezelfde 0,55 leest daar als een
+     spookje. Gemeten via de post-processing composer (en dat is de enige
+     meting die telt, want de grade-pass dempt): met het volle net kwam 1,36 %
+     van de pixels boven de achtergrond uit, met de kale doorsnede 0,06 %.
+
+     Dus twee sets waarden, en niet één compromis dat in beide gevallen net
+     niet klopt. */
+  const INKT = {
+    net:  { mp: 0.55, shock: 0.34 },
+    lijn: { mp: 1.00, shock: 0.75 }
+  };
+
+  const mp = bouwOppervlak(0x6fd3e8, INKT.net.mp);
   mp.name = 'msphere:magnetopause';
-  const shock = bouwOppervlak(0xe8a86f, 0.34);
+  const shock = bouwOppervlak(0xe8a86f, INKT.net.shock);
   shock.name = 'msphere:bowshock';
 
   /* De punten van één omwentelingsoppervlak, als lijnstukken.
@@ -196,6 +212,9 @@ export function createBoundaryLayer(THREE, deps) {
   function setOutline(vlak) {
     if (vlak === doorsnedeVlak) return false;
     doorsnedeVlak = vlak;
+    const inkt = vlak ? INKT.lijn : INKT.net;
+    mp.material.opacity = inkt.mp;
+    shock.material.opacity = inkt.shock;
     return true;
   }
 

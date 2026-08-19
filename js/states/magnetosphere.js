@@ -664,7 +664,7 @@ export function createMagnetosphereState(THREE, deps) {
          zet niemand hem terug — je komt dan terug op een aarde in het zwart.
          Gemeten, en het is precies de faalvorm die je niet ziet als je alleen
          via de vrije stand test: dáár staan de sterren toch al aan. */
-      if (layers.starsRestore) layers.starsRestore();
+      if (layers.skyRestore) layers.skyRestore();
       boundary.setVisible(false);
       if (feed) feed.setEnabled(false);
       if (clock && bewaardeKlok) { clock.herstel(bewaardeKlok); bewaardeKlok = null; }
@@ -702,8 +702,8 @@ export function createMagnetosphereState(THREE, deps) {
     // De lens is al gezet door view.camera() hierboven; hier gaat het om wat
     // ERNA komt. De stand die goToView zojuist neerzette is de nieuwe waarheid.
     leesRig();
-    if (layers.starsOff && layers.starsRestore) {
-      if (v && v.flat) layers.starsOff(); else layers.starsRestore();
+    if (layers.skyOff && layers.skyRestore) {
+      if (v && v.flat) layers.skyOff(); else layers.skyRestore();
     }
     /* Het raster vervangt de sterren, en het vlak volgt de kijkrichting:
        Meridian kijkt langs GSM Y en heeft dus het X-Z-vlak, Top kijkt langs

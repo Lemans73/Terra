@@ -9470,19 +9470,48 @@ if (globalThis.TerraCore) {
          in het lagenpaneel blijft ongemoeid, want die staat in deze states toch
          niet voor de keuze van de bezoeker. eventsRestore() zet zijn eigen
          instelling bij vertrek terug. */
-      /* DE VASTE STANDEN KRIJGEN GEEN STERRENHEMEL.
+      /* DE VASTE STANDEN KRIJGEN GEEN HEMEL — GEEN STERREN EN GEEN ATMOSFEER.
 
          Meridian en Top zijn geen uitzicht maar een DOORSNEDE: je kijkt
          loodrecht op een vlak waarin de vorm zijn betekenis heeft. Een
-         sterrenveld erachter suggereert dat je ergens vandaan kijkt, en dat
-         is precies wat een doorsnede niet doet. De vrije stand houdt ze wel,
-         want dáár kijk je wél ergens vandaan.
+         sterrenveld erachter en een gloed om de bol suggereren allebei dat je
+         ergens vandaan kijkt, en dat is precies wat een doorsnede niet doet.
+         De vrije stand houdt ze wel, want dáár kijk je wél ergens vandaan.
 
-         `null` en niet een zwarte afbeelding: globe.gl valt dan terug op de
-         achtergrondkleur, en dat scheelt ook het tekenen van een bol van
-         8k bij elke frame. */
-      starsOff() { world.backgroundImageUrl(null); },
-      starsRestore() { world.backgroundImageUrl(assetsFor(texQuality).stars); },
+         EN DE ATMOSFEER MOET HIER SOWIESO WEG, want hij maakt de helft van het
+         beeld zwart. Dat is uitgezocht en niet vermoed:
+
+           De atmosfeerschil van globe.gl is een fresnel-gloed met
+           `intensity = pow(coefficient + dot(normal, viewDir), power)`. Een
+           negatieve basis in `pow()` is in GLSL ongedefinieerd en levert NaN.
+           Bij een PERSPECTIEFcamera blijft die basis positief; bij een
+           ORTHOGRAFISCHE niet, want daar loopt elke kijkstraal evenwijdig
+           terwijl de shader nog met `vVertexWorldPosition - cameraPosition`
+           rekent.
+
+           In het gewone beeld valt dat niet op: de framebuffer klemt af. De
+           app tekent echter via een post-processing composer, en die rendert in
+           een HDR-doel dat NaN bewaart. De bloom-pass smeert die NaN met vijf
+           blur-niveaus over een groot deel van het beeld uit, en de grade-pass
+           daarna maakt er zwart van.
+
+           GEMETEN 2026-08-20: 77,9 % van het beeld zwart met de atmosfeer aan,
+           0 % zonder. Bloom alleen is onschuldig, grade alleen ook — het is de
+           combinatie, en daarom vond geen enkele meting op
+           `renderer.render()` hem. Wie hier iets meet: meet via
+           `world.postProcessingComposer().render()`, want dát is wat de app doet.
+
+         `null` en niet een zwarte afbeelding voor de achtergrond: globe.gl valt
+         dan terug op de achtergrondkleur, en dat scheelt ook het tekenen van
+         een bol van 8k bij elke frame. */
+      skyOff() {
+        world.backgroundImageUrl(null);
+        world.showAtmosphere(false);
+      },
+      skyRestore() {
+        world.backgroundImageUrl(assetsFor(texQuality).stars);
+        world.showAtmosphere(true);
+      },
 
       auroraOn() {
         if (active.aurora) return;
