@@ -306,6 +306,39 @@
     </div>
   </div>
 
+  <!-- DE TRANSPORTBALK VAN DE MAGNETOSFEER (sessie 30).
+       Staat op dezelfde plek als het tijd-eiland en nooit tegelijk ermee: in
+       die state gaat het eiland uit (css/app.css, naast body.sun-view) en komt
+       deze ervoor in de plaats. Hij hergebruikt de klassen van het eiland, dus
+       alle rooster- en mobielcorrecties gelden hier ook — zie de kop van
+       js/ui/magnetosphere-transport.js voor waarom het twee bedieningen zijn
+       en niet één met een uitzondering erin.
+
+       ZICHTBAARHEID GAAT VIA body.msphere-on EN NIET VIA `hidden`. De regel
+       hieronder zet `display`, en display in een klasse verslaat het
+       hidden-attribuut — dezelfde val als bij .ti-panel. -->
+  <div class="msphere-time" id="msphere-time">
+    <div class="ti-row">
+      <div class="ti-play">
+        <button class="play-btn" id="msp-back" title="Play backwards" aria-label="Play backwards">&#9664;</button>
+        <button class="play-btn" id="msp-pause" title="Pause" aria-label="Pause" disabled>&#10073;&#10073;</button>
+        <button class="play-btn" id="msp-fwd" title="Play forwards" aria-label="Play forwards">&#9654;</button>
+      </div>
+      <div class="ti-slider">
+        <!-- min/max worden gezet uit de reeks: de baan IS de dekking van de
+             data. Hier staat dus met opzet geen bereik in de markup. -->
+        <input type="range" id="msp-slider" class="range" min="0" max="0" step="1" value="0"
+        aria-label="Step through the measured solar wind" />
+      </div>
+      <div class="ti-now">
+        <button class="ti-val" id="msp-val" type="button"
+        title="Back to the latest measurement">now</button>
+      </div>
+      <button class="play-btn mspt-rate" id="msp-rate" type="button"
+      title="Playback speed" aria-label="Playback speed">6 h/s</button>
+    </div>
+  </div>
+
   <div class="masthead">
     <div class="brand">
       <div class="brand-row">
@@ -1663,6 +1696,7 @@ import { createSpaceState } from './js/states/space.js';
 import { createMagnetosphereState } from './js/states/magnetosphere.js';
 import { createBoundaryLayer } from './js/layers/magnetosphere/boundary-layer.js';
 import { createMagnetosphereFeed, MSPHERE_HEALTH_ID } from './js/compute/magnetosphere-feed.js';
+import { createMagnetosphereTransport } from './js/ui/magnetosphere-transport.js';
 import { createEnvironmentToggle } from './js/core/globe-root.js';
 import { skyFrame } from './js/compute/frames.js';
 import { createViewStates } from './js/core/view-state.js';
@@ -2276,7 +2310,12 @@ const msphereFeed = (globalThis.TerraData && globalThis.TerraCore)
       // `nieuweData` en niet `tik`: de state moet niet alleen herbouwen maar ook
       // beslissen of de cursor meeschuift naar het nieuwste aangekomen monster.
       // Dat is zijn keuze en niet die van de feed — zie `volgtNu` daar.
-      onUpdate: () => { if (msphereState) msphereState.nieuweData(); }
+      onUpdate: () => {
+        if (msphereState) msphereState.nieuweData();
+        // De balk toont de cursor en de grenzen van de baan, en die verschuiven
+        // allebei met elke ronde: er komen rijen bij aan de staart.
+        if (msphereTransport) msphereTransport.toon();
+      }
     })
   : null;
 
@@ -6731,7 +6770,7 @@ bindCosmosToggle('sunspots-toggle', 'es-sunspots',
    het init-blok. Zelfde TDZ-familie als de rest. */
 let viewStates = null, spaceState = null, planets = null;
 // De magnetosfeer. Zelfde TDZ-afspraak als de andere states.
-let msphereState = null, msphereBoundary = null;
+let msphereState = null, msphereBoundary = null, msphereTransport = null;
 let disks = null, lagrange = null, orbits = null, environment = null;
 /* `panels` en `navPanel` staan hier om dezelfde reden als de rij hierboven, en
    niet bij hun eigen code verderop: `setPanelOpen()` leest `panels` en die
@@ -9247,6 +9286,16 @@ if (globalThis.TerraCore) {
     }
   });
 
+  /* De bediening. Hij LEEST de state en schrijft er alleen de cursor in; de
+     state blijft de enige die weet welk moment er getoond wordt. Zonder feed
+     is er niets om doorheen te lopen, dus dan komt hij er ook niet. */
+  if (msphereFeed) {
+    msphereTransport = createMagnetosphereTransport({
+      state: msphereState, feed: msphereFeed, fmtStamp, formatOffset
+    });
+    if (msphereTransport) msphereTransport.toon();
+  }
+
   /* EERST de magnetosfeer, DAN de zon, DAN de ruimte. De navigatie staat in
      registratievolgorde en die loopt van dichtbij naar ver — de holte om de
      aarde ligt binnen de baan van de zon. */
@@ -9313,6 +9362,23 @@ backBtn.addEventListener('click', () => {
   if (actief) viewStates.set(actief, false);
 });
 viewStates.onChange((actief) => { backBtn.hidden = !actief; });
+
+/* DE TRANSPORTBALK VOLGT DE STATE, EN NIET ANDERSOM.
+
+   `onChange` en geen aanroep vanuit de state zelf: die kent zijn bediening niet
+   en hoort dat ook niet te doen — hij bezit de cursor, de balk toont hem. Deze
+   haak dekt bovendien alle wegen naar buiten, ook Back to Earth en een sprong
+   naar een andere state, en dat is precies waarom hij hier al staat.
+
+   HET STOPPEN IS HET BELANGRIJKE HALF. Een afspeellus die doorloopt terwijl de
+   bezoeker weg is, blijft de cursor verzetten — en die cursor stuurt de klok
+   van de HELE app. Dan schuift de aarde onder je vandaan vanuit een state die
+   niet meer open staat. */
+viewStates.onChange((actief) => {
+  if (!msphereTransport) return;
+  if (actief === 'msphere') msphereTransport.toon();
+  else msphereTransport.stop();
+});
 // Het trackvenster hoort bij wat je aankijkt: dagen rond de aarde, jaren in het
 // zonnestelsel. Zie borgTrackPresets() waarom dit aan `onChange` hangt en niet aan
 // setSpaceView().
@@ -9378,6 +9444,7 @@ if (IS_LOCAL) {
     // dezelfde reden als de rest — één regel die uit de toon valt leest als een
     // uitzondering die er niet is.
     get msphereFeed() { return msphereFeed; },
+    get msphereTransport() { return msphereTransport; },
     get sunMoon() { return sunMoon; },
     get active() { return active; },
     get spaceVoorheen() { return spaceVoorheen; },

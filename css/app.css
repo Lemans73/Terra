@@ -1941,7 +1941,11 @@
      280 px breed, de readout net zo aan de rechterkant. Het eiland centreert zich dus
      in de RUIMTE ERTUSSEN in plaats van op het scherm, en kan per constructie niet
      botsen — ook niet op een smal venster, waar het gewoon meekrimpt. */
-  .time-island {
+  /* De transportbalk van de magnetosfeer deelt deze plek — nooit tegelijk, zie
+     de schakelregels verderop. Eén regel voor allebei, zodat een correctie aan
+     de onderrand er niet één van de twee vergeet; dat is precies wat er in
+     sessie 24 gebeurde toen deze maten uit elkaar liepen. */
+  .time-island, .msphere-time {
     position: fixed;
     /* De variabele en niet de ingetikte 28 px: `@media (max-height: 480px)` zet
        `--dock-bottom` op 12 en schoof de knoppenrij mee, maar het eiland bleef op
@@ -2125,6 +2129,21 @@
      zie de kop van js/states/magnetosphere.js. */
   body.msphere-on .time-island { display: none; }
 
+  /* En de transportbalk komt ervoor in de plaats. Hij staat standaard uit en
+     niet op `hidden`: de regel hierboven zet `display`, en display in een
+     klasse verslaat het hidden-attribuut. De body-klasse weet toch al in welke
+     state we zijn, dus een tweede schakelaar in JS zou een tweede waarheid zijn. */
+  .msphere-time { display: none; }
+  body.msphere-on .msphere-time { display: flex; }
+
+  /* De snelheidsknop neemt de kolom over die in het eiland de klok-uitklapper
+     draagt. Zelfde breedte-gedrag (auto), zodat de sliderbaan even lang blijft. */
+  .mspt-rate {
+    grid-area: more;
+    font-variant-numeric: tabular-nums;
+    min-width: 46px;
+  }
+
   /* ---- Toast-meldingen (nieuwe real-time entries) ---- */
   #toasts {
     position: fixed;
@@ -2226,7 +2245,7 @@
        KNOPPENRIJ, de panelen stoppen boven het eiland. Tot sessie 25 waren die twee
        hetzelfde getal, en dat kon alleen omdat het eiland verdween zodra er een
        paneel openging. */
-    .time-island {
+    .time-island, .msphere-time {
       left: 10px; right: 10px; max-width: none;
       bottom: calc(var(--dock-lift) + env(safe-area-inset-bottom, 0px));
     }
