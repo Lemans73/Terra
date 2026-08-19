@@ -104,7 +104,26 @@ createServer(async (req, res) => {
     if (/(^|\/)\.env/.test(p)) { res.writeHead(403); return res.end('forbidden'); }
 
     const data = await readFile(full);
-    res.writeHead(200, { 'Content-Type': TYPES[extname(full)] || 'application/octet-stream' });
+    /* NOOIT CACHEN OP DE ONTWIKKELMACHINE.
+
+       Zonder een cache-kop past een browser HEURISTISCHE caching toe: hij leidt
+       zelf een houdbaarheid af uit Last-Modified en serveert een gewijzigd
+       bestand daarna nog uit zijn eigen cache, zonder te vragen of het nog
+       klopt. Voor `css/app.css` en de ES-modules betekende dat een pagina die
+       half oud en half nieuw draait — en dat leest als een fout in de code die
+       er niet is. Het kostte in sessie 30 een halve zoektocht naar een bug die
+       alleen in de cache van de browser bestond.
+
+       `no-store` en niet `no-cache`: de eerste bewaart niets, de tweede bewaart
+       wel maar valideert opnieuw. Op localhost is er niets te winnen met
+       bewaren, en alles te verliezen met een halve validatie.
+
+       Dit raakt alleen deze ontwikkelserver. Op Vercel bepalen de headers in
+       vercel.json wat er gebeurt, en daar is cachen juist wel de bedoeling. */
+    res.writeHead(200, {
+      'Content-Type': TYPES[extname(full)] || 'application/octet-stream',
+      'Cache-Control': 'no-store'
+    });
     res.end(data);
   } catch {
     res.writeHead(404); res.end('not found');
