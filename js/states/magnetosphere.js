@@ -29,7 +29,8 @@
    voordoet als een meting is erger dan geen vorm.
    ============================================================ */
 
-import { MSPHERE_RE, pocNaarTerra } from '../layers/magnetosphere/boundary-layer.js';
+import { MSPHERE_RE, MSPHERE_DRAW_MAX, pocNaarTerra }
+  from '../layers/magnetosphere/boundary-layer.js';
 
 /* De nominale windstand waarop de vorm draait zolang B3 er niet is.
    Eén plek, met een naam die zegt wat hij is — een default die ergens
@@ -59,21 +60,43 @@ export function createMagnetosphereState(THREE, deps) {
     return S / Math.sin(Math.min(halfV, halfH));
   }
 
-  // De neus staat op ~10 Re, de staart loopt tot 60. Het beeld dat de VORM
-  // toont is de neus plus een stuk flank — niet de hele staart, want dan is
-  // de aarde vier pixels. Twintig aardstralen is de maat waarop je de holte
-  // ziet én de bol nog herkent.
-  const overviewDistance = () => fitDistance(20 * MSPHERE_RE);
+  /* HOE VER, EN WAAROM DIT GEMETEN IS.
+
+     De eerste versie kadreerde op 20 Re, "genoeg om de holte te zien en de
+     bol te herkennen". Op het scherm zat je daarmee BINNEN de magnetosfeer:
+     het net vulde het beeld en van de vorm — neus, flank, staart — was niets
+     te lezen. De vorm is niet symmetrisch om de aarde: hij loopt van +10 Re
+     aan de zonzijde tot -60 in de staart, dus wat je moet omvatten is de
+     STAART en niet de neus.
+
+     Vandaar de getekende lengte als maat. De 0,70 volgt uit het draaipunt: dat
+     ligt op de aarde (zie targetFrom), dus een kader dat de hele staart omvat
+     is aan de zonzijde voor de helft leeg. Zo staan de neus, de flank en een
+     goed stuk staart in beeld, en loopt de staart aan de rand door — wat een
+     staart hoort te doen. */
+  const overviewDistance = () => fitDistance(MSPHERE_DRAW_MAX * MSPHERE_RE * 0.70);
 
   const bounds = () => ({
     min: MSPHERE_RE * 1.6,                   // net buiten de bol
     max: fitDistance(90 * MSPHERE_RE)        // ruim voorbij de getekende staart
   });
 
+  /* HET DRAAIPUNT BLIJFT OP DE AARDE, EN DAT IS GEEN KEUZE.
+
+     De vorm loopt van +10 Re aan de zonzijde tot -60 in de staart, dus zijn
+     midden ligt niet op de aarde. Een kadrering die daarheen pant, is
+     geprobeerd en werkt niet: globe.gl schrijft `controls.target` bij elke
+     `update()` terug naar de oorsprong. GEMETEN — target op (0,0,-2000) gezet,
+     na één `ctl.update()` weer (0,0,0). Dat is dezelfde val als bij de
+     zonaanzicht-camera in sessie 21.
+
+     Dus staat de aarde in het midden en strekt de holte zich naar één kant
+     uit. Dat is fysisch trouwens de eerlijker weergave: de staart wijst van de
+     zon af, en waar hij heen wijst is de informatie. */
   function targetFrom(direction, distance) {
     const b = bounds();
     return { pos: direction.clone().multiplyScalar(distance), target: origin.clone(),
-             min: b.min, max: Math.max(b.max, distance * 1.15) };
+             min: b.min, max: Math.max(b.max, distance * 1.6) };
   }
 
   /* DE GSM-BASIS IN TERRA'S ASSEN.
