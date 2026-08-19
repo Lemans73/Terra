@@ -97,7 +97,12 @@ export function createViewStates(env) {
   const saved = {
     pos: null, target: null, min: 0, max: 0,
     labels: true, autoRotate: false,
-    rotate: true, pan: true
+    rotate: true, pan: true,
+    // `camera.up` hoort hier ook bij. Een state die hem kantelt en niet
+    // terugzet, laat de gebruiker achter met een aardbol die scheef draait
+    // zonder zichtbare oorzaak — dezelfde klasse fout als een vastgezette
+    // view die na vertrek blijft staan.
+    up: null
   };
 
   /* Een state aanmelden.
@@ -112,7 +117,7 @@ export function createViewStates(env) {
        camera()    -> { pos, target, min, max }   waar de camera heen gaat
        enter()     state-specifieke dingen aanzetten (optioneel)
        exit()      ze weer uitzetten (optioneel)
-       views       { naam: { camera() -> {pos, target, min, max}, locked } }
+       views       { naam: { camera() -> {pos, target, min, max, up?}, locked } }
        initialView welke view bij binnenkomst geldt (optioneel)
        keepLabels     laat de labels met rust (standaard: uit)
        keepRotation   laat auto-rotate met rust (standaard: uit)
@@ -195,6 +200,7 @@ export function createViewStates(env) {
       saved.max = ctl.maxDistance;
       saved.rotate = ctl.enableRotate;
       saved.pan = ctl.enablePan;
+      saved.up = cam.up.clone();
       saved.labels = labels.get();
       saved.autoRotate = autoRotate.get();
 
@@ -225,6 +231,7 @@ export function createViewStates(env) {
       // met een bol die niet meer draait en geen zichtbare oorzaak.
       ctl.enableRotate = saved.rotate;
       ctl.enablePan = saved.pan;
+      if (saved.up) cam.up.copy(saved.up);
 
       if (handedOver) {
         // Alleen de grenzen en het draaipunt teruggeven; wie het overneemt
@@ -279,6 +286,18 @@ export function createViewStates(env) {
 
     ctl.enableRotate = !view.locked;
     ctl.enablePan = true;      // ook vastgezet: de orientatie staat vast, het beeld niet
+
+    /* EEN VIEW MAG ZIJN EIGEN "OMHOOG" OPGEVEN, en dat moet VÓÓR de
+       camerabeweging gebeuren: OrbitControls leest `camera.up` bij het
+       opbouwen van zijn eigen assenstelsel, dus achteraf zetten geeft een
+       beeld dat pas bij de volgende muisbeweging rechttrekt.
+
+       WAAROM DIT BESTAAT. Zonder dit staat "omhoog" altijd op Terra's
+       noordpool (0,1,0). Voor een view in een ANDER frame — het GSM-frame van
+       de magnetosfeer staat er tientallen graden vanaf — betekent dat: je
+       kijkt wel loodrecht op het juiste vlak, maar het beeld hangt scheef.
+       Een "zijaanzicht" dat gekanteld is, is geen zijaanzicht. */
+    if (d.up) cam.up.copy(d.up).normalize();
 
     if (!options || options.fly !== false) {
       flyCamera(cam, ctl, d.pos, d.target, { min: d.min, max: d.max });

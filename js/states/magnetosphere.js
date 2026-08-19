@@ -93,10 +93,11 @@ export function createMagnetosphereState(THREE, deps) {
      Dus staat de aarde in het midden en strekt de holte zich naar één kant
      uit. Dat is fysisch trouwens de eerlijker weergave: de staart wijst van de
      zon af, en waar hij heen wijst is de informatie. */
-  function targetFrom(direction, distance) {
+  function targetFrom(direction, distance, up) {
     const b = bounds();
     return { pos: direction.clone().multiplyScalar(distance), target: origin.clone(),
-             min: b.min, max: Math.max(b.max, distance * 1.6) };
+             min: b.min, max: Math.max(b.max, distance * 1.6),
+             up: up ? up.clone() : null };
   }
 
   /* DE GSM-BASIS IN TERRA'S ASSEN.
@@ -140,20 +141,39 @@ export function createMagnetosphereState(THREE, deps) {
   const LOCK_NOTE = 'Locked to the GSM frame — pan and zoom still work.';
 
   const views = {
+    /* DE TWEE VASTE STANDEN GEVEN HUN EIGEN "OMHOOG" OP.
+
+       Zonder dat staat omhoog op Terra's noordpool (0,1,0), en het GSM-frame
+       staat daar tientallen graden vanaf — de dipoolas is 11 graden scheef en
+       de zonrichting draait de hele dag rond. Je kijkt dan wel loodrecht op
+       het juiste vlak, maar het beeld hangt scheef, en een gekanteld
+       zijaanzicht is geen zijaanzicht.
+
+       In BEIDE standen ligt de zonlijn (GSM-x) horizontaal, want dat is de as
+       waarlangs de vorm zich uitstrekt. Wat verticaal staat verschilt:
+       Meridian zet de dipoolkant omhoog, Top de flank. */
     meridian: {
       locked: true, label: 'Meridian', note: LOCK_NOTE,
       camera: () => {
         // Loodrecht op het X-Z-vlak is de Y-as: van daaruit zie je dat vlak
-        // op ware grootte.
+        // op ware grootte, met de dipoolas-kant omhoog.
         const a = gsmAssen();
-        return targetFrom(a.y.clone(), overviewDistance());
+        return targetFrom(a.y.clone(), overviewDistance(), a.z);
       }
     },
     top: {
       locked: true, label: 'Top', note: LOCK_NOTE,
       camera: () => {
+        // Van boven op het X-Y-vlak. Omhoog moet IN dat vlak liggen — de
+        // Z-as zou samenvallen met de kijkrichting en dat is gedegenereerd.
+        //
+        // MIN Y EN NIET PLUS: met +y staat de zon rechts en in Meridian links,
+        // en dan wisselt de leesrichting bij het omschakelen tussen twee standen
+        // van hetzelfde onderwerp. GEMETEN als schermhoek van de zonlijn: +y gaf
+        // 0 graden, -y geeft 180, gelijk aan Meridian. De PoC houdt dezelfde
+        // conventie aan (+X links, zie zijn schaaloverlay).
         const a = gsmAssen();
-        return targetFrom(a.z.clone(), overviewDistance());
+        return targetFrom(a.z.clone(), overviewDistance(), a.y.clone().negate());
       }
     },
     orbit: {
@@ -196,6 +216,9 @@ export function createMagnetosphereState(THREE, deps) {
 
     enter() {
       layers.eventsOff();
+      // Zon en maan staan op hun echte plek en die ligt BINNEN de magnetopauze;
+      // zie de noot bij environmentOff in index.html.
+      if (layers.environmentOff) layers.environmentOff();
       // EERST oriënteren, DAN pas een view berekenen: view-state.js vraagt
       // direct na `enter()` om `views.meridian.camera()`, en die leest het
       // frame dat hier gezet wordt. Andersom staat de camera op de oriëntatie
@@ -207,6 +230,7 @@ export function createMagnetosphereState(THREE, deps) {
 
     exit() {
       boundary.setVisible(false);
+      if (layers.environmentRestore) layers.environmentRestore();
       layers.eventsRestore();
     }
   };

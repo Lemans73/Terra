@@ -9045,26 +9045,35 @@ const aardgebondenVersiering = () => [
   planets && planets.group       // de geocentrische projectie
 ];
 
+/* Gebeurtenissen gaan uit bij het binnengaan van een state en komen terug zoals
+   ze waren. Zelfde patroon als `activeVoorSlot` bij de sloten: onthouden wat er
+   aan stond, want anders zet je bij het verlaten lagen aan die de gebruiker zelf
+   had uitgezet.
+
+   ÉÉN OBJECT VOOR ALLE STATES, en dat is geen zuinigheid. Toen de magnetosfeer
+   erbij kwam stond hier de tweede letterlijke kopie van deze twee functies, en
+   twee plekken die hetzelfde onthouden lopen gegarandeerd uiteen — precies het
+   argument waarmee view-state.js zelf bestaat. */
+const gebeurtenisLagen = {
+  eventsOff() {
+    for (const laag of Object.keys(active)) {
+      spaceVoorheen[laag] = active[laag];
+      active[laag] = false;
+    }
+    render();
+  },
+  eventsRestore() {
+    for (const laag of Object.keys(spaceVoorheen)) active[laag] = spaceVoorheen[laag];
+    render();
+  }
+};
+
 spaceState = createSpaceState(THREE, {
   world, orbits,
   moment: momentNow,
   skyFrame,
   layers: {
-    // Gebeurtenissen gaan uit en komen terug zoals ze waren. Zelfde
-    // patroon als `activeVoorSlot` bij de sloten: onthouden wat er aan
-    // stond, want anders zet je bij het verlaten lagen aan die de
-    // gebruiker zelf had uitgezet.
-    eventsOff() {
-      for (const laag of Object.keys(active)) {
-        spaceVoorheen[laag] = active[laag];
-        active[laag] = false;
-      }
-      render();
-    },
-    eventsRestore() {
-      for (const laag of Object.keys(spaceVoorheen)) active[laag] = spaceVoorheen[laag];
-      render();
-    },
+    ...gebeurtenisLagen,
 
     /* De aardbol en alles wat aan haar vastzit. De lijst is expliciet en
        niet afgeleid, want deze groepen hangen stuk voor stuk als DIRECT
@@ -9114,18 +9123,25 @@ if (globalThis.TerraCore) {
     Core: globalThis.TerraCore,
     moment: momentNow,
     layers: {
-      // Dezelfde boekhouding als bij Space: onthouden wat er aan stond, want
-      // anders zet je bij het verlaten lagen aan die de gebruiker zelf uit had.
-      eventsOff() {
-        for (const laag of Object.keys(active)) {
-          spaceVoorheen[laag] = active[laag];
-          active[laag] = false;
-        }
-        render();
+      ...gebeurtenisLagen,
+
+      /* ZON EN MAAN GAAN UIT, en dat is een inhoudelijk besluit.
+
+         Ze staan op hun echte plek — de zon op 420 eenheden, de maan op haar
+         baan — en die plekken liggen BINNEN de magnetopauze, die op ~1025
+         begint. Je ziet ze daardoor middenin de holte hangen alsof ze daar
+         thuishoren, terwijl de zon juist de bron is van de wind die er van
+         búiten op drukt. Een schaal die voor de aarde-weergave klopt, liegt
+         hier.
+
+         `environment.hide()` onthoudt per object wat er stond en `restore()`
+         zet dat terug — niet "alles aan", want dan zet je bij het verlaten de
+         maan aan voor wie hem zelf had uitgezet. */
+      environmentOff() {
+        environment.hide([sunMoon && sunMoon.group], { includeGlobe: false });
       },
-      eventsRestore() {
-        for (const laag of Object.keys(spaceVoorheen)) active[laag] = spaceVoorheen[laag];
-        render();
+      environmentRestore() {
+        environment.restore();
       }
     }
   });
