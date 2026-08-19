@@ -308,6 +308,126 @@ for (const m of modules) {
   }
 }
 
+// ---- 2b. Klassieke scripts inline -----------------------------------------
+//
+// De magnetosfeer-fysicalaag komt byte-identiek uit de PoC en is UMD, geen ESM
+// — zie js/compute/magnetosphere/SYNC.md voor waarom dat zo BLIJFT. Ze staan
+// dus als `<script src>` in index.html, en collectModules() hierboven ziet ze
+// niet: IMPORT_RE eist een `from`.
+//
+// DAT IS PRECIES DE FOUT DIE DIT BESTAND OP REGEL 63 OVER ZICHZELF BESCHRIJFT.
+// Een side-effect import (`import './core.js';`) wordt door deModule() WEL
+// gestript en door collectModules() NIET verzameld: elke aanroep blijft staan,
+// elke definitie verdwijnt, en de build meldt succes. Vandaar dat de scripts
+// hier op hun eigen plek worden ingelijnd — in documentvolgorde, want een
+// classic script draait waar hij staat en registry.js leest bij het laden wat
+// core.js en strip.js daarvoor gepubliceerd hebben.
+//
+// AFGELEID, NIET BIJGEHOUDEN, net als de modules: wat morgen in index.html
+// wordt bijgezet komt vanzelf mee. Er is geen lijst om te vergeten.
+const SCRIPT_SRC_RE = /[ \t]*<script\s+src="([^"]+)"\s*>\s*<\/script>[ \t]*\n?/g;
+
+const classicSrcs = [...html.matchAll(SCRIPT_SRC_RE)].map(m => m[1]).filter(isLocal);
+const ingelijnd = [];
+for (const spec of classicSrcs) {
+  const pad = posix.join('.', spec);
+  let src;
+  try { src = await read(pad); }
+  catch { throw new Error(`build failed: <script src="${spec}"> — bestand niet gevonden`); }
+
+  // Een `</script>` in de bron sluit de tag waar hij in landt. Dat is geen
+  // theoretisch geval: de bron is een KOPIE uit een ander project, dus de
+  // volgende versie kan hem meebrengen. Weigeren, niet slim ontsnappen —
+  // dezelfde houding als bij de aliassen hierboven.
+  if (/<\/script/i.test(src)) {
+    throw new Error(`build failed: ${spec} bevat "</script>" en kan niet inline`);
+  }
+  // Idem voor een HTML-commentaarsluiter: die zou het omringende commentaar
+  // vroegtijdig beëindigen.
+  if (src.includes('-->')) {
+    throw new Error(`build failed: ${spec} bevat "-->" en kan niet inline`);
+  }
+  ingelijnd.push({ spec, pad, src });
+}
+
+// GEEN TWEE BESTANDEN MOGEN DEZELFDE GLOBAL CLAIMEN.
+//
+// De vijf `Terra*`-namen zijn veilig; `Chart` en `Sector` uit de PoC's lib/ zijn
+// dat niet — dat is precies het soort naam waar een bibliotheek overheen
+// schrijft, en hier gaat alles in één document. Ze zijn NIET hernoemd, want dan
+// was de kopie een fork geworden. In plaats daarvan valt een botsing hier om.
+// GEEN `^`-ANKER. De eerste versie hiervan had er een, en vond daardoor NUL
+// namen: elk van deze bestanden sluit af met `if (isNode) module.exports = api;
+// else root.TerraCore = Core;` — de toekenning staat achter een `else`, niet aan
+// het begin van de regel. De toets liep, meldde niets, en bewees niets. Dat is
+// exact de faalvorm waar deze hele stap tegen bedoeld is, en hij zat dus even
+// in zijn eigen vangrail.
+const GLOBAL_RE = /\broot\.([A-Za-z_$][\w$]*)\s*=(?!=)/g;
+const claims = new Map();
+for (const { spec, src } of ingelijnd) {
+  for (const m of [...src.matchAll(GLOBAL_RE)]) {
+    const naam = m[1];
+    if (claims.has(naam)) {
+      throw new Error(
+        `build failed: twee bestanden claimen globalThis.${naam} — ` +
+        `${claims.get(naam)} en ${spec}`);
+    }
+    claims.set(naam, spec);
+  }
+}
+
+// En geen enkele ES-module mag een top-level naam declareren die een klassiek
+// script op globalThis zet: na het inlijnen staan ze in hetzelfde document, en
+// een `const Chart` zou de global overschaduwen zonder dat iemand het merkt.
+for (const m of modules) {
+  const src = await read(m);
+  for (const naam of claims.keys()) {
+    const botsing = new RegExp(`^(?:export\\s+)?(?:const|let|var|function|class)\\s+${naam}\\b`, 'm');
+    if (botsing.test(src)) {
+      throw new Error(
+        `build failed: ${m} declareert "${naam}" en ${claims.get(naam)} zet die op ` +
+        `globalThis. In de standalone staan ze in één scope.`);
+    }
+  }
+}
+
+// NUL GEVONDEN NAMEN IS ZELF EEN FOUT. Deze bestanden zijn UMD en publiceren per
+// definitie iets; vindt de toets hierboven niets, dan is niet bewezen dat er geen
+// botsing is — dan is bewezen dat er niet gekeken is. Zonder deze regel was de
+// vorige versie stil groen gebleven.
+if (ingelijnd.length && !claims.size) {
+  throw new Error(
+    'build failed: klassieke scripts ingelijnd maar geen enkele globalThis-naam ' +
+    'gevonden — de botsingstoets heeft niets gemeten.');
+}
+
+for (const { spec, pad, src } of ingelijnd) {
+  const merk = `/* ===== inlined from ./${pad} ===== */`;
+  const eenmalig = new RegExp(
+    `[ \\t]*<script\\s+src="${spec.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"\\s*>\\s*<\\/script>`);
+  if (!eenmalig.test(out)) {
+    throw new Error(`build failed: <script src="${spec}"> niet terug te vinden in de uitvoer`);
+  }
+  out = out.replace(eenmalig, `<script>\n${merk}\n${src}\n</script>`);
+}
+
+// Niets lokaals mag overleven, en alles wat verzameld is moet er echt in staan.
+// Dezelfde twee kanten als bij de modules — een build die één kant toetst, ziet
+// de helft van wat er mis kan gaan.
+const restSrc = [...out.matchAll(SCRIPT_SRC_RE)].map(m => m[1]).filter(isLocal);
+if (restSrc.length) {
+  throw new Error(`build failed: lokale <script src> overleefde — ${restSrc.join(', ')}`);
+}
+for (const { pad } of ingelijnd) {
+  if (!out.includes(`inlined from ./${pad}`)) {
+    throw new Error(`build failed: ${pad} werd gelezen maar nooit ingelijnd`);
+  }
+}
+if (ingelijnd.length) {
+  console.log(`classic scripts inlined — ${ingelijnd.length} files, ` +
+              `globals: ${[...claims.keys()].join(', ')}`);
+}
+
 // ---- 3. Assets naar het CDN ----------------------------------------------
 if (!out.includes("const ASSET_BASE = '';")) {
   throw new Error('build failed: ASSET_BASE declaration not found — did config.js change?');

@@ -1570,6 +1570,33 @@
     </div>
   </div>
 
+<!-- ============================================================
+     DE MAGNETOSFEER-FYSICALAAG — klassieke scripts, met opzet.
+
+     Dit zijn byte-identieke kopieën uit de magnetosfeer-PoC; zie
+     js/compute/magnetosphere/SYNC.md. Ze zijn UMD, dus ze draaien
+     ongewijzigd in de browser én onder node — en dat is precies waarom ze
+     GEEN ES-module worden gemaakt: de PoC toetst het verscheepte bestand
+     met 1498 asserties, en een omgezette variant zou iets anders toetsen
+     dan wat Terra draait.
+
+     DE VOLGORDE IS EEN AFHANKELIJKHEID, geen smaak. registry.js leest bij
+     het laden `root.TerraStrip` en `root.TerraCore`; staat hij bóven die
+     twee, dan krijgt hij `undefined` en publiceert hij een lege registry —
+     wat eruitziet als een kloppende lijst.
+
+     Ze staan vóór de module omdat een classic script daar geëvalueerd is
+     tegen de tijd dat de module draait. `tools/build-standalone.mjs` lijnt
+     ze op deze plek in en weigert te bouwen als er één niet gevonden wordt.
+     ============================================================ -->
+<script src="./js/compute/magnetosphere/core.js"></script>
+<script src="./js/compute/magnetosphere/data.js"></script>
+<script src="./js/compute/magnetosphere/chart.js"></script>
+<script src="./js/compute/magnetosphere/sector.js"></script>
+<script src="./js/compute/magnetosphere/strip.js"></script>
+<script src="./js/compute/magnetosphere/overlay.js"></script>
+<script src="./js/compute/magnetosphere/registry.js"></script>
+
 <script type="module">
 // Alle specifiers gaan via de import map in <head> → ÉÉN gedeelde, gepinde three.
 // globe.gl, three en de post-processing-passes gebruiken nu gegarandeerd dezelfde
