@@ -296,8 +296,17 @@ export function createViewStates(env) {
        noordpool (0,1,0). Voor een view in een ANDER frame — het GSM-frame van
        de magnetosfeer staat er tientallen graden vanaf — betekent dat: je
        kijkt wel loodrecht op het juiste vlak, maar het beeld hangt scheef.
-       Een "zijaanzicht" dat gekanteld is, is geen zijaanzicht. */
+       Een "zijaanzicht" dat gekanteld is, is geen zijaanzicht.
+
+       EN EEN VIEW DIE NIETS OPGEEFT, KRIJGT DE STANDAARD TERUG. Dat was de
+       eerste versie niet, en het gevolg was meteen zichtbaar: na Meridian
+       bleef `camera.up` op de GSM-as staan, dus in de vrije stand draaide
+       OrbitControls om een gekantelde as. Dat leest als een aarde die uit
+       zichzelf beweegt — je sleept horizontaal en het hele beeld kantelt.
+       Een view hoort de stand niet te erven van wie er toevallig vóór hem
+       was. */
     if (d.up) cam.up.copy(d.up).normalize();
+    else if (saved.up) cam.up.copy(saved.up);
 
     if (!options || options.fly !== false) {
       flyCamera(cam, ctl, d.pos, d.target, { min: d.min, max: d.max });

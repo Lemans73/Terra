@@ -6994,6 +6994,10 @@ function stepSunFlight(cam, ctl) {
 //
 // Vandaar een merkteken op de vector zelf en een controle per frame. Dat is O(1) en
 // overleeft elke vervanging.
+// Staat de magnetosfeer aan? Als functie en niet als vlag, zodat er maar één
+// waarheid is over welke state actief is — het register.
+const inMagnetosfeer = () => !!(viewStates && viewStates.isActive('msphere'));
+
 function ensureTargetLock() {
   const t = world.controls().target;
   if (t.__terraLocked) return;
@@ -7001,7 +7005,13 @@ function ensureTargetLock() {
     const orig = t[naam].bind(t);
     // Ook tijdens de TERUGVLUCHT blijft het slot dicht: dan staat `sunView` al op
     // false terwijl het draaipunt nog onderweg is naar de oorsprong.
-    t[naam] = (...args) => ((inZonAanzicht() || sunFlight.actief) ? t : orig(...args));
+    // OOK IN DE MAGNETOSFEER. Daar ligt het draaipunt niet op de aarde maar in
+    // de holte (zie js/states/magnetosphere.js), en zonder dit slot zet globe.gl
+    // het bij elke 'change' terug naar de oorsprong — dan draai je om de aarde
+    // terwijl de vorm zich 60 Re naar één kant uitstrekt, en die zwiept door het
+    // beeld zodra je sleept.
+    t[naam] = (...args) =>
+      ((inZonAanzicht() || sunFlight.actief || inMagnetosfeer()) ? t : orig(...args));
   }
   t.__terraLocked = true;
 }

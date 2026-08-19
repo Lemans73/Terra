@@ -69,33 +69,46 @@ export function createMagnetosphereState(THREE, deps) {
      aan de zonzijde tot -60 in de staart, dus wat je moet omvatten is de
      STAART en niet de neus.
 
-     Vandaar de getekende lengte als maat. De 0,70 volgt uit het draaipunt: dat
-     ligt op de aarde (zie targetFrom), dus een kader dat de hele staart omvat
-     is aan de zonzijde voor de helft leeg. Zo staan de neus, de flank en een
-     goed stuk staart in beeld, en loopt de staart aan de rand door — wat een
-     staart hoort te doen. */
-  const overviewDistance = () => fitDistance(MSPHERE_DRAW_MAX * MSPHERE_RE * 0.70);
+     Vandaar de getekende lengte als maat. De 0,55 hoort bij het draaipunt in de
+     holte (zie targetFrom): nu de vorm gecentreerd staat, hoeft het kader niet
+     meer de lege zonzijde te compenseren die een draaipunt op de aarde opleverde.
+     Stond op 0,70 toen dat nog wél zo was. */
+  const overviewDistance = () => fitDistance(MSPHERE_DRAW_MAX * MSPHERE_RE * 0.55);
 
   const bounds = () => ({
     min: MSPHERE_RE * 1.6,                   // net buiten de bol
     max: fitDistance(90 * MSPHERE_RE)        // ruim voorbij de getekende staart
   });
 
-  /* HET DRAAIPUNT BLIJFT OP DE AARDE, EN DAT IS GEEN KEUZE.
+  /* HET DRAAIPUNT LIGT IN DE HOLTE, NIET OP DE AARDE.
 
      De vorm loopt van +10 Re aan de zonzijde tot -60 in de staart, dus zijn
-     midden ligt niet op de aarde. Een kadrering die daarheen pant, is
-     geprobeerd en werkt niet: globe.gl schrijft `controls.target` bij elke
-     `update()` terug naar de oorsprong. GEMETEN — target op (0,0,-2000) gezet,
-     na één `ctl.update()` weer (0,0,0). Dat is dezelfde val als bij de
-     zonaanzicht-camera in sessie 21.
+     midden ligt niet op de aarde. Met het draaipunt op de oorsprong draai je
+     om de AARDE, en dan zwiept de staart door het beeld zodra je sleept — het
+     voelt alsof je in een gesloten ruimte om iets heen draait in plaats van om
+     de vorm zelf.
 
-     Dus staat de aarde in het midden en strekt de holte zich naar één kant
-     uit. Dat is fysisch trouwens de eerlijker weergave: de staart wijst van de
-     zon af, en waar hij heen wijst is de informatie. */
-  function targetFrom(direction, distance, up) {
+     DIT KAN ALLEEN OMDAT HET SLOT DICHT STAAT. globe.gl zet `controls.target`
+     bij elke 'change' terug op de oorsprong met `setScalar()`; `ensureTargetLock()`
+     in index.html blokkeert die methode zolang deze state actief is. Zonder dat
+     slot is dit gemeten en werkte het niet: target op (0,0,-2000), na één
+     `ctl.update()` weer (0,0,0).
+
+     LET OP bij uitbreiden: het slot blokkeert `set` en `setScalar`, NIET `copy`
+     of een directe toekenning aan x/y/z. Wie hier een `target.set(...)`
+     toevoegt, ziet het stilzwijgend niets doen — dezelfde voorwaarde waarop de
+     zonvlucht werkt. */
+  const _mid = new THREE.Vector3();
+  function kaderMidden(zonAs) {
+    // Halverwege tussen de neus (+10) en het einde van de getekende staart
+    // (-60) ligt op -25 Re. Dat is 0,42 van de tekengrens, van de zon af.
+    return _mid.copy(zonAs).multiplyScalar(-MSPHERE_DRAW_MAX * MSPHERE_RE * 0.42);
+  }
+
+  function targetFrom(direction, distance, up, midden) {
     const b = bounds();
-    return { pos: direction.clone().multiplyScalar(distance), target: origin.clone(),
+    const doel = midden ? midden.clone() : origin.clone();
+    return { pos: direction.clone().multiplyScalar(distance).add(doel), target: doel,
              min: b.min, max: Math.max(b.max, distance * 1.6),
              up: up ? up.clone() : null };
   }
@@ -158,7 +171,7 @@ export function createMagnetosphereState(THREE, deps) {
         // Loodrecht op het X-Z-vlak is de Y-as: van daaruit zie je dat vlak
         // op ware grootte, met de dipoolas-kant omhoog.
         const a = gsmAssen();
-        return targetFrom(a.y.clone(), overviewDistance(), a.z);
+        return targetFrom(a.y.clone(), overviewDistance(), a.z, kaderMidden(a.x));
       }
     },
     top: {
@@ -173,7 +186,7 @@ export function createMagnetosphereState(THREE, deps) {
         // 0 graden, -y geeft 180, gelijk aan Meridian. De PoC houdt dezelfde
         // conventie aan (+X links, zie zijn schaaloverlay).
         const a = gsmAssen();
-        return targetFrom(a.z.clone(), overviewDistance(), a.y.clone().negate());
+        return targetFrom(a.z.clone(), overviewDistance(), a.y.clone().negate(), kaderMidden(a.x));
       }
     },
     orbit: {
@@ -184,7 +197,7 @@ export function createMagnetosphereState(THREE, deps) {
         _dir.copy(a.x).multiplyScalar(0.85)
             .add(_z.copy(a.z).multiplyScalar(0.45))
             .add(_y.copy(a.y).multiplyScalar(0.5)).normalize();
-        return targetFrom(_dir.clone(), overviewDistance());
+        return targetFrom(_dir.clone(), overviewDistance(), null, kaderMidden(a.x));
       }
     }
   };
