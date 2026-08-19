@@ -1662,6 +1662,7 @@ import { createSpaceState } from './js/states/space.js';
 // js/compute/magnetosphere/SYNC.md voor waarom die byte-identiek blijven.
 import { createMagnetosphereState } from './js/states/magnetosphere.js';
 import { createBoundaryLayer } from './js/layers/magnetosphere/boundary-layer.js';
+import { createMagnetosphereFeed, MSPHERE_HEALTH_ID } from './js/compute/magnetosphere-feed.js';
 import { createEnvironmentToggle } from './js/core/globe-root.js';
 import { skyFrame } from './js/compute/frames.js';
 import { createViewStates } from './js/core/view-state.js';
@@ -2249,6 +2250,32 @@ const bijNu = () => baseMoment === null && timeOffsetMs === 0;
 // want de url-getters hierónder lezen hem ook.
 const adapterDagen = (a) => a.days ? (a.days[timeWindow] ?? 1) : a.dagen;
 
+/* ---- De feed onder de magnetosfeer (sessie 30) ---------------------------
+   Hij levert twee gewone Terra-adapters, die hieronder de literal in gaan. Zo
+   krijgt de magnetosfeer dezelfde timeout, dezelfde verbindingsregel en
+   dezelfde poort als elke andere bron — in plaats van langs Terra heen te
+   halen met de eigen fetchlaag van de PoC.
+
+   STAAT HIER EN NIET BIJ DE ANDERE STATES, want `Adapters` hieronder heeft hem
+   nodig en die literal draait bij het laden van de module. `pull` en
+   `setHealth` zijn functiedeclaraties en dus gehesen; `msphereState` wordt pas
+   veel later toegekend, maar de callback hieronder draait pas als er werkelijk
+   iets binnenkomt — en dat kan niet vóór `enter()`, want de adapters staan uit.
+
+   Ontbreekt TerraData of TerraCore, dan is er geen feed en geen state; de app
+   draait door zonder magnetosfeer. Dezelfde voorwaarde als bij de state zelf. */
+const msphereFeed = (globalThis.TerraData && globalThis.TerraCore)
+  ? createMagnetosphereFeed({
+      Data: globalThis.TerraData,
+      Physics: globalThis.TerraCore.Physics,
+      pull, setHealth,
+      // Nieuwe data betekent een nieuwe vorm. Zonder deze melding zou de holte
+      // pas bij de volgende tik van updateSunUniform() meebewegen, en die staat
+      // op 30 seconden — een halve minuut een oude magnetosfeer.
+      onUpdate: () => { if (msphereState) msphereState.tik(); }
+    })
+  : null;
+
 const Adapters = {
   // USGS — aardbevingen, via het query-endpoint van dezelfde catalogus.
   // ---------------------------------------------------------------------------
@@ -2511,6 +2538,15 @@ const Adapters = {
     }
   },
 
+  // NOAA SWPC Geospace — de zonnewind onder de magnetosfeer.
+  // ---------------------------------------------------------------------------
+  // Gedefinieerd in js/compute/magnetosphere-feed.js, want ze horen bij die state
+  // en niet bij dit bestand. Ze staan standaard UIT: samen 1,19 MB per ronde, en
+  // dat haal je niet op voor een state die niemand geopend heeft. De state zet ze
+  // om bij enter() en weer terug bij exit(), net als syncAuroraLayer() dat voor
+  // OVATION doet.
+  ...(msphereFeed ? msphereFeed.adapters : {}),
+
   // NASA EONET — natural events, ÉÉN AANROEP PER CATEGORIE.
   // ---------------------------------------------------------------------------
   // Niet terugdraaien naar één gedeeld venster. EONET's venster telt niet hoe oud een
@@ -2689,6 +2725,9 @@ const HEALTH_SOURCES = [
   // standaard uit en schrijft dan `warn · switched off` naar zijn health-id — met
   // de gedeelde 'swpc' zou die regel permanent verkeerd staan. Zie de adapter.
   { id:'ovation',   label:'NOAA SWPC OVATION', sub:'Aurora oval (30-min forecast)' },
+  // Eigen regel om precies dezelfde reden als OVATION hierboven: deze twee staan
+  // standaard uit en schrijven dan `switched off` naar hun health-id.
+  { id:MSPHERE_HEALTH_ID, label:'NOAA SWPC Geospace', sub:'Solar wind · planetary Kp' },
   { id:'waqi',      label:'WAQI',              sub:'Air quality' },
   { id:'lightning', label:'Blitzortung relay', sub:'Lightning (local relay)' }
 ];
@@ -8607,7 +8646,17 @@ async function pull(adapter, opties = {}) {
     // 2xx. Gemeten 2026-08-08: EMSC antwoordt zo voor elk tijdvak vóór 1998. Zonder
     // deze regel gooit `res.json()` op een lege body, valt de fout in de catch en
     // meldt de app "network/CORS" — een leeg tijdvak dat zich voordoet als storing.
-    const json = res.status === 204 ? { features: [] } : await res.json();
+    // EEN ADAPTER MAG ZIJN EIGEN TEKST-NAAR-JSON STAP MEEBRENGEN, en er is
+    // precies één reden dat die haak bestaat: NOAA SWPC stuurt af en toe
+    // letterlijke `NaN` in JSON. Dat is geen geldige JSON, `res.json()` gooit,
+    // de fout valt in de catch hieronder en de app meldt "network/CORS" — een
+    // parsefout die zich voordoet als een storing. De magnetosfeer-adapters
+    // leveren daarom `parseText`, die NaN naar null omzet (nooit naar nul: nul
+    // is een meting, null de afwezigheid ervan) en de treffers telt.
+    // Een adapter zonder `parseText` houdt letterlijk het oude pad.
+    const json = res.status === 204 ? { features: [] }
+               : adapter.parseText ? adapter.parseText(await res.text())
+               : await res.json();
     // NOG EEN KEER TOETSEN, en dit is geen overdaad. De toets bovenaan draaide vóór
     // het netwerkverkeer; wie ondertussen van seismische bron wisselt, heeft die
     // adapter dus al uitgezet terwijl zijn antwoord nog onderweg is. Zonder deze
@@ -9282,6 +9331,11 @@ if (IS_LOCAL) {
     get spaceState() { return spaceState; },
     get msphereState() { return msphereState; },
     get msphereBoundary() { return msphereBoundary; },
+    // De feed staat NIET achter een getter met een null-val: hij wordt vóór de
+    // Adapters-literal gebouwd en is hier dus altijd al af. Wel als getter, om
+    // dezelfde reden als de rest — één regel die uit de toon valt leest als een
+    // uitzondering die er niet is.
+    get msphereFeed() { return msphereFeed; },
     get sunMoon() { return sunMoon; },
     get active() { return active; },
     get spaceVoorheen() { return spaceVoorheen; },
