@@ -2272,7 +2272,11 @@ const msphereFeed = (globalThis.TerraData && globalThis.TerraCore)
       // Nieuwe data betekent een nieuwe vorm. Zonder deze melding zou de holte
       // pas bij de volgende tik van updateSunUniform() meebewegen, en die staat
       // op 30 seconden — een halve minuut een oude magnetosfeer.
-      onUpdate: () => { if (msphereState) msphereState.tik(); }
+      //
+      // `nieuweData` en niet `tik`: de state moet niet alleen herbouwen maar ook
+      // beslissen of de cursor meeschuift naar het nieuwste aangekomen monster.
+      // Dat is zijn keuze en niet die van de feed — zie `volgtNu` daar.
+      onUpdate: () => { if (msphereState) msphereState.nieuweData(); }
     })
   : null;
 
@@ -9181,6 +9185,44 @@ if (globalThis.TerraCore) {
     boundary: msphereBoundary,
     Core: globalThis.TerraCore,
     moment: momentNow,
+    feed: msphereFeed,
+
+    /* DE KLOK, ALS DRIE HANDELINGEN EN NIET ALS VARIABELE.
+
+       De magnetosfeer heeft geen eigen tijd; hij BEGRENST de bestaande tot het
+       venster waarin gemeten is. Daarom geen tweede klok in de state, maar deze
+       drie: lezen waar de bezoeker stond, het moment zetten, en teruggeven.
+
+       Alles loopt via refreshTimeUI(), en dat is met opzet: dat is de enige
+       trechter naar een ander moment — de slider, het datumveld, de reset, de
+       eclipssprong en elke stap van het afspelen komen daar allemaal langs.
+       Een vierde weg ernaast zou precies het soort tweede pad zijn dat elders
+       in dit bestand telkens is dichtgezet. */
+    clock: {
+      lees: () => ({ basis: baseMoment, offset: timeOffsetMs }),
+
+      zet(d) {
+        // Terra's eigen afspeellus zou anders elke seconde tegen de cursor in
+        // schrijven. Twee dingen die dezelfde tijd zetten lopen gegarandeerd uit
+        // de pas; de state brengt in B3c zijn eigen transport mee.
+        stopPlay();
+        baseMoment = d;
+        timeOffsetMs = 0;
+        if (timeSliderEl) timeSliderEl.value = '0';
+        refreshTimeUI();
+      },
+
+      herstel(s) {
+        baseMoment = s.basis;
+        timeOffsetMs = s.offset;
+        // De slider staat in STAPPEN en niet in milliseconden, dus terugzetten
+        // vraagt de deling die de handler ook doet. Zonder dit blijft de knop op
+        // 0 staan terwijl het moment verschoven is — een bediening die iets
+        // anders aanwijst dan de scene toont.
+        if (timeSliderEl) timeSliderEl.value = String(Math.round(timeOffsetMs / stapMs()));
+        refreshTimeUI();
+      }
+    },
     layers: {
       ...gebeurtenisLagen,
 

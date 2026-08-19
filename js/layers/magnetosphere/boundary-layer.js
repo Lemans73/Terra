@@ -149,6 +149,29 @@ export function createBoundaryLayer(THREE, deps) {
     const thetas = B.arcThetas(r0, alpha, MSPHERE_DRAW_MAX, N_THETA);
     const mpStat = vulOppervlak(mp, thetas, (th) => P.magnetopauseRadius(th, r0, alpha));
 
+    /* GEEN MACH IS GEEN BOEGSCHOK, en die regel staat hier omdat de formule
+       hem niet kan dragen. `bowShockStandoff` begint met `Math.max(mach, 1.2)`
+       — een numeriek vangnet tegen de singulariteit bij Mach 1, geen fysische
+       ondergrens. Een ontbrekende mach glipt daar doorheen als 1,2.
+
+       GEMETEN 2026-08-19: bowShockStandoff(10, null) geeft 37,75 Re, tot op de
+       cijfers gelijk aan Mach 1,2, waar de gemeten week tussen Mach 2,9 en 8,0
+       ligt. Dat is bijna vier keer te ver, zonder één foutmelding — dezelfde
+       faalvorm als de standoff van 23 Re uit een ontbrekende dichtheid.
+
+       Latent en niet acuut: in de gemeten week hadden 0 van de 10.008 rijen een
+       onvolledige mach. Dat is geen reden om het te laten staan, het is de reden
+       dat niemand het ooit had zien gebeuren.
+
+       De magnetopauze blijft wél staan: die hangt aan pdyn en Bz, en die zijn er.
+       Een halve waarheid tonen is hier juist, want de helft die ontbreekt is
+       zichtbaar afwezig. */
+    if (!Number.isFinite(mach)) {
+      shock.visible = false;
+      return { r0, alpha, rbs: null, ...mpStat, shockLijnstukken: 0 };
+    }
+    shock.visible = true;
+
     // De boegschok is dezelfde vorm, opgeblazen tot zijn eigen standoff.
     const rbs = P.bowShockStandoff(r0, mach);
     const schaal = rbs / r0;

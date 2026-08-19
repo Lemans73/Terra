@@ -20,25 +20,33 @@
    onderwerp. Hier IS de zonrichting het onderwerp — de hele vorm hangt
    eraan — dus die moet meelopen met de tijdkiezer.
 
-   WAT DEZE STATE NOG NIET DOET (sessie 29, blok B2)
-   De windwaarden zijn nog NOMINAAL en niet gemeten: 2 nPa, Bz 0,
-   Mach 8. Dat is een rustige, gemiddelde zonnewind. Blok B3 hangt er de
-   echte metingen aan (propagated solar wind van NOAA SWPC), en dan
-   verandert deze vorm mee met wat er werkelijk aankomt. Zolang dat niet
-   zo is, staat het er ALS ZODANIG BIJ — een gemodelleerde vorm die zich
-   voordoet als een meting is erger dan geen vorm.
+   DE KLOK VAN DEZE STATE IS DE GEMETEN REEKS (sessie 30, blok B3).
+   Buiten deze state kiest de bezoeker een moment en volgt de hele
+   scene dat. Hier kan dat niet: de magnetosfeer van vorige maand is
+   niet gemeten, en die van morgen ook niet. De reeks loopt zeven dagen
+   terug en tot zo'n uur vooruit — dat laatste omdat de zonnewind
+   GEPROPAGEERD is: de nieuwste monsters zijn wél gemeten, ze zijn
+   alleen nog onderweg.
+
+   Daarom NEEMT deze state de klok over in plaats van hem te negeren.
+   Bij binnenkomst zet hij het moment op het laatste AANGEKOMEN monster
+   en onthoudt hij waar de bezoeker stond; bij vertrek geeft hij dat
+   terug. Zo staan de schemerlijn, de zonrichting en de holte op
+   hetzelfde moment — één klok, alleen begrensd tot waar er gemeten is.
+   Het tijd-eiland gaat daarom uit (css/app.css, naast body.sun-view).
+
+   EN GEEN METING IS GEEN OPPERVLAK. `Series.derive` weigert een r0 waar
+   de dichtheid ontbreekt, en deze state tekent dan niets. Een
+   gemodelleerde vorm die zich voordoet als een meting is erger dan geen
+   vorm — dat gold voor de nominale wind die hier tot sessie 30 stond,
+   en het geldt net zo goed voor een gat in de feed.
    ============================================================ */
 
 import { MSPHERE_RE, MSPHERE_DRAW_MAX, pocNaarTerra }
   from '../layers/magnetosphere/boundary-layer.js';
 
-/* De nominale windstand waarop de vorm draait zolang B3 er niet is.
-   Eén plek, met een naam die zegt wat hij is — een default die ergens
-   los in een aanroep staat, wordt stilzwijgend een bewering. */
-export const MSPHERE_NOMINAL_WIND = { pdyn: 2.0, bz: 0, mach: 8 };
-
 export function createMagnetosphereState(THREE, deps) {
-  const { world, boundary, layers, Core } = deps;
+  const { world, boundary, layers, Core, feed, clock } = deps;
 
   const origin = new THREE.Vector3(0, 0, 0);
   const _sun = new THREE.Vector3();
@@ -202,15 +210,95 @@ export function createMagnetosphereState(THREE, deps) {
     }
   };
 
-  /* Bouwen uit de huidige windstand. Apart van `enter()` omdat de tijdkiezer
-     hem ook aanroept: de zonrichting schuift, dus het frame draait mee. */
+  /* ----------------------------------------------------------
+     DE CURSOR, EN WAAROM HIJ HIER WOONT EN NIET IN DE FEED.
+
+     De feed levert metingen; welke daarvan je BEKIJKT is een keuze van
+     de weergave. Zet je de cursor in de feed, dan moet elke volgende
+     bewoner van deze state (de tijdlijn, de veldlijnen, het paneel) zich
+     bij een dataobject melden om te weten welk moment er getoond wordt —
+     en dan is er geen enkele plek meer waar dat één ding is.
+
+     `volgtNu` is het verschil tussen "de cursor staat toevallig op het
+     laatste monster" en "de cursor HOORT op het laatste monster te
+     staan". Zonder dat onderscheid trekt elke nieuwe meting de
+     bezoeker terug naar nu, precies terwijl hij aan het kijken is.
+  ---------------------------------------------------------- */
+  let actief = false;
+  let volgtNu = true;
+  let cursor = 0;
   let laatste = null;
+  let bewaardeKlok = null;
+  let inZet = false;
+
+  /* HET MACHGETAL, EN WAAROM HET HIER STAAT EN NIET IN Series.derive.
+
+     `derive` rekent wat de LANES nodig hebben (pdyn, r0, sector); de mach
+     heeft alleen de scene nodig, voor de boegschok. De keten is die van
+     stateAt() in de PoC, inclusief de eis dat alle vier de grootheden er
+     zijn: v en n voor de alfvénsnelheid, t voor de geluidssnelheid, bt
+     voor het veld. Ontbreekt er één, dan is er geen mach — en geen
+     boegschok, zie de noot in boundary-layer.js. */
+  function machVan(s) {
+    if (!Number.isFinite(s.v) || !Number.isFinite(s.n) ||
+        !Number.isFinite(s.t) || !Number.isFinite(s.bt)) return null;
+    const m = Core.Physics.magnetosonicMach({ v: s.v, n: s.n, t: s.t, bt: s.bt });
+    return Number.isFinite(m) ? m : null;
+  }
+
+  /* Bouwen uit het monster onder de cursor. Apart van `enter()` omdat de
+     klok hem ook aanroept: de zonrichting schuift, dus het frame draait mee. */
   function herbouw() {
-    const w = MSPHERE_NOMINAL_WIND;
     const a = gsmAssen();
     boundary.orient(a.x, a.dip);
-    laatste = boundary.update(w.pdyn, w.bz, w.mach);
+
+    const rows = feed ? feed.rows() : null;
+    const s = rows && rows[cursor] ? rows[cursor] : null;
+
+    /* GEEN METING IS GEEN OPPERVLAK. `pdyn` is null zodra de dichtheid of de
+       snelheid ontbreekt, en dan is r0 dat ook — zie de lange noot in
+       data.js: null maal v maal v is nul in JavaScript, en standoff(0, bz)
+       geeft 23 Re, een magnetosfeer twee keer zo groot als de grootste ooit
+       gemeten, uit een getal dat niet bestaat. */
+    if (!s || s.pdyn === null || !Number.isFinite(s.bz)) {
+      boundary.setVisible(false);
+      laatste = { ok: false, reden: rows ? 'no measurement at this moment'
+                                         : 'no solar wind', rij: s };
+      return laatste;
+    }
+
+    const mach = machVan(s);
+    laatste = { ok: true, rij: s, mach, ...boundary.update(s.pdyn, s.bz, mach) };
+    boundary.setVisible(true);
     return laatste;
+  }
+
+  /* De cursor verzetten EN de scene meenemen.
+
+     `clock.zet` loopt via refreshTimeUI -> updateSunUniform -> tik(), en dat
+     is de bedoeling: één moment voor de hele scene, niet een tweede klok
+     ernaast. `inZet` zorgt dat die tik() niet ook nog eens bouwt — dan zou
+     elke stap het oppervlak twee keer opbouwen, en tijdens het afspelen is
+     dat het verschil tussen soepel en niet. */
+  function zetCursor(i) {
+    const rows = feed ? feed.rows() : null;
+    if (!rows || !rows.length) return null;
+    cursor = Math.max(0, Math.min(rows.length - 1, Math.round(i)));
+    if (clock) {
+      inZet = true;
+      try { clock.zet(new Date(rows[cursor].time)); } finally { inZet = false; }
+    }
+    return herbouw();
+  }
+
+  /* De feed heeft iets nieuws. Volgt de cursor "nu", dan schuift hij mee naar
+     het laatste AANGEKOMEN monster — niet naar het laatste monster, want de
+     staart daarna is nog onderweg. */
+  function nieuweData() {
+    if (!actief) return;
+    const i = feed ? feed.arrivedEnd() : -1;
+    if (volgtNu && i >= 0) { zetCursor(i); return; }
+    herbouw();
   }
 
   const definition = {
@@ -228,34 +316,64 @@ export function createMagnetosphereState(THREE, deps) {
     camera: () => views.meridian.camera(),
 
     enter() {
+      // EERST de vlag. `clock.zet` hieronder tikt via updateSunUniform terug
+      // naar tik(), en die doet niets zolang de state niet actief heet te zijn.
+      actief = true;
+      volgtNu = true;
       layers.eventsOff();
       // Zon en maan staan op hun echte plek en die ligt BINNEN de magnetopauze;
       // zie de noot bij environmentOff in index.html.
       if (layers.environmentOff) layers.environmentOff();
+      // Waar de bezoeker stond, vóór we de klok overnemen. Onthouden en niet
+      // "terug naar nu" bij vertrek: wie in 1985 stond te kijken hoort daar
+      // terug te komen, net zoals environment.restore() per object onthoudt.
+      if (clock) bewaardeKlok = clock.lees();
+      if (feed) feed.setEnabled(true);
+      // De reeks kan er al liggen van een vorig bezoek — de feed houdt hem
+      // vast als de poort dichtgaat. Is hij er nog niet, dan bouwt `herbouw`
+      // niets en meldt hij dat; de feed roept ons terug zodra hij binnen is.
+      //
       // EERST oriënteren, DAN pas een view berekenen: view-state.js vraagt
       // direct na `enter()` om `views.meridian.camera()`, en die leest het
       // frame dat hier gezet wordt. Andersom staat de camera op de oriëntatie
       // van de vórige keer. Dezelfde volgorde als in space.js, en om dezelfde
       // reden daar één keer misgegaan.
-      herbouw();
-      boundary.setVisible(true);
+      nieuweData();
+      if (!feed) herbouw();
     },
 
     exit() {
+      // Ook hier eerst de vlag, en om de spiegelreden: `clock.herstel`
+      // hieronder tikt terug, en die tik hoort niets meer te bouwen.
+      actief = false;
       boundary.setVisible(false);
+      if (feed) feed.setEnabled(false);
+      if (clock && bewaardeKlok) { clock.herstel(bewaardeKlok); bewaardeKlok = null; }
       if (layers.environmentRestore) layers.environmentRestore();
       layers.eventsRestore();
     }
   };
 
-  /* Loopt mee met de tijdkiezer, via dezelfde aanroep die zon en maan
-     bijwerkt — geen tweede klok. Anders dan space.js wordt hier WEL opnieuw
-     georiënteerd: de zonrichting is hier het onderwerp en niet de achtergrond. */
+  /* Loopt mee met de klok, via dezelfde aanroep die zon en maan bijwerkt —
+     geen tweede klok. Anders dan space.js wordt hier WEL opnieuw georiënteerd:
+     de zonrichting is hier het onderwerp en niet de achtergrond.
+
+     DE POORT IS `actief` EN NIET `boundary.group.visible`, en dat is sinds
+     sessie 30 een noodzaak en geen smaak. Het oppervlak gaat nu uit zodra er
+     geen meting is; met de zichtbaarheid als poort klemt dat vast — onzichtbaar
+     dus geen herbouw, geen herbouw dus nooit meer zichtbaar. Een vlag die twee
+     dingen tegelijk betekent, breekt zodra ze uit elkaar lopen. */
   function tik() {
-    if (!boundary.group.visible) return;
+    if (!actief || inZet) return;
     herbouw();
   }
 
-  return { definition, views: Object.keys(views), tik,
-           herbouw, laatsteBouw: () => laatste, gsmAssen };
+  return { definition, views: Object.keys(views), tik, nieuweData,
+           herbouw, laatsteBouw: () => laatste, gsmAssen,
+           // Voor de transportbalk (B3c) en voor het meetluik. `volgtNu` is
+           // schrijfbaar: wie zelf schuift, volgt niet meer.
+           zetCursor,
+           cursor: () => cursor,
+           volgtNu: (v) => (v === undefined ? volgtNu : (volgtNu = !!v)),
+           actief: () => actief };
 }

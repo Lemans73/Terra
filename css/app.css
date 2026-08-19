@@ -2117,6 +2117,14 @@
      erbij zou iets beloven wat er niet is. */
   body.sun-view .time-island { display: none; }
 
+  /* En om een verwante maar niet dezelfde reden ook in de magnetosfeer. Daar is
+     er WEL een tijd om te kiezen, maar alleen binnen de zeven dagen waarin
+     gemeten is — de magnetosfeer van vorige maand bestaat niet als meting. Een
+     slider die tot 1985 reikt zou een vorm beloven die nooit is waargenomen.
+     De state neemt de klok over en brengt in B3c zijn eigen bediening mee;
+     zie de kop van js/states/magnetosphere.js. */
+  body.msphere-on .time-island { display: none; }
+
   /* ---- Toast-meldingen (nieuwe real-time entries) ---- */
   #toasts {
     position: fixed;
