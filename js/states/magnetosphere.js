@@ -375,6 +375,35 @@ export function createMagnetosphereState(THREE, deps) {
   let rigGevuld = false;
   let vlakkeStand = false;
 
+  /* WAT DE BEZOEKER AAN WIL ZIEN, apart van wat er te zien VALT.
+
+     Twee verschillende dingen, en ze door elkaar halen is precies hoe een
+     schakelaar stil kapot gaat. `boundary.update()` zet de boegschok zelf uit
+     zodra er geen machgetal is — die is dan niet te tekenen, wat de bezoeker
+     ook wil. En de voorkeur mag dat niet overschrijven, want dan staat er een
+     schok op een verzonnen Mach 1,2 (zie boundary-layer.js).
+
+     Vandaar: de voorkeur staat hier, en de zichtbaarheid is de voorkeur ÉN de
+     mogelijkheid. */
+  let wilMagnetopauze = true;
+  let wilBoegschok = true;
+  let wilRaster = true;
+  let huidigeView = null;
+
+  function pasVoorkeurenToe() {
+    boundary.setPartVisible('magnetopause', wilMagnetopauze);
+    // Geen rbs betekent geen machgetal, en dan is er niets om te tonen.
+    boundary.setPartVisible('bowshock', wilBoegschok && !!(laatste && laatste.rbs !== null));
+  }
+
+  /* Het raster hoort bij een VLAK, dus het bestaat alleen in de vaste standen —
+     ook als de bezoeker hem aan heeft staan. In de vrije stand is er geen vlak
+     om een schaal op te leggen. */
+  function pasRasterToe() {
+    if (!grid) return;
+    grid.setPlane(vlakkeStand && wilRaster && huidigeView ? huidigeView : null);
+  }
+
   /* HET DRAAIPUNT SCHUIFT MEE MET DE ZOOM.
 
      Twee dingen die allebei waar zijn en elkaar tegenspraken. Uitgezoomd
@@ -531,6 +560,9 @@ export function createMagnetosphereState(THREE, deps) {
 
     const mach = machVan(s);
     laatste = { ok: true, rij: s, mach, ...boundary.update(s.pdyn, s.bz, mach) };
+    // NA update(), want die zet de boegschok zelf uit bij een ontbrekend
+    // machgetal en zou de voorkeur anders overschrijven.
+    pasVoorkeurenToe();
     boundary.setVisible(true);
     return laatste;
   }
@@ -622,6 +654,7 @@ export function createMagnetosphereState(THREE, deps) {
       // hieronder tikt terug, en die tik hoort niets meer te bouwen.
       actief = false;
       world.controls().removeEventListener('change', opBesturing);
+      huidigeView = null;
       if (grid) grid.setPlane(null);
       if (boundary.setOutline) boundary.setOutline(null);
       vlakkeStand = false;
@@ -664,6 +697,7 @@ export function createMagnetosphereState(THREE, deps) {
      onderhouden. */
   function viewGewisseld(naam) {
     if (!actief) return;
+    huidigeView = naam;
     const v = views[naam];
     // De lens is al gezet door view.camera() hierboven; hier gaat het om wat
     // ERNA komt. De stand die goToView zojuist neerzette is de nieuwe waarheid.
@@ -675,7 +709,7 @@ export function createMagnetosphereState(THREE, deps) {
        Meridian kijkt langs GSM Y en heeft dus het X-Z-vlak, Top kijkt langs
        GSM Z en heeft X-Y. In de vrije stand geen van beide — een raster is
        een doorsnede en een perspectiefbeeld heeft er geen. */
-    if (grid) grid.setPlane(v && v.flat ? naam : null);
+    pasRasterToe();
     /* Alleen de omtrek in de vlakke standen: bij een omwentelingsoppervlak dat
        je loodrecht bekijkt ÍS de doorsnede de omtrek, en het volle net maakt er
        weer een driedimensionaal ding van. Zie de noot in boundary-layer.js. */
@@ -687,6 +721,15 @@ export function createMagnetosphereState(THREE, deps) {
            // Voor de transportbalk (B3c) en voor het meetluik. `volgtNu` is
            // schrijfbaar: wie zelf schuift, volgt niet meer.
            zetCursor,
+           /* De vier schakelaars van het paneel. Ze zetten een VOORKEUR en niet
+              de zichtbaarheid: wat er werkelijk staat volgt uit de voorkeur én
+              uit wat er te tekenen valt. */
+           setPart(naam, aan) {
+             if (naam === 'magnetopause') wilMagnetopauze = !!aan;
+             else if (naam === 'bowshock') wilBoegschok = !!aan;
+             else if (naam === 'grid') { wilRaster = !!aan; pasRasterToe(); return; }
+             pasVoorkeurenToe();
+           },
            cursor: () => cursor,
            volgtNu: (v) => (v === undefined ? volgtNu : (volgtNu = !!v)),
            actief: () => actief };

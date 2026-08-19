@@ -2136,6 +2136,36 @@
   .msphere-time { display: none; }
   body.msphere-on .msphere-time { display: flex; }
 
+  /* WAT IN DEZE STATE NIET VAN TOEPASSING IS, WORDT NIET GETOOND — niet
+     uitgegrijsd. Dezelfde vorm als .space-only hierboven, en om dezelfde reden
+     op <body> en niet op de sectie zelf.
+
+     Het gaat om échte betekenisloosheid en niet om opruimen: `enter()` zet met
+     eventsOff() alle gebeurtenislagen uit en met environmentOff() zon en maan,
+     dus die schakelaars staan er als knoppen die niets doen. De bevingsfilters
+     (Magnitude, Upper limit, Time window, Depth) zitten binnen dezelfde sectie
+     als de lagenlijst en gaan mee.
+
+     `Axes & poles` BLIJFT, en dat is inhoudelijk: de dipoolas is hier het
+     onderwerp — GSM heeft hem nodig om zijn Y-as te definiëren. Zie de sectie
+     in index.html.
+
+     De tabrij gaat uit via zijn id en niet via `.panel .tabs`: een selector die
+     de plek noemt breekt stil bij een verhuizing, en dat is in sessie 25 al een
+     keer gebeurd. */
+  body.msphere-on [data-acc="layers-list"],
+  body.msphere-on [data-acc="earth-overlays"],
+  body.msphere-on [data-acc="sky-projections"],
+  body.msphere-on [data-acc="cosmos-layers"],
+  body.msphere-on #panel-tabs,
+  body.msphere-on .mode-switch { display: none; }
+
+  /* En de eigen sectie is er alleen dan. LET OP dezelfde val als bij
+     .space-only: een expliciete `display` in een klasse verslaat het
+     `hidden`-attribuut. */
+  .msphere-only { display: none; }
+  body.msphere-on .msphere-only { display: block; }
+
   /* De snelheidsknop neemt de kolom over die in het eiland de klok-uitklapper
      draagt. Zelfde breedte-gedrag (auto), zodat de sliderbaan even lang blijft. */
   .mspt-rate {

@@ -982,7 +982,7 @@
            (Geen productnaam in deze noot — die zou de standalone-knip overleven en
            de vangrail in tools/build-standalone.mjs laten afgaan.) -->
       <span class="panel-title">Layers &amp; filters</span>
-      <div class="tabs" role="tablist">
+      <div class="tabs" role="tablist" id="panel-tabs">
         <!-- Vier icoon-tabs. Alle vier als inline SVG met `stroke: currentColor`,
              zodat ze dezelfde lijndikte en kleur delen en vanzelf meekleuren met de
              actieve staat. Tekst-emoji zoals ☾ en ⚙ deden dat niet: die brengen hun
@@ -1214,6 +1214,63 @@
            kaartlagen zonder teller zijn. Dat onderscheid is er nog steeds — het zit nu
            in de SECTIE in plaats van in de tab. Een eigen tab voor drie schakelaars
            was te veel eer, en de tabrij zat vol. -->
+<!-- DE STATE-EIGEN SECTIE (sessie 30).
+
+     Alleen zichtbaar in de magnetosfeer, en daar is hij het enige wat er staat
+     naast `Axes & poles` — de rest van dit paneel gaat in die state uit. Reden:
+     alles hierboven schakelt lagen die `eventsOff()` net heeft uitgezet, of
+     filtert bevingen die er niet zijn. Een schakelaar die niets doet is erger
+     dan geen schakelaar, want hij belooft een handeling.
+
+     `Axes & poles` blijft wél staan, en dat is inhoudelijk: de dipoolas ís hier
+     het onderwerp. De hele holte hangt aan zijn stand — GSM heeft hem nodig om
+     zijn Y-as te definiëren.
+
+     Vorm gelijk aan `Axes & poles` hieronder (`.elayer` met een `.edot` en een
+     `.estat`), want het zijn dezelfde soort schakelaars: geometrie in de scene,
+     geen gebeurtenissen met een teller. -->
+<section class="acc open msphere-only" data-acc="msphere-layers">
+      <button class="acc-head" type="button" aria-expanded="true">
+      <span>Magnetosphere</span>
+      <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="acc-body">
+      <div class="elayer on expandable" id="msp-mp-toggle">
+      <span class="edot"></span>Magnetopause
+      <button class="row-expand" data-note="msp-mp-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <span class="estat" id="es-msp-mp">on</span>
+      </div>
+      <div class="layer-detail" id="msp-mp-note">
+      The surface where the solar wind&#8217;s pressure balances Earth&#8217;s magnetic
+      field. Its shape follows <b>Shue et al. 1998</b>, driven by two measured
+      quantities: the dynamic pressure of the wind and the north&#8211;south component
+      of the interplanetary field. Both come from NOAA&#8217;s propagated solar wind,
+      so the surface you see is the one this moment&#8217;s wind is making.
+      <br /><br />
+      The nose sits around ten Earth radii. A strong gust can push it inside
+      geosynchronous orbit at 6.6 Re, which is why that distance matters.
+      </div>
+      <div class="elayer on" id="msp-bs-toggle"><span class="edot"></span>Bow shock<span class="estat" id="es-msp-bs">on</span></div>
+      <div class="elayer on expandable" id="msp-grid-toggle">
+      <span class="edot"></span>Scale grid
+      <button class="row-expand" data-note="msp-grid-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <span class="estat" id="es-msp-grid">on</span>
+      </div>
+      <div class="layer-detail" id="msp-grid-note">
+      A grid in Earth radii, one line every 10 Re, in the plane the view looks at.
+      It replaces the star field in <b>Meridian</b> and <b>Top</b>: those are
+      cross-sections, not a view from somewhere, and a sky behind them would say
+      otherwise. The free 3D view keeps its stars and has no grid &#8212; a scale
+      needs a flat plane to mean anything.
+      </div>
+      <div class="elayer on" id="msp-aurora-toggle"><span class="edot"></span>Aurora oval<span class="estat" id="es-msp-aurora">on</span></div>
+      </div>
+      </section>
+
 <section class="acc" data-acc="earth-overlays">
       <button class="acc-head" type="button" aria-expanded="false">
       <span>Earth overlays</span>
@@ -6421,6 +6478,46 @@ function pmHerkomst(p, st) {
     });
   });
 }
+
+/* DE SCHAKELAARS VAN DE MAGNETOSFEER.
+
+   Eigen binder en niet bindCosmosToggle(): die vertrekt vroeg als `sunMoon`
+   ontbreekt en roept updateSunUniform() aan, en allebei slaan hier nergens op.
+   Wat hij wél deelt is de vorm — klik, klasse `on`, en het woordje in `.estat`
+   — want dat is wat de bezoeker herkent.
+
+   START AAN, alle vier. Deze state toont zijn eigen onderwerp; iets uitzetten
+   is hier de uitzondering en niet het beginpunt. */
+function bindMsphereToggle(id, statId, apply, start = true) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  let on = start;
+  el.classList.toggle('on', on);
+  el.addEventListener('click', (e) => {
+    // De uitklapknop zit IN de rij; zonder dit zet elke klik op "wat is dit?"
+    // ook de laag om. Dezelfde val als bij de lagenrijen.
+    if (e.target.closest('.row-expand')) return;
+    on = !on;
+    el.classList.toggle('on', on);
+    const stat = document.getElementById(statId);
+    if (stat) stat.textContent = on ? 'on' : 'off';
+    apply(on);
+  });
+}
+bindMsphereToggle('msp-mp-toggle', 'es-msp-mp',
+  on => msphereState && msphereState.setPart('magnetopause', on));
+bindMsphereToggle('msp-bs-toggle', 'es-msp-bs',
+  on => msphereState && msphereState.setPart('bowshock', on));
+bindMsphereToggle('msp-grid-toggle', 'es-msp-grid',
+  on => msphereState && msphereState.setPart('grid', on));
+/* De aurora loopt WEL via de bestaande poort: hij is een gewone Terra-laag met
+   een eigen adapter van 924 KB, en syncAuroraLayer() is de enige plek die
+   bepaalt of die bron bevraagd wordt. Een tweede weg ernaartoe zou precies de
+   dubbele waarheid geven die daar in sessie 27 is dichtgezet. */
+bindMsphereToggle('msp-aurora-toggle', 'es-msp-aurora', on => {
+  active.aurora = on;
+  syncAuroraLayer();
+});
 
 const geomagToggles = [
   ['rotaxis-toggle', 'es-rotaxis', on => geomag.setVisible({ rotation: on })],
