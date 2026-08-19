@@ -1657,6 +1657,11 @@ import { createAuroraLayer } from './js/layers/aurora-layer.js';
 import { createAntipodeLayer, antipodeOf } from './js/layers/antipode-layer.js';
 import { graticuleGeometry } from './js/core/graticule.js';
 import { createSpaceState } from './js/states/space.js';
+// De magnetosfeer (sessie 29). De fysica komt uit de klassieke scripts
+// hierboven (globalThis.TerraCore) en niet uit een import: zie
+// js/compute/magnetosphere/SYNC.md voor waarom die byte-identiek blijven.
+import { createMagnetosphereState } from './js/states/magnetosphere.js';
+import { createBoundaryLayer } from './js/layers/magnetosphere/boundary-layer.js';
 import { createEnvironmentToggle } from './js/core/globe-root.js';
 import { skyFrame } from './js/compute/frames.js';
 import { createViewStates } from './js/core/view-state.js';
@@ -4032,6 +4037,9 @@ function updateSunUniform() {
   // hele hemel, en dus geen tweede tijdlijn die uit de pas kan lopen. De laag
   // doet niets zolang hij onzichtbaar is, en dat is de normale stand.
   if (spaceState) spaceState.tik();
+  // De magnetosfeer hangt aan dezelfde tik: de zonrichting IS hier het
+  // onderwerp, dus het frame moet met de tijdkiezer meelopen.
+  if (msphereState) msphereState.tik();
   // De ecliptica en de Lagrange-punten hangen aan dezelfde klok. Beide doen
   // niets zolang ze onzichtbaar zijn, en dat is de normale stand.
   if (disks) disks.update(now, world.camera());
@@ -6679,6 +6687,8 @@ bindCosmosToggle('sunspots-toggle', 'es-sunspots',
    tijdens de scene-opbouw al kan draaien, en `viewStates` bestaat pas in
    het init-blok. Zelfde TDZ-familie als de rest. */
 let viewStates = null, spaceState = null, planets = null;
+// De magnetosfeer. Zelfde TDZ-afspraak als de andere states.
+let msphereState = null, msphereBoundary = null;
 let disks = null, lagrange = null, orbits = null, environment = null;
 /* `panels` en `navPanel` staan hier om dezelfde reden als de rij hierboven, en
    niet bij hun eigen code verderop: `setPanelOpen()` leest `panels` en die
@@ -9084,6 +9094,48 @@ bouwPlanetenLijst();
 // bewoner en daarmee het bewijs dat de abstractie klopt: zou hij alleen
 // door `space` gebruikt worden, dan was er een vierde variant bij in
 // plaats van een gedeelde.
+/* ---- De magnetosfeer (sessie 29) ---------------------------------------
+   De laag hangt NAAST de aarde-mesh in de scene, niet eraan. Zelfde reden als
+   bij de aurora-schil van sessie 27: een kind erft `visible`, en de wireframe
+   zet de aarde uit — dan zou de magnetosfeer meeverdwijnen terwijl juist zij
+   het onderwerp is.
+
+   De fysica komt van globalThis.TerraCore, gepubliceerd door de klassieke
+   scripts vóór deze module. Ontbreekt hij, dan wordt de state niet aangemeld
+   en verschijnt hij niet in de navigatie — een knop naar een state die niet
+   kan rekenen is erger dan geen knop. */
+if (globalThis.TerraCore) {
+  msphereBoundary = createBoundaryLayer(THREE, { Core: globalThis.TerraCore });
+  world.scene().add(msphereBoundary.group);
+
+  msphereState = createMagnetosphereState(THREE, {
+    world,
+    boundary: msphereBoundary,
+    Core: globalThis.TerraCore,
+    moment: momentNow,
+    layers: {
+      // Dezelfde boekhouding als bij Space: onthouden wat er aan stond, want
+      // anders zet je bij het verlaten lagen aan die de gebruiker zelf uit had.
+      eventsOff() {
+        for (const laag of Object.keys(active)) {
+          spaceVoorheen[laag] = active[laag];
+          active[laag] = false;
+        }
+        render();
+      },
+      eventsRestore() {
+        for (const laag of Object.keys(spaceVoorheen)) active[laag] = spaceVoorheen[laag];
+        render();
+      }
+    }
+  });
+
+  /* EERST de magnetosfeer, DAN de zon, DAN de ruimte. De navigatie staat in
+     registratievolgorde en die loopt van dichtbij naar ver — de holte om de
+     aarde ligt binnen de baan van de zon. */
+  viewStates.register('msphere', msphereState.definition);
+}
+
 viewStates.register('sun', {
   body: 'sun-view',
   label: 'Sun',
@@ -9202,6 +9254,8 @@ if (IS_LOCAL) {
     get environment() { return environment; },
     get viewStates() { return viewStates; },
     get spaceState() { return spaceState; },
+    get msphereState() { return msphereState; },
+    get msphereBoundary() { return msphereBoundary; },
     get sunMoon() { return sunMoon; },
     get active() { return active; },
     get spaceVoorheen() { return spaceVoorheen; },
