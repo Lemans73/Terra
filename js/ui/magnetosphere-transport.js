@@ -27,11 +27,21 @@
    hier ook, zonder ze over te schrijven.
    ============================================================ */
 
-/* Waarom niet één snelheidsschuiver zoals het eiland: die woont daar in het
-   uitklappaneel, en dat heeft deze balk niet. Drie standen zijn genoeg voor
-   een venster van zeven dagen — 1 h/s doorloopt het in bijna drie minuten,
-   24 h/s in zeven seconden. */
-const MSPT_SNELHEDEN = [1, 6, 24];      // uur per seconde
+/* DE DRIE STANDEN VAN DE PoC, IN DATA-MINUTEN PER SECONDE.
+
+   Niet uur per seconde, en dat is meer dan een eenheid. Bij 6 h/s schuift het
+   getoonde moment 360 minuten per seconde op: dan zie je een week voorbijkomen
+   en geen magnetosfeer ademen. Bij 10 min/s duurt één omwenteling van de aarde
+   veertien seconden, en dát is de schaal waarop de vorm iets doet.
+
+   Het las bovendien als een TIJDSCHAAL — "24 h" naast "3 D" en "7 D" in de
+   tijdlijn zegt hoe BREED het venster is, niet hoe snel het loopt. Twee dingen
+   die op elkaar lijken en iets anders betekenen.
+
+   De reeks staat op één rij per minuut, dus minuten/s IS rijen/s.
+   Waarden en standaard uit de PoC: 1 / 10 / 20, standaard 10. */
+const MSPT_SNELHEDEN = [1, 10, 20];     // data-minuten per seconde
+const MSPT_STANDAARD = 1;               // index van 10 min/s
 
 export function createMagnetosphereTransport(deps) {
   const { state, feed, fmtStamp, formatOffset } = deps;
@@ -48,11 +58,11 @@ export function createMagnetosphereTransport(deps) {
   const knopSnelheid = el('msp-rate');
 
   let richting = 0;
-  let snelheid = 1;                     // index in MSPT_SNELHEDEN
+  let snelheid = MSPT_STANDAARD;        // index in MSPT_SNELHEDEN
   let raf = null;
   let vorigeTijd = 0;
 
-  const uurPerSec = () => MSPT_SNELHEDEN[snelheid];
+  const minPerSec = () => MSPT_SNELHEDEN[snelheid];
 
   /* Waar de baan ophoudt. Niet rows.length - 1: zie de kop. */
   function eindeBaan() {
@@ -74,8 +84,8 @@ export function createMagnetosphereTransport(deps) {
     if (!richting) return;
     const dt = Math.min(0.1, (nu - vorigeTijd) / 1000);
     vorigeTijd = nu;
-    // Eén rij is één minuut op de aankomstklok, dus uur/s maal 60 is rijen/s.
-    const doel = state.cursor() + richting * uurPerSec() * 60 * dt;
+    // Eén rij is één minuut op de aankomstklok, dus minuten/s IS rijen/s.
+    const doel = state.cursor() + richting * minPerSec() * dt;
     const max = eindeBaan();
     if (doel <= 0 || doel >= max) {
       state.zetCursor(doel <= 0 ? 0 : max);
@@ -120,7 +130,7 @@ export function createMagnetosphereTransport(deps) {
       schuif.value = String(state.cursor());
       schuif.disabled = !rows || max <= 0;
     }
-    if (knopSnelheid) knopSnelheid.textContent = uurPerSec() + ' h/s';
+    if (knopSnelheid) knopSnelheid.textContent = minPerSec() + ' min/s';
 
     if (!knopMoment) return;
     if (!rows) { knopMoment.textContent = 'no data'; return; }

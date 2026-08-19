@@ -46,7 +46,7 @@ import { MSPHERE_RE, MSPHERE_DRAW_MAX, pocNaarTerra }
   from '../layers/magnetosphere/boundary-layer.js';
 
 export function createMagnetosphereState(THREE, deps) {
-  const { world, boundary, layers, Core, feed, clock } = deps;
+  const { world, boundary, grid, layers, Core, feed, clock } = deps;
 
   const origin = new THREE.Vector3(0, 0, 0);
   const _sun = new THREE.Vector3();
@@ -175,6 +175,40 @@ export function createMagnetosphereState(THREE, deps) {
   ---------------------------------------------------------- */
   const LOCK_NOTE = 'Locked to the GSM frame — pan and zoom still work.';
 
+  /* EEN LANGE LENS MAAKT VAN EEN AANZICHT EEN DOORSNEDE.
+
+     De vaste standen kijken loodrecht op een vlak, maar met de gewone
+     beeldhoek van 50 graden loopt de staart zichtbaar naar het verdwijnpunt
+     en klapt de ring om de neus open tot een ovaal. Je ziet dan een foto van
+     een driedimensionaal ding, terwijl het beeld dat de magnetosfeer
+     verklaart een DOORSNEDE is — de plaat uit elk leerboek, en het beeld dat
+     de PoC op zijn 2D-canvas geeft.
+
+     Twaalf graden is geen orthografische camera maar komt er dichtbij: de
+     perspectiefvertekening loopt terug met ongeveer de verhouding van de
+     tangens, dus van 50 naar 12 graden is ruim vier keer vlakker. De camera
+     schuift evenredig naar achteren omdat fitDistance() de beeldhoek zelf
+     leest — daar hoeft dus niets voor bijgesteld te worden.
+
+     Waarom geen echte orthografische camera: die is van globe.gl en wordt
+     door de hele app gedeeld (labels, de zonvlucht, de ruimtestand rekenen
+     allemaal met zijn beeldhoek). Een tweede cameratype erbij zetten is een
+     verbouwing; een andere brandpuntsafstand is een getal. */
+  const MSPHERE_FLAT_FOV = 12;
+  let bewaardeFov = null;
+
+  function zetLens(vlak) {
+    const cam = world.camera();
+    if (vlak) {
+      if (bewaardeFov === null) bewaardeFov = cam.fov;
+      cam.fov = MSPHERE_FLAT_FOV;
+    } else if (bewaardeFov !== null) {
+      cam.fov = bewaardeFov;
+      bewaardeFov = null;
+    } else return;
+    cam.updateProjectionMatrix();
+  }
+
   const views = {
     /* DE TWEE VASTE STANDEN GEVEN HUN EIGEN "OMHOOG" OP.
 
@@ -188,8 +222,12 @@ export function createMagnetosphereState(THREE, deps) {
        waarlangs de vorm zich uitstrekt. Wat verticaal staat verschilt:
        Meridian zet de dipoolkant omhoog, Top de flank. */
     meridian: {
-      locked: true, label: 'Meridian', note: LOCK_NOTE,
+      locked: true, flat: true, label: 'Meridian', note: LOCK_NOTE,
       camera: () => {
+        // DE LENS EERST. fitDistance() leest de beeldhoek, dus zet je hem pas
+        // ná de berekening, dan hoort de afstand bij de vorige lens en staat
+        // het kader er vier keer naast tot de volgende viewwissel.
+        zetLens(true);
         // Loodrecht op het X-Z-vlak is de Y-as: van daaruit zie je dat vlak
         // op ware grootte, met de dipoolas-kant omhoog.
         const a = gsmAssen();
@@ -197,7 +235,7 @@ export function createMagnetosphereState(THREE, deps) {
       }
     },
     top: {
-      locked: true, label: 'Top', note: LOCK_NOTE,
+      locked: true, flat: true, label: 'Top', note: LOCK_NOTE,
       camera: () => {
         // Van boven op het X-Y-vlak. Omhoog moet IN dat vlak liggen — de
         // Z-as zou samenvallen met de kijkrichting en dat is gedegenereerd.
@@ -207,6 +245,7 @@ export function createMagnetosphereState(THREE, deps) {
         // van hetzelfde onderwerp. GEMETEN als schermhoek van de zonlijn: +y gaf
         // 0 graden, -y geeft 180, gelijk aan Meridian. De PoC houdt dezelfde
         // conventie aan (+X links, zie zijn schaaloverlay).
+        zetLens(true);                       // zie de noot bij meridian
         const a = gsmAssen();
         return targetFrom(a.z.clone(), overviewDistance(), a.y.clone().negate(), kaderMidden(a.x));
       }
@@ -214,6 +253,9 @@ export function createMagnetosphereState(THREE, deps) {
     orbit: {
       locked: false, label: '3D orbit', note: 'Free orbit.',
       camera: () => {
+        // De vrije stand houdt de gewone beeldhoek: daar kijk je juist RÓND de
+        // vorm, en dan is perspectief wat de diepte draagt.
+        zetLens(false);
         // Schuin op de zonlijn: de neus in beeld én de staart herkenbaar.
         const a = gsmAssen();
         _dir.copy(a.x).multiplyScalar(0.85)
@@ -223,6 +265,118 @@ export function createMagnetosphereState(THREE, deps) {
       }
     }
   };
+
+  /* ==========================================================
+     DE CAMERASTELLING WOONT IN HET GSM-FRAME (sessie 30).
+
+     Buiten deze state staat de camera in wereldcoördinaten, en dat klopt
+     daar: de aarde ligt stil en de zon trekt eroverheen. Hier is het
+     onderwerp juist de holte, en die staat vast ten opzichte van de ZON.
+     De aarde draait erin rond.
+
+     Tot deze sessie zette `goToView` de camera één keer neer en bleef hij
+     daar. Zet je dan het afspelen aan, dan draait het GSM-frame wél mee en
+     de camera niet — en dus zwiept de holte door het beeld terwijl de aarde
+     stil lijkt te staan. Precies omgekeerd aan wat er gebeurt.
+
+     De oplossing is niet een correctie maar een andere boekhouding: de
+     camerapositie en zijn "omhoog" worden hier BEWAARD IN GSM-COÖRDINATEN.
+     Bij elke herbouw worden ze met de nieuwe framerotatie terug naar de
+     wereld gerekend; als de bezoeker zelf sleept of zoomt, worden ze
+     teruggelezen. Eén formulering, en alle drie de standen kloppen: de
+     vaste standen blijven vaststaan, de vrije stand blijft vrij, en in
+     allebei staat de holte stil terwijl de aarde erin draait.
+  ========================================================== */
+  const _camGsm = new THREE.Vector3();
+  const _upGsm = new THREE.Vector3(0, 1, 0);
+  const _qFrame = new THREE.Quaternion();
+  const _qInv = new THREE.Quaternion();
+  const _tmp = new THREE.Vector3();
+  let rigGevuld = false;
+
+  /* HET DRAAIPUNT SCHUIFT MEE MET DE ZOOM.
+
+     Twee dingen die allebei waar zijn en elkaar tegenspraken. Uitgezoomd
+     hoort het draaipunt in de HOLTE te liggen: de vorm loopt van +10 Re aan
+     de zonzijde tot -60 in de staart, dus zijn midden ligt niet op de aarde,
+     en met een draaipunt op de aarde zwiept de staart door het beeld zodra je
+     sleept (Terry, sessie 29). Ingezoomd hoort het op de AARDE te liggen:
+     anders convergeert het zoomen op een leeg punt 25 Re verderop en kom je
+     er nooit bij (Terry, sessie 30 — gemeten: de aarde stond op 22 % van de
+     linkerrand en mat zeven pixels).
+
+     Dus verschuift het met de afstand. Ver weg is het beeld een VORM en
+     draai je om die vorm; dichtbij is het beeld een PLANEET en draai je om de
+     planeet. De overgang loopt over de tussenliggende afstanden, met een
+     smoothstep zodat er nergens een knik in zit.
+
+     DE AFSTAND WORDT AAN DE AARDE GEMETEN EN NIET AAN HET DRAAIPUNT. Dat is
+     geen detail maar de reden dat dit stabiel is: het draaipunt verplaatsen
+     verandert de afstand tot het draaipunt, en zou die de maat zijn, dan
+     stuurde het draaipunt zichzelf. De afstand tot de aarde ligt vast. */
+  const MSPHERE_PIVOT_NEAR = MSPHERE_RE * 6;    // hier ligt het draaipunt volledig op de aarde
+  function draaipuntFactor(afstandTotAarde) {
+    const ver = overviewDistance();
+    if (!(ver > MSPHERE_PIVOT_NEAR)) return 1;
+    const t = (afstandTotAarde - MSPHERE_PIVOT_NEAR) / (ver - MSPHERE_PIVOT_NEAR);
+    /* LINEAIR EN NIET SMOOTHSTEP, en de reden is meetkundig.
+
+       De hoek waaronder je de aarde náást de kijkas ziet, is het draaipunt
+       GEDEELD DOOR de afstand. Houd je die verhouding constant, dan blijft de
+       aarde tijdens het inzoomen op dezelfde plek in beeld staan en groeit hij
+       alleen — geen zijwaartse zwaai. Lineair doet precies dat, want teller en
+       noemer lopen dan samen op. Smoothstep loopt aan de verre kant vlak, dus
+       daar krimpt het draaipunt trager dan de afstand en drijft de aarde nog
+       een stukje verder naar de rand voordat hij terugkomt.
+
+       GEMETEN, uitgedempt (OrbitControls staat op damping 0,1, dus één
+       update() brengt hem maar een tiende van de weg — meten vóór het uitdempt
+       geeft de stand van onderweg en niet die van straks):
+
+         afstand  31671  19735  12325  7713  4835  3035  1906  1196   748
+         aarde X  -0,475 -0,470 -0,459 -0,443 -0,417 -0,377 -0,318 -0,228 -0,089
+         straal    0,011  0,019  0,031  0,053  0,087  0,144  0,233  0,374  0,592
+
+       Monotoon naar het midden, nergens verder van de as dan waar hij begon,
+       en aan het eind vult de aarde het beeld. */
+    return Math.max(0, Math.min(1, t));
+  }
+
+  /* Het draaipunt in GSM-coördinaten: langs -X (van de zon af), geschaald met
+     de factor hierboven. In GSM is de zonlijn per definitie +X, dus dit is
+     dezelfde -0,42 x tekengrens als kaderMidden, alleen frame-onafhankelijk. */
+  function draaipuntGsm(uit, afstandTotAarde) {
+    const f = draaipuntFactor(afstandTotAarde);
+    return uit.set(0, 0, -MSPHERE_DRAW_MAX * MSPHERE_RE * 0.42 * f);
+  }
+
+  /* De wereldstand overnemen in GSM. Draait bij elke muisbeweging: wat de
+     bezoeker doet is de waarheid, en dit is waar die waarheid binnenkomt. */
+  function leesRig() {
+    const cam = world.camera();
+    _qInv.copy(_qFrame).invert();
+    _camGsm.copy(cam.position).applyQuaternion(_qInv);
+    _upGsm.copy(cam.up).applyQuaternion(_qInv);
+    rigGevuld = true;
+  }
+
+  /* En terug. Het draaipunt wordt hier OPNIEUW BEREKEND en niet meegedraaid:
+     hij hangt aan de zoomafstand, en die kan sinds de vorige keer veranderd
+     zijn. `copy` en niet `set` — ensureTargetLock() blokkeert `set` en
+     `setScalar` zolang deze state actief is, en dat is precies waarom het
+     draaipunt hier überhaupt buiten de oorsprong kan liggen. */
+  function schrijfRig() {
+    if (!rigGevuld) return;
+    const cam = world.camera(), ctl = world.controls();
+    cam.position.copy(_camGsm).applyQuaternion(_qFrame);
+    cam.up.copy(_upGsm).applyQuaternion(_qFrame).normalize();
+    ctl.target.copy(draaipuntGsm(_tmp, _camGsm.length()).applyQuaternion(_qFrame));
+  }
+
+  /* De haak op de besturing. Hij MOET er zijn zolang de state open staat:
+     zonder terugleesstap zou de eerstvolgende herbouw de camera terugzetten
+     naar waar hij stond vóór de bezoeker sleepte. */
+  function opBesturing() { if (actief) { leesRig(); schrijfRig(); } }
 
   /* ----------------------------------------------------------
      DE CURSOR, EN WAAROM HIJ HIER WOONT EN NIET IN DE FEED.
@@ -265,6 +419,11 @@ export function createMagnetosphereState(THREE, deps) {
   function herbouw() {
     const a = gsmAssen();
     boundary.orient(a.x, a.dip);
+    /* De groep draagt de framerotatie al; die is dus ook de rotatie waarmee de
+       camerastelling terug naar de wereld gaat. Eén bron, geen tweede
+       berekening die ooit uit de pas kan lopen. */
+    _qFrame.copy(boundary.group.quaternion);
+    if (actief) schrijfRig();
 
     const rows = feed ? feed.rows() : null;
     const s = rows && rows[cursor] ? rows[cursor] : null;
@@ -350,6 +509,10 @@ export function createMagnetosphereState(THREE, deps) {
       // "terug naar nu" bij vertrek: wie in 1985 stond te kijken hoort daar
       // terug te komen, net zoals environment.restore() per object onthoudt.
       if (clock) bewaardeKlok = clock.lees();
+      // De stelling wordt pas gevuld door de eerste view die view-state.js
+      // direct hierna opvraagt; tot dan mag schrijfRig() niets doen.
+      rigGevuld = false;
+      world.controls().addEventListener('change', opBesturing);
       if (layers.auroraOn) layers.auroraOn();
       if (feed) feed.setEnabled(true);
       // De reeks kan er al liggen van een vorig bezoek — de feed houdt hem
@@ -369,6 +532,15 @@ export function createMagnetosphereState(THREE, deps) {
       // Ook hier eerst de vlag, en om de spiegelreden: `clock.herstel`
       // hieronder tikt terug, en die tik hoort niets meer te bouwen.
       actief = false;
+      world.controls().removeEventListener('change', opBesturing);
+      if (grid) grid.setPlane(null);
+      zetLens(false);
+      /* ONVOORWAARDELIJK, en niet alleen wanneer we uit een vlakke stand komen.
+         Verlaat je de state vanuit Meridian, dan is de hemel daar uitgezet en
+         zet niemand hem terug — je komt dan terug op een aarde in het zwart.
+         Gemeten, en het is precies de faalvorm die je niet ziet als je alleen
+         via de vrije stand test: dáár staan de sterren toch al aan. */
+      if (layers.starsRestore) layers.starsRestore();
       boundary.setVisible(false);
       if (feed) feed.setEnabled(false);
       if (clock && bewaardeKlok) { clock.herstel(bewaardeKlok); bewaardeKlok = null; }
@@ -395,7 +567,27 @@ export function createMagnetosphereState(THREE, deps) {
     herbouw();
   }
 
-  return { definition, views: Object.keys(views), tik, nieuweData,
+  /* Wordt door index.html aangeroepen bij elke viewwissel (viewStates.onChange).
+     De KENNIS staat hier en niet daar: welke stand plat hoort te zijn is een
+     eigenschap van deze state, en index.html hoort daar geen lijst van te
+     onderhouden. */
+  function viewGewisseld(naam) {
+    if (!actief) return;
+    const v = views[naam];
+    // De lens is al gezet door view.camera() hierboven; hier gaat het om wat
+    // ERNA komt. De stand die goToView zojuist neerzette is de nieuwe waarheid.
+    leesRig();
+    if (layers.starsOff && layers.starsRestore) {
+      if (v && v.flat) layers.starsOff(); else layers.starsRestore();
+    }
+    /* Het raster vervangt de sterren, en het vlak volgt de kijkrichting:
+       Meridian kijkt langs GSM Y en heeft dus het X-Z-vlak, Top kijkt langs
+       GSM Z en heeft X-Y. In de vrije stand geen van beide — een raster is
+       een doorsnede en een perspectiefbeeld heeft er geen. */
+    if (grid) grid.setPlane(v && v.flat ? naam : null);
+  }
+
+  return { definition, views: Object.keys(views), tik, nieuweData, viewGewisseld,
            herbouw, laatsteBouw: () => laatste, gsmAssen,
            // Voor de transportbalk (B3c) en voor het meetluik. `volgtNu` is
            // schrijfbaar: wie zelf schuift, volgt niet meer.

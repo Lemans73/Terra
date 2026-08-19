@@ -335,7 +335,7 @@
         title="Back to the latest measurement">now</button>
       </div>
       <button class="play-btn mspt-rate" id="msp-rate" type="button"
-      title="Playback speed" aria-label="Playback speed">6 h/s</button>
+      title="Playback speed" aria-label="Playback speed">10 min/s</button>
     </div>
   </div>
 
@@ -1695,6 +1695,8 @@ import { createSpaceState } from './js/states/space.js';
 // js/compute/magnetosphere/SYNC.md voor waarom die byte-identiek blijven.
 import { createMagnetosphereState } from './js/states/magnetosphere.js';
 import { createBoundaryLayer } from './js/layers/magnetosphere/boundary-layer.js';
+import { createMagnetosphereGrid } from './js/layers/magnetosphere/grid-layer.js';
+import { MSPHERE_RE, MSPHERE_DRAW_MAX } from './js/layers/magnetosphere/boundary-layer.js';
 import { createMagnetosphereFeed, MSPHERE_HEALTH_ID } from './js/compute/magnetosphere-feed.js';
 import { createMagnetosphereTransport } from './js/ui/magnetosphere-transport.js';
 import { createEnvironmentToggle } from './js/core/globe-root.js';
@@ -6770,7 +6772,7 @@ bindCosmosToggle('sunspots-toggle', 'es-sunspots',
    het init-blok. Zelfde TDZ-familie als de rest. */
 let viewStates = null, spaceState = null, planets = null;
 // De magnetosfeer. Zelfde TDZ-afspraak als de andere states.
-let msphereState = null, msphereBoundary = null, msphereTransport = null;
+let msphereState = null, msphereBoundary = null, msphereTransport = null, msphereGrid = null;
 let disks = null, lagrange = null, orbits = null, environment = null;
 /* `panels` en `navPanel` staan hier om dezelfde reden als de rij hierboven, en
    niet bij hun eigen code verderop: `setPanelOpen()` leest `panels` en die
@@ -7098,6 +7100,45 @@ function ensureTargetLock() {
   t.__terraLocked = true;
 }
 ensureTargetLock();
+
+/* HET SNELHEIDSSLOT — dezelfde vorm als het slot hierboven, en om een verwante
+   reden: globe.gl schrijft óók hier iets terug dat voor de aardweergave klopt
+   en voor de magnetosfeer niet.
+
+   GEMETEN 2026-08-19. globe.gl schaalt `rotateSpeed` en `zoomSpeed` mee met de
+   afstand tot de AARDBOL, zodat een sleep bij een hoge stand ongeveer evenveel
+   oppervlak verplaatst als van dichtbij. Prima zolang je om de aarde draait.
+   In de magnetosfeer sta je op zo'n 82 aardstralen, en dan komt hij uit op
+   rotateSpeed 24,3 en zoomSpeed 4,5 — waar de standaard van three.js 1,0 is.
+   Eén sleep over het scherm draaide je daarmee bijna vierentwintig keer rond.
+
+   En hij schrijft ze TERUG: handmatig op 1 zetten hield het tot de eerstvolgende
+   zoomstap, waarna er weer 21,9 en 4,3 stond. Vandaar een slot en geen
+   toekenning. Buiten de magnetosfeer verandert er niets: daar is globe.gl's
+   schaling precies goed.
+
+   Waarom een property en geen functie-omhulsel zoals bij `target`: dit zijn
+   kale getallen op het controls-object, dus onderscheppen gaat met een setter. */
+const MSPHERE_ROTATE_SPEED = 1.0;   // three.js-standaard: één schermhoogte slepen is één omwenteling
+const MSPHERE_ZOOM_SPEED   = 1.0;
+function ensureSpeedLock() {
+  const c = world.controls();
+  if (c.__terraSpeedLocked) return;
+  for (const [naam, vast] of [['rotateSpeed', MSPHERE_ROTATE_SPEED],
+                              ['zoomSpeed', MSPHERE_ZOOM_SPEED]]) {
+    let waarde = c[naam];
+    Object.defineProperty(c, naam, {
+      configurable: true,
+      get: () => (inMagnetosfeer() ? vast : waarde),
+      // De schrijfactie van globe.gl wordt niet geweigerd maar ONTHOUDEN: zodra
+      // je de state verlaat hoort zijn schaling meteen weer te gelden, en niet
+      // de waarde van vóór het bezoek.
+      set: (v) => { waarde = v; }
+    });
+  }
+  c.__terraSpeedLocked = true;
+}
+ensureSpeedLock();
 
 // ---- Space ----
 // De ingang en de camerastanden zitten sinds sessie 24 in js/ui/nav.js, dat ze
@@ -9219,9 +9260,16 @@ if (globalThis.TerraCore) {
   msphereBoundary = createBoundaryLayer(THREE, { Core: globalThis.TerraCore });
   world.scene().add(msphereBoundary.group);
 
+  /* Het Re-raster hangt ÓNDER de grensvlakgroep en niet naast de scene. Zo
+     erft het de framerotatie en staat het per constructie stil ten opzichte
+     van de holte — geen tweede plek waar dezelfde rotatie berekend wordt. */
+  msphereGrid = createMagnetosphereGrid(THREE, { RE: MSPHERE_RE, drawMax: MSPHERE_DRAW_MAX });
+  msphereBoundary.group.add(msphereGrid.group);
+
   msphereState = createMagnetosphereState(THREE, {
     world,
     boundary: msphereBoundary,
+    grid: msphereGrid,
     Core: globalThis.TerraCore,
     moment: momentNow,
     feed: msphereFeed,
@@ -9325,6 +9373,20 @@ if (globalThis.TerraCore) {
          in het lagenpaneel blijft ongemoeid, want die staat in deze states toch
          niet voor de keuze van de bezoeker. eventsRestore() zet zijn eigen
          instelling bij vertrek terug. */
+      /* DE VASTE STANDEN KRIJGEN GEEN STERRENHEMEL.
+
+         Meridian en Top zijn geen uitzicht maar een DOORSNEDE: je kijkt
+         loodrecht op een vlak waarin de vorm zijn betekenis heeft. Een
+         sterrenveld erachter suggereert dat je ergens vandaan kijkt, en dat
+         is precies wat een doorsnede niet doet. De vrije stand houdt ze wel,
+         want dáár kijk je wél ergens vandaan.
+
+         `null` en niet een zwarte afbeelding: globe.gl valt dan terug op de
+         achtergrondkleur, en dat scheelt ook het tekenen van een bol van
+         8k bij elke frame. */
+      starsOff() { world.backgroundImageUrl(null); },
+      starsRestore() { world.backgroundImageUrl(assetsFor(texQuality).stars); },
+
       auroraOn() {
         if (active.aurora) return;
         active.aurora = true;
@@ -9424,10 +9486,14 @@ viewStates.onChange((actief) => { backBtn.hidden = !actief; });
    bezoeker weg is, blijft de cursor verzetten — en die cursor stuurt de klok
    van de HELE app. Dan schuift de aarde onder je vandaan vanuit een state die
    niet meer open staat. */
-viewStates.onChange((actief) => {
-  if (!msphereTransport) return;
-  if (actief === 'msphere') msphereTransport.toon();
-  else msphereTransport.stop();
+viewStates.onChange((actief, view) => {
+  if (msphereTransport) {
+    if (actief === 'msphere') msphereTransport.toon();
+    else msphereTransport.stop();
+  }
+  // De state beslist zelf wat een stand betekent — welke plat is, of er
+  // sterren horen, en welke camerastand hij als waarheid overneemt.
+  if (msphereState && actief === 'msphere') msphereState.viewGewisseld(view);
 });
 // Het trackvenster hoort bij wat je aankijkt: dagen rond de aarde, jaren in het
 // zonnestelsel. Zie borgTrackPresets() waarom dit aan `onChange` hangt en niet aan
@@ -9495,6 +9561,7 @@ if (IS_LOCAL) {
     // uitzondering die er niet is.
     get msphereFeed() { return msphereFeed; },
     get msphereTransport() { return msphereTransport; },
+    get msphereGrid() { return msphereGrid; },
     get sunMoon() { return sunMoon; },
     get active() { return active; },
     get spaceVoorheen() { return spaceVoorheen; },
