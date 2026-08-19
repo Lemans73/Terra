@@ -200,7 +200,35 @@ export function createMagnetosphereState(THREE, deps) {
      zoomen blijven werken. Zie de kop van core/view-state.js voor waarom
      die twee dingen uit elkaar horen.
   ---------------------------------------------------------- */
-  const LOCK_NOTE = 'Locked to the GSM frame — pan and zoom still work.';
+  /* IN EEN VASTE STAND PANT DE LINKERKNOP, EN DAT MOET GEZEGD WORDEN.
+
+     view-state.js zet `ctl.enableRotate = false` in een vastgezette stand, en
+     OrbitControls heeft de linkerknop standaard op DRAAIEN staan. Uitgezet
+     draaien betekent dus: slepen doet niets, en pannen zit verstopt op de
+     rechterknop. Precies de klacht dat pannen "nog toegevoegd moest worden" —
+     het zat er wel, maar op een knop die niemand probeert.
+
+     Bij de aanraakbediening hetzelfde: één vinger pant, twee vingers zoomen. */
+  let bewaardeKnoppen = null, bewaardeVingers = null;
+
+  function zetSleepgedrag(pannen) {
+    const ctl = world.controls();
+    if (pannen) {
+      if (!bewaardeKnoppen) {
+        bewaardeKnoppen = { ...ctl.mouseButtons };
+        bewaardeVingers = { ...ctl.touches };
+      }
+      ctl.mouseButtons = { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY,
+                           RIGHT: THREE.MOUSE.PAN };
+      ctl.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_PAN };
+    } else if (bewaardeKnoppen) {
+      ctl.mouseButtons = bewaardeKnoppen;
+      ctl.touches = bewaardeVingers;
+      bewaardeKnoppen = bewaardeVingers = null;
+    }
+  }
+
+  const LOCK_NOTE = 'Locked to the GSM frame — drag to pan, scroll to zoom.';
 
   /* ==========================================================
      DE VLAKKE STANDEN KRIJGEN EEN ORTHOGRAFISCHE PROJECTIE.
@@ -464,6 +492,31 @@ export function createMagnetosphereState(THREE, deps) {
     return uit.set(0, 0, -MSPHERE_DRAW_MAX * MSPHERE_RE * 0.42 * f);
   }
 
+  /* WIE DE CAMERA HET LAATST VERZETTE, HEEFT GELIJK.
+
+     Deze stelling BEZIT de camera niet; hij laat hem alleen met het GSM-frame
+     meedraaien. Zodra iemand anders hem verplaatst — een vlucht bij een
+     standwissel, globe.gl, een sleep die geen 'change' gaf — is diens stand de
+     waarheid en moet die eerst ingelezen worden.
+
+     Zonder dit ging het mis bij de EERSTE binnenkomst, en precies daar:
+     `set()` roept `enter()` aan, dan `goToView(initialView)`, en die start een
+     VLUCHT van 1100 ms. De viewwissel leest de stelling uit aan het BEGIN
+     daarvan, dus met de camera nog in de aarde-stand. Kwam de feed een seconde
+     later binnen, dan schreef `herbouw()` die verouderde stand terug en stond
+     de camera weer op ~200 eenheden. Bij een orthografische projectie is de
+     beeldhoogte afstand maal 0,9 — dus 1,8 Re, en je kijkt door een kijkgaatje
+     naar een vorm van 90 Re. Gemeten: 2362 opgelichte pixels tegen 28.531 na
+     een klik op de viewknop, die de vlucht opnieuw begon.
+
+     Vandaar deze toets in plaats van een uitzondering voor de vlucht: de
+     stelling hoeft niet te weten WIE de camera verzette, alleen DAT het
+     gebeurde. */
+  const _laatstGeschreven = new THREE.Vector3(NaN, NaN, NaN);
+  const camIsVerzet = () =>
+    !Number.isFinite(_laatstGeschreven.x) ||
+    world.camera().position.distanceToSquared(_laatstGeschreven) > 1e-6;
+
   /* De wereldstand overnemen in GSM. Draait bij elke muisbeweging: wat de
      bezoeker doet is de waarheid, en dit is waar die waarheid binnenkomt. */
   function leesRig() {
@@ -489,6 +542,30 @@ export function createMagnetosphereState(THREE, deps) {
     cam.position.copy(_camGsm).applyQuaternion(_qFrame);
     cam.up.copy(_upGsm).applyQuaternion(_qFrame).normalize();
     ctl.target.copy(_targetGsm).applyQuaternion(_qFrame);
+    _laatstGeschreven.copy(cam.position);
+    /* DE ORTHOGRAFISCHE MATRIX MOET HIER OPNIEUW, en dit is geen voorzorg maar
+       de reparatie van drie klachten tegelijk.
+
+       De beeldhoogte is afstand maal 0,9, dus hij verandert bij ELKE dolly en
+       bij elke stap van een vlucht. Maar three.js bouwt `projectionMatrix`
+       alleen als iemand `updateProjectionMatrix()` aanroept, en OrbitControls
+       doet dat bij een perspectiefcamera niet — daar verandert de dolly de
+       POSITIE en regelt het perspectief de rest vanzelf. Onze camera zegt nog
+       steeds perspectief te zijn (zie zetProjectie), dus die aanroep blijft uit.
+
+       Wat dat opleverde:
+         · bij de eerste binnenkomst zette `set()` de matrix terwijl de camera
+           nog in de aarde-stand stond — beeldhoogte 1,8 Re — waarna de vlucht
+           hem naar 10.000 bracht zonder de matrix bij te werken. Je keek door
+           een sleuf: gemeten 2362 opgelichte pixels, precies één beeldrij.
+         · zoomen deed niets zichtbaars: de camera schoof wel op, het beeldveld
+           niet.
+       Een klik op een viewknop hielp, want die roept zetProjectie() opnieuw aan.
+
+       Hier en niet in opBesturing: schrijfRig draait bij élke muisbeweging én
+       bij elke herbouw, en dat is precies de verzameling momenten waarop de
+       afstand veranderd kan zijn. */
+    if (vlakkeStand) cam.updateProjectionMatrix();
   }
 
   /* De haak op de besturing. Hij MOET er zijn zolang de state open staat:
@@ -540,6 +617,10 @@ export function createMagnetosphereState(THREE, deps) {
     /* De groep draagt de framerotatie al; die is dus ook de rotatie waarmee de
        camerastelling terug naar de wereld gaat. Eén bron, geen tweede
        berekening die ooit uit de pas kan lopen. */
+    /* EERST KIJKEN OF IEMAND ANDERS DE CAMERA VERZETTE, en pas dan het frame
+       bijwerken: de terugleesstap rekent met het OUDE frame, want de stand die
+       er staat hoort daar nog bij. */
+    if (actief && rigGevuld && camIsVerzet()) leesRig();
     _qFrame.copy(boundary.group.quaternion);
     if (actief) schrijfRig();
 
@@ -633,6 +714,7 @@ export function createMagnetosphereState(THREE, deps) {
       // De stelling wordt pas gevuld door de eerste view die view-state.js
       // direct hierna opvraagt; tot dan mag schrijfRig() niets doen.
       rigGevuld = false;
+      _laatstGeschreven.set(NaN, NaN, NaN);
       world.controls().addEventListener('change', opBesturing);
       if (layers.auroraOn) layers.auroraOn();
       if (feed) feed.setEnabled(true);
@@ -658,6 +740,7 @@ export function createMagnetosphereState(THREE, deps) {
       if (grid) grid.setPlane(null);
       if (boundary.setOutline) boundary.setOutline(null);
       vlakkeStand = false;
+      zetSleepgedrag(false);
       zetProjectie(false);
       /* ONVOORWAARDELIJK, en niet alleen wanneer we uit een vlakke stand komen.
          Verlaat je de state vanuit Meridian, dan is de hemel daar uitgezet en
@@ -702,6 +785,7 @@ export function createMagnetosphereState(THREE, deps) {
     // De lens is al gezet door view.camera() hierboven; hier gaat het om wat
     // ERNA komt. De stand die goToView zojuist neerzette is de nieuwe waarheid.
     leesRig();
+    zetSleepgedrag(!!(v && v.flat));
     if (layers.skyOff && layers.skyRestore) {
       if (v && v.flat) layers.skyOff(); else layers.skyRestore();
     }
