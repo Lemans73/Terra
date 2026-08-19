@@ -286,7 +286,15 @@ export function createMagnetosphereState(THREE, deps) {
     cursor = Math.max(0, Math.min(rows.length - 1, Math.round(i)));
     if (clock) {
       inZet = true;
-      try { clock.zet(new Date(rows[cursor].time)); } finally { inZet = false; }
+      try {
+        /* OP HET NIEUWSTE AANGEKOMEN MONSTER ZETTEN WE ECHT "NU", en niet de
+           tijd van dat monster. Dat scheelt minder dan een minuut, maar het is
+           het verschil tussen `bijNu()` waar en onwaar — en daaraan hangt of de
+           nowcast-lagen (de aurora voorop) open staan of op een tijdslot. Zie de
+           noot bij clock.zetNu in index.html. */
+        if (cursor === feed.arrivedEnd() && clock.zetNu) clock.zetNu();
+        else clock.zet(new Date(rows[cursor].time));
+      } finally { inZet = false; }
     }
     return herbouw();
   }
@@ -328,6 +336,7 @@ export function createMagnetosphereState(THREE, deps) {
       // "terug naar nu" bij vertrek: wie in 1985 stond te kijken hoort daar
       // terug te komen, net zoals environment.restore() per object onthoudt.
       if (clock) bewaardeKlok = clock.lees();
+      if (layers.auroraOn) layers.auroraOn();
       if (feed) feed.setEnabled(true);
       // De reeks kan er al liggen van een vorig bezoek — de feed houdt hem
       // vast als de poort dichtgaat. Is hij er nog niet, dan bouwt `herbouw`
@@ -351,6 +360,10 @@ export function createMagnetosphereState(THREE, deps) {
       if (clock && bewaardeKlok) { clock.herstel(bewaardeKlok); bewaardeKlok = null; }
       if (layers.environmentRestore) layers.environmentRestore();
       layers.eventsRestore();
+      // NA eventsRestore: die zet `active.aurora` terug op de keuze van de
+      // bezoeker, en pas dan kan de poort van de zwaarste bron van de app op
+      // die keuze gezet worden. Andersom leest hij de stand van deze state.
+      if (layers.auroraRestore) layers.auroraRestore();
     }
   };
 

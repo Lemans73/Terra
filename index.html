@@ -9251,6 +9251,27 @@ if (globalThis.TerraCore) {
         refreshTimeUI();
       },
 
+      /* HET NIEUWSTE MONSTER IS "NU", EN DAT MOET DE APP OOK VINDEN.
+
+         `zet` hierboven schrijft `baseMoment`, en daarmee is `bijNu()` per
+         definitie onwaar — ook op het laatste aangekomen monster. Dat is niet
+         cosmetisch: borgTijdsloten() zet de lagen uit TIJDREIS_ONMOGELIJK
+         (aqi, lightning, aurora) dan op een tijdslot, en de aurora-ovaal is
+         juist wat je in deze state bij nu wél wil zien.
+
+         Het verschil dat we daarmee opgeven is de tijd tussen het monster en de
+         wandklok, en dat is per constructie minder dan één minuut: het laatste
+         AANGEKOMEN monster is de nieuwste rij met een aankomsttijd die al
+         gepasseerd is, en de reeks staat op minuutrijen. Een kwart graad
+         aardrotatie, tegen een tijdslot dat het onderwerp wegneemt. */
+      zetNu() {
+        stopPlay();
+        baseMoment = null;
+        timeOffsetMs = 0;
+        if (timeSliderEl) timeSliderEl.value = '0';
+        refreshTimeUI();
+      },
+
       herstel(s) {
         baseMoment = s.basis;
         timeOffsetMs = s.offset;
@@ -9282,6 +9303,35 @@ if (globalThis.TerraCore) {
       },
       environmentRestore() {
         environment.restore();
+      },
+
+      /* DE AURORA-OVAAL HOORT BIJ DIT ONDERWERP en staat daarom aan, ook als de
+         bezoeker hem op de bol had uitgezet. Hij is waar de instroom landt: het
+         enige stuk van deze hele vorm dat je met het blote oog kunt zien.
+
+         Alleen bij NU, en daar hoeft niets voor geregeld te worden — `aurora`
+         staat in TIJDREIS_ONMOGELIJK, dus borgTijdsloten() sluit hem zodra het
+         moment verschuift en opent hem bij terugkeer. Dat werkt alleen omdat
+         `clock.zetNu` hierboven op het nieuwste monster echt `nu` zet; met een
+         `baseMoment` zou het slot permanent dicht staan.
+
+         GEMETEN, want de maat is niet vanzelfsprekend: in de meridiaanstand
+         draagt de ovaal 497 pixels van 800x560, oftewel 0,11 % dekking. De twee
+         grensvlakken doen er in hetzelfde beeld 12 %. Het is dus een gloed op de
+         bol en geen tweede onderwerp — precies wat het hoort te zijn, maar wie
+         er een opvallende laag van verwacht, ziet hem niet.
+
+         Alleen `active` en `syncAuroraLayer`, net als eventsOff/-Restore: de rij
+         in het lagenpaneel blijft ongemoeid, want die staat in deze states toch
+         niet voor de keuze van de bezoeker. eventsRestore() zet zijn eigen
+         instelling bij vertrek terug. */
+      auroraOn() {
+        if (active.aurora) return;
+        active.aurora = true;
+        syncAuroraLayer();
+      },
+      auroraRestore() {
+        syncAuroraLayer();
       }
     }
   });
