@@ -134,6 +134,75 @@ export function createBoundaryLayer(THREE, deps) {
     return { punten: nT * N_ROLL, lijnstukken: idx.length / 2 };
   }
 
+  /* ==========================================================
+     ALLEEN DE DOORSNEDE, VOOR DE VLAKKE STANDEN.
+
+     Meridian en Top kijken loodrecht op een vlak door de zonlijn. Bij een
+     OMWENTELINGSOPPERVLAK is de doorsnede in dat vlak precies de omtrek die
+     je ziet — de rest van het net ligt eromheen en zegt daar niets meer.
+     Het volle net (3456 punten, 4560 lijnstukken per oppervlak) maakt van een
+     doorsnede juist weer een driedimensionaal ding, en dat is precies wat een
+     doorsnede niet is.
+
+     Twee krommen per oppervlak dus, en welke twee hangt van het vlak af.
+     De geometrie hieronder zet een punt op GSM-y = rho*sin(a) en GSM-z =
+     rho*cos(a):
+
+       meridian (het GSM X-Z-vlak) vraagt GSM-y = 0  ->  a = 0 en a = pi
+       top      (het GSM X-Y-vlak) vraagt GSM-z = 0  ->  a = pi/2 en 3pi/2
+
+     Dat is geen benadering van de omtrek maar de omtrek zelf, want een
+     omwentelingsoppervlak heeft geen silhouet dat van de kijkhoek afwijkt
+     zolang je loodrecht op zijn as staat.
+  ========================================================== */
+  let doorsnedeVlak = null;
+  const ROLLEN = {
+    meridian: [0, Math.PI],
+    top: [Math.PI / 2, 3 * Math.PI / 2]
+  };
+
+  function vulDoorsnede(lijn, thetas, straalBijHoek, vlak) {
+    const nT = thetas.length, rollen = ROLLEN[vlak] || ROLLEN.meridian;
+    const P = new Float32Array(nT * rollen.length * 3);
+    for (let j = 0; j < rollen.length; j++) {
+      const a = rollen[j];
+      for (let i = 0; i < nT; i++) {
+        const th = thetas[i], r = straalBijHoek(th);
+        const x = r * Math.cos(th), rho = r * Math.sin(th);
+        const k = (j * nT + i) * 3;
+        P[k]     = rho * Math.sin(a) * MSPHERE_RE;   // Terra x  <- GSM y
+        P[k + 1] = rho * Math.cos(a) * MSPHERE_RE;   // Terra y  <- GSM z
+        P[k + 2] = x * MSPHERE_RE;                   // Terra z  <- GSM x
+      }
+    }
+    // Elke kromme als aaneengesloten lijnstukken; de twee krommen raken elkaar
+    // op de neus (theta 0) maar worden NIET verbonden — dan zou de laatste
+    // punt van de ene naar de eerste van de andere springen.
+    const idx = [];
+    for (let j = 0; j < rollen.length; j++)
+      for (let i = 0; i < nT - 1; i++) idx.push(j * nT + i, j * nT + i + 1);
+
+    lijn.geometry.dispose();
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(P, 3));
+    geo.setIndex(idx);
+    lijn.geometry = geo;
+    return { punten: nT * rollen.length, lijnstukken: idx.length / 2 };
+  }
+
+  /* Het vlak waarin de doorsnede getekend wordt, of null voor het volle net.
+     Geeft terug of er iets veranderde, zodat de aanroeper weet of er herbouwd
+     moet worden. */
+  function setOutline(vlak) {
+    if (vlak === doorsnedeVlak) return false;
+    doorsnedeVlak = vlak;
+    return true;
+  }
+
+  const vul = (lijn, thetas, straalBijHoek) => doorsnedeVlak
+    ? vulDoorsnede(lijn, thetas, straalBijHoek, doorsnedeVlak)
+    : vulOppervlak(lijn, thetas, straalBijHoek);
+
   /* Herbouwen uit een windstand.
 
      `pdyn` in nPa en `bz` in nT zijn METINGEN; r0, alpha en de boegschok
@@ -147,7 +216,7 @@ export function createBoundaryLayer(THREE, deps) {
     // oppervlak dat nergens meer staat, zonder dat er iets fout gaat.
     const alpha = P.flaring(pdyn, bz);
     const thetas = B.arcThetas(r0, alpha, MSPHERE_DRAW_MAX, N_THETA);
-    const mpStat = vulOppervlak(mp, thetas, (th) => P.magnetopauseRadius(th, r0, alpha));
+    const mpStat = vul(mp, thetas, (th) => P.magnetopauseRadius(th, r0, alpha));
 
     /* GEEN MACH IS GEEN BOEGSCHOK, en die regel staat hier omdat de formule
        hem niet kan dragen. `bowShockStandoff` begint met `Math.max(mach, 1.2)`
@@ -175,7 +244,7 @@ export function createBoundaryLayer(THREE, deps) {
     // De boegschok is dezelfde vorm, opgeblazen tot zijn eigen standoff.
     const rbs = P.bowShockStandoff(r0, mach);
     const schaal = rbs / r0;
-    const shockStat = vulOppervlak(shock, thetas,
+    const shockStat = vul(shock, thetas,
       (th) => P.magnetopauseRadius(th, r0, alpha) * schaal);
 
     return { r0, alpha, rbs, ...mpStat, shockLijnstukken: shockStat.lijnstukken };
@@ -213,6 +282,7 @@ export function createBoundaryLayer(THREE, deps) {
     group.clear();
   }
 
-  return { group, update, orient, setVisible, setPartVisible, dispose,
+  return { group, update, orient, setVisible, setPartVisible, setOutline, dispose,
+           outline: () => doorsnedeVlak,
            parts: { mp, shock } };
 }

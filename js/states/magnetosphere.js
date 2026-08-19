@@ -45,6 +45,11 @@
 import { MSPHERE_RE, MSPHERE_DRAW_MAX, pocNaarTerra }
   from '../layers/magnetosphere/boundary-layer.js';
 
+/* De diepteplak van de orthografische projectie, in Terra-eenheden. Ruim om de
+   getekende staart (60 Re = 6000) heen, en dat mag: orthografische diepte is
+   lineair. */
+const MSPHERE_ORTHO_DIEPTE = 200000;
+
 export function createMagnetosphereState(THREE, deps) {
   const { world, boundary, grid, layers, Core, feed, clock } = deps;
 
@@ -95,12 +100,34 @@ export function createMagnetosphereState(THREE, deps) {
      holte (zie targetFrom): nu de vorm gecentreerd staat, hoeft het kader niet
      meer de lege zonzijde te compenseren die een draaipunt op de aarde opleverde.
      Stond op 0,70 toen dat nog wél zo was. */
-  const overviewDistance = () => fitDistance(MSPHERE_DRAW_MAX * MSPHERE_RE * 0.55);
+  /* Hoe ver de camera staat. TWEE REGIMES, want de projectie verschilt.
 
-  const bounds = () => ({
-    min: MSPHERE_RE * 1.6,                   // net buiten de bol
-    max: fitDistance(90 * MSPHERE_RE)        // ruim voorbij de getekende staart
-  });
+     Perspectief (de vrije stand): de afstand BEPAALT hoe groot iets in beeld
+     komt, dus die volgt uit de beeldhoek — dat is fitDistance.
+
+     Orthografisch (de vlakke standen): de afstand bepaalt daar niets aan de
+     grootte, alleen de hoogte van het beeldveld doet dat. Maar we KIEZEN de
+     afstand zo dat hoogte = afstand * 0,9 blijft gelden, want dat is de
+     relatie waarop de registratie van de PoC rust. Zie de noot bij
+     zetProjectie. */
+  const overviewDistance = () => (vlakkeStand
+    ? orthoAfstand()
+    : fitDistance(MSPHERE_DRAW_MAX * MSPHERE_RE * 0.55));
+
+  /* De zoomgrenzen, en ook die verschillen per projectie.
+
+     Perspectief: de afstand is letterlijk afstand, dus de ondergrens houdt je
+     buiten de bol en de bovengrens voorbij de staart.
+
+     Orthografisch: de afstand IS de zoom (hoogte = afstand * 0,9). De grenzen
+     zijn daar dus beeldhoogtes: van 6 Re — dan vult de aarde een derde van het
+     beeld — tot 400 Re, ruim voorbij de getekende staart. Camera-in-de-bol
+     bestaat hier niet als probleem: bij een orthografische projectie zit er
+     geen kegel om doorheen te vallen. */
+  const bounds = () => (vlakkeStand
+    ? { min: 6 * MSPHERE_RE / MSPHERE_ORTHO_K,
+        max: orthoAfstand() * 4.5 }            // ruim vier keer uitzoomen vanaf het kader
+    : { min: MSPHERE_RE * 1.6, max: fitDistance(90 * MSPHERE_RE) });
 
   /* HET DRAAIPUNT LIGT IN DE HOLTE, NIET OP DE AARDE.
 
@@ -175,37 +202,81 @@ export function createMagnetosphereState(THREE, deps) {
   ---------------------------------------------------------- */
   const LOCK_NOTE = 'Locked to the GSM frame — pan and zoom still work.';
 
-  /* EEN LANGE LENS MAAKT VAN EEN AANZICHT EEN DOORSNEDE.
+  /* ==========================================================
+     DE VLAKKE STANDEN KRIJGEN EEN ORTHOGRAFISCHE PROJECTIE.
 
-     De vaste standen kijken loodrecht op een vlak, maar met de gewone
-     beeldhoek van 50 graden loopt de staart zichtbaar naar het verdwijnpunt
-     en klapt de ring om de neus open tot een ovaal. Je ziet dan een foto van
-     een driedimensionaal ding, terwijl het beeld dat de magnetosfeer
-     verklaart een DOORSNEDE is — de plaat uit elk leerboek, en het beeld dat
-     de PoC op zijn 2D-canvas geeft.
+     Een doorsnede kent geen verdwijnpunt. Met een perspectiefbeeld loopt de
+     staart naar één punt en klapt de ring om de neus open tot een ovaal; dan
+     kijk je naar een foto van een driedimensionaal ding, terwijl het beeld dat
+     de magnetosfeer verklaart juist de plaat uit het leerboek is. De lange lens
+     van 12 graden bracht dat dichterbij maar niet erheen.
 
-     Twaalf graden is geen orthografische camera maar komt er dichtbij: de
-     perspectiefvertekening loopt terug met ongeveer de verhouding van de
-     tangens, dus van 50 naar 12 graden is ruim vier keer vlakker. De camera
-     schuift evenredig naar achteren omdat fitDistance() de beeldhoek zelf
-     leest — daar hoeft dus niets voor bijgesteld te worden.
+     WAAROM DIT GEEN VERBOUWING IS. De camera van globe.gl wordt niet vervangen
+     — er wordt één methode op dat exemplaar overschreven. three.js' renderer
+     roept `updateProjectionMatrix()` niet aan tijdens het tekenen; hij gebruikt
+     `camera.projectionMatrix`. Overschrijf je die methode, dan gaat alles
+     downstream mee: tekenen, raycasten, `.project()` en `.unproject()`.
+     Dezelfde onderscheppingstechniek als ensureTargetLock en ensureSpeedLock,
+     en net zo omkeerbaar.
 
-     Waarom geen echte orthografische camera: die is van globe.gl en wordt
-     door de hele app gedeeld (labels, de zonvlucht, de ruimtestand rekenen
-     allemaal met zijn beeldhoek). Een tweede cameratype erbij zetten is een
-     verbouwing; een andere brandpuntsafstand is een getal. */
-  const MSPHERE_FLAT_FOV = 12;
-  let bewaardeFov = null;
+     DE HOOGTE IS AFSTAND MAAL 0,9, EN DAT IS GEEN WILLEKEURIG GETAL. Het is de
+     relatie uit `Core.Registration.pxPerRe` (js/compute/magnetosphere/core.js):
+     px per Re is `h / (dist * 0,9)`. Houden we ons daaraan, dan geldt de hele
+     registratie van de PoC hier per constructie — en dan is `overlay.js` met
+     zijn Re-getallen langs de assen exact aan te sluiten in plaats van
+     bij benadering. Dat is de reden dat de afstand hieronder uit de gewenste
+     hoogte volgt en niet andersom.
 
-  function zetLens(vlak) {
-    const cam = world.camera();
-    if (vlak) {
-      if (bewaardeFov === null) bewaardeFov = cam.fov;
-      cam.fov = MSPHERE_FLAT_FOV;
-    } else if (bewaardeFov !== null) {
-      cam.fov = bewaardeFov;
-      bewaardeFov = null;
-    } else return;
+     WAT ER NIET MEEGAAT: `camera.isPerspectiveCamera` blijft waar. Wie daarop
+     vertakt denkt dus nog steeds perspectief. In deze state raakt dat twee
+     dingen, en allebei zijn ze afgevangen: fitDistance() wordt hier niet
+     gebruikt (de afstand komt uit orthoAfstand), en de labelschaal in
+     core/label-sprite.js leest `fov` — maar labels staan in deze state uit.
+  ========================================================== */
+  /* Wat er in het beeld past, in Re. Gemeten bij 960 x 600: de neus (+10 Re)
+     valt op -0,489 en het einde van de staart (-60 Re) op +0,483 — de vorm
+     vult de breedte symmetrisch, met de zon links zoals de PoC hem zet. */
+  const MSPHERE_ORTHO_SPAN_RE = 90;
+  const MSPHERE_ORTHO_K = 0.9;             // Registration.pxPerRe
+
+  /* EEN CANVAS VAN NUL GEEFT aspect = 0/0 = NaN, en dan is de projectiematrix
+     weg — hetzelfde gat dat fitDistance() hierboven al dicht heeft. Bij een
+     orthografische matrix is het erger: een NaN daarin maakt élk punt NaN, dus
+     het beeld is zwart en blijft dat. Gemeten in sessie 30, in een verborgen
+     browserpaneel. */
+  const veiligeAspect = () => {
+    const a = world.camera().aspect;
+    return Number.isFinite(a) && a > 0 ? a : 1;
+  };
+
+  /* De hoogte volgt de VERHOUDING, want de vorm is lang en niet hoog. Op een
+     breed scherm bepaalt de hoogte hoeveel je verticaal ziet; op een telefoon
+     in portret zou diezelfde hoogte de staart afsnijden, dus daar groeit hij
+     mee. Dezelfde afweging als de min(halfV, halfH) in fitDistance. */
+  const orthoHoogte = () => MSPHERE_ORTHO_SPAN_RE * MSPHERE_RE * Math.max(1, 1 / veiligeAspect());
+  const orthoAfstand = () => orthoHoogte() / MSPHERE_ORTHO_K;
+
+  let orthoOrigineel = null;
+
+  function zetProjectie(vlak) {
+    const cam = world.camera(), ctl = world.controls();
+    if (vlak && !orthoOrigineel) {
+      orthoOrigineel = cam.updateProjectionMatrix.bind(cam);
+      cam.updateProjectionMatrix = function () {
+        const hoogte = cam.position.distanceTo(ctl.target) * MSPHERE_ORTHO_K;
+        const halfH = hoogte / 2, halfW = halfH * veiligeAspect();
+        /* Een diepteplak die de hele scene omvat, en ruim: bij een
+           orthografische projectie is de dieptenauwkeurigheid LINEAIR, dus een
+           groot bereik kost hier niets. Bij perspectief zou dat juist de
+           z-fighting geven waar `near` normaal zo klein voor blijft. */
+        cam.projectionMatrix.makeOrthographic(-halfW, halfW, halfH, -halfH,
+                                              -MSPHERE_ORTHO_DIEPTE, MSPHERE_ORTHO_DIEPTE);
+        cam.projectionMatrixInverse.copy(cam.projectionMatrix).invert();
+      };
+    } else if (!vlak && orthoOrigineel) {
+      cam.updateProjectionMatrix = orthoOrigineel;
+      orthoOrigineel = null;
+    } else if (!vlak) return;
     cam.updateProjectionMatrix();
   }
 
@@ -227,7 +298,8 @@ export function createMagnetosphereState(THREE, deps) {
         // DE LENS EERST. fitDistance() leest de beeldhoek, dus zet je hem pas
         // ná de berekening, dan hoort de afstand bij de vorige lens en staat
         // het kader er vier keer naast tot de volgende viewwissel.
-        zetLens(true);
+        vlakkeStand = true;
+        zetProjectie(true);
         // Loodrecht op het X-Z-vlak is de Y-as: van daaruit zie je dat vlak
         // op ware grootte, met de dipoolas-kant omhoog.
         const a = gsmAssen();
@@ -245,7 +317,8 @@ export function createMagnetosphereState(THREE, deps) {
         // van hetzelfde onderwerp. GEMETEN als schermhoek van de zonlijn: +y gaf
         // 0 graden, -y geeft 180, gelijk aan Meridian. De PoC houdt dezelfde
         // conventie aan (+X links, zie zijn schaaloverlay).
-        zetLens(true);                       // zie de noot bij meridian
+        vlakkeStand = true;                  // zie de noot bij meridian
+        zetProjectie(true);
         const a = gsmAssen();
         return targetFrom(a.z.clone(), overviewDistance(), a.y.clone().negate(), kaderMidden(a.x));
       }
@@ -255,7 +328,8 @@ export function createMagnetosphereState(THREE, deps) {
       camera: () => {
         // De vrije stand houdt de gewone beeldhoek: daar kijk je juist RÓND de
         // vorm, en dan is perspectief wat de diepte draagt.
-        zetLens(false);
+        vlakkeStand = false;
+        zetProjectie(false);
         // Schuin op de zonlijn: de neus in beeld én de staart herkenbaar.
         const a = gsmAssen();
         _dir.copy(a.x).multiplyScalar(0.85)
@@ -289,10 +363,17 @@ export function createMagnetosphereState(THREE, deps) {
   ========================================================== */
   const _camGsm = new THREE.Vector3();
   const _upGsm = new THREE.Vector3(0, 1, 0);
+  /* HET DRAAIPUNT STAAT ER OOK IN, en dat is de voorwaarde voor pannen. In de
+     vlakke standen verzet de bezoeker het draaipunt zelf; werd het bij elke
+     herbouw opnieuw uit de zoomafstand berekend, dan sprong elke pan meteen
+     terug. In de vrije stand is het juist andersom — daar STUURT de zoom het,
+     en dat is wat het inzoomen op de aarde mogelijk maakt. */
+  const _targetGsm = new THREE.Vector3();
   const _qFrame = new THREE.Quaternion();
   const _qInv = new THREE.Quaternion();
   const _tmp = new THREE.Vector3();
   let rigGevuld = false;
+  let vlakkeStand = false;
 
   /* HET DRAAIPUNT SCHUIFT MEE MET DE ZOOM.
 
@@ -315,7 +396,11 @@ export function createMagnetosphereState(THREE, deps) {
      verandert de afstand tot het draaipunt, en zou die de maat zijn, dan
      stuurde het draaipunt zichzelf. De afstand tot de aarde ligt vast. */
   const MSPHERE_PIVOT_NEAR = MSPHERE_RE * 6;    // hier ligt het draaipunt volledig op de aarde
+  /* ALLEEN IN DE VRIJE STAND. In de vlakke standen pant de bezoeker zelf, en
+     dan hoort het draaipunt te blijven waar hij het neerzet — daar is inzoomen
+     op de aarde ook niet het doel (Terry, sessie 30). */
   function draaipuntFactor(afstandTotAarde) {
+    if (vlakkeStand) return 1;
     const ver = overviewDistance();
     if (!(ver > MSPHERE_PIVOT_NEAR)) return 1;
     const t = (afstandTotAarde - MSPHERE_PIVOT_NEAR) / (ver - MSPHERE_PIVOT_NEAR);
@@ -357,6 +442,7 @@ export function createMagnetosphereState(THREE, deps) {
     _qInv.copy(_qFrame).invert();
     _camGsm.copy(cam.position).applyQuaternion(_qInv);
     _upGsm.copy(cam.up).applyQuaternion(_qInv);
+    _targetGsm.copy(world.controls().target).applyQuaternion(_qInv);
     rigGevuld = true;
   }
 
@@ -368,9 +454,12 @@ export function createMagnetosphereState(THREE, deps) {
   function schrijfRig() {
     if (!rigGevuld) return;
     const cam = world.camera(), ctl = world.controls();
+    // Alleen in de VRIJE stand stuurt de zoom het draaipunt. In de vlakke
+    // standen blijft staan wat de bezoeker zelf pande.
+    if (!vlakkeStand) draaipuntGsm(_targetGsm, _camGsm.length());
     cam.position.copy(_camGsm).applyQuaternion(_qFrame);
     cam.up.copy(_upGsm).applyQuaternion(_qFrame).normalize();
-    ctl.target.copy(draaipuntGsm(_tmp, _camGsm.length()).applyQuaternion(_qFrame));
+    ctl.target.copy(_targetGsm).applyQuaternion(_qFrame);
   }
 
   /* De haak op de besturing. Hij MOET er zijn zolang de state open staat:
@@ -534,7 +623,9 @@ export function createMagnetosphereState(THREE, deps) {
       actief = false;
       world.controls().removeEventListener('change', opBesturing);
       if (grid) grid.setPlane(null);
-      zetLens(false);
+      if (boundary.setOutline) boundary.setOutline(null);
+      vlakkeStand = false;
+      zetProjectie(false);
       /* ONVOORWAARDELIJK, en niet alleen wanneer we uit een vlakke stand komen.
          Verlaat je de state vanuit Meridian, dan is de hemel daar uitgezet en
          zet niemand hem terug — je komt dan terug op een aarde in het zwart.
@@ -585,6 +676,10 @@ export function createMagnetosphereState(THREE, deps) {
        GSM Z en heeft X-Y. In de vrije stand geen van beide — een raster is
        een doorsnede en een perspectiefbeeld heeft er geen. */
     if (grid) grid.setPlane(v && v.flat ? naam : null);
+    /* Alleen de omtrek in de vlakke standen: bij een omwentelingsoppervlak dat
+       je loodrecht bekijkt ÍS de doorsnede de omtrek, en het volle net maakt er
+       weer een driedimensionaal ding van. Zie de noot in boundary-layer.js. */
+    if (boundary.setOutline && boundary.setOutline(v && v.flat ? naam : null)) herbouw();
   }
 
   return { definition, views: Object.keys(views), tik, nieuweData, viewGewisseld,
