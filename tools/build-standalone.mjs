@@ -278,9 +278,29 @@ for (const stmt of [...html.matchAll(IMPORT_RE)]) {
   }
 }
 
+// ---- No CDN imports inside a module ----------------------------------------
+// `deModule()` strips EVERY import line, including one that points at a CDN —
+// and that import has nowhere to go afterwards, because only index.html sits
+// inside the `type="module"` script that the import map applies to. A module
+// with `import { LineSegments2 } from 'three/examples/jsm/…'` therefore builds
+// clean and throws `LineSegments2 is not defined` the moment the standalone is
+// opened. Measured in session 32; it was the first module ever to try it.
+//
+// REFUSED, NOT HOISTED, for the same reason as the alias check above: hoisting
+// would make this script responsible for a piece of module semantics, and the
+// convention it would be papering over is one this app already keeps — every
+// local module takes `THREE` (and anything else from a CDN) as a PARAMETER.
 let inlined = '';
 for (const m of modules) {
-  inlined += `\n/* ===== inlined from ./${m} ===== */\n` + deModule(await read(m)) + '\n';
+  const src = await read(m);
+  for (const stmt of [...src.matchAll(IMPORT_RE)]) {
+    if (isLocal(stmt[1])) continue;
+    throw new Error(
+      `build failed: CDN import inside a module — "${stmt[1]}" in ${m}.\n` +
+      `  It is stripped on inlining and nothing declares the name afterwards.\n` +
+      `  Import it in index.html and pass the value in as a parameter.`);
+  }
+  inlined += `\n/* ===== inlined from ./${m} ===== */\n` + deModule(src) + '\n';
 }
 
 // The placeholder has to be absent from the document, or the modules land in

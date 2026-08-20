@@ -1303,6 +1303,30 @@
       geosynchronous orbit at 6.6 Re, which is why that distance matters.
       </div>
       <div class="elayer on" id="msp-bs-toggle"><span class="edot"></span>Bow shock<span class="estat" id="es-msp-bs">on</span></div>
+      <div class="elayer on expandable" id="msp-lines-toggle">
+      <span class="edot"></span>Field lines
+      <button class="row-expand" data-note="msp-lines-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <span class="estat" id="es-msp-lines">on</span>
+      </div>
+      <div class="layer-detail" id="msp-lines-note">
+      Traced through the field itself: <b>IGRF-14</b> for the Earth&#8217;s own
+      magnet, <b>T89c</b> for what the currents in space add to it, driven by the
+      measured Kp of this moment. Each line starts just above the surface and is
+      followed until it either comes back down or crosses the magnetopause.
+      <br /><br />
+      That crossing is the whole point, and it is what the three colours mean.
+      A <b>closed</b> line has both feet on Earth. An <b>open</b> line reaches
+      the boundary drawn around it, so plasma can travel along it either way.
+      <b>Unresolved</b> is neither &#8212; the integration ran out of room or out
+      of steps, and that is a statement about the tracer and not about the
+      magnetosphere, which is why those lines are thinner and dashed. The full
+      key is in Details.
+      <br /><br />
+      Lighter and warmer lines leave the northern hemisphere, darker and cooler
+      ones the southern. That is a shade within a state, not a fourth state.
+      </div>
       <div class="elayer on expandable" id="msp-grid-toggle">
       <span class="edot"></span>Scale grid
       <button class="row-expand" data-note="msp-grid-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
@@ -1746,6 +1770,14 @@ import * as THREE from 'three';
 // Bloom-postprocessing + kleurgrading-pass (zelfde three via 'three/' import-map-prefix).
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+/* De brede-lijnklassen voor de veldlijnen van de magnetosfeer. HIER en niet in
+   js/layers/magnetosphere/fieldlines-layer.js: een CDN-import binnen een module
+   wordt door tools/build-standalone.mjs gestript zonder vervanging, en dat gaf
+   een standalone die "geslaagd" meldde en niet werkte. De build weigert het nu;
+   index.html is de enige plek waar dit soort import staat. */
+import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
+import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
+import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 // GSAP voor soepele UI/element-animaties (markers, meldingen, dialogen)
 import { gsap } from 'gsap';
 // Config & constanten (Stap 0 refactor): kleuren, bronnen, AQI-banden,
@@ -1803,6 +1835,7 @@ import { createSpaceState } from './js/states/space.js';
 import { createMagnetosphereState } from './js/states/magnetosphere.js';
 import { createBoundaryLayer } from './js/layers/magnetosphere/boundary-layer.js';
 import { createMagnetosphereGrid } from './js/layers/magnetosphere/grid-layer.js';
+import { createFieldlinesLayer } from './js/layers/magnetosphere/fieldlines-layer.js';
 import { MSPHERE_RE, MSPHERE_DRAW_MAX } from './js/layers/magnetosphere/boundary-layer.js';
 import { createMagnetosphereFeed, MSPHERE_HEALTH_ID } from './js/compute/magnetosphere-feed.js';
 import { createMagnetosphereTransport } from './js/ui/magnetosphere-transport.js';
@@ -6566,6 +6599,8 @@ bindMsphereToggle('msp-bs-toggle', 'es-msp-bs',
   on => msphereState && msphereState.setPart('bowshock', on));
 bindMsphereToggle('msp-grid-toggle', 'es-msp-grid',
   on => msphereState && msphereState.setPart('grid', on));
+bindMsphereToggle('msp-lines-toggle', 'es-msp-lines',
+  on => msphereState && msphereState.setPart('fieldlines', on));
 /* De aurora loopt WEL via de bestaande poort: hij is een gewone Terra-laag met
    een eigen adapter van 924 KB, en syncAuroraLayer() is de enige plek die
    bepaalt of die bron bevraagd wordt. Een tweede weg ernaartoe zou precies de
@@ -6926,7 +6961,7 @@ bindCosmosToggle('sunspots-toggle', 'es-sunspots',
 let viewStates = null, spaceState = null, planets = null;
 // De magnetosfeer. Zelfde TDZ-afspraak als de andere states.
 let msphereState = null, msphereBoundary = null, msphereTransport = null;
-let msphereGrid = null, msphereStrip = null;
+let msphereGrid = null, msphereStrip = null, msphereLines = null;
 let disks = null, lagrange = null, orbits = null, environment = null;
 /* `panels` en `navPanel` staan hier om dezelfde reden als de rij hierboven, en
    niet bij hun eigen code verderop: `setPanelOpen()` leest `panels` en die
@@ -9646,10 +9681,27 @@ if (globalThis.TerraCore) {
   msphereGrid = createMagnetosphereGrid(THREE, { RE: MSPHERE_RE, drawMax: MSPHERE_DRAW_MAX });
   msphereBoundary.group.add(msphereGrid.group);
 
+  /* En de veldlijnen hangen op dezelfde plek als het raster: ONDER de
+     grensvlakgroep. `Core.Build.run` levert zijn punten in GSM — de integratie
+     loopt Earth-fixed, maar `Trace.line` schrijft de GSM-versie van elk punt weg
+     — dus ze horen in hetzelfde frame als het oppervlak eromheen, en dat is ook
+     de enige manier waarop een lijn die de magnetopauze kruist dat op dezelfde
+     plek doet als waar het oppervlak getekend staat. Gemeten, na een eerste
+     poging waarin ze ernaast hingen: dat gaf een keurige dipool die fout stond.
+
+     De renderer gaat mee omdat LineMaterial zijn lijnbreedte in NDC rekent en
+     daarvoor de schermmaat nodig heeft. */
+  msphereLines = createFieldlinesLayer(THREE, {
+    RE: MSPHERE_RE, renderer: world.renderer(),
+    lines: { LineSegments2, LineSegmentsGeometry, LineMaterial }
+  });
+  msphereBoundary.group.add(msphereLines.group);
+
   msphereState = createMagnetosphereState(THREE, {
     world,
     boundary: msphereBoundary,
     grid: msphereGrid,
+    fieldlines: msphereLines,
     Core: globalThis.TerraCore,
     moment: momentNow,
     feed: msphereFeed,
@@ -10076,6 +10128,7 @@ if (IS_LOCAL) {
     get msphereFeed() { return msphereFeed; },
     get msphereTransport() { return msphereTransport; },
     get msphereGrid() { return msphereGrid; },
+    get msphereLines() { return msphereLines; },
     get sunMoon() { return sunMoon; },
     get active() { return active; },
     get spaceVoorheen() { return spaceVoorheen; },

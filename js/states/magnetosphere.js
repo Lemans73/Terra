@@ -51,7 +51,7 @@ import { MSPHERE_RE, MSPHERE_DRAW_MAX, pocNaarTerra }
 const MSPHERE_ORTHO_DIEPTE = 200000;
 
 export function createMagnetosphereState(THREE, deps) {
-  const { world, boundary, grid, layers, Core, feed, clock } = deps;
+  const { world, boundary, grid, fieldlines, layers, Core, feed, clock } = deps;
 
   const origin = new THREE.Vector3(0, 0, 0);
   const _sun = new THREE.Vector3();
@@ -186,19 +186,34 @@ export function createMagnetosphereState(THREE, deps) {
              up: up ? up.clone() : null };
   }
 
-  /* DE GSM-BASIS IN TERRA'S ASSEN.
+  /* DE GSM-BASIS, IN TWEE FRAMES TEGELIJK.
 
      X naar de zon, Y = M x X, Z = X x Y — de definitie uit
-     Core.Frames.gsmBasis, maar hier in Terra-coördinaten omdat de camera
-     daarin staat. De omzetting (x,y,z) -> (y,z,x) zit in `pocNaarTerra`;
-     zie daar waarom dat een rotatie is en geen spiegeling. */
+     Core.Frames.gsmBasis. De camera staat in Terra-coördinaten, dus die
+     drie assen gaan door `pocNaarTerra`; zie daar waarom (x,y,z)->(y,z,x)
+     een rotatie is en geen spiegeling.
+
+     EN DE ONBEWERKTE VERSIE GAAT MEE TERUG (sessie 32). De veldlijnen
+     tracen in het EARTH-FIXED frame van de PoC — Core.Trace._dir zegt dat
+     met zoveel woorden — dus hun spec heeft de basis nodig zoals
+     Core.Frames.gsmBasis hem levert, vóór de omzetting. Twee keer IGRF
+     evalueren om dezelfde basis twee keer uit te rekenen zou precies de
+     tweede berekening zijn die ooit uit de pas loopt; `coeff` en `dip`
+     staan hier al klaar.
+
+     `tilt` komt uit dezelfde bron. T89 heeft hem nodig en hij is per
+     constructie de hoek tussen de dipoolas en de zonlijn — zelf uitrekenen
+     uit de Terra-assen geeft hetzelfde getal langs een tweede weg. */
   function gsmAssen() {
     const d = moment();
     const coeff = Core.IGRF.atYear(Core.Frames.decimalYear(d));
     const dip = Core.IGRF.dipole(coeff);
 
-    pocNaarTerra(THREE, Core.Frames.sunGeo(d), _sun).normalize();
-    pocNaarTerra(THREE, Core.geoPoint(dip.northLat, dip.northLon, 1), _dip).normalize();
+    const dipGeo = Core.geoPoint(dip.northLat, dip.northLon, 1);
+    const basis = Core.Frames.gsmBasis(d, dipGeo);
+
+    pocNaarTerra(THREE, basis.X, _sun).normalize();
+    pocNaarTerra(THREE, dipGeo, _dip).normalize();
 
     _y.crossVectors(_dip, _sun);
     if (_y.lengthSq() < 1e-12) _y.set(0, 1, 0);
@@ -206,7 +221,7 @@ export function createMagnetosphereState(THREE, deps) {
     _z.crossVectors(_sun, _y).normalize();
     // `dip` gaat mee terug in plaats van als bijwerking in `_dip` te blijven
     // staan: een aanroeper die daarop leunt, breekt zodra de volgorde wijzigt.
-    return { x: _sun, y: _y, z: _z, dip: _dip };
+    return { x: _sun, y: _y, z: _z, dip: _dip, basis, coeff, date: d };
   }
 
   /* ----------------------------------------------------------
@@ -545,6 +560,7 @@ export function createMagnetosphereState(THREE, deps) {
   let wilMagnetopauze = true;
   let wilBoegschok = true;
   let wilRaster = true;
+  let wilVeldlijnen = true;
   let huidigeView = null;
 
   function pasVoorkeurenToe() {
@@ -559,6 +575,177 @@ export function createMagnetosphereState(THREE, deps) {
   function pasRasterToe() {
     if (!grid) return;
     grid.setPlane(vlakkeStand && wilRaster && huidigeView ? huidigeView : null);
+  }
+
+  /* ==========================================================
+     DE VELDLIJNEN (sessie 32, blok F)
+
+     IGRF binnen, T89 buiten, en per lijn de vraag of hij de magnetopauze
+     kruist. `Core.Build.run` doet dat in één aanroep en levert de punten plus
+     drie uitspraken die nergens anders vandaan komen: hoeveel lijnen open zijn,
+     waar de poolkaprand ligt, en hoeveel van de getekende lijnlengte voorbij de
+     geostationaire baan valt — de enige straal waarop dit project het veld MEET.
+
+     DE SPEC IS HET ENIGE DAT ERIN GAAT. `Core.Env.of` maakt daar de omgeving
+     uit; alle getallen hieronder komen uit de POC en zijn daar met een meting
+     onderbouwd. Ze hier "afstemmen" betekent iets anders tekenen dan wat de
+     1498 POC-asserties toetsen.
+
+     WAT ERUIT KOMT STAAT IN GSM, niet in het Earth-fixed frame waarin
+     `Core.Trace` zegt te rekenen: de integratie loopt daar, maar `Trace.line`
+     schrijft per stap de GSM-versie van het punt weg. De tekenlaag hangt daarom
+     onder dezelfde groep als het grensvlak. Gemeten, want het verschil is niet
+     te zien — een lijnenbundel in het verkeerde frame is nog steeds een dipool.
+
+     GEEN WORKER (besluit sessie 29). Een herbouw kost 24,58 ms gemeten, eens
+     per dataminuut. Terugkeerbaar: `Core.Build.run` is in beide gevallen
+     dezelfde functie.
+  ========================================================== */
+
+  /* De zaadladder. Vijf sporten, ongelijk verdeeld, en dat is een meting: de
+     eerste open lijn ligt tussen 60 graden (zware storm) en 70 (rustig), dus een
+     ladder die daaronder ligt zegt bij elk weer hetzelfde. Zie de lange noot bij
+     Core.Build.seedList. */
+  const MSPHERE_ZAAD_LATS = [56, 66, 72, 78, 84];
+  /* MINDER LENGTEGRADEN NAAR DE POOL TOE, en alleen in de vrije standen. De
+     omtrek van een breedtecirkel krimpt met cos(breedte), dus acht vaste
+     meridianen staan bij 84 graden vijf keer zo dicht op elkaar als bij 56 —
+     acht bijna identieke bogen de staart in. De vloer is 4 en niet 2: de
+     poolkaprand is de laagste breedte waar ÉÉN lengtegraad opengaat, en met
+     twee zaden per schil kan een open sector ertussendoor vallen. */
+  const MSPHERE_ZAAD_LONN = [8, 6, 4, 4, 4];
+
+  /* WELKE ZADEN BIJ WELKE STAND HOREN, en dit is de enige plek waar dat staat.
+
+     In Meridian kijk je op het GSM X-Z-vlak, en dan zijn de noon-midnight-
+     meridiaan en zijn tegenhanger precies de twee lengtegraden die IN dat vlak
+     liggen — acht meridianen zouden zes bundels opleveren die je van opzij als
+     één streep ziet.
+
+     Top kijkt langs de dipoolas-kant, en dáár vallen die twee juist samen tot
+     één lijn. De POC kent geen Top-stand en heeft deze keuze dus nooit hoeven
+     maken; hier krijgt Top de acht meridianen van de vrije stand. */
+  const zaadSoort = (viewNaam) => (viewNaam === 'meridian' ? 'meridian' : '3d');
+
+  /* De lengtegraad van de zon, in het geofysische frame. `basis.X` ÍS de
+     genormaliseerde zonrichting daar — dezelfde die `Core.Frames.gsmBasis`
+     gebruikt — dus dit is geen tweede berekening. */
+  const zonLon = (basis) => Math.atan2(basis.X.y, basis.X.x) * 180 / Math.PI;
+
+  function veldSpec(rij, a, viewNaam) {
+    const soort = zaadSoort(viewNaam);
+    const lon = zonLon(a.basis);
+    return {
+      epochMs: a.date.getTime(),
+      year: Core.Frames.decimalYear(a.date),
+      basis: Core.Frames.basisArray(a.basis),
+      tilt: a.basis.tilt,
+      field: { iopt: Core.T89.band(rij ? rij.kp : NaN) },
+      /* GEEN GRENS MEESTUREN ALS ER GEEN IS. `Env.of` draagt dat al — `shape`
+         wordt null en de tracer kan niets meer OPEN noemen. Een verzonnen r0
+         zou de tracer een oppervlak laten classificeren dat niemand gemeten
+         heeft, en dat is erger dan geen oppervlak. */
+      boundary: (laatste && laatste.ok && laatste.r0 !== null)
+        ? { r0: laatste.r0, alpha: laatste.alpha } : null,
+      seeds: {
+        lonDeg: soort === 'meridian' ? [lon, lon + 180]
+                                     : [0, 45, 90, 135, 180, 225, 270, 315],
+        lonN: soort === 'meridian' ? null : MSPHERE_ZAAD_LONN,
+        lats: MSPHERE_ZAAD_LATS, hemis: [1, -1], seedR: 1.01
+      },
+      trace: { maxR: Core.CONST.MODEL_MAX_RE, minR: 1.0, steps: 4000,
+               dsA: 0.02, dsB: 0.06, dsMax: 0.35 },
+      /* De decimatietolerantie schaalt met r: elk weggelaten punt ligt binnen
+         `tolCoef * max(r,1)` Re van de koorde die het vervangt. Op 0,0006 is dat
+         bij r = 70 Re minder dan een halve pixel; op de oude 0,004 was het 3,5
+         en zag je de hoekigheid in de staart. Gemeten kosten: 2093 -> 5622
+         punten, en de bouwtijd verandert NIET — die zit in het traceren. */
+      emit: { tolCoef: 0.0006, maxPts: 1024 }
+    };
+  }
+
+  /* DE SLEUTEL DIE ZEGT OF ER IETS TE HERBOUWEN VALT.
+
+     De tijdkwantisering van twee minuten is GEEN rem maar een uitspraak over
+     hoe fijn de geometrie de klok volgt. Alles wat de vorm verandert staat
+     erin; wat er niet in staat verandert hem niet. */
+  function veldSleutel(rij, a, viewNaam) {
+    return [Math.round(a.date.getTime() / 120000), zaadSoort(viewNaam),
+            Core.T89.band(rij ? rij.kp : NaN),
+            (laatste && laatste.ok && laatste.r0 !== null) ? laatste.r0.toFixed(2) : '-',
+            (laatste && laatste.ok && laatste.alpha !== null) ? laatste.alpha.toFixed(3) : '-',
+            wilVeldlijnen ? 1 : 0].join('|');
+  }
+
+  /* EEN VLOER OP DE WANDKLOK, NAAST DE KWANTISERING OP DE DATATIJD.
+
+     Die twee zeggen iets anders en dat is de reden dat het er twee zijn. De
+     twee minuten hierboven is een uitspraak over de FYSICA: fijner dan dat
+     volgt de geometrie de klok niet. Deze vloer is een uitspraak over het
+     BEELD: vaker dan dit past een herbouw niet in een frame.
+
+     GEMETEN in de draaiende app: 23,9 ms per herbouw in de vrije stand (52
+     lijnen), 10,2 ms in een doorsnede (20 lijnen). Bij 20 min/s verandert de
+     twee-minutensleutel tien keer per seconde, dus zonder vloer kost dat een
+     kwart van de wandtijd — en elke herbouw is op zichzelf al langer dan de
+     16,7 ms van een frame, dus je ziet hem als een hapering en niet als traag.
+
+     250 ms geeft vier herbouwen per seconde: 10 % van de wandtijd in de vrije
+     stand. Wat je ervoor inlevert is dat de lijnen tijdens het afspelen tot een
+     kwart seconde achterlopen op het oppervlak — bij 20 min/s zo'n vijf
+     datamin, en over die vijf minuten beweegt de vorm niet zichtbaar.
+
+     DE INHAALSLAG IS NIET OPTIONEEL. Een overgeslagen herbouw die nooit
+     terugkomt is precies de stille fout die deze app elders dichtzet: de
+     lijnen staan dan op een moment dat allang voorbij is en niets zegt het.
+     Tijdens het afspelen komt de volgende tik vanzelf; bij de LAATSTE stap
+     vóór een pauze niet, en daar is de timer voor. */
+  const MSPHERE_VELD_VLOER_MS = 250;
+
+  let laatsteVeld = null;
+  let veldSleutelNu = null;
+  let veldBouwTijd = 0;
+  let veldInhaal = null;
+
+  function bouwVeldlijnen(rij, a, forceer) {
+    if (!fieldlines || !Core.Build) return null;
+    if (veldInhaal) { clearTimeout(veldInhaal); veldInhaal = null; }
+    if (!wilVeldlijnen) {
+      fieldlines.setVisible(false);
+      veldSleutelNu = null;
+      return laatsteVeld;
+    }
+    const view = huidigeView || (naarView || 'orbit');
+    const sleutel = veldSleutel(rij, a, view);
+    if (!forceer && sleutel === veldSleutelNu) { fieldlines.setVisible(true); return laatsteVeld; }
+
+    const nu = performance.now();
+    const wacht = MSPHERE_VELD_VLOER_MS - (nu - veldBouwTijd);
+    if (!forceer && veldSleutelNu !== null && wacht > 0) {
+      veldInhaal = setTimeout(() => { veldInhaal = null; if (actief) herbouw(); }, wacht);
+      fieldlines.setVisible(true);
+      return laatsteVeld;
+    }
+
+    const geom = Core.Build.run(veldSpec(rij, a, view));
+    const teken = fieldlines.upload(geom);
+    veldSleutelNu = sleutel;
+    veldBouwTijd = performance.now();
+    laatsteVeld = { geom, teken };
+    fieldlines.setVisible(true);
+    return laatsteVeld;
+  }
+
+  /* Geen meting is geen lijn. Zonder wind is er geen grens, en zonder grens kan
+     de tracer niets OPEN noemen — maar de lijnen zelf bestaan wél: IGRF en T89
+     hangen niet aan de zonnewind. Ze komen dan in één neutrale inkt te staan en
+     de uitlezing zegt waarom. Wat er NIET is, is een moment: staat er geen rij,
+     dan is er ook geen tijd om het veld op te evalueren. */
+  function veldlijnenUit() {
+    if (veldInhaal) { clearTimeout(veldInhaal); veldInhaal = null; }
+    if (!fieldlines) return;
+    fieldlines.setVisible(false);
+    veldSleutelNu = null;
   }
 
   /* HET DRAAIPUNT SCHUIFT MEE MET DE ZOOM.
@@ -801,6 +988,13 @@ export function createMagnetosphereState(THREE, deps) {
     const rows = feed ? feed.rows() : null;
     const s = rows && rows[cursor] ? rows[cursor] : null;
 
+    /* GEEN RIJ IS GEEN MOMENT. De veldlijnen hangen niet aan de zonnewind —
+       IGRF en T89 rekenen zonder — maar ze hangen wél aan een TIJD, en zonder
+       reeks is er geen moment om het veld op te evalueren. Verderop, na de
+       grensberekening, wordt er wel gebouwd: dan is `laatste.r0` bekend en kan
+       de tracer classificeren. */
+    if (!s) veldlijnenUit();
+
     /* GEEN METING IS GEEN OPPERVLAK. `pdyn` is null zodra de dichtheid of de
        snelheid ontbreekt, en dan is r0 dat ook — zie de lange noot in
        data.js: null maal v maal v is nul in JavaScript, en standoff(0, bz)
@@ -810,6 +1004,11 @@ export function createMagnetosphereState(THREE, deps) {
       boundary.setVisible(false);
       laatste = { ok: false, reden: rows ? 'no measurement at this moment'
                                          : 'no solar wind', rij: s };
+      /* ZONDER GRENS BLIJVEN DE LIJNEN STAAN, in één neutrale inkt. Ze zeggen
+         dan alleen nog waar het veld heen wijst en niets over open of dicht —
+         `bounded: false` reist met de geometrie mee, en de laag kleurt daarop.
+         Het alternatief, de lijnen weghalen, zou beweren dat er geen veld is. */
+      if (s) bouwVeldlijnen(s, a, false);
       return laatste;
     }
 
@@ -819,6 +1018,10 @@ export function createMagnetosphereState(THREE, deps) {
     // machgetal en zou de voorkeur anders overschrijven.
     pasVoorkeurenToe();
     boundary.setVisible(true);
+    // NA `laatste`, want de spec leest er zijn grens uit: kleuren op de HUIDIGE
+    // r0 terwijl de lijnen van een vorige spec zijn, toont een topologie die bij
+    // andere lijnen hoort. Zie de noot bij `bounded` in Core.Build.run.
+    bouwVeldlijnen(s, a, false);
     return laatste;
   }
 
@@ -942,6 +1145,7 @@ export function createMagnetosphereState(THREE, deps) {
       if (layers.skyRestore) layers.skyRestore();
       if (layers.atmosphereRestore) layers.atmosphereRestore();
       boundary.setVisible(false);
+      veldlijnenUit();
       if (feed) feed.setEnabled(false);
       if (clock && bewaardeKlok) { clock.herstel(bewaardeKlok); bewaardeKlok = null; }
       if (layers.environmentRestore) layers.environmentRestore();
@@ -1030,6 +1234,9 @@ export function createMagnetosphereState(THREE, deps) {
   const zichtbaarRaster = () =>
     (grid && grid.group.visible ? grid.plane() : null);
 
+  /* Naast grensWisselt / rasterWisselt / hemelWisselt; zie overgangBegin. */
+  let veldWisselt = false;
+
   function overgangBegin(vanNaam, naarNaam) {
     if (!actief) return;
     const v = views[naarNaam];
@@ -1056,6 +1263,12 @@ export function createMagnetosphereState(THREE, deps) {
     grensWisselt  = (naarVlak ? naarNaam : null) !== boundary.outline();
     rasterWisselt = naarRaster !== zichtbaarRaster();
     hemelWisselt  = naarVlak !== vlakkeStand;
+    /* De veldlijnen wisselen alleen als hun ZADEN wisselen, en dat is niet bij
+       elke standwissel zo: Meridian zaait op twee lengtegraden, de andere twee
+       standen op acht. Orbit -> Top verandert er dus niets aan, en dan hoort er
+       ook niets weg te vervagen. */
+    veldWisselt   = !!fieldlines && wilVeldlijnen &&
+                    zaadSoort(naarNaam) !== zaadSoort(huidigeView);
     gewisseld = false;
     overgangLoopt = true;
 
@@ -1082,6 +1295,18 @@ export function createMagnetosphereState(THREE, deps) {
        je loodrecht bekijkt ÍS de doorsnede de omtrek, en het volle net maakt er
        weer een driedimensionaal ding van. Zie de noot in boundary-layer.js. */
     if (boundary.setOutline(naarVlak ? naarView : null)) herbouw();
+    /* En de zaden. `huidigeView` staat hierboven al op de nieuwe stand, dus
+       `bouwVeldlijnen` leest de goede.
+
+       GEFORCEERD, EN DAT IS HET PUNT VAN DIE VLAG. De wandklokvloer bestaat om
+       een AFSPEELLUS te temperen — tien herbouwen per seconde die je toch niet
+       kunt lezen. Een standwissel is geen tijdstap: hij komt op menselijk tempo
+       en de bezoeker heeft er zojuist zelf op geklikt. Gemeten zonder deze
+       vlag: zes wissels achter elkaar hielden alle zes de zaden van de eerste. */
+    if (veldWisselt) {
+      const rows = feed ? feed.rows() : null;
+      bouwVeldlijnen(rows && rows[cursor] ? rows[cursor] : null, gsmAssen(), true);
+    }
   }
 
   function overgangStap(e) {
@@ -1092,6 +1317,7 @@ export function createMagnetosphereState(THREE, deps) {
     const zicht = dalZicht(e);
     if (grensWisselt && boundary.setFade) boundary.setFade(zicht);
     if (rasterWisselt && grid && grid.setFade) grid.setFade(zicht);
+    if (veldWisselt && fieldlines) fieldlines.setFade(zicht);
 
     if (!gewisseld && e >= 0.5) { wisselInHetDal(); gewisseld = true; }
   }
@@ -1110,6 +1336,8 @@ export function createMagnetosphereState(THREE, deps) {
     } else if (orthoOrigineel) world.camera().updateProjectionMatrix();
     if (boundary.setFade) boundary.setFade(1);
     if (grid && grid.setFade) grid.setFade(1);
+    if (fieldlines) fieldlines.setFade(1);
+    veldWisselt = false;
     // De aangekomen stand is de nieuwe waarheid voor de camerastelling.
     leesRig();
     schrijfRig();
@@ -1120,16 +1348,21 @@ export function createMagnetosphereState(THREE, deps) {
   function overgangAfbreken() {
     overgangLoopt = false;
     gewisseld = true;
-    grensWisselt = rasterWisselt = hemelWisselt = false;
+    grensWisselt = rasterWisselt = hemelWisselt = veldWisselt = false;
     naarView = null; naarRaster = null; naarVlak = false;
     mengVan = mengNaar = 0;
     if (boundary.setFade) boundary.setFade(1);
     if (grid && grid.setFade) grid.setFade(1);
+    if (fieldlines) fieldlines.setFade(1);
     laatProjectieLos();
   }
 
   return { definition, views: Object.keys(views), tik, nieuweData,
            herbouw, laatsteBouw: () => laatste, gsmAssen,
+           /* De veldlijnuitkomst, voor de uitlezing (blok R). Draagt de hele
+              `Core.Build.run`-teruggave plus wat de tekenlaag ervan kwijt kon —
+              `tally`, `polarCap` en `horizon` komen NERGENS anders vandaan. */
+           laatsteVeld: () => laatsteVeld,
            /* Voor het meetluik. De overgang is per constructie niet met het oog
               te toetsen — hij duurt 1100 ms en het enige wat telt is dat er
               nergens een sprong in zit. Dus moet elke tussenstand op te vragen
@@ -1148,6 +1381,15 @@ export function createMagnetosphereState(THREE, deps) {
              if (naam === 'magnetopause') wilMagnetopauze = !!aan;
              else if (naam === 'bowshock') wilBoegschok = !!aan;
              else if (naam === 'grid') { wilRaster = !!aan; pasRasterToe(); return; }
+             else if (naam === 'fieldlines') {
+               wilVeldlijnen = !!aan;
+               /* AANZETTEN IS BOUWEN, en niet alleen zichtbaar maken: bij het
+                  uitzetten is de sleutel gewist, dus er staat niets klaar. De
+                  aanroep gaat langs `herbouw` en niet rechtstreeks, zodat er
+                  één weg naar een verse geometrie blijft. */
+               if (actief) herbouw(); else veldlijnenUit();
+               return;
+             }
              pasVoorkeurenToe();
            },
            cursor: () => cursor,

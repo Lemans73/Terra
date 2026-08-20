@@ -96,6 +96,20 @@
     --msphere-model:    #b98cff;
     --msphere-goes:     #ffd166;
     --msphere-open:     #f2a33c;
+    /* DE DRIE LIJNSTATEN, EN DIT IS DE ENIGE PLEK WAAR ZE STAAN (sessie 32).
+       `Core.Build` levert een KLASSE per lijn (0/1/2) en nooit een kleur, dus
+       een themawissel raakt geen enkele berekening. `--msphere-open` erboven
+       doet dubbel dienst: dezelfde oranje in de tijdlijn en op een open lijn,
+       en dat is geen toeval maar dezelfde uitspraak — zuidwaarts weer, open
+       veld.
+
+       `--msphere-unres` ligt een derde op de RGB-lijn richting `closed`: de
+       verwantschap met cyaan hoort zichtbaar te zijn, want onopgelost gaat over
+       de INTEGRATIE en niet over een derde fysische toestand. Het
+       betekenisonderscheid wordt gedragen door de streepjes en de dunnere lijn,
+       niet door de kleur. */
+    --msphere-closed:   #4fd1c5;
+    --msphere-unres:    #588f9c;
     --msphere-mp:       #6ea8ff;
     --msphere-saa:      #d4564f;
     --msphere-edge:     rgba(140,170,210,0.16);
