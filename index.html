@@ -183,6 +183,18 @@
     </button>
   </div>
 
+  <!-- DE CAMERASTAND, IN HET CHROOM (sessie 31). Dezelfde gleuf en dezelfde
+       vormtaal als de bolweergave hierboven, en nooit tegelijk ermee: een state
+       met standen verbergt die wissel (zie body.msphere-on / body.space-on in
+       de stylesheet). Eén gleuf, één betekenis — welke weergave van het
+       onderwerp.
+
+       Leeg in de markup: js/ui/view-switch.js vult hem uit het view-register,
+       zodat een nieuwe state hier nul regels kost. Zelfde afspraak als het
+       Navigate-paneel. -->
+  <div class="mode-switch view-switch" id="view-switch" role="group"
+    aria-label="Camera view" hidden></div>
+
   <!-- ==== Het tijdeiland ====================================================
        Zwevend eiland onderaan het midden, tegenover de mode-switch bovenaan. Het
        gekozen moment stuurt sinds 2026-08-08 de hele scene — zon, maan, dag/nacht,
@@ -359,6 +371,23 @@
       </div>
     </div>
   </div>
+
+  <!-- DE UITGANG UIT DE DOORKIJK, OP EEN SMAL SCHERM (sessie 31, Terry).
+
+       Op een telefoon bedekt het detailvenster precies datgene wat het beschrijft.
+       Ruimte maken met het kruisje zette tot deze sessie ook de koorde uit, want
+       die hangt aan het OPEN zijn van dat venster — je kon de doorkijk dus nooit
+       zien. Nu klapt het venster weg zodra de doorkijk aan gaat en blijft deze
+       ene knop staan.
+
+       BUITEN HET VENSTER en dus zonder kop en zonder kruisje (Terry): het is geen
+       ingeklapt paneel maar één handeling. Hij zet de doorkijk uit ÉN brengt de
+       uitlezing terug — je staat weer waar je was. -->
+  <button class="antipode-exit" id="antipode-exit" type="button" hidden
+    aria-label="Hide the antipode">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="6.4" y1="17.6" x2="17.6" y2="6.4"/><circle cx="6.4" cy="17.6" r="1.6" fill="currentColor" stroke="none"/><circle cx="17.6" cy="6.4" r="1.6" fill="currentColor" stroke="none"/></svg>
+    <span>Hide the antipode</span>
+  </button>
 
   <div class="masthead">
     <div class="brand">
@@ -1782,6 +1811,7 @@ import { createEnvironmentToggle } from './js/core/globe-root.js';
 import { skyFrame } from './js/compute/frames.js';
 import { createViewStates } from './js/core/view-state.js';
 import { createNavPanel } from './js/ui/nav.js';
+import { createViewSwitch } from './js/ui/view-switch.js';
 import { createPanelManager } from './js/ui/panels.js';
 import { createDetailPanel } from './js/ui/detail.js';
 import { limbThreshold } from './js/core/label-sprite.js';
@@ -8821,7 +8851,21 @@ function detailActions(d) {
       // omzetten moet de view opnieuw langs `refresh()` — anders blijft er "Through
       // the Earth" staan terwijl de koorde er al ligt. `refresh()` hertekent zonder
       // in-animatie (sessie 26) en is hier precies voor bedoeld.
-      run: () => { toggleAntipode(d); showDetail(d); } });
+      /* OP EEN SMAL SCHERM MAAKT DE DOORKIJK RUIMTE VOOR ZICHZELF.
+
+         Daar bedekken de panelen — deze uitlezing én het lagenpaneel — precies
+         de bol waar je doorheen wilt kijken. `clearView()` is het bestaande
+         antwoord daarop; "Show on globe" en "Go to this moment" hiernaast doen
+         het al. Wat er overblijft is de uitgangsknop, en die is de weg terug.
+
+         DE VOLGORDE IS DE HELE TRUC. Eerst opruimen en dán de koorde aanzetten:
+         `clearView()` sluit ook dit venster, en dat loopt via `hideDetail()` →
+         `hideAntipode()`. Andersom zou het opruimen de koorde meteen weer
+         weghalen — en dan doet de knop niets. */
+      run: () => {
+        if (!antipodeIsOn(d) && isNarrow()) { clearView(); showAntipode(d); }
+        else { toggleAntipode(d); showDetail(d); }
+      } });
   }
   return acties;
 }
@@ -8856,6 +8900,7 @@ function showAntipode(d) {
                 new THREE.Vector3(naar.x, naar.y, naar.z), t);
   antipodeEvent = d;
   antipodeWireWasOn = wireframeOn;
+  syncAntipodeUitgang();
   if (!wireframeOn) { wireframeOn = true; applyWireframe(); }
 }
 
@@ -8864,11 +8909,34 @@ function hideAntipode() {
   antipode.hide();
   antipodeEvent = null;
   if (!antipodeWireWasOn && wireframeOn) { wireframeOn = false; applyWireframe(); }
+  syncAntipodeUitgang();
 }
 
 function toggleAntipode(d) {
   if (antipodeIsOn(d)) hideAntipode(); else showAntipode(d);
 }
+
+/* DE UITGANG HANGT AAN DE KOORDE EN NIET AAN DE KNOP DIE HEM AANZETTE.
+
+   `hideAntipode()` is het enige punt waarlangs de koorde verdwijnt — via de knop,
+   via een state-wissel, via clearView() en via het sluiten van het venster. Door
+   de uitgang daaraan te hangen kan hij per constructie niet blijven staan boven
+   een doorkijk die er niet meer is. */
+const antipodeUitgang = document.getElementById('antipode-exit');
+
+function syncAntipodeUitgang() {
+  if (!antipodeUitgang) return;
+  const aan = !!(antipode && antipode.isOn() && antipodeEvent && isNarrow());
+  antipodeUitgang.hidden = !aan;
+}
+
+antipodeUitgang?.addEventListener('click', () => {
+  const ev = antipodeEvent;
+  hideAntipode();
+  // De uitlezing terug, zodat je staat waar je was. Ná hideAntipode, want
+  // showDetail() ruimt een koorde op die bij een ánder onderwerp hoort.
+  if (ev) showDetail(ev);
+});
 
 /* HET VENSTER SLUIT NIETS MEER (sessie 25). Hier stond een `isNarrow()`-tak die
    het lagenpaneel dichtdeed en de knoppenrij wegzette, omdat dit venster op een
@@ -9705,7 +9773,15 @@ if (globalThis.TerraCore) {
         state: msphereState, feed: msphereFeed,
         Core: globalThis.TerraCore, Chart: globalThis.Chart,
         Sector: globalThis.Sector, StripLanes: globalThis.TerraStrip,
-        moment: momentNow
+        moment: momentNow,
+        /* Slepen in de tijdlijn zet het afspelen stil, net als de schuiver dat
+           doet. Als sluiting en niet als verwijzing: de balk bestaat hier nog
+           niet, en een momentopname zou `null` blijven. */
+        stopAfspelen: () => { if (msphereTransport) msphereTransport.stop(); },
+        /* Slepen in de tijdlijn verzet de cursor, en dan moet de schuiver mee.
+           `toon()` en niet `stop()`: het afspelen is bij het oppakken al
+           stilgezet en hoeft niet elke frame opnieuw. */
+        onMoment: () => { if (msphereTransport) msphereTransport.toon(); }
       });
     } catch (e) {
       console.error('Terra: de tijdlijn van de magnetosfeer kon niet opgezet worden.', e);
@@ -9714,7 +9790,9 @@ if (globalThis.TerraCore) {
 
     msphereTransport = createMagnetosphereTransport({
       state: msphereState, feed: msphereFeed, fmtStamp, formatOffset,
-      onCursor: () => { if (msphereStrip) msphereStrip.toon(); }
+      onCursor: () => { if (msphereStrip) msphereStrip.toon(); },
+      // Welk stuk van de baan er in de tijdlijn staat — zie toonBereik() daar.
+      bereik: () => (msphereStrip ? msphereStrip.bereik() : null)
     });
     if (msphereTransport) msphereTransport.toon();
   }
@@ -9774,6 +9852,11 @@ viewStates.register('space', spaceState.definition);
    volgorde van registratie ook de volgorde in de navigatie is. */
 navPanel = createNavPanel({ viewStates, host: navHost });
 navPanel.onClose(() => panels.close('nav'));
+
+/* En dezelfde standen in het chroom. HIER en niet eerder: hij leest het register
+   en dat is pas gevuld nadat alle states zich hebben aangemeld — dezelfde reden
+   die het Navigate-paneel op deze plek zet. */
+createViewSwitch({ viewStates, host: document.getElementById('view-switch') });
 
 /* De Back to Earth-knop hangt aan het REGISTER en niet aan een state: er is
    maar één uitgang, en die kent het register al. Hij verschijnt alleen wanneer

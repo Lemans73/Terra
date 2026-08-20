@@ -52,7 +52,7 @@ export function createMagnetosphereTransport(deps) {
      Aan de BALK en niet aan de state: de state bezit de cursor en hoort niet te
      weten wie hem allemaal tekent. Dezelfde snede als "de state bezit de
      cursor, deze balk toont hem" in de kop hierboven. */
-  const { state, feed, fmtStamp, formatOffset, onCursor } = deps;
+  const { state, feed, fmtStamp, formatOffset, onCursor, bereik } = deps;
 
   const el = (id) => document.getElementById(id);
   const wortel = el('msphere-time');
@@ -165,12 +165,46 @@ export function createMagnetosphereTransport(deps) {
      tweede waarheid worden, en dan is er altijd een pad waarlangs ze uit
      elkaar lopen.
   ---------------------------------------------------------- */
+  /* ----------------------------------------------------------
+     WELK STUK VAN DE BAAN ER IN DE TIJDLIJN STAAT.
+
+     De baan beslaat de HELE gemeten reeks — dat is de afspraak uit sessie 30:
+     de grenzen van de baan zijn de dekking van de data, en dat is precies wat
+     je van een baan wil kunnen aflezen. De tijdlijn eronder toont daar een
+     venster op, van een dag tot een week.
+
+     Zonder een beeld van die verhouding leest "24h gekozen, maar de schuiver
+     gaat zeven dagen terug" als een fout. Het is er geen: het is een uitsnede,
+     en die uitsnede hoort zichtbaar te zijn. Vandaar een lichtere band op de
+     baan, precies over het venster.
+
+     EEN VERLOOP OP DE BAAN ZELF en geen extra element: `.range` heeft een effen
+     `background` op de baan (de duim is een eigen pseudo-element en blijft
+     erbuiten), dus twee harde stops volstaan. Een tweede element eroverheen zou
+     de aanraakdoelen van de schuiver in de weg zitten. */
+  function toonBereik() {
+    if (!schuif || !bereik) return;
+    const b = bereik();
+    const spanne = b ? b.laatste - b.eerste : 0;
+    if (!b || spanne <= 0) { schuif.style.background = ''; return; }
+    const a = Math.max(0, Math.min(100, 100 * (b.van - b.eerste) / spanne));
+    const z = Math.max(0, Math.min(100, 100 * (b.tot - b.eerste) / spanne));
+    // Beslaat het venster de hele reeks (7 D), dan is er niets uit te snijden.
+    if (z - a > 99.5) { schuif.style.background = ''; return; }
+    schuif.style.background =
+      'linear-gradient(to right, var(--hair) 0 ' + a + '%, ' +
+      'var(--ink-faint) ' + a + '% ' + z + '%, var(--hair) ' + z + '% 100%)';
+  }
+
   function toon() {
     /* VOORAAN EN NIET ACHTERAAN. `toon()` heeft drie vroege uitgangen — geen
        momentknop, geen reeks, geen rij — en achter een `return` gemeld worden is
        precies hoe een tweede toehoorder stil wegvalt. De tijdlijn leest de
        cursor en de reeks zelf, dus de volgorde maakt hem niets uit. */
     if (onCursor) onCursor();
+    // NA onCursor: die hertekent de tijdlijn, en pas daarna weet hij welk
+    // venster er staat.
+    toonBereik();
     const rows = feed.rows();
     const max = eindeBaan();
     if (schuif) {

@@ -360,6 +360,58 @@
   }
   .mode-opt .mode-icon { font-size: 13px; line-height: 1; }
 
+  /* DE CAMERASTAND DEELT DE GLEUF MET DE BOLWEERGAVE (sessie 31), dus hij deelt
+     ook de vormtaal — `.mode-switch` staat er al op. Wat hij nodig heeft is de
+     eigen regel voor `hidden`: `.mode-switch` zet een expliciete `display: flex`
+     en die verslaat het attribuut. Dezelfde val als bij .dock-btn, .ti-panel en
+     .nav-panel, en hij is in dit bestand nu vier keer ingelopen. */
+  .view-switch[hidden] { display: none; }
+
+  /* ---- De uitgang uit de doorkijk (sessie 31) ----
+     Zwevend boven de tijdverdieping, in de taal van de knoppenrij: dun kader,
+     blur, één handeling. Hij staat alleen op een smal scherm — daar is het
+     detailvenster schermbreed en bedekt het de bol waar je doorheen kijkt.
+
+     `--time-lift` en niet `--dock-lift`: hij hoort boven de tijdrij te staan en
+     niet ernaast, want daar staat op deze breedte het moment al. */
+  .antipode-exit {
+    position: fixed;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: calc(var(--time-lift) + env(safe-area-inset-bottom, 0px));
+    z-index: var(--z-chrome);
+    display: none;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 14px;
+    background: rgba(11,16,24,0.82);
+    backdrop-filter: blur(14px);
+    border: 1px solid var(--accent);
+    border-radius: 999px;
+    color: var(--ink);
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    pointer-events: auto;
+    white-space: nowrap;
+  }
+  .antipode-exit svg { width: 15px; height: 15px; flex: 0 0 auto; }
+  /* Eigen regel omdat de klasse hierboven `display` zet — zelfde val als bij
+     .dock-btn, .ti-panel, .nav-panel en .view-switch. Vijf keer nu. */
+  .antipode-exit[hidden] { display: none; }
+
+  /* EN ZE STAAN NOOIT TEGELIJK. Een state met camerastanden verbergt de
+     bolweergave: de magnetosfeer deed dat al, Space komt er nu bij. Daar is de
+     bol helemaal weg (een heliocentrisch beeld heeft hem niet nodig), dus
+     Realistic/Expert was er een schakelaar zonder zichtbaar gevolg.
+
+     De zon blijft ongemoeid (Terry): die state heeft geen standen, dus de gleuf
+     valt daar vanzelf terug op de bolweergave.
+
+     Op de ID, om de reden die bij body.msphere-on staat. */
+  body.space-on #mode-switch { display: none; }
+
   /* ---- Legend / layer toggles ---- */
   /* Flexkolom met een vaste kop en één scrollend middendeel (sessie 9, 2026-07-30).
      `overflow: hidden` op de buitenkant is wat de inhoud binnen de afgeronde hoeken
@@ -2183,7 +2235,12 @@
   body.msphere-on [data-acc="sky-projections"],
   body.msphere-on [data-acc="cosmos-layers"],
   body.msphere-on #panel-tabs,
-  body.msphere-on .mode-switch { display: none; }
+  /* OP ZIJN ID EN NIET OP `.mode-switch`, want die klasse draagt sinds sessie 31
+     twee dingen: de bolweergave én de camerastand, die dezelfde gleuf en
+     dezelfde vormtaal delen. Op de klasse toetsen verborg ze allebei — en dat
+     zag je niet in de code, alleen aan een gleuf die leeg bleef. Zelfde reden
+     die #panel-tabs hierboven al op zijn id zet. */
+  body.msphere-on #mode-switch { display: none; }
 
   /* En de eigen sectie is er alleen dan. LET OP dezelfde val als bij
      .space-only: een expliciete `display` in een klasse verslaat het
@@ -2238,24 +2295,19 @@
      scherm van 1440. Op mobiel staat `max-width: none` al. */
   body.msphere-on .msphere-time { max-width: none; }
 
-  /* EN DE TIJDVERDIEPING WORDT HOGER. `--time-h` is niet "de hoogte van .ti-row"
-     maar "de hoogte van alles wat op de tijdverdieping staat" — zie de lange
-     noot in de mobiele media-query. Laat je hem op 40 staan, dan stopt een
-     paneel onder de strip en ligt het er op mobiel overheen.
+  /* DE TIJDLIJN TELT NIET MEE VOOR WAAR EEN PANEEL STOPT (sessie 31, Terry).
 
-     EN `--time-lift` MOET HIER MEE, HOE OVERBODIG DAT OOK LIJKT.
+     Eerst deed hij dat wel: `--time-h` is "de hoogte van alles wat op de
+     tijdverdieping staat", en de strip staat daar. Maar op een telefoon kostte
+     dat 140 px paneelhoogte voor een uitlezing die je achter dat paneel toch
+     niet leest — en juist daar is de ruimte op.
 
-     Een custom property wordt opgelost op het element waar hij GEDECLAREERD is,
-     niet waar hij gebruikt wordt. `--time-lift` staat in `:root` en leest daar
-     dus de `--time-h` van `:root` — een override op `<body>` bereikt hem niet.
-     Wat er dan gebeurt is niet zichtbaar in de code en wél op het scherm:
-     GEMETEN op 375x812 met de strip erbij, liep het paneel er 93 px overheen.
-     Deze regel is die reparatie, en hij hoort bij élke variabele die uit
-     `--time-h` volgt. */
-  body.msphere-on {
-    --time-h: calc(40px + var(--msps-gap) + var(--msps-h));
-    --time-lift: calc(var(--dock-lift) + var(--time-h) + var(--time-gap));
-  }
+     Dus mag een paneel de tijdlijn BEDEKKEN en stopt hij boven de BEDIENING:
+     de afspeelknoppen, de schuiver en het zwevende moment. Die drie moeten
+     bereikbaar en leesbaar blijven terwijl een paneel openstaat, want dat is
+     waarmee je door de reeks loopt. Zie de mobiele media-query, waar
+     `--panel-lift` gezet wordt; op desktop stopt een paneel toch al boven de
+     knoppenrij en staat de balk er ruim naast. */
 
   /* ---- Toast-meldingen (nieuwe real-time entries) ---- */
   #toasts {
@@ -2357,21 +2409,12 @@
          `laneLayout` verdeelt naar gewicht, dus de verhoudingen blijven. */
       --msps-h: 132px;
     }
-    /* Dezelfde optelling als op desktop, met de 74 van hierboven. Het grondgetal
-       staat er twee keer in en dat is met opzet: `--time-h` wordt op twee plekken
-       gezet en een afgeleide variabele ertussen zou de meting in de noot
-       hierboven onleesbaar maken.
+    /* EN DE TIJDLIJN TELT NIET MEE. `--time-h` blijft op 74 — de bediening plus
+       het zwevende moment — dus een paneel stopt daarboven en bedekt de strip.
+       Zie de noot bij body.msphere-on hierboven voor waarom.
 
-       `--panel-lift` MOET HIER OOK OPNIEUW, om dezelfde reden als `--time-lift`
-       hierboven: hij is in `:root` gedeclareerd als `var(--time-lift)` en heeft
-       die daar al opgelost. Hier is hij bovendien wél in gebruik — op een breed
-       scherm stopt een paneel boven de KNOPPENRIJ en op deze breedte boven de
-       TIJDVERDIEPING, en die verdieping is nu 212 px in plaats van 74. */
-    body.msphere-on {
-      --time-h: calc(74px + var(--msps-gap) + var(--msps-h));
-      --time-lift: calc(var(--dock-lift) + var(--time-h) + var(--time-gap));
-      --panel-lift: var(--time-lift);
-    }
+       Er staat hier daarom géén override meer. Dat is de hele regel: de strip
+       hangt onder `--time-lift` en niet erin. */
     /* Volle breedte, en GEEN transform die opgeheven moet worden — zie de noot bij
        .time-island. `--dock-lift` en niet `--panel-lift`: het eiland stopt boven de
        KNOPPENRIJ, de panelen stoppen boven het eiland. Tot sessie 25 waren die twee
@@ -2473,6 +2516,44 @@
     /* Op smalle schermen alleen de iconen. Beide opties blijven zichtbaar; dat is juist
        de reden dat het een segmented toggle is. */
     .mode-opt .mode-text { display: none; }
+    .view-switch .mode-text { display: inline; }
+    /* Alleen hier: op een breed scherm staat de uitlezing naast de bol en
+       hoeft er niets weg te klappen. */
+    .antipode-exit { display: flex; }
+    .antipode-exit[hidden] { display: none; }
+
+    /* DE CAMERASTAND HOUDT ZIJN TEKST, en dat is geen uitzondering maar het
+       verschil tussen de twee bewoners van deze gleuf. De bolweergave heeft
+       ICONEN (◐ en ▦) en kan zijn tekst dus missen; een camerastand heeft er
+       geen, want Meridian en Top zijn allebei "recht op een vlak" en alleen het
+       woord zegt op wélk vlak. Zonder deze regel staan er drie lege pillen —
+       gemeten: 20 px per knop, en niets erin.
+
+       Wat wél korter mag is het label dat te lang is: "3D orbit" wordt "3D".
+       Gemeten op 375 px, met deze maten: de magnetosfeer komt op 122 px en
+       Space op 137, tegen 145 px vrije ruimte tussen de wordmark en de knoppen
+       rechts. */
+    /* DE CAMERASTAND ZAKT EEN RIJ, en houdt daarmee zijn tekst.
+
+       De bolweergave kan in de mastheadrij blijven omdat hij ICONEN heeft (◐ en
+       ▦) en zijn tekst daar dus weglaat. Een camerastand heeft er geen: Meridian
+       en Top zijn allebei "recht op een vlak" en alleen het woord zegt op wélk
+       vlak. Zonder tekst staan er drie lege pillen — gemeten: 20 px per knop en
+       niets erin.
+
+       En met tekst past hij daar niet. GEMETEN op 375 px: tussen de wordmark
+       (eindigt op 115) en de knoppen rechts (beginnen op 260) is 145 px vrij, en
+       de rij meet 147 in de magnetosfeer en 171 in Space — zelfs met "3D orbit"
+       ingekort tot "3D". Een rij lager is er 355.
+
+       56 px is dezelfde lijn waarop de meldingen, de bevingenlijst en de
+       instellingen opengaan; die bedekken hem dan, en dat mag — het zijn
+       tijdelijke vensters. */
+    /* TWEE KLASSEN, want `.mode-switch { top: 12px }` staat verderop in deze
+       media-query en heeft dezelfde soortelijkheid — dan wint de laatste. Dit
+       element draagt beide klassen, dus `.mode-switch.view-switch` wint hoe de
+       volgorde ook loopt. */
+    .mode-switch.view-switch { top: 56px; }
     .mode-opt { padding: 6px 10px; }
     /* Op één lijn met de wordmark en de bel. Stond tot 2026-07-31 op 48 px, onder de
        masthead, omdat het eiland toen nog tekstlabels droeg en op 375 px tegen de

@@ -51,11 +51,39 @@ const MSPS_VENSTERS = [
 ];
 const MSPS_STANDAARD = 0;
 
-/* Waar het venster de cursor kwijtraakt, schuift het mee — en dan komt de
-   cursor op een tiende van de linkerrand te staan. Niet op de rand zelf: dan
-   herankert hij bij elke volgende stap opnieuw, en een spec-herbouw kost meer
-   dan de hele tekening. */
+/* HET VENSTER SCHUIFT DOORLOPEND MEE EN VERSPRINGT NIET (sessie 31, Terry).
+
+   Eerst bleef het staan tot de cursor de rand raakte en sprong het dan 90 %
+   verder. Dat leest als haperen en niet als scrollen — en scrollen is wat het
+   is: de schuiver van de transportbalk beslaat de hele week, de tijdlijn toont
+   er een venster op.
+
+   Nu duwt de cursor het venster zodra hij binnen deze marge van een rand komt,
+   en geen pixel eerder. Een tiende, dus je houdt 80 % van het venster om in
+   rond te kijken voordat er iets beweegt.
+
+   BETAALBAAR, EN DAT IS GEMETEN. Elke verschuiving is een spec-herbouw:
+   mediaan 3,1 ms bij 24 h en 8,7 ms bij 7 D — en dat laatste venster is de hele
+   reeks en schuift dus nooit. Met de rem van 20 Hz is dat 62 ms rekenwerk per
+   seconde slepen, 6 % van een kern. */
 const MSPS_MARGE = 0.1;
+
+/* ---------- De marges van het tekenvlak ----------------------------------
+
+   `Chart.PAD` is 52 en byte-identiek, dus daar valt niets aan te draaien. Wat
+   Terra wél kan is het tekenvlak VERSCHUIVEN: chart.js zet de asgetallen rechts
+   uitgelijnd op `PAD - 5`, dus alles links van het breedste getal is loze
+   ruimte. GEMETEN op de huidige lanes: het breedste getal is 21,7 px breed en er
+   bleef 25,3 px leeg.
+
+   Die ruimte wordt per herbouw OPNIEUW gemeten en niet als constante gezet: een
+   lane die vandaag tot -100 loopt kan morgen -1000 halen, en een vaste
+   verschuiving snijdt dat getal dan af — precies het soort fout dat je pas ziet
+   als hij er al staat. `MSPS_LINKS_MIN` is wat er sowieso vrij blijft;
+   `MSPS_RECHTS` is de lucht na de laatste meetwaarde, want daar stond de data
+   tegen de rand. */
+const MSPS_LINKS_MIN = 4;
+const MSPS_RECHTS = 10;
 
 /* ---------- Het palet -----------------------------------------------------
 
@@ -125,7 +153,13 @@ const MSPS_TEKST = {
 const MSPS_LABELS_VANAF = 450;
 
 export function createMagnetosphereStrip(deps) {
-  const { state, feed, Core, Chart, Sector, StripLanes, moment } = deps;
+  /* `onMoment` IS DE TEGENHANGER VAN `onCursor` IN DE TRANSPORTBALK. Die balk
+     was tot nu toe de enige die de cursor verzette en meldde het daarom als
+     enige; sinds je de playhead kunt slepen is deze strip de tweede. Zonder
+     deze haak blijft de schuiver staan waar hij stond terwijl het moment al
+     verschoven is — twee besturingen die hetzelfde tonen en uit elkaar lopen. */
+  const { state, feed, Core, Chart, Sector, StripLanes, moment,
+          stopAfspelen, onMoment } = deps;
 
   const canvas = document.getElementById('msphere-strip');
   const knopVenster = document.getElementById('msp-window');
@@ -179,17 +213,45 @@ export function createMagnetosphereStrip(deps) {
 
      Bij 7 D schuift er dus nooit iets: dat venster is de hele reeks.
   ---------------------------------------------------------- */
+  /* De rechterrand van het venster, als geheugen. Zonder dat zou "meeschuiven"
+     niet te onderscheiden zijn van "opnieuw uitrekenen": het venster moet
+     kunnen BLIJVEN staan zolang de cursor er ruim in zit. `null` betekent nog
+     niet geplaatst — dan hangt hij aan het nieuwste monster. */
+  let vensterTot = null;
+
+  /* Staat er een sleep in de tijdlijn zelf? Dan verschuift het venster NIET.
+
+     GEMETEN, en het was de enige fout in dit blok: `timeAtX` klemt op
+     [from, to], dus aan de linkerrand levert elke volgende beweging opnieuw
+     `from` op — en de meeschuifregel duwt het venster dan bij elke stap een
+     stukje verder. Over vijf stappen kroop het 7,4 uur weg, terwijl slepen
+     juist NIET mag scrollen (Terry). De schuiver van de transportbalk is waar
+     je door de week loopt; hierbinnen kies je een moment in wat er staat. */
+  let sleept = false;
+
   function venster(rows) {
     const breedte = huidigVenster().ms;
     const eerste = rows[0].time, laatste = rows[rows.length - 1].time;
-    let tot = laatste, van = tot - breedte;
+    const marge = breedte * MSPS_MARGE;
     const cursorTijd = rows[state.cursor()] ? rows[state.cursor()].time : laatste;
-    if (cursorTijd < van) {
-      van = cursorTijd - breedte * MSPS_MARGE;
-      tot = van + breedte;
+
+    if (vensterTot === null) vensterTot = laatste;
+    // Komt de cursor binnen de marge van een rand, dan duwt hij het venster mee.
+    // Tenzij de bezoeker in de tijdlijn zelf sleept — zie de noot bij `sleept`.
+    if (!sleept) {
+      if (cursorTijd > vensterTot - marge) vensterTot = cursorTijd + marge;
+      else if (cursorTijd < vensterTot - breedte + marge) {
+        vensterTot = cursorTijd + breedte - marge;
+      }
     }
-    if (van < eerste) { van = eerste; tot = Math.min(laatste, van + breedte); }
-    return { van, tot };
+    /* En hij loopt niet buiten de reeks. De BOVENgrens eerst en de ondergrens
+       daarna: bij een reeks die korter is dan het venster wint die laatste, en
+       dan staat het venster op de hele reeks in plaats van erbuiten. */
+    vensterTot = Math.min(vensterTot, laatste);
+    vensterTot = Math.max(vensterTot, Math.min(laatste, eerste + breedte));
+
+    const tot = vensterTot;
+    return { van: Math.max(eerste, tot - breedte), tot };
   }
 
   /* DE RIJEN WORDEN GESNEDEN EN NIET ALLEEN BEGRENSD.
@@ -227,6 +289,38 @@ export function createMagnetosphereStrip(deps) {
     ongeldig();
   }
 
+  /* HOEVEEL HET TEKENVLAK NAAR LINKS MAG, gemeten en niet geschat.
+
+     chart.js zet de asgetallen RECHTS uitgelijnd op `PAD - 5`, in 9px mono.
+     Alles links van het breedste getal is loze ruimte. Meet dus dat getal en
+     geef terug wat er weg kan, met `MSPS_LINKS_MIN` als wat sowieso vrij blijft.
+
+     Waarom niet één keer bij het opzetten: de schalen hangen aan de DATA. Een
+     lane die vandaag tot -100 loopt kan morgen -1000 halen, en een vaste
+     verschuiving snijdt dat getal dan af — precies het soort fout dat je pas
+     ziet als het te laat is. Dit kost één measureText per lane per herbouw. */
+  function linkerSchuif(spec) {
+    ctx.save();
+    ctx.font = '9px ' + mono;
+    let breedste = 0;
+    for (const lane of spec.lanes) {
+      const sc = lane.fixedScale;
+      if (!sc) continue;
+      for (const v of [sc.lo, sc.hi]) {
+        const t = Chart.fmt ? Chart.fmt(v, sc.tick) : String(v);
+        const w = ctx.measureText(String(t)).width;
+        if (w > breedste) breedste = w;
+      }
+    }
+    ctx.restore();
+    const vrij = (Chart.PAD || 52) - 5 - breedste;
+    return Math.max(0, vrij - MSPS_LINKS_MIN);
+  }
+
+  /* De verschuiving van de HUIDIGE tekening. Nodig buiten het tekenen om, want
+     de muis wijst in canvascoördinaten en de grafiek staat verschoven. */
+  let schuif = 0;
+
   function bouwSpec(rows) {
     const { van, tot } = venster(rows);
     const inVenster = snijd(rows, van, tot);
@@ -245,6 +339,16 @@ export function createMagnetosphereStrip(deps) {
     spec.fmtTick = StripLanes.fmtTick;
     spec.fmtTime = StripLanes.fmtTime;
     spec.mono = mono;
+
+    /* DE BREEDTE WORDT NA DE BOUW BIJGESTELD, en dat mag omdat de twee dingen
+       die eraan hangen niet dezelfde gevoeligheid hebben. Bij het BOUWEN stuurt
+       `width` alleen de decimatie (hoeveel bakjes er in de plotbreedte passen),
+       en die verandert hier met 11 px op 648 — anderhalve procent, ver onder
+       één bakje. Bij het TEKENEN bepaalt hij waar de rechterrand ligt, en dát
+       is wat we willen verzetten. Eén bouw dus, en niet twee: die tweede kostte
+       3,1 ms voor anderhalve procent nauwkeuriger decimatie. */
+    schuif = linkerSchuif(spec);
+    spec.width = S.w + schuif - MSPS_RECHTS;
     vertaal(spec);
     return spec;
   }
@@ -333,9 +437,15 @@ export function createMagnetosphereStrip(deps) {
     spec.playhead = rows[state.cursor()] ? rows[state.cursor()].time : null;
     /* In `overlay` en niet in `spec.hoverX`: dat laatste veld laat chart.js zijn
        eigen uitleesvenster tekenen, en de waarden staan hier per lane. */
-    if (spec.overlay) spec.overlay.hoverX = S.hoverX;
+    if (spec.overlay) spec.overlay.hoverX = S.hoverX === null ? null : S.hoverX + schuif;
+    /* WISSEN IN CANVASCOÖRDINATEN, TEKENEN IN GRAFIEKCOÖRDINATEN. De volgorde
+       is niet vrij: na de translate ligt x = 0 buiten het canvas en zou
+       clearRect een strook laten staan. */
     ctx.clearRect(0, 0, S.w, S.h);
+    ctx.save();
+    ctx.translate(-schuif, 0);
     StripLanes.draw(Chart, ctx, spec);
+    ctx.restore();
     S.vuil = false;
   }
 
@@ -349,21 +459,89 @@ export function createMagnetosphereStrip(deps) {
     // Voorbij een etmaal heeft de GOES-lane het weekbestand nodig. De feed
     // beslist zelf of er iets op te halen valt; escalatie is eenrichting.
     if (v.breed && feed.zetGoesBreed) feed.zetGoesBreed();
+    // Een andere breedte is een ander venster: opnieuw aanhaken op het nieuwste
+    // monster in plaats van de oude rechterrand aanhouden.
+    vensterTot = null;
     ongeldig();
     teken();
   }
 
   knopVenster?.addEventListener('click', () => zetVenster(vensterIndex + 1));
 
-  /* De muis. `offsetX` en niet clientX minus de doos: dat eerste rekent de
-     schaal van het element al mee, en dit canvas is op een telefoon smaller dan
-     zijn buffer. */
+  /* ----------------------------------------------------------
+     DE MUIS DOET TWEE DINGEN, EN HET VERSCHIL IS DE KNOP.
+
+     Bewegen zonder knop is AANWIJZEN: de captie leest per lane uit wat er onder
+     de cursor staat. Bewegen mét knop is HET MOMENT KIEZEN — de playhead volgt
+     de vinger.
+
+     SLEPEN SCROLT NIET (Terry, expliciet). `Chart.timeAtX` klemt zelf op
+     [from, to], dus een sleep buiten het venster levert de rand op en niet een
+     tijd erbuiten. Het venster verschuift dus niet mee; daar is de schuiver van
+     de transportbalk voor.
+
+     `clientX` MINUS DE DOOS EN NIET `offsetX`. Dat laatste stond er eerst en het
+     is GEMETEN fout: in een paneel met een afwijkende schaalfactor liep `offsetX`
+     op de halve snelheid mee en werd hij links van het midden zelfs negatief —
+     bij een cursor 628 px in het element gaf hij 156. `getBoundingClientRect()`
+     staat in dezelfde eenheden als `clientX`, dus dat verschil klopt per
+     constructie, wat de pagina ook doet met zoom of schaal.
+
+     Plus `schuif`, want de grafiek staat verschoven getekend — zie tekenNu.
+  ---------------------------------------------------------- */
+  function momentBijX(x) {
+    const spec = S.spec, rows = feed.rows();
+    if (!spec || !rows || !rows.length) return;
+    const pad = Chart.PAD || 52;
+    const t = Chart.timeAtX(x + schuif, spec.from, spec.to, pad, spec.width - pad);
+    const i = feed.indexAt(t);
+    if (i >= 0 && i !== state.cursor()) {
+      // Wie zelf aanwijst, volgt niet meer automatisch het nieuwste monster.
+      state.volgtNu(false);
+      state.zetCursor(i);
+      if (onMoment) onMoment();
+    }
+  }
+
+  // De doos in dezelfde eenheden als `clientX`. Per gebeurtenis opgevraagd: hij
+  // verandert bij elke resize, bij het openen van een paneel en bij het scrollen
+  // van de pagina, en een gecachte waarde is dan stil fout.
+  const xVanEvent = (e) => e.clientX - canvas.getBoundingClientRect().left;
+
+  canvas.addEventListener('pointerdown', (e) => {
+    sleept = true;
+    /* Zonder capture raakt de sleep los zodra je buiten het canvas komt, en dat
+       gebeurt bij een strip van 132 px hoog voortdurend. In een try: een
+       pointerId die niet actief is (een nagebootste gebeurtenis in een toets)
+       laat dit gooien, en dat mag de sleep niet meenemen. */
+    try { canvas.setPointerCapture(e.pointerId); } catch (_) { /* geen capture */ }
+    if (stopAfspelen) stopAfspelen();
+    const x = xVanEvent(e);
+    S.hoverX = x;
+    momentBijX(x);
+    teken();
+    e.preventDefault();
+  });
+
   canvas.addEventListener('pointermove', (e) => {
-    S.hoverX = e.offsetX;
+    const x = xVanEvent(e);
+    S.hoverX = x;
+    if (sleept) momentBijX(x);
     teken();
   });
+
+  const losLaten = (e) => {
+    if (!sleept) return;
+    sleept = false;
+    if (canvas.releasePointerCapture && e && e.pointerId !== undefined) {
+      try { canvas.releasePointerCapture(e.pointerId); } catch (_) { /* al los */ }
+    }
+  };
+  canvas.addEventListener('pointerup', losLaten);
+  canvas.addEventListener('pointercancel', losLaten);
+
   canvas.addEventListener('pointerleave', () => {
-    if (S.hoverX === null) return;
+    if (sleept || S.hoverX === null) return;
     S.hoverX = null;
     teken();
   });
@@ -384,6 +562,16 @@ export function createMagnetosphereStrip(deps) {
     },
     zetVenster,
     venster: () => huidigVenster().id,
+    /* WELK STUK VAN DE DEKKING ER IN BEELD STAAT. De transportbalk tekent dat
+       als bereik op zijn baan: die baan beslaat de hele reeks en het venster
+       een deel ervan, en zonder dat beeld leest "24h gekozen, schuiver spant
+       zeven dagen" als een fout in plaats van als een uitsnede. */
+    bereik() {
+      const rows = feed.rows();
+      if (!rows || !rows.length || !S.spec) return null;
+      return { van: S.spec.from, tot: S.spec.to,
+               eerste: rows[0].time, laatste: rows[rows.length - 1].time };
+    },
     // Voor het meetluik: de spec is de dure helft en moet te tellen zijn.
     spec: () => S.spec
   };
