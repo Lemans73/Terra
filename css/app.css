@@ -2449,9 +2449,23 @@
   body.msphere-on .detail-panel .tab[data-tab="d-sunmoon"],
   body.msphere-on .detail-panel .tab[data-tab="d-planets"] { display: none; }
 
-  /* EEN TAB IS EEN FLEXDOOS EN GEEN BLOK. De algemene regel hierboven zet
-     `display: block`, en dan valt het label onder het icoon in plaats van
-     ernaast. Dit zet hem terug op wat `.detail-panel .tab` zelf gebruikt. */
+  /* EEN TAB HEEFT TWEE EIGEN REGELS NODIG, EN DAT IS DE SPECIFICITEITSVAL.
+
+     `.msphere-only { display: none }` weegt (0,1,0) en `.detail-panel .tab`
+     weegt (0,2,0), dus die laatste WINT en zette de Legend-tab overal op
+     `display: flex` — ook buiten deze state, waar hij niets verklaart. De
+     verbergregel greep dus nooit, en dat viel niet op omdat ik alleen bínnen
+     de magnetosfeer had gekeken.
+
+     Beide standen staan daarom hier, allebei zwaar genoeg om te winnen:
+     (0,3,0) om hem te verbergen, (0,3,1) om hem terug te zetten. En `flex` en
+     geen `block`, want de algemene regel zou het label onder het icoon leggen
+     in plaats van ernaast.
+
+     Dit is dezelfde les die dit bestand al zeven keer heeft opgeschreven, maar
+     één slag dieper: het gaat niet alleen om display in een KLASSE tegen
+     `hidden`, maar om display in een klasse tegen een SPECIFIEKERE selector. */
+  .detail-panel .tab.msphere-only { display: none; }
   body.msphere-on .detail-panel .tab.msphere-only { display: flex; }
 
   /* GEEN STREEP BOVEN DE EERSTE ZICHTBARE SECTIE (sessie 34, Terry).
