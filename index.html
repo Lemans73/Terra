@@ -1397,6 +1397,31 @@
       otherwise. The free 3D view keeps its stars and has no grid &#8212; a scale
       needs a flat plane to mean anything.
       </div>
+      <div class="elayer on expandable" id="msp-wind-toggle">
+      <span class="edot"></span>Solar wind
+      <button class="row-expand" data-note="msp-wind-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <span class="estat" id="es-msp-wind">on</span>
+      </div>
+      <div class="layer-detail" id="msp-wind-note">
+      The wind arriving from the Sun, drawn as it flows around the cavity. Two
+      things about it are <b>measured</b>: how fast it moves and how many
+      particles there are. The speed on screen scales with the measured
+      velocity, so 700 km/s really does travel 1.75&#215; as fast as 400, and
+      the density sets how thick the stream is.
+      <br /><br />
+      The <b>path</b> is drawn, not solved. Outside the bow shock each particle
+      follows the measured inflow vector; inside it, the flow is deflected
+      around the magnetopause by a formula, not by magnetohydrodynamics. What
+      is true in it is the <i>direction</i>: the stream really does bend around
+      the nose rather than run into it, and it brightens where it grazes the
+      boundary, because that is where the pressure is highest.
+      <br /><br />
+      No standoff, no wind &#8212; there would be nothing to bend around, and a
+      straight stream through the magnetosphere would claim the opposite of
+      what happens.
+      </div>
       <div class="elayer on" id="msp-aurora-toggle"><span class="edot"></span>Aurora oval<span class="estat" id="es-msp-aurora">on</span></div>
       </div>
       </section>
@@ -1892,6 +1917,7 @@ import { createMagnetosphereState } from './js/states/magnetosphere.js';
 import { createBoundaryLayer } from './js/layers/magnetosphere/boundary-layer.js';
 import { createMagnetosphereGrid } from './js/layers/magnetosphere/grid-layer.js';
 import { createFieldlinesLayer } from './js/layers/magnetosphere/fieldlines-layer.js';
+import { createWindLayer } from './js/layers/magnetosphere/wind-layer.js';
 import { createMagnetosphereScale } from './js/ui/magnetosphere-scale.js';
 import { MSPHERE_RE, MSPHERE_DRAW_MAX } from './js/layers/magnetosphere/boundary-layer.js';
 import { createMagnetosphereFeed, MSPHERE_HEALTH_ID } from './js/compute/magnetosphere-feed.js';
@@ -5190,6 +5216,11 @@ waveToggleEl.addEventListener('click', () => {
 });
 
 // ---- Animatie-loop: waterruis-uniform + 3D-glyph-animaties ----
+/* Het vorige frame-moment van de windlaag. Buiten de lus, want hij moet twee
+   aanroepen overleven; `null` betekent "eerste frame", en die krijgt dt = 0
+   in plaats van de tijd sinds het opstarten. */
+let _windVorig = null;
+
 function animateShader() {
   const gt = performance.now() / 1000;
   const nowMs = Date.now(); // wandklok, voor o.a. de bliksem-leeftijd-fade
@@ -5311,6 +5342,18 @@ function animateShader() {
      werkelijk verschoven is — twee geprojecteerde ijkpunten als handtekening —
      dus buiten de state en in stilstand kost dit twee matrixvermenigvuldigingen. */
   if (msphereScale) msphereScale.tick();
+  /* De zonnewind, en dit is de ENIGE laag van deze state die per FRAME loopt.
+     Alle andere hangen aan de klok en worden door `msphereState.tik()` bediend;
+     deze beweegt uit zichzelf en heeft dus een echte dt nodig.
+
+     DE dt KOMT UIT DE WANDKLOK VAN DE LUS ZELF (`gt`) en niet uit de tijdkiezer:
+     wat hier beweegt is een tekening met een tempo, niet een moment in de reeks.
+     De laag klemt hem — een verborgen tabblad levert bij terugkeer seconden en
+     dan teleporteert de hele bundel door de holte heen. */
+  if (msphereWind) {
+    msphereWind.step(_windVorig === null ? 0 : gt - _windVorig);
+    _windVorig = gt;
+  }
   updateHover();      // raycaster-highlight bijwerken
   positionLabels();   // leader-line labels herpositioneren
   requestAnimationFrame(animateShader);
@@ -6668,6 +6711,8 @@ bindMsphereToggle('msp-grid-toggle', 'es-msp-grid',
   on => msphereState && msphereState.setPart('grid', on));
 bindMsphereToggle('msp-lines-toggle', 'es-msp-lines',
   on => msphereState && msphereState.setPart('fieldlines', on));
+bindMsphereToggle('msp-wind-toggle', 'es-msp-wind',
+  on => msphereState && msphereState.setPart('wind', on));
 /* De aurora loopt WEL via de bestaande poort: hij is een gewone Terra-laag met
    een eigen adapter van 924 KB, en syncAuroraLayer() is de enige plek die
    bepaalt of die bron bevraagd wordt. Een tweede weg ernaartoe zou precies de
@@ -7029,6 +7074,7 @@ let viewStates = null, spaceState = null, planets = null;
 // De magnetosfeer. Zelfde TDZ-afspraak als de andere states.
 let msphereState = null, msphereBoundary = null, msphereTransport = null;
 let msphereGrid = null, msphereStrip = null, msphereLines = null, msphereScale = null;
+let msphereWind = null;
 let disks = null, lagrange = null, orbits = null, environment = null;
 /* `panels` en `navPanel` staan hier om dezelfde reden als de rij hierboven, en
    niet bij hun eigen code verderop: `setPanelOpen()` leest `panels` en die
@@ -7993,6 +8039,10 @@ function bouwMsphereLegenda() {
     'With no Bz there is no state to show, and the boundary falls back to plain blue: the shape still stands, because that hangs on the pressure, but nothing is claimed about what is coming in. That is not the same as a quiet magnetosphere.');
   msphereLegendaRij(host, 'line', msphereBoundary.colors.shock, 'Bow shock',
     'Where the wind first slows below its own signal speed. Scaled off the magnetopause with the magnetosonic Mach number — no Mach, no shock. It does not take the colours above: it hangs entirely on the standoff and adds no measurement of its own.');
+  if (msphereWind) {
+    msphereLegendaRij(host, 'dot', msphereWind.colors.wind, 'Solar wind',
+      'Speed from the measured velocity and density from the measured count, but the path is drawn rather than solved — the deflection around the boundary is a formula, not magnetohydrodynamics. It brightens where it grazes the magnetopause, which is the same quantity that bends it.');
+  }
   if (msphereGrid) {
     msphereLegendaRij(host, 'line', msphereGrid.colors.as,
       'Scale grid — one line every ' + msphereGrid.stepRe + ' Re',
@@ -10303,6 +10353,15 @@ if (globalThis.TerraCore) {
   });
   msphereBoundary.group.add(msphereLines.group);
 
+  /* En de zonnewind, op diezelfde plek: ONDER de grensvlakgroep. Zijn deeltjes
+     worden in GSM gerekend — dat is het frame waarin `Flow.sheathVel` om de
+     neus van de grens heen geformuleerd is — dus ze horen in hetzelfde frame
+     als het oppervlak waar ze omheen buigen. Zou hij ernaast hangen, dan boog
+     de stroom om een grens die ergens anders getekend staat. */
+  msphereWind = createWindLayer(THREE, { Core: globalThis.TerraCore,
+                                        renderer: world.renderer() });
+  msphereBoundary.group.add(msphereWind.group);
+
   /* En de getallen bij dat raster, op een tweede canvas (blok O). Hij krijgt
      `TerraOverlay` mee voor zijn twee PURE helpers — `ticks` en `label`, allebei
      los getoetst in de PoC — en verder niets uit dat bestand: zijn
@@ -10335,6 +10394,7 @@ if (globalThis.TerraCore) {
   msphereState = createMagnetosphereState(THREE, {
     world,
     boundary: msphereBoundary,
+    wind: msphereWind,
     grid: msphereGrid,
     scale: msphereScale,
     fieldlines: msphereLines,
@@ -10823,6 +10883,7 @@ if (IS_LOCAL) {
     get msphereTransport() { return msphereTransport; },
     get msphereGrid() { return msphereGrid; },
     get msphereLines() { return msphereLines; },
+    get msphereWind() { return msphereWind; },
     get msphereScale() { return msphereScale; },
     // Voor de tegenproef op de legenda-vangrail: een verzonnen lijnstaat in de
     // registry moet hem luid laten vallen, niet stil een lege regel geven.

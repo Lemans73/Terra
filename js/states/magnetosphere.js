@@ -51,7 +51,7 @@ import { MSPHERE_RE, MSPHERE_DRAW_MAX, pocNaarTerra }
 const MSPHERE_ORTHO_DIEPTE = 200000;
 
 export function createMagnetosphereState(THREE, deps) {
-  const { world, boundary, grid, scale, fieldlines, layers, Core, feed, clock } = deps;
+  const { world, boundary, wind, grid, scale, fieldlines, layers, Core, feed, clock } = deps;
 
   const origin = new THREE.Vector3(0, 0, 0);
   const _sun = new THREE.Vector3();
@@ -676,12 +676,20 @@ export function createMagnetosphereState(THREE, deps) {
   let wilBoegschok = true;
   let wilRaster = true;
   let wilVeldlijnen = true;
+  let wilWind = true;
   let huidigeView = null;
 
   function pasVoorkeurenToe() {
     boundary.setPartVisible('magnetopause', wilMagnetopauze);
     // Geen rbs betekent geen machgetal, en dan is er niets om te tonen.
     boundary.setPartVisible('bowshock', wilBoegschok && !!(laatste && laatste.rbs !== null));
+    /* De wind hangt aan dezelfde rbs, en om een sterkere reden dan de schok:
+       zonder schok is er geen sheath, en dan is er geen afbuiging om te tekenen
+       — alleen een rechte stroom dwars door de magnetosfeer. De laag weigert
+       dat zelf ook (zie `update`), maar de knop hoort er niet omheen te kunnen.
+       Merk op dat dit NIET aan de knop van de boegschok hangt: die zet een
+       tekening uit, niet de meting eronder. */
+    if (wind) wind.setVisible(wilWind && !!(laatste && laatste.rbs !== null));
   }
 
   /* Het raster hoort bij een VLAK, dus het bestaat alleen in de vaste standen —
@@ -1172,6 +1180,9 @@ export function createMagnetosphereState(THREE, deps) {
          `bounded: false` reist met de geometrie mee, en de laag kleurt daarop.
          Het alternatief, de lijnen weghalen, zou beweren dat er geen veld is. */
       if (s) bouwVeldlijnen(s, a, false);
+      /* GEEN GRENS IS GEEN WIND. Niet omdat er geen wind zou waaien, maar
+         omdat er niets is om omheen te buigen: de afbuiging IS de tekening. */
+      if (wind) wind.update(s, laatste);
       return laatste;
     }
 
@@ -1185,6 +1196,10 @@ export function createMagnetosphereState(THREE, deps) {
     // r0 terwijl de lijnen van een vorige spec zijn, toont een topologie die bij
     // andere lijnen hoort. Zie de noot bij `bounded` in Core.Build.run.
     bouwVeldlijnen(s, a, false);
+    // En de wind, om diezelfde reden NA `laatste`: hij buigt om de grens die er
+    // NU staat. Een bundel die om de vorige vorm heen loopt, scheert langs een
+    // oppervlak dat ergens anders getekend is.
+    if (wind) wind.update(s, laatste);
     return laatste;
   }
 
@@ -1313,6 +1328,7 @@ export function createMagnetosphereState(THREE, deps) {
       if (grid) grid.setPlane(null);
       if (scale) scale.setPlane(null);
       if (boundary.setOutline) boundary.setOutline(null);
+      if (wind) wind.setOutline(false);
       vlakkeStand = false;
       zetSleepgedrag(false);
       /* ONDERWEG OF NIET: alles terug naar de ruststand. Verlaat de bezoeker de
@@ -1328,6 +1344,11 @@ export function createMagnetosphereState(THREE, deps) {
       if (layers.skyRestore) layers.skyRestore();
       if (layers.atmosphereRestore) layers.atmosphereRestore();
       boundary.setVisible(false);
+      /* De wind hangt ONDER de grensgroep, dus hij verdwijnt met de regel
+         hierboven al uit beeld. Zijn eigen vlag gaat er toch uit: `step()`
+         leest die, en anders blijft er per frame een bundel doorgerekend
+         worden die niemand ziet. */
+      if (wind) wind.setVisible(false);
       veldlijnenUit();
       if (feed) feed.setEnabled(false);
       if (clock && bewaardeKlok) { clock.herstel(bewaardeKlok); bewaardeKlok = null; }
@@ -1477,6 +1498,7 @@ export function createMagnetosphereState(THREE, deps) {
     /* Alleen de omtrek in de vlakke standen: bij een omwentelingsoppervlak dat
        je loodrecht bekijkt ÍS de doorsnede de omtrek, en het volle net maakt er
        weer een driedimensionaal ding van. Zie de noot in boundary-layer.js. */
+    if (wind) wind.setOutline(naarVlak);
     if (boundary.setOutline(naarVlak ? naarView : null)) herbouw();
     /* En de zaden. `huidigeView` staat hierboven al op de nieuwe stand, dus
        `bouwVeldlijnen` leest de goede.
@@ -1499,6 +1521,9 @@ export function createMagnetosphereState(THREE, deps) {
 
     const zicht = dalZicht(e);
     if (grensWisselt && boundary.setFade) boundary.setFade(zicht);
+    /* De wind vervaagt MET de grens en niet apart: hij buigt om precies dat
+       oppervlak, dus als dat even wegvalt hoort de stroom eromheen dat ook. */
+    if (grensWisselt && wind) wind.setFade(zicht);
     if (rasterWisselt && grid && grid.setFade) grid.setFade(zicht);
     if (rasterWisselt && scale) scale.setFade(zicht);
     if (veldWisselt && fieldlines) fieldlines.setFade(zicht);
@@ -1519,6 +1544,7 @@ export function createMagnetosphereState(THREE, deps) {
       if (layers.atmosphereRestore) layers.atmosphereRestore();
     } else if (orthoOrigineel) world.camera().updateProjectionMatrix();
     if (boundary.setFade) boundary.setFade(1);
+    if (wind) wind.setFade(1);
     if (grid && grid.setFade) grid.setFade(1);
     if (scale) scale.setFade(1);
     if (fieldlines) fieldlines.setFade(1);
@@ -1537,6 +1563,7 @@ export function createMagnetosphereState(THREE, deps) {
     naarView = null; naarRaster = null; naarVlak = false;
     mengVan = mengNaar = 0;
     if (boundary.setFade) boundary.setFade(1);
+    if (wind) wind.setFade(1);
     if (grid && grid.setFade) grid.setFade(1);
     if (scale) scale.setFade(1);
     if (fieldlines) fieldlines.setFade(1);
@@ -1566,6 +1593,7 @@ export function createMagnetosphereState(THREE, deps) {
            setPart(naam, aan) {
              if (naam === 'magnetopause') wilMagnetopauze = !!aan;
              else if (naam === 'bowshock') wilBoegschok = !!aan;
+             else if (naam === 'wind') wilWind = !!aan;
              else if (naam === 'grid') { wilRaster = !!aan; pasRasterToe(); return; }
              else if (naam === 'fieldlines') {
                wilVeldlijnen = !!aan;
