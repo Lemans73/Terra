@@ -119,6 +119,26 @@ export function createSpaceState(THREE, deps) {
   const LOCK_NOTE = 'Locked to the ecliptic plane — pan and zoom still work.';
 
   const views = {
+    /* DE VOLGORDE IS DE VOLGORDE OP HET SCHERM (sessie 31, Terry). `list()`
+       loopt deze literal af, en zowel de gleuf bovenin als het register lezen
+       daaruit. 3D orbit staat vooraan omdat dat de stand is waarin je de vorm
+       ROND ziet; de vaste standen daarna zijn doorsneden ervan.
+
+       LET OP dat dit niet hetzelfde is als `initialView`. Wat er als eerste
+       STAAT en wat er als eerste GETOOND wordt zijn twee keuzes; ze mogen
+       samenvallen maar hoeven het niet. */
+    orbit: {
+      locked: false, label: '3D orbit', note: 'Free orbit.',
+      camera: () => {
+        // Schuin boven het vlak: de banen worden dan ellipsen in plaats van
+        // lijnen of cirkels, en dat leest als ruimte. Uit de huidige
+        // camerarichting zou hier ook kunnen, maar dan hangt de stand af
+        // van waar je toevallig stond.
+        _tilt.copy(orbits.pole(_dir)).multiplyScalar(0.55);
+        _side.copy(orbits.vernal(_dir));
+        return targetFrom(_tilt.add(_side).normalize().clone(), overviewDistance());
+      }
+    },
     top: {
       locked: true, label: 'Top', note: LOCK_NOTE,
       camera: () => targetFrom(orbits.pole(_dir).clone(), overviewDistance())
@@ -134,18 +154,6 @@ export function createSpaceState(THREE, deps) {
         // hetzelfde frame, dus per constructie in het baanvlak.
         _side.crossVectors(orbits.pole(_dir), orbits.vernal(_tilt)).normalize();
         return targetFrom(_side.clone(), overviewDistance());
-      }
-    },
-    orbit: {
-      locked: false, label: '3D orbit', note: 'Free orbit.',
-      camera: () => {
-        // Schuin boven het vlak: de banen worden dan ellipsen in plaats van
-        // lijnen of cirkels, en dat leest als ruimte. Uit de huidige
-        // camerarichting zou hier ook kunnen, maar dan hangt de stand af
-        // van waar je toevallig stond.
-        _tilt.copy(orbits.pole(_dir)).multiplyScalar(0.55);
-        _side.copy(orbits.vernal(_dir));
-        return targetFrom(_tilt.add(_side).normalize().clone(), overviewDistance());
       }
     }
   };

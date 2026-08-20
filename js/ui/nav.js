@@ -22,6 +22,19 @@
    is meteen de "Back to Earth" die overal moet werken: er is maar één
    uitgang en die kent het register al.
 
+   DE CAMERASTANDEN STAAN HIER NIET MEER (sessie 31, Terry).
+
+   Ze stonden er wel, als een rij knoppen onder de actieve state. Op een
+   telefoon betekende dat: paneel openen, stand wisselen, paneel sluiten, en
+   dan pas zien wat je gewisseld had — terwijl juist dat paneel de scene bedekt
+   die je aan het beoordelen bent. Ze zitten nu in het chroom bovenaan
+   (js/ui/view-switch.js), waar je ze kunt bedienen terwijl je kijkt.
+
+   Dit paneel gaat daarmee over ÉÉN ding: in welke state je bent. De noot
+   onderaan blijft wél staan — die beschrijft niet de knop maar de stand waar je
+   in zit ("Locked to the GSM frame"), en op een telefoon is een tooltip geen
+   weg om daarachter te komen.
+
    HERBOUWEN, NIET BIJWERKEN. De lijst is hooguit een handvol rijen,
    dus per wijziging opnieuw opbouwen kost niets en scheelt een tweede
    waarheid over welke rij nu actief is. Dat is dezelfde afweging als
@@ -58,21 +71,10 @@ export function createNavPanel(opts) {
 
   function render() {
     const actief = viewStates.activeState();
-    const huidigeView = viewStates.currentView();
     let html = rij('', earth.label, earth.icon, !actief);
 
     for (const s of viewStates.list()) {
       html += rij(s.key, s.label, s.icon, actief === s.key);
-      // De camerastanden verschijnen ALLEEN onder de state die aan staat.
-      // Standen van een state waar je niet in zit hebben niets te besturen,
-      // en ze zouden hun eigen state stilzwijgend moeten aanzetten om iets
-      // te doen — dat is een tweede ingang naar dezelfde plek.
-      if (actief === s.key && s.views.length) {
-        html += '<div class="nav-views">' + s.views.map(v =>
-          '<button class="preset' + (v.name === huidigeView ? ' active' : '') + '" ' +
-          'type="button" data-view="' + v.name + '">' + v.label + '</button>').join('') +
-          '</div>';
-      }
     }
 
     const noot = actief ? viewStates.viewNote() : '';
@@ -94,8 +96,6 @@ export function createNavPanel(opts) {
       render();
       return;
     }
-    const viewBtn = e.target.closest('.nav-views .preset');
-    if (viewBtn) { viewStates.goToView(viewBtn.dataset.view); render(); }
   });
 
   // Het register meldt zelf wanneer de state of de view verandert. Dat dekt

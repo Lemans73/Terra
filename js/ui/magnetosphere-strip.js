@@ -107,7 +107,8 @@ const MSPS_PALET = {
   'goes':      '--msphere-goes',
   'open':      '--msphere-open',
   'mp':        '--msphere-mp',
-  'saa':       '--msphere-saa'
+  'saa':       '--msphere-saa',
+  'band-ink':  '--msphere-band-ink'
 };
 
 /* ---------- De Engelse teksten -------------------------------------------
@@ -122,7 +123,12 @@ const MSPS_PALET = {
    een Engelse app — zichtbaar, en dus niet stil. */
 const MSPS_TEKST = {
   bz:     { label: 'Bz',           beyond: 'no solar wind' },
-  sector: { label: 'IMF sector',   beyond: 'no Bx or Bt',
+  /* `inkt` OVERSCHRIJFT `lane.color`, en dat veld is bij chart.js precies één
+     ding: de kleur van het LANE-LABEL (`c.fillStyle = lane.color || spec.ink`).
+     Voor een balkenlane doet het verder niets — de balken tekenen uit
+     `series[].color`. De sector is de enige lane waarvan het label altijd op een
+     gekleurde band ligt, en daar is Terra's gewone inkt onleesbaar. */
+  sector: { label: 'IMF sector',   beyond: 'no Bx or Bt', inkt: 'band-ink',
             series: ['toward the Sun', 'away from the Sun'] },
   pdyn:   { label: 'Dyn. pressure', beyond: 'no density or speed' },
   r0:     { label: 'Standoff r₀',  beyond: 'no model without wind',
@@ -363,6 +369,7 @@ export function createMagnetosphereStrip(deps) {
       if (!t) continue;
       if (t.label) lane.label = t.label;
       if (t.beyond) lane.beyond = t.beyond;
+      if (t.inkt && palet[t.inkt + '_hex']) lane.color = palet[t.inkt + '_hex'];
       if (smal && lane.series) {
         for (const serie of lane.series) if (serie.label) serie.label = '';
       } else if (t.series && lane.series) {

@@ -451,6 +451,25 @@ export function createMagnetosphereState(THREE, deps) {
        draaipunt in plaats van langs de koorde. Zie de noot bij flyCamera()
        in index.html — in een orthografische stand ís de afstand de zoom, dus
        een koorde leest als een in-en-uit-zoom van 90 naar 64 Re en terug. */
+    /* DE VOLGORDE IS DE VOLGORDE OP HET SCHERM (sessie 31, Terry). `list()`
+       loopt deze literal af, en zowel de gleuf bovenin als het register lezen
+       daaruit. 3D orbit staat vooraan omdat dat de stand is waarin je de vorm
+       ROND ziet; de vaste standen daarna zijn doorsneden ervan.
+
+       LET OP dat dit niet hetzelfde is als `initialView`. Wat er als eerste
+       STAAT en wat er als eerste GETOOND wordt zijn twee keuzes; ze mogen
+       samenvallen maar hoeven het niet. */
+    orbit: {
+      locked: false, arc: true, label: '3D orbit', note: 'Free orbit.',
+      camera: () => {
+        // De vrije stand houdt de gewone beeldhoek: daar kijk je juist RÓND de
+        // vorm, en dan is perspectief wat de diepte draagt.
+        // Schuin op de zonlijn: de neus in beeld én de staart herkenbaar.
+        const a = gsmAssen();
+        return targetFrom(orbitRichting(a).clone(), overviewDistance(false),
+                          null, kaderMidden(a.x), false);
+      }
+    },
     meridian: {
       locked: true, flat: true, arc: true, label: 'Meridian', note: LOCK_NOTE,
       camera: () => {
@@ -475,17 +494,6 @@ export function createMagnetosphereState(THREE, deps) {
         const a = gsmAssen();
         return targetFrom(a.z.clone(), overviewDistance(true),
                           a.y.clone().negate(), kaderMidden(a.x), true);
-      }
-    },
-    orbit: {
-      locked: false, arc: true, label: '3D orbit', note: 'Free orbit.',
-      camera: () => {
-        // De vrije stand houdt de gewone beeldhoek: daar kijk je juist RÓND de
-        // vorm, en dan is perspectief wat de diepte draagt.
-        // Schuin op de zonlijn: de neus in beeld én de staart herkenbaar.
-        const a = gsmAssen();
-        return targetFrom(orbitRichting(a).clone(), overviewDistance(false),
-                          null, kaderMidden(a.x), false);
       }
     }
   };
