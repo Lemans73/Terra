@@ -17,14 +17,17 @@
 
 import { readFile, readdir } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
-import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const KOPIE = join(ROOT, 'js/compute/magnetosphere');
-const POC = join(homedir(),
-  'Documents/_werk/_ObsidianVault/apps/magnetosphere-poc-terra');
+/* DE PoC STAAT IN DE PROJECTMAP EN NIET MEER IN DE VAULT (sessie 31).
+   Zolang dit pad naar de vault wees, was deze toets groen om de verkeerde
+   reden: beide kopieen bestonden en waren toevallig byte-identiek, dus hij
+   vergeleek met een bestand dat buiten de repo ligt en dus buiten elke
+   herziening. Een vangrail hoort te meten wat er MEEGELEVERD wordt. */
+const POC = join(ROOT, 'logs/magnetosphere-poc-terra');
 
 // Welk bestand hier komt van welk pad daar. Niet af te leiden uit de naam:
 // `chart.js` komt uit `lib/`, de rest uit `terra/`.

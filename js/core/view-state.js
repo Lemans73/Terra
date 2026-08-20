@@ -77,7 +77,8 @@
 
    Verwacht:
      world           globe.gl-instantie (voor camera() en controls())
-     flyCamera(cam, ctl, pos, target, {min, max})
+     flyCamera(cam, ctl, pos, target, {min, max, up?, arc?,
+                                       onStep?(e), onDone?()})
      stopFlight()    een lopende vlucht afbreken
      labels          { get(), set(bool) }
      autoRotate      { get(), set(bool), pause() }
@@ -117,8 +118,14 @@ export function createViewStates(env) {
        camera()    -> { pos, target, min, max }   waar de camera heen gaat
        enter()     state-specifieke dingen aanzetten (optioneel)
        exit()      ze weer uitzetten (optioneel)
-       views       { naam: { camera() -> {pos, target, min, max, up?}, locked } }
+       views       { naam: { camera() -> {pos, target, min, max, up?},
+                             locked, arc? } }
        initialView welke view bij binnenkomst geldt (optioneel)
+       transition  { begin(vanView, naarView), step(e), end() }  (optioneel)
+                   ZIE DE NOOT BIJ goToView. Een state die dit veld heeft,
+                   krijgt de vlucht als voortgang aangereikt en kan daarmee
+                   alles wat NIET vanzelf beweegt over de overgang verdelen
+                   in plaats van het op frame 0 om te klappen.
        keepLabels     laat de labels met rust (standaard: uit)
        keepRotation   laat auto-rotate met rust (standaard: uit)
   */
@@ -281,6 +288,7 @@ export function createViewStates(env) {
     if (!view) return false;
 
     const ctl = world.controls(), cam = world.camera();
+    const vorigeView = activeView;
     const d = view.camera();
     activeView = name;
 
@@ -305,13 +313,58 @@ export function createViewStates(env) {
        zichzelf beweegt — je sleept horizontaal en het hele beeld kantelt.
        Een view hoort de stand niet te erven van wie er toevallig vóór hem
        was. */
-    if (d.up) cam.up.copy(d.up).normalize();
-    else if (saved.up) cam.up.copy(saved.up);
+    const doelUp = d.up || saved.up || null;
+    const vliegt = !options || options.fly !== false;
 
-    if (!options || options.fly !== false) {
-      flyCamera(cam, ctl, d.pos, d.target, { min: d.min, max: d.max });
+    /* ----------------------------------------------------------
+       DE OVERGANG BEGINT VOORDAT DE CAMERA VERTREKT.
+
+       Tot sessie 31 was een viewwissel twee dingen tegelijk: de POSITIE
+       werd geanimeerd over 1100 ms, en al het andere klapte om op frame 0
+       — "omhoog", de projectie, en wat de state verder aan zijn beeld
+       verandert. Gemeten op frame 0, dus voordat er iets bewogen was:
+       `camera.up` sprong 90,0 graden bij Meridian -> Top en 15,4 bij
+       3D orbit -> Meridian. Dat leest als een flikker gevolgd door een
+       beweging, en niet als een beweging.
+
+       `transition` is het antwoord, en het staat hier GENERIEK: deze
+       module weet niet wat een state tijdens een overgang te doen heeft
+       — dat is precies de kennis die in de state hoort. Wat hij wel kan,
+       is de voortgang van de vlucht doorgeven. Een state zonder dit veld
+       merkt er niets van; `sun` en `space` vliegen ongewijzigd.
+
+       `begin()` krijgt de vorige en de nieuwe viewnaam, en draait terwijl
+       de camera nog op zijn oude plek staat — zo kan hij de stand die er
+       NU is als beginpunt lezen. Dat is ook wat een half onderbroken
+       overgang redt: klik je halverwege op een derde stand, dan begint de
+       nieuwe overgang bij wat er op dat moment op het scherm staat.
+    ---------------------------------------------------------- */
+    const overgang = def.transition || null;
+    if (overgang && overgang.begin) overgang.begin(vorigeView, name);
+
+    if (vliegt) {
+      /* `up` GAAT MEE IN DE VLUCHT en wordt hier niet meer gekopieerd. De
+         noot hierboven legt uit waarom hij vóór de camerabeweging gezet
+         moest worden; dat argument gold voor een `up` die in één keer
+         verspringt. Nu draait hij mee, dus schrijft de vluchtlus hem elke
+         frame — zie stepSunFlight() in index.html voor de volgorde. */
+      flyCamera(cam, ctl, d.pos, d.target, {
+        min: d.min, max: d.max,
+        up: doelUp,
+        arc: !!(view.arc || d.arc),
+        onStep: (overgang && overgang.step) || null,
+        onDone: (overgang && overgang.end) || null
+      });
     } else {
+      if (doelUp) cam.up.copy(doelUp).normalize();
       placeDirect(cam, ctl, d);
+      /* GEEN VLUCHT IS GEEN HALVE OVERGANG. Zonder animatie is er geen
+         frame om de voortgang over te verdelen, dus gaat hij in één keer
+         naar het eind. Zou dat wegvallen, dan bleef de state hangen in de
+         stand van vóór de wissel terwijl de camera er al is — en dat is
+         precies de conditie waarin een test draait (`fly: false`). */
+      if (overgang && overgang.step) overgang.step(1);
+      if (overgang && overgang.end) overgang.end();
     }
     notify();
     return true;

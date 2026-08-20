@@ -109,8 +109,13 @@ export function createMagnetosphereState(THREE, deps) {
      grootte, alleen de hoogte van het beeldveld doet dat. Maar we KIEZEN de
      afstand zo dat hoogte = afstand * 0,9 blijft gelden, want dat is de
      relatie waarop de registratie van de PoC rust. Zie de noot bij
-     zetProjectie. */
-  const overviewDistance = () => (vlakkeStand
+     borgProjectie. */
+  /* DE VLAG IS EEN ARGUMENT MET EEN STANDAARD, en dat is sinds sessie 31 het
+     verschil tussen een vraag en een opdracht. `camera()` moet kunnen uitrekenen
+     waar hij heen gaat ZONDER eerst `vlakkeStand` te verzetten — dat verzetten
+     was namelijk precies de helft van de overgang die op frame 0 omklapte. Wie
+     geen vlag meegeeft, vraagt naar de stand die er nu getekend wordt. */
+  const overviewDistance = (vlak = vlakkeStand) => (vlak
     ? orthoAfstand()
     : fitDistance(MSPHERE_DRAW_MAX * MSPHERE_RE * 0.55));
 
@@ -124,7 +129,7 @@ export function createMagnetosphereState(THREE, deps) {
      beeld — tot 400 Re, ruim voorbij de getekende staart. Camera-in-de-bol
      bestaat hier niet als probleem: bij een orthografische projectie zit er
      geen kegel om doorheen te vallen. */
-  const bounds = () => (vlakkeStand
+  const bounds = (vlak = vlakkeStand) => (vlak
     ? { min: 6 * MSPHERE_RE / MSPHERE_ORTHO_K,
         max: orthoAfstand() * 4.5 }            // ruim vier keer uitzoomen vanaf het kader
     : { min: MSPHERE_RE * 1.6, max: fitDistance(90 * MSPHERE_RE) });
@@ -154,8 +159,27 @@ export function createMagnetosphereState(THREE, deps) {
     return _mid.copy(zonAs).multiplyScalar(-MSPHERE_DRAW_MAX * MSPHERE_RE * 0.42);
   }
 
-  function targetFrom(direction, distance, up, midden) {
-    const b = bounds();
+  /* DE KIJKRICHTING VAN DE VRIJE STAND, apart omdat er TWEE dingen aan hangen:
+     waar de camera gaat staan, en op welke afstand van de AARDE dat is. Dat
+     tweede getal is de ijkmaat van het meeschuivende draaipunt — zie
+     draaipuntFactor — en het mocht daar niet uit een tweede formule komen. */
+  /* Schuin op de zonlijn: de neus in beeld én de staart herkenbaar. De
+     verhouding staat hier als GENORMALISEERDE GSM-componenten, en niet als drie
+     losse getallen die daarna genormaliseerd worden — dan is het ook zonder
+     assenstelsel uit te rekenen hoe ver die stand van de aarde af ligt. */
+  const ORBIT_EENHEID = (() => {
+    const L = Math.hypot(0.85, 0.5, 0.45);
+    return { x: 0.85 / L, y: 0.5 / L, z: 0.45 / L };
+  })();
+
+  function orbitRichting(a) {
+    return _dir.copy(a.x).multiplyScalar(ORBIT_EENHEID.x)
+               .addScaledVector(a.y, ORBIT_EENHEID.y)
+               .addScaledVector(a.z, ORBIT_EENHEID.z);
+  }
+
+  function targetFrom(direction, distance, up, midden, vlak) {
+    const b = bounds(vlak);
     const doel = midden ? midden.clone() : origin.clone();
     return { pos: direction.clone().multiplyScalar(distance).add(doel), target: doel,
              min: b.min, max: Math.max(b.max, distance * 1.6),
@@ -284,27 +308,122 @@ export function createMagnetosphereState(THREE, deps) {
   const orthoHoogte = () => MSPHERE_ORTHO_SPAN_RE * MSPHERE_RE * Math.max(1, 1 / veiligeAspect());
   const orthoAfstand = () => orthoHoogte() / MSPHERE_ORTHO_K;
 
-  let orthoOrigineel = null;
+  /* DE PROJECTIE MENGT, HIJ KLAPT NIET OM (sessie 31).
 
-  function zetProjectie(vlak) {
+     `mengE` is 0 bij zuiver perspectief en 1 bij zuiver orthografisch. Tot deze
+     sessie waren dat de enige twee waarden en werden ze op frame 0 van een
+     standwissel gezet — gemeten: 3D orbit -> Meridian klapte de projectie om
+     terwijl de camera nog op de plek van de vrije stand stond, met een
+     beeldhoogte van 66 Re waar de bestemming er 90 heeft. Dat is de flikker,
+     en pas dáárna begon de vlucht.
+
+     WAAROM ELEMENT VOOR ELEMENT MENGEN VEILIG IS, en niet op goed geluk. De
+     perspectiefmatrix levert w = -z, de orthografische w = 1. De menging geeft
+     w = -(1-e)*z + e. Zichtbare meetkunde ligt bij z < 0 (three kijkt langs -z),
+     dus w > 0 voor élke e >= 0: het singuliere vlak van de gemengde projectie
+     ligt altijd ACHTER de camera. En een convexe combinatie van twee in z
+     monotone afbeeldingen is zelf monotoon, dus de diepteordening kan onderweg
+     niet omklappen. Geen z-fighting dat er zonder menging niet was.
+
+     Meetkundig is dit precies de camera waarvan het oogpunt naar oneindig
+     schuift terwijl het kader op het draaipunt blijft staan: de dolly-zoom die
+     een foto in een doorsnede verandert.
+
+     MAAR DE MENGFACTOR IS NIET WAT JE ZIET, EN DAT IS GEMETEN.
+
+     Een rechtstreekse menging met de vluchtvoortgang leek te werken en was
+     onbruikbaar. De sterkte van het perspectief die je waarneemt is niet `e`
+     maar s = (1-e) / w, met w de gemengde w op het draaipunt. Uitgerekend en
+     nagemeten voor een draaipunt op 7000 eenheden:
+
+       e      0     0,5    0,9    0,99   0,999  0,9999   1
+       s/s0  1,00   1,00   1,00   0,99   0,87    0,41    0
+
+     Het beeld blijft dus VOLLEDIG perspectief tot e voorbij 0,999 is en klapt
+     dan in de laatste duizendste alsnog om. De menging verplaatste de flikker
+     naar het eind in plaats van hem op te heffen — gemeten als een NDC-sprong
+     van 0,074 op de laatste stap, tien keer die ervoor.
+
+     De oorzaak is de schaal van de scene: w loopt van 1 (ortho) tot D (de
+     afstand tot het draaipunt, hier zevenduizend), en een lineaire menging
+     tussen twee getallen die vier ordes uit elkaar liggen is bij elke tussen-
+     waarde nog vrijwel gelijk aan de grootste.
+
+     Dus mengt niet `e` maar `s` lineair. Uit s = (1-t)/D volgt
+
+       1 - e = (1-t) / (1 + t(D-1))
+
+     en dat is de omrekening hieronder. `mengE` blijft daarmee zeggen wat het
+     zegt — hoe orthografisch het BEELD is — en de matrix krijgt de factor die
+     daarbij hoort. */
+  let orthoOrigineel = null;
+  let mengE = 0;
+
+  const _mOrtho = new THREE.Matrix4();
+  const _mPersp = new THREE.Matrix4();
+
+  /* De override PLAATSEN. Idempotent, want hij wordt aangeroepen bij het begin
+     van elke overgang die de projectie raakt — ook wanneer hij er al staat.
+     Zie de lange noot hierboven bij MSPHERE_ORTHO_SPAN_RE voor waarom dit één
+     methode overschrijven is en geen vervangen camera. */
+  function borgProjectie() {
     const cam = world.camera(), ctl = world.controls();
-    if (vlak && !orthoOrigineel) {
-      orthoOrigineel = cam.updateProjectionMatrix.bind(cam);
-      cam.updateProjectionMatrix = function () {
-        const hoogte = cam.position.distanceTo(ctl.target) * MSPHERE_ORTHO_K;
-        const halfH = hoogte / 2, halfW = halfH * veiligeAspect();
-        /* Een diepteplak die de hele scene omvat, en ruim: bij een
-           orthografische projectie is de dieptenauwkeurigheid LINEAIR, dus een
-           groot bereik kost hier niets. Bij perspectief zou dat juist de
-           z-fighting geven waar `near` normaal zo klein voor blijft. */
-        cam.projectionMatrix.makeOrthographic(-halfW, halfW, halfH, -halfH,
-                                              -MSPHERE_ORTHO_DIEPTE, MSPHERE_ORTHO_DIEPTE);
-        cam.projectionMatrixInverse.copy(cam.projectionMatrix).invert();
-      };
-    } else if (!vlak && orthoOrigineel) {
-      cam.updateProjectionMatrix = orthoOrigineel;
-      orthoOrigineel = null;
-    } else if (!vlak) return;
+    if (orthoOrigineel) { cam.updateProjectionMatrix(); return; }
+    orthoOrigineel = cam.updateProjectionMatrix.bind(cam);
+    cam.updateProjectionMatrix = function () {
+      const afstand = cam.position.distanceTo(ctl.target);
+      const halfH = afstand * MSPHERE_ORTHO_K / 2;
+      const halfW = halfH * veiligeAspect();
+      /* Een diepteplak die de hele scene omvat, en ruim: bij een
+         orthografische projectie is de dieptenauwkeurigheid LINEAIR, dus een
+         groot bereik kost hier niets. Bij perspectief zou dat juist de
+         z-fighting geven waar `near` normaal zo klein voor blijft. */
+      _mOrtho.makeOrthographic(-halfW, halfW, halfH, -halfH,
+                               -MSPHERE_ORTHO_DIEPTE, MSPHERE_ORTHO_DIEPTE);
+
+      if (mengE >= 1) {
+        cam.projectionMatrix.copy(_mOrtho);
+      } else {
+        /* DE PERSPECTIEFMATRIX WORDT OPNIEUW GEBOUWD EN NIET OVERGENOMEN.
+
+           three.js bouwt `projectionMatrix` alleen op verzoek, en OrbitControls
+           vraagt er niet om bij een perspectiefcamera. Was `camera.aspect` ooit
+           NaN — en dat is hij in een paneel dat bij het laden 0x0 is — dan staat
+           er een NaN-matrix die daarna nooit meer opgeruimd wordt. GEMETEN in
+           sessie 31: `projectionMatrix.elements[0] === NaN` in de vrije stand.
+           Eén NaN maakt de hele menging NaN, en een NaN-projectie herstelt zich
+           nergens meer. Dus eerst de aspect langs dezelfde vangrail als de
+           orthografische helft, en dan pas three zijn eigen werk laten doen. */
+        const bewaardeAspect = cam.aspect;
+        cam.aspect = veiligeAspect();
+        orthoOrigineel();
+        _mPersp.copy(cam.projectionMatrix);
+        cam.aspect = bewaardeAspect;
+
+        /* Van "hoe orthografisch ziet het eruit" naar "welke matrixmenging
+           hoort daarbij" — zie de tabel in de kop. Een draaipunt op één
+           eenheid of dichterbij maakt de omrekening zinloos (D-1 <= 0); dan is
+           er ook geen scheve schaal om recht te trekken. */
+        const D = afstand;
+        const m = D > 1 ? 1 - (1 - mengE) / (1 + mengE * (D - 1)) : mengE;
+
+        const uit = cam.projectionMatrix.elements;
+        const pp = _mPersp.elements, po = _mOrtho.elements;
+        for (let i = 0; i < 16; i++) uit[i] = pp[i] + (po[i] - pp[i]) * m;
+      }
+      cam.projectionMatrixInverse.copy(cam.projectionMatrix).invert();
+    };
+    cam.updateProjectionMatrix();
+  }
+
+  /* En weer weghalen. Alleen wanneer de menging op nul staat: zolang er ook
+     maar een beetje ortho in zit, is deze override de enige die dat weet. */
+  function laatProjectieLos() {
+    const cam = world.camera();
+    if (!orthoOrigineel) return;
+    cam.updateProjectionMatrix = orthoOrigineel;
+    orthoOrigineel = null;
+    mengE = 0;
     cam.updateProjectionMatrix();
   }
 
@@ -319,23 +438,31 @@ export function createMagnetosphereState(THREE, deps) {
 
        In BEIDE standen ligt de zonlijn (GSM-x) horizontaal, want dat is de as
        waarlangs de vorm zich uitstrekt. Wat verticaal staat verschilt:
-       Meridian zet de dipoolkant omhoog, Top de flank. */
+       Meridian zet de dipoolkant omhoog, Top de flank.
+
+       EN `camera()` IS EEN VRAAG, GEEN OPDRACHT (sessie 31). Tot deze sessie
+       zette elke `camera()` hier eerst `vlakkeStand` en installeerde hij de
+       projectie — dus tegen de tijd dat `goToView` de vlucht startte, was de
+       helft van de overgang al gebeurd. De bestemming staat nu in `flat` en
+       wordt als argument doorgegeven; wát er getekend wordt, verzet de
+       overgang zelf, halverwege de vlucht. Zie `transition` verderop.
+
+       `arc: true` op alle drie: de vlucht loopt langs een BOOG om het
+       draaipunt in plaats van langs de koorde. Zie de noot bij flyCamera()
+       in index.html — in een orthografische stand ís de afstand de zoom, dus
+       een koorde leest als een in-en-uit-zoom van 90 naar 64 Re en terug. */
     meridian: {
-      locked: true, flat: true, label: 'Meridian', note: LOCK_NOTE,
+      locked: true, flat: true, arc: true, label: 'Meridian', note: LOCK_NOTE,
       camera: () => {
-        // DE LENS EERST. fitDistance() leest de beeldhoek, dus zet je hem pas
-        // ná de berekening, dan hoort de afstand bij de vorige lens en staat
-        // het kader er vier keer naast tot de volgende viewwissel.
-        vlakkeStand = true;
-        zetProjectie(true);
         // Loodrecht op het X-Z-vlak is de Y-as: van daaruit zie je dat vlak
         // op ware grootte, met de dipoolas-kant omhoog.
         const a = gsmAssen();
-        return targetFrom(a.y.clone(), overviewDistance(), a.z, kaderMidden(a.x));
+        return targetFrom(a.y.clone(), overviewDistance(true), a.z,
+                          kaderMidden(a.x), true);
       }
     },
     top: {
-      locked: true, flat: true, label: 'Top', note: LOCK_NOTE,
+      locked: true, flat: true, arc: true, label: 'Top', note: LOCK_NOTE,
       camera: () => {
         // Van boven op het X-Y-vlak. Omhoog moet IN dat vlak liggen — de
         // Z-as zou samenvallen met de kijkrichting en dat is gedegenereerd.
@@ -345,25 +472,20 @@ export function createMagnetosphereState(THREE, deps) {
         // van hetzelfde onderwerp. GEMETEN als schermhoek van de zonlijn: +y gaf
         // 0 graden, -y geeft 180, gelijk aan Meridian. De PoC houdt dezelfde
         // conventie aan (+X links, zie zijn schaaloverlay).
-        vlakkeStand = true;                  // zie de noot bij meridian
-        zetProjectie(true);
         const a = gsmAssen();
-        return targetFrom(a.z.clone(), overviewDistance(), a.y.clone().negate(), kaderMidden(a.x));
+        return targetFrom(a.z.clone(), overviewDistance(true),
+                          a.y.clone().negate(), kaderMidden(a.x), true);
       }
     },
     orbit: {
-      locked: false, label: '3D orbit', note: 'Free orbit.',
+      locked: false, arc: true, label: '3D orbit', note: 'Free orbit.',
       camera: () => {
         // De vrije stand houdt de gewone beeldhoek: daar kijk je juist RÓND de
         // vorm, en dan is perspectief wat de diepte draagt.
-        vlakkeStand = false;
-        zetProjectie(false);
         // Schuin op de zonlijn: de neus in beeld én de staart herkenbaar.
         const a = gsmAssen();
-        _dir.copy(a.x).multiplyScalar(0.85)
-            .add(_z.copy(a.z).multiplyScalar(0.45))
-            .add(_y.copy(a.y).multiplyScalar(0.5)).normalize();
-        return targetFrom(_dir.clone(), overviewDistance(), null, kaderMidden(a.x));
+        return targetFrom(orbitRichting(a).clone(), overviewDistance(false),
+                          null, kaderMidden(a.x), false);
       }
     }
   };
@@ -399,7 +521,6 @@ export function createMagnetosphereState(THREE, deps) {
   const _targetGsm = new THREE.Vector3();
   const _qFrame = new THREE.Quaternion();
   const _qInv = new THREE.Quaternion();
-  const _tmp = new THREE.Vector3();
   let rigGevuld = false;
   let vlakkeStand = false;
 
@@ -456,9 +577,37 @@ export function createMagnetosphereState(THREE, deps) {
   /* ALLEEN IN DE VRIJE STAND. In de vlakke standen pant de bezoeker zelf, en
      dan hoort het draaipunt te blijven waar hij het neerzet — daar is inzoomen
      op de aarde ook niet het doel (Terry, sessie 30). */
-  function draaipuntFactor(afstandTotAarde) {
-    if (vlakkeStand) return 1;
-    const ver = overviewDistance();
+  /* DE IJKMAAT MOET DEZELFDE SOORT AFSTAND ZIJN ALS DE INVOER, en dat was hij
+     niet. De invoer is de afstand van de camera tot de AARDE; `overviewDistance`
+     geeft de afstand van de camera tot het DRAAIPUNT. Dat draaipunt ligt 25 Re
+     van de aarde af, dus die twee lopen fors uiteen: gemeten in de vrije stand
+     7808 tegen 6038.
+
+     Het gevolg was zichtbaar op precies één moment. De vlucht landde op het
+     volle draaipunt (`kaderMidden`), waarna de eerste `schrijfRig` er de factor
+     0,754 op losliet en het draaipunt 618,8 eenheden — ruim zes aardstralen —
+     naar de aarde trok. Dat is de grootste sprong van de hele wissel naar de
+     vrije stand, en hij zat helemaal aan het eind.
+
+     Nu is de ijkmaat de afstand tot de aarde van de kaderstand zelf. Daar geldt
+     per constructie f = 1, dus de vlucht landt waar de besturing hem daarna ook
+     houdt — en dichterbij loopt hij door precies dezelfde lineaire helling als
+     eerst. */
+  /* IN GETALLEN EN NIET IN VECTOREN, want dit is frame-onafhankelijk: de lengte
+     van een som in een orthonormale basis hangt niet af van hoe die basis in de
+     wereld staat. Dat scheelt hier een IGRF-evaluatie bij ELKE muisbeweging —
+     deze functie hangt aan draaipuntFactor, en die draait op elke 'change'. */
+  function overviewTotAarde() {
+    const ver = overviewDistance(false);
+    const k = MSPHERE_DRAW_MAX * MSPHERE_RE * 0.42;      // zie kaderMidden
+    return Math.hypot(ORBIT_EENHEID.x * ver - k,
+                      ORBIT_EENHEID.y * ver,
+                      ORBIT_EENHEID.z * ver);
+  }
+
+  function draaipuntFactor(afstandTotAarde, vlak = vlakkeStand) {
+    if (vlak) return 1;
+    const ver = overviewTotAarde();
     if (!(ver > MSPHERE_PIVOT_NEAR)) return 1;
     const t = (afstandTotAarde - MSPHERE_PIVOT_NEAR) / (ver - MSPHERE_PIVOT_NEAR);
     /* LINEAIR EN NIET SMOOTHSTEP, en de reden is meetkundig.
@@ -551,7 +700,7 @@ export function createMagnetosphereState(THREE, deps) {
        alleen als iemand `updateProjectionMatrix()` aanroept, en OrbitControls
        doet dat bij een perspectiefcamera niet — daar verandert de dolly de
        POSITIE en regelt het perspectief de rest vanzelf. Onze camera zegt nog
-       steeds perspectief te zijn (zie zetProjectie), dus die aanroep blijft uit.
+       steeds perspectief te zijn (zie borgProjectie), dus die aanroep blijft uit.
 
        Wat dat opleverde:
          · bij de eerste binnenkomst zette `set()` de matrix terwijl de camera
@@ -560,18 +709,35 @@ export function createMagnetosphereState(THREE, deps) {
            een sleuf: gemeten 2362 opgelichte pixels, precies één beeldrij.
          · zoomen deed niets zichtbaars: de camera schoof wel op, het beeldveld
            niet.
-       Een klik op een viewknop hielp, want die roept zetProjectie() opnieuw aan.
+       Een klik op een viewknop hielp, want die roept de projectie opnieuw op.
 
        Hier en niet in opBesturing: schrijfRig draait bij élke muisbeweging én
        bij elke herbouw, en dat is precies de verzameling momenten waarop de
        afstand veranderd kan zijn. */
-    if (vlakkeStand) cam.updateProjectionMatrix();
+    /* DE VOORWAARDE IS WIE DE PROJECTIE BEZIT, niet welke stand er getekend
+       wordt. Sinds sessie 31 mengt de projectie over een overgang, en dan is er
+       een tussengebied waarin `vlakkeStand` nog vals is terwijl de override er
+       wél staat. Op `vlakkeStand` toetsen zou de matrix daar laten verlopen —
+       dezelfde stilstaande matrix die dit blok nu juist repareert. */
+    if (orthoOrigineel) cam.updateProjectionMatrix();
   }
 
   /* De haak op de besturing. Hij MOET er zijn zolang de state open staat:
      zonder terugleesstap zou de eerstvolgende herbouw de camera terugzetten
      naar waar hij stond vóór de bezoeker sleepte. */
-  function opBesturing() { if (actief) { leesRig(); schrijfRig(); } }
+  /* TIJDENS EEN OVERGANG LEEST DE STELLING ALLEEN.
+
+     `schrijfRig()` berekent in de vrije stand het draaipunt opnieuw uit de
+     zoomafstand en schrijft dat in `controls.target`. Dat is goed zolang de
+     bezoeker aan het stuur zit, maar tijdens een vlucht zet die vlucht zélf een
+     baan uit — en twee schrijvers op hetzelfde draaipunt geeft de boog van
+     sessie 31 nooit waar hij hoort. Lezen mag wel: dan staat de stelling bij
+     aankomst al op de goede stand. */
+  function opBesturing() {
+    if (!actief) return;
+    leesRig();
+    if (!overgangLoopt) schrijfRig();
+  }
 
   /* ----------------------------------------------------------
      DE CURSOR, EN WAAROM HIJ HIER WOONT EN NIET IN DE FEED.
@@ -622,7 +788,7 @@ export function createMagnetosphereState(THREE, deps) {
        er staat hoort daar nog bij. */
     if (actief && rigGevuld && camIsVerzet()) leesRig();
     _qFrame.copy(boundary.group.quaternion);
-    if (actief) schrijfRig();
+    if (actief && !overgangLoopt) schrijfRig();   // zie opBesturing()
 
     const rows = feed ? feed.rows() : null;
     const s = rows && rows[cursor] ? rows[cursor] : null;
@@ -698,6 +864,14 @@ export function createMagnetosphereState(THREE, deps) {
     initialView: 'meridian',
     camera: () => views.meridian.camera(),
 
+    /* DE OVERGANG IS EEN EIGENSCHAP VAN DEZE STATE, niet van de navigatie.
+       core/view-state.js weet dat er een vlucht loopt en hoe ver hij is; wat
+       er tijdens die vlucht met projectie, hemel, raster en grensvlak moet
+       gebeuren, weet alleen deze state. Zie het blok "DE OVERGANG TUSSEN TWEE
+       STANDEN" verderop. States zonder dit veld — `sun`, `space` — vliegen
+       precies zoals ze deden. */
+    transition: { begin: overgangBegin, step: overgangStap, end: overgangEind },
+
     enter() {
       // EERST de vlag. `clock.zet` hieronder tikt via updateSunUniform terug
       // naar tik(), en die doet niets zolang de state niet actief heet te zijn.
@@ -741,13 +915,18 @@ export function createMagnetosphereState(THREE, deps) {
       if (boundary.setOutline) boundary.setOutline(null);
       vlakkeStand = false;
       zetSleepgedrag(false);
-      zetProjectie(false);
+      /* ONDERWEG OF NIET: alles terug naar de ruststand. Verlaat de bezoeker de
+         state halverwege een wissel, dan is er geen bestemming meer om naartoe
+         te vervagen — en een half vervaagde grens of een half gemengde
+         projectie die blijft staan, neemt hij mee naar de aarde. */
+      overgangAfbreken();
       /* ONVOORWAARDELIJK, en niet alleen wanneer we uit een vlakke stand komen.
          Verlaat je de state vanuit Meridian, dan is de hemel daar uitgezet en
          zet niemand hem terug — je komt dan terug op een aarde in het zwart.
          Gemeten, en het is precies de faalvorm die je niet ziet als je alleen
          via de vrije stand test: dáár staan de sterren toch al aan. */
       if (layers.skyRestore) layers.skyRestore();
+      if (layers.atmosphereRestore) layers.atmosphereRestore();
       boundary.setVisible(false);
       if (feed) feed.setEnabled(false);
       if (clock && bewaardeKlok) { clock.herstel(bewaardeKlok); bewaardeKlok = null; }
@@ -774,20 +953,111 @@ export function createMagnetosphereState(THREE, deps) {
     herbouw();
   }
 
-  /* Wordt door index.html aangeroepen bij elke viewwissel (viewStates.onChange).
-     De KENNIS staat hier en niet daar: welke stand plat hoort te zijn is een
-     eigenschap van deze state, en index.html hoort daar geen lijst van te
-     onderhouden. */
-  function viewGewisseld(naam) {
+  /* ==========================================================
+     DE OVERGANG TUSSEN TWEE STANDEN (sessie 31).
+
+     Een standwissel was tot deze sessie twee dingen tegelijk. De POSITIE werd
+     geanimeerd over 1100 ms; al het andere klapte om op frame 0. GEMETEN, vlak
+     vóór en vlak ná `goToView()` en dus voordat er iets bewogen was:
+
+       Meridian -> Top        `camera.up` draaide 90,0 graden
+       3D orbit -> Meridian   projectie perspectief -> orthografisch, `up` 15,4
+                              graden, beeldhoogte 66 Re waar de bestemming er
+                              90 heeft
+
+     Dat leest als een flikker gevolgd door een beweging, en niet als een
+     beweging. Dit blok verdeelt alles wat niet vanzelf meebeweegt over die
+     1100 ms, langs de voortgang `e` die de vlucht aanreikt.
+
+     DRIE SOORTEN VERANDERING, EN ZE VRAGEN ELK IETS ANDERS.
+
+       doorlopend    positie, draaipunt, "omhoog" en de PROJECTIE. Die lopen
+                     mee met `e`; zie de boog in flyCamera() en de menging in
+                     borgProjectie().
+       niet te mengen   de geometrie van het grensvlak (142 lijnstukken tegen
+                     4560), het vlak van het raster, en de hemel. Daar zit geen
+                     tussenvorm tussen. Wat er WEL tussen zit is hoeveel je
+                     ervan ziet: de inkt zakt naar nul, de wissel gebeurt in dat
+                     dal, en de inkt komt weer op.
+       onzichtbaar   het sleepgedrag en de zoomgrenzen. Die mogen meteen.
+
+     HET DAL LIGT OP HET SNELSTE PUNT VAN DE BEWEGING. De ease is power2.inOut,
+     dus bij e = 0,5 gaat de camera het hardst. Een wissel die je toch niet kunt
+     mengen, hoort daar te vallen en niet aan het begin of het eind, waar het
+     beeld bijna stilstaat.
+
+     EN HIJ VERVAAGT ALLEEN WAT ER ECHT WISSELT. Meridian -> Top houdt dezelfde
+     projectie, dezelfde hemel en dezelfde omtrek; alleen het rastervlak
+     wisselt. Zou de vervaging onvoorwaardelijk zijn, dan dook een grensvlak dat
+     nergens om vraagt halverwege weg — precies de flikker die dit blok
+     opruimt, alleen dan zelfgemaakt.
+  ========================================================== */
+  /* De halve breedte van het dal, in vluchtvoortgang. Buiten [0,22 .. 0,78]
+     staat de inkt vol; daarbinnen zakt hij met een smoothstep naar nul, dus
+     nergens een knik. */
+  const MSPHERE_DAL = 0.28;
+
+  let overgangLoopt = false;
+  let mengVan = 0, mengNaar = 0;
+  let naarView = null, naarVlak = false;
+  let naarRaster = null;
+  let grensWisselt = false, rasterWisselt = false, hemelWisselt = false;
+  let gewisseld = false;
+
+  const dalZicht = (e) => {
+    const t = Math.min(1, Math.abs(e - 0.5) / MSPHERE_DAL);
+    return t * t * (3 - 2 * t);
+  };
+
+  /* Wat er NU zichtbaar aan raster staat. `grid.plane()` onthoudt het laatst
+     gebouwde vlak ook als de groep verborgen is — dat is de optimalisatie die
+     een wissel heen en terug geen twee keer laat bouwen. Voor de vraag "wisselt
+     er iets" telt alleen wat je ziet. */
+  const zichtbaarRaster = () =>
+    (grid && grid.group.visible ? grid.plane() : null);
+
+  function overgangBegin(vanNaam, naarNaam) {
     if (!actief) return;
-    huidigeView = naam;
-    const v = views[naam];
-    // De lens is al gezet door view.camera() hierboven; hier gaat het om wat
-    // ERNA komt. De stand die goToView zojuist neerzette is de nieuwe waarheid.
-    leesRig();
-    zetSleepgedrag(!!(v && v.flat));
-    if (layers.skyOff && layers.skyRestore) {
-      if (v && v.flat) layers.skyOff(); else layers.skyRestore();
+    const v = views[naarNaam];
+    naarView = naarNaam;
+    naarVlak = !!(v && v.flat);
+    naarRaster = naarVlak && wilRaster ? naarNaam : null;
+
+    /* DE MENGING BEGINT WAAR HIJ NU STAAT EN NIET BIJ NUL. Klikt de bezoeker
+       halverwege een wissel op een derde stand, dan is de projectie op dat
+       moment half gemengd — en dáár hoort de nieuwe overgang te beginnen.
+       Anders springt hij eerst terug naar zuiver perspectief. */
+    mengVan = mengE;
+    mengNaar = naarVlak ? 1 : 0;
+    if (mengVan > 0 || mengNaar > 0) {
+      borgProjectie();
+      /* METEEN EN NIET IN HET DAL. De atmosfeer mag niet mee de menging in —
+         zie de lange noot bij atmosphereOff in index.html. En dat kan hier,
+         want wat je verliest is een dunne gloed om een bol die een honderdste
+         van het beeld beslaat; wat je ervoor terugkrijgt is dat 78 % van het
+         scherm niet zwart wordt. */
+      if (layers.atmosphereOff) layers.atmosphereOff();
+    }
+
+    grensWisselt  = (naarVlak ? naarNaam : null) !== boundary.outline();
+    rasterWisselt = naarRaster !== zichtbaarRaster();
+    hemelWisselt  = naarVlak !== vlakkeStand;
+    gewisseld = false;
+    overgangLoopt = true;
+
+    // Onzichtbaar, dus meteen: wie tijdens de vlucht sleept, doet dat al in de
+    // stand waar hij heen gaat.
+    zetSleepgedrag(naarVlak);
+  }
+
+  /* De harde wissels, alle vier op hetzelfde moment. Ze staan bij elkaar omdat
+     ze bij elkaar horen: dit is het frame waarop het beeld van soort verandert,
+     en een van de vier die eerder of later gaat, is een tweede omslagpunt. */
+  function wisselInHetDal() {
+    vlakkeStand = naarVlak;
+    huidigeView = naarView;
+    if (hemelWisselt && layers.skyOff && layers.skyRestore) {
+      if (naarVlak) layers.skyOff(); else layers.skyRestore();
     }
     /* Het raster vervangt de sterren, en het vlak volgt de kijkrichting:
        Meridian kijkt langs GSM Y en heeft dus het X-Z-vlak, Top kijkt langs
@@ -797,11 +1067,63 @@ export function createMagnetosphereState(THREE, deps) {
     /* Alleen de omtrek in de vlakke standen: bij een omwentelingsoppervlak dat
        je loodrecht bekijkt ÍS de doorsnede de omtrek, en het volle net maakt er
        weer een driedimensionaal ding van. Zie de noot in boundary-layer.js. */
-    if (boundary.setOutline && boundary.setOutline(v && v.flat ? naam : null)) herbouw();
+    if (boundary.setOutline(naarVlak ? naarView : null)) herbouw();
   }
 
-  return { definition, views: Object.keys(views), tik, nieuweData, viewGewisseld,
+  function overgangStap(e) {
+    if (!overgangLoopt) return;
+    mengE = mengVan + (mengNaar - mengVan) * e;
+    if (orthoOrigineel) world.camera().updateProjectionMatrix();
+
+    const zicht = dalZicht(e);
+    if (grensWisselt && boundary.setFade) boundary.setFade(zicht);
+    if (rasterWisselt && grid && grid.setFade) grid.setFade(zicht);
+
+    if (!gewisseld && e >= 0.5) { wisselInHetDal(); gewisseld = true; }
+  }
+
+  function overgangEind() {
+    if (!overgangLoopt) return;
+    // Een vlucht die nooit voorbij het midden kwam — REDUCED_MOTION, of een
+    // view die zonder animatie gezet wordt — heeft de wissel nog tegoed.
+    if (!gewisseld) { wisselInHetDal(); gewisseld = true; }
+    mengE = mengNaar;
+    overgangLoopt = false;              // vóór schrijfRig: die mag weer schrijven
+    if (mengE <= 0) {
+      laatProjectieLos();
+      // Zuiver perspectief: nu pas mag de atmosfeer terug.
+      if (layers.atmosphereRestore) layers.atmosphereRestore();
+    } else if (orthoOrigineel) world.camera().updateProjectionMatrix();
+    if (boundary.setFade) boundary.setFade(1);
+    if (grid && grid.setFade) grid.setFade(1);
+    // De aangekomen stand is de nieuwe waarheid voor de camerastelling.
+    leesRig();
+    schrijfRig();
+  }
+
+  /* Alles terug naar de ruststand, zonder animatie. Voor `exit()`: daar is er
+     geen bestemming meer om naartoe te vervagen. */
+  function overgangAfbreken() {
+    overgangLoopt = false;
+    gewisseld = true;
+    grensWisselt = rasterWisselt = hemelWisselt = false;
+    naarView = null; naarRaster = null; naarVlak = false;
+    mengVan = mengNaar = 0;
+    if (boundary.setFade) boundary.setFade(1);
+    if (grid && grid.setFade) grid.setFade(1);
+    laatProjectieLos();
+  }
+
+  return { definition, views: Object.keys(views), tik, nieuweData,
            herbouw, laatsteBouw: () => laatste, gsmAssen,
+           /* Voor het meetluik. De overgang is per constructie niet met het oog
+              te toetsen — hij duurt 1100 ms en het enige wat telt is dat er
+              nergens een sprong in zit. Dus moet elke tussenstand op te vragen
+              zijn: `mengE` is de projectiemenging (0 perspectief, 1 ortho) en
+              `overgang()` zegt of er er een loopt. */
+           mengE: () => mengE,
+           overgang: () => overgangLoopt,
+           vlakkeStand: () => vlakkeStand,
            // Voor de transportbalk (B3c) en voor het meetluik. `volgtNu` is
            // schrijfbaar: wie zelf schuift, volgt niet meer.
            zetCursor,

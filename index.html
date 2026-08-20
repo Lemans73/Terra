@@ -7118,8 +7118,42 @@ function updateSpaceReadout() {
 const sunFlight = { actief: false, t0: 0, duur: 1100,
                     vanPos: new THREE.Vector3(), naarPos: new THREE.Vector3(),
                     vanDoel: new THREE.Vector3(), naarDoel: new THREE.Vector3(),
-                    min: 0, max: 0 };
+                    min: 0, max: 0,
+                    /* ---- de vier velden van sessie 31, alle vier OPTIONEEL ----
+                       Een vlucht die ze niet meekrijgt legt exact dezelfde baan af
+                       als vóór deze sessie. Dat is met opzet: de zon- en
+                       ruimtevlucht werken en hoeven niet mee te veranderen om de
+                       standwissel van de magnetosfeer glad te krijgen. */
+                    boog: false,
+                    vanUp: new THREE.Vector3(), naarUp: new THREE.Vector3(),
+                    upMee: false,
+                    onStep: null, onDone: null,
+                    // afgeleiden van de boog, één keer bij de start berekend
+                    vanRicht: new THREE.Vector3(), vanR: 0, naarR: 0,
+                    qBoog: new THREE.Quaternion(), qUp: new THREE.Quaternion() };
 
+const _flyQ = new THREE.Quaternion();
+const _flyV = new THREE.Vector3();
+
+/* DE BAAN IS EEN BOOG EN GEEN KOORDE, wanneer de aanroeper daarom vraagt.
+
+   `lerpVectors` trekt een rechte lijn tussen twee camerastanden, en die lijn
+   snijdt af: liggen de standen 90 graden uit elkaar, dan zakt de afstand tot
+   het draaipunt onderweg naar 71 % (wortel 2 gedeeld door 2). In een
+   perspectiefbeeld valt dat nauwelijks op — daar bepaalt de afstand alleen de
+   parallax. In een ORTHOGRAFISCHE stand ÍS de afstand de zoom (beeldhoogte =
+   afstand maal 0,9), dus daar zie je het beeld inzoomen en weer terugkomen.
+
+   GEMETEN op de wissel Meridian -> Top, die precies 90,0 graden is:
+     e         0    0,10   0,25   0,50   0,75   0,90    1
+     afstand 10000  9056   7906   7072   7906   9056  10000
+     hoogte  90 Re  81,5   71,2   63,6   71,2   81,5  90 Re
+
+   Met een boog blijft de straal onderweg wat hij hoort te zijn: de RICHTING
+   ten opzichte van het draaipunt slerpt, de STRAAL loopt geometrisch. Dat
+   laatste en niet lineair, want de waargenomen schaal is omgekeerd evenredig
+   met de straal — geometrisch betekent dus een gelijkmatige zoom in plaats van
+   een die aan het begin hard gaat en aan het eind kruipt. */
 function flyCamera(cam, ctl, pos, target, limits) {
   sunFlight.vanPos.copy(cam.position);
   sunFlight.naarPos.copy(pos);
@@ -7132,6 +7166,40 @@ function flyCamera(cam, ctl, pos, target, limits) {
   sunFlight.actief = true;
   ctl.minDistance = 0.01;
   ctl.maxDistance = Infinity;
+
+  /* EEN NIEUWE VLUCHT NEEMT DE HAKEN VAN DE VORIGE OVER EN ROEPT ZE NIET AF.
+     Klikt de bezoeker halverwege een wissel op een andere stand, dan hoort de
+     onderbroken overgang geen `onDone` meer te krijgen — die zou een
+     kruisvervaging terugzetten die de nieuwe overgang net opnieuw begonnen is.
+     Wie de haken meegeeft, weet zelf wat er nog openstond: `begin()` leest de
+     stand die er NU is. */
+  sunFlight.onStep = (limits && limits.onStep) || null;
+  sunFlight.onDone = (limits && limits.onDone) || null;
+
+  sunFlight.upMee = !!(limits && limits.up);
+  if (sunFlight.upMee) {
+    sunFlight.vanUp.copy(cam.up).normalize();
+    sunFlight.naarUp.copy(limits.up).normalize();
+    sunFlight.qUp.setFromUnitVectors(sunFlight.vanUp, sunFlight.naarUp);
+  }
+
+  /* De boog wordt hier ONTLEED en niet per frame: richting en straal ten
+     opzichte van het eigen draaipunt. Een straal van nul heeft geen richting,
+     dus dan valt hij terug op de rechte lijn — dat is geen fout maar de enige
+     baan die er dan is. */
+  sunFlight.boog = false;
+  if (limits && limits.arc) {
+    _flyV.subVectors(sunFlight.vanPos, sunFlight.vanDoel);
+    sunFlight.vanR = _flyV.length();
+    const naarOff = new THREE.Vector3().subVectors(sunFlight.naarPos, sunFlight.naarDoel);
+    sunFlight.naarR = naarOff.length();
+    if (sunFlight.vanR > 1e-6 && sunFlight.naarR > 1e-6) {
+      sunFlight.vanRicht.copy(_flyV).divideScalar(sunFlight.vanR);
+      sunFlight.qBoog.setFromUnitVectors(sunFlight.vanRicht,
+                                         naarOff.divideScalar(sunFlight.naarR));
+      sunFlight.boog = true;
+    }
+  }
 }
 
 // Wordt elke frame aangeroepen vanuit animateShader.
@@ -7141,15 +7209,52 @@ function stepSunFlight(cam, ctl) {
     : Math.min(1, (performance.now() - sunFlight.t0) / sunFlight.duur);
   // dezelfde S-curve als power2.inOut
   const e = u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2;
-  cam.position.lerpVectors(sunFlight.vanPos, sunFlight.naarPos, e);
+
   // x/y/z rechtstreeks — zie de noot bij lockControlsTarget().
   ctl.target.x = sunFlight.vanDoel.x + (sunFlight.naarDoel.x - sunFlight.vanDoel.x) * e;
   ctl.target.y = sunFlight.vanDoel.y + (sunFlight.naarDoel.y - sunFlight.vanDoel.y) * e;
   ctl.target.z = sunFlight.vanDoel.z + (sunFlight.naarDoel.z - sunFlight.vanDoel.z) * e;
+
+  if (sunFlight.boog) {
+    _flyQ.set(0, 0, 0, 1).slerp(sunFlight.qBoog, e);
+    _flyV.copy(sunFlight.vanRicht).applyQuaternion(_flyQ);
+    // r = rA * (rB/rA)^e — geometrisch, dus een gelijkmatige zoom
+    const r = sunFlight.vanR * Math.pow(sunFlight.naarR / sunFlight.vanR, e);
+    cam.position.copy(ctl.target).addScaledVector(_flyV, r);
+  } else {
+    cam.position.lerpVectors(sunFlight.vanPos, sunFlight.naarPos, e);
+  }
+
+  /* "OMHOOG" DRAAIT MEE IN PLAATS VAN TE SPRINGEN.
+
+     Tot sessie 31 zette goToView `camera.up` op de bestemming vóórdat de vlucht
+     begon. GEMETEN op frame 0, dus voordat er iets bewogen was: bij Meridian ->
+     Top draaide hij 90,0 graden en bij 3D orbit -> Meridian 15,4. Het hele beeld
+     rolde in één frame om, en pas dáárna kwam de camera in beweging. Dat is de
+     flikker waar deze sessie over gaat.
+
+     EEN FRAME ACHTERSTAND, EN DAT MAG. OrbitControls heeft zijn `update()` van
+     deze frame al gedraaid als deze lus aan de beurt is, dus de geschreven `up`
+     telt pas mee bij de volgende. Over 1100 ms is dat 16 ms — onzichtbaar, en
+     het alternatief (vóór globe.gl schrijven) is precies de volgordestrijd die
+     de noot bij flyCamera() beschrijft. */
+  if (sunFlight.upMee) {
+    _flyQ.set(0, 0, 0, 1).slerp(sunFlight.qUp, e);
+    cam.up.copy(sunFlight.vanUp).applyQuaternion(_flyQ).normalize();
+  }
+
+  /* NA het schrijven en niet ervoor: wie meeloopt met de vlucht rekent aan de
+     stand van DEZE frame. De projectiemenging van de magnetosfeer leest
+     bijvoorbeeld de afstand tot het draaipunt, en die staat er pas hierboven. */
+  if (sunFlight.onStep) sunFlight.onStep(e);
+
   if (u >= 1) {
     sunFlight.actief = false;
     ctl.minDistance = sunFlight.min;
     ctl.maxDistance = sunFlight.max;
+    const klaar = sunFlight.onDone;
+    sunFlight.onStep = sunFlight.onDone = null;
+    if (klaar) klaar();
   }
 }
 
@@ -9264,7 +9369,11 @@ environment = createEnvironmentToggle(world);
 viewStates = createViewStates({
   world,
   flyCamera,
-  stopFlight: () => { sunFlight.actief = false; },
+  /* DE HAKEN GAAN MEE UIT. Een afgebroken vlucht heeft geen `onDone` meer te
+     melden — die zou een kruisvervaging terugzetten van een overgang die
+     niemand meer afmaakt. Zie de noot bij flyCamera(). */
+  stopFlight: () => { sunFlight.actief = false;
+                      sunFlight.onStep = sunFlight.onDone = null; },
   labels:     { get: () => labelsOn, set: (v) => { labelsOn = v; } },
   autoRotate: { get: () => autoRotateWanted, set: setAutoRotate,
                 pause: pauseAutoRotate },
@@ -9506,12 +9615,37 @@ if (globalThis.TerraCore) {
          een bol van 8k bij elke frame. */
       skyOff() {
         world.backgroundImageUrl(null);
-        world.showAtmosphere(false);
       },
       skyRestore() {
         world.backgroundImageUrl(assetsFor(texQuality).stars);
-        world.showAtmosphere(true);
       },
+
+      /* DE ATMOSFEER STAAT APART VAN DE STERREN (sessie 31), en dat is geen
+         opsplitsing om de opsplitsing.
+
+         Ze horen allebei bij "de hemel" en gaan in een doorsnede allebei uit,
+         maar ze komen op een ANDER moment terug. De sterren mogen halverwege de
+         standwissel aan, waar de camera het hardst beweegt en niemand de
+         omslag ziet. De atmosfeer mag dat niet: zolang er ook maar een beetje
+         orthografische projectie in de menging zit, kan hij NaN produceren.
+
+         WAAROM. Zijn shader rekent `pow(0.1 + dot(normaal, kijkrichting), 3.5)`
+         — gemeten uniformen, en 3,5 is GEEN GEHEEL GETAL, dus een negatieve
+         basis is in GLSL ondefinieerd. Onder perspectief blijft die basis
+         positief: van het achterste halfrond loopt het inproduct van 1 in het
+         midden naar 0 op de silhouetrand, en verder komt er niets in beeld.
+         Een orthografisch beeldveld heeft zijn nabije vlak op MIN 200.000 —
+         dat laat meetkunde toe die bij perspectief buiten de kegel viel, en
+         daar keert het inproduct om. Wat er dan gebeurt staat in handoff 30:
+         de framebuffer klemt de NaN weg, het HDR-doel van de composer bewaart
+         hem, bloom smeert hem met vijf blur-niveaus uit en de grade-pass maakt
+         er zwart van. Gemeten 77,9 % van het beeld tegen 0 %.
+
+         Dus: uit zodra er gemengd wordt, en pas terug als de projectie weer
+         zuiver perspectief is. Zie overgangBegin/overgangEind in
+         js/states/magnetosphere.js. */
+      atmosphereOff() { world.showAtmosphere(false); },
+      atmosphereRestore() { world.showAtmosphere(true); },
 
       auroraOn() {
         if (active.aurora) return;
@@ -9617,9 +9751,15 @@ viewStates.onChange((actief, view) => {
     if (actief === 'msphere') msphereTransport.toon();
     else msphereTransport.stop();
   }
-  // De state beslist zelf wat een stand betekent — welke plat is, of er
-  // sterren horen, en welke camerastand hij als waarheid overneemt.
-  if (msphereState && actief === 'msphere') msphereState.viewGewisseld(view);
+  /* WAT EEN STAND BETEKENT, WEET DE STATE — en sinds sessie 31 vertelt hij dat
+     niet meer hierlangs. Deze haak vuurde ná `goToView()`, dus op frame 0: de
+     projectie, de hemel, het raster en de omtrek klapten er allemaal om terwijl
+     de vlucht van 1100 ms nog moest beginnen. Dat is de flikker.
+
+     Het staat nu in `definition.transition` (js/states/magnetosphere.js), waar
+     de state de voortgang van de vlucht meekrijgt en die vier dingen over de
+     beweging kan verdelen. Eén mechanisme in plaats van twee, en de kennis
+     blijft waar hij hoort. */
 });
 // Het trackvenster hoort bij wat je aankijkt: dagen rond de aarde, jaren in het
 // zonnestelsel. Zie borgTrackPresets() waarom dit aan `onChange` hangt en niet aan
@@ -9678,6 +9818,21 @@ if (IS_LOCAL) {
     get orbits() { return orbits; },
     get environment() { return environment; },
     get viewStates() { return viewStates; },
+
+    /* DE VLUCHT IS NIET MET HET OOG TE TOETSEN, en dat is precies waarom hij
+       hier staat. Hij duurt 1100 ms en het enige wat telt is dat er nergens
+       een sprong in zit — dat lees je niet van een scherm af, en in een
+       verborgen paneel loopt `requestAnimationFrame` niet eens.
+
+       Met deze twee is elke tussenstand op te vragen zonder op de klok te
+       wachten:
+         sunFlight.t0 = performance.now() - 1100 * u;
+         stepSunFlight(world.camera(), world.controls());
+       Dat draait de ECHTE lus, inclusief de boog, de "omhoog"-slerp en de
+       projectiemenging. Een eigen nabouw zou toetsen wat de toets denkt. */
+    get sunFlight() { return sunFlight; },
+    stepSunFlight: (cam, ctl) => stepSunFlight(cam || world.camera(),
+                                               ctl || world.controls()),
     get spaceState() { return spaceState; },
     get msphereState() { return msphereState; },
     get msphereBoundary() { return msphereBoundary; },

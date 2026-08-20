@@ -46,11 +46,15 @@ export function createMagnetosphereGrid(THREE, opts) {
   /* Twee inkten: de assen door de oorsprong dragen meer, want zij zeggen
      waar de aarde staat en waar de zonlijn loopt. Dezelfde keuze als in
      overlay.js, dat `axisInk` en `gridInk` uit elkaar houdt. */
+  const RASTER_INKT = { raster: 0.55, as: 0.85 };
+
   const matRaster = new THREE.LineBasicMaterial({
-    color: new THREE.Color(0x2b3d52), transparent: true, opacity: 0.55, depthWrite: false
+    color: new THREE.Color(0x2b3d52), transparent: true,
+    opacity: RASTER_INKT.raster, depthWrite: false
   });
   const matAs = new THREE.LineBasicMaterial({
-    color: new THREE.Color(0x46617f), transparent: true, opacity: 0.85, depthWrite: false
+    color: new THREE.Color(0x46617f), transparent: true,
+    opacity: RASTER_INKT.as, depthWrite: false
   });
 
   const raster = new THREE.LineSegments(new THREE.BufferGeometry(), matRaster);
@@ -123,13 +127,29 @@ export function createMagnetosphereGrid(THREE, opts) {
     return stat;
   }
 
+  /* De kruisvervaging van een standwissel (sessie 31). Het vlak van een raster
+     wisselt in één keer — Meridian heeft GSM X-Z en Top X-Y, en daar zit geen
+     tussenrooster tussen. Dus zakt de inkt naar nul, wisselt het vlak in dat
+     dal, en komt hij weer op. Zelfde afweging als bij de grensvlakken, zie de
+     noot bij setFade() in boundary-layer.js. */
+  let vervaging = 1;
+
+  function setFade(f) {
+    const n = Math.max(0, Math.min(1, Number.isFinite(f) ? f : 1));
+    if (n === vervaging) return;
+    vervaging = n;
+    matRaster.opacity = RASTER_INKT.raster * n;
+    matAs.opacity = RASTER_INKT.as * n;
+  }
+
   function dispose() {
     for (const l of [raster, assen]) { l.geometry.dispose(); l.material.dispose(); }
     group.clear();
   }
 
-  return { group, setPlane, dispose,
+  return { group, setPlane, setFade, dispose,
            stepRe: MSPHERE_GRID_STEP_RE,
+           fade: () => vervaging,
            plane: () => huidigVlak,
            parts: { raster, assen } };
 }

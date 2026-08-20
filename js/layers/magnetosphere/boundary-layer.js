@@ -209,13 +209,41 @@ export function createBoundaryLayer(THREE, deps) {
   /* Het vlak waarin de doorsnede getekend wordt, of null voor het volle net.
      Geeft terug of er iets veranderde, zodat de aanroeper weet of er herbouwd
      moet worden. */
+  /* DE INKT HEEFT TWEE SCHRIJVERS EN DAAROM EEN FUNCTIE.
+
+     `setOutline` bepaalt WELKE set inkt erbij hoort (net of doorsnede),
+     `setFade` bepaalt hoeveel ervan je op dit moment ziet. Zou elk van de
+     twee zijn eigen `material.opacity =` hebben, dan wiste de laatste
+     schrijver de ander uit en was het toeval wie je zag. Een halverwege
+     vervaagde grens die zijn weergave wisselt, is precies het geval waarin
+     dat gebeurt — en dat is nu net het geval waarvoor de vervaging bestaat. */
+  let vervaging = 1;
+
+  function schrijfInkt() {
+    const inkt = doorsnedeVlak ? INKT.lijn : INKT.net;
+    mp.material.opacity = inkt.mp * vervaging;
+    shock.material.opacity = inkt.shock * vervaging;
+  }
+
   function setOutline(vlak) {
     if (vlak === doorsnedeVlak) return false;
     doorsnedeVlak = vlak;
-    const inkt = vlak ? INKT.lijn : INKT.net;
-    mp.material.opacity = inkt.mp;
-    shock.material.opacity = inkt.shock;
+    schrijfInkt();
     return true;
+  }
+
+  /* De kruisvervaging van een standwissel (sessie 31).
+
+     Tussen doorsnede en vol net zit geen tussenvorm: 142 lijnstukken worden
+     er 4560, en die geometrie wisselt in één keer. Wat er WEL tussen zit is
+     hoeveel je ervan ziet, dus zakt de inkt naar nul, wisselt de vorm in dat
+     dal, en komt hij weer op. Zichtbaarheid is hier het enige dat continu kan
+     zijn, dus is dat waar de overgang op rijdt. */
+  function setFade(f) {
+    const n = Math.max(0, Math.min(1, Number.isFinite(f) ? f : 1));
+    if (n === vervaging) return;
+    vervaging = n;
+    schrijfInkt();
   }
 
   const vul = (lijn, thetas, straalBijHoek) => doorsnedeVlak
@@ -301,7 +329,9 @@ export function createBoundaryLayer(THREE, deps) {
     group.clear();
   }
 
-  return { group, update, orient, setVisible, setPartVisible, setOutline, dispose,
+  return { group, update, orient, setVisible, setPartVisible, setOutline, setFade,
+           dispose,
            outline: () => doorsnedeVlak,
+           fade: () => vervaging,
            parts: { mp, shock } };
 }
