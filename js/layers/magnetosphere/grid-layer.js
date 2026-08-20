@@ -48,12 +48,15 @@ export function createMagnetosphereGrid(THREE, opts) {
      overlay.js, dat `axisInk` en `gridInk` uit elkaar houdt. */
   const RASTER_INKT = { raster: 0.55, as: 0.85 };
 
+  // Eén plek voor de twee inkten; de legenda leest ze via `colors` hieronder.
+  const RASTER_INK = 0x2b3d52, AS_INK = 0x46617f;
+
   const matRaster = new THREE.LineBasicMaterial({
-    color: new THREE.Color(0x2b3d52), transparent: true,
+    color: new THREE.Color(RASTER_INK), transparent: true,
     opacity: RASTER_INKT.raster, depthWrite: false
   });
   const matAs = new THREE.LineBasicMaterial({
-    color: new THREE.Color(0x46617f), transparent: true,
+    color: new THREE.Color(AS_INK), transparent: true,
     opacity: RASTER_INKT.as, depthWrite: false
   });
 
@@ -149,6 +152,8 @@ export function createMagnetosphereGrid(THREE, opts) {
 
   return { group, setPlane, setFade, dispose,
            stepRe: MSPHERE_GRID_STEP_RE,
+           colors: { raster: '#' + RASTER_INK.toString(16).padStart(6, '0'),
+                     as: '#' + AS_INK.toString(16).padStart(6, '0') },
            fade: () => vervaging,
            plane: () => huidigVlak,
            parts: { raster, assen } };

@@ -818,6 +818,29 @@
       </div>
       </section>
 
+      <!-- DE LEGENDA (sessie 32, blok B5).
+
+           WAT HIER STAAT IS GEEN MARKUP MAAR EEN LEEG VAK. De swatches worden
+           gebouwd uit de kleuren die de LAGEN ZELF publiceren — boundary.colors,
+           grid.colors, fieldlines.colors, PARAMS voor de aurora — en niet uit
+           CSS die dezelfde waarde nog eens opschrijft. Een sleutel die zegt de
+           kleur van het oppervlak te zijn en het niet is, is erger dan geen
+           sleutel, en dat is precies wat een tweede plek vroeg of laat oplevert.
+
+           De drie lijnstaten en de twee vereenvoudigingen komen uit
+           TerraRegistry, met een Terra-zijdige Engelse tekst per id en een
+           vangrail die luid stopt bij een id zonder tekst. De registry blijft zo
+           de enige die zegt WELKE er zijn; Terra levert de woorden. -->
+      <section class="acc msphere-only" data-acc="msphere-legend">
+      <button class="acc-head" type="button" aria-expanded="false">
+      <span>Legend</span>
+      <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="acc-body">
+      <div class="msp-leg" id="msphere-legend"></div>
+      </div>
+      </section>
+
       <!-- HET MAGNEETVELD IS EEN RIJ EN GEEN SECTIE (sessie 25). De vier waarden en
            de poolplot stonden hier als accordeon; ze staan nu in het detailvenster,
            waar je één ding tegelijk leest. Wat hier blijft is de weg erheen. De twee
@@ -7806,6 +7829,180 @@ function updateMsphereReadout() {
   if (v) detail.refresh(v);
 }
 
+
+/* ---- De legenda van de magnetosfeer (sessie 32, blok B5) ------------------
+   Alles wat in deze state inkt op het scherm zet, met de reden erbij. Drie
+   dingen tekenen hier: de scene, de veldlijnen, en de tijdlijn onderin.
+
+   DE KLEUREN KOMEN VAN DE LAGEN ZELF. `boundary.colors`, `grid.colors`,
+   `fieldlines.colors`, en voor de aurora de drie stops uit PARAMS. Ze hier
+   overtikken zou een tweede plek maken, en een swatch die de kleur van het
+   oppervlak zégt te zijn en het niet is, is erger dan geen swatch.
+
+   DE SERIELABELS VAN DE SECTOR-LANE STAAN HIER, EN DAAROM ALLEEN HIER.
+   chart.js tekent zo'n label in `s.color` — dezelfde kleur als de balk waar hij
+   op ligt (chart.js:616). GEMETEN op de draaiende strip: een sectorlabel op zijn
+   eigen band haalt contrast 1,00 en op de ándere band 1,16, tegen een ondergrens
+   van 3,0 voor grote tekst. Beide zijn dus onleesbaar, niet één van de twee. Ze
+   donker maken zou ze leesbaar maken en de koppeling tussen woord en band
+   slopen — precies wat een legenda wél kan dragen: hier ligt de kleur náást het
+   woord op een neutrale ondergrond. De labels in de strip blijven staan omdat de
+   captie bij het aanwijzen ze gebruikt; ze kosten daar geen zichtbare ruimte.
+
+   WAT DE POC ZEGT EN TERRA NIET DOET, gaat er NIET in. De POC kleurt zijn
+   magnetopauze naar Bz; Terra tekent hem in één vaste inkt. Die registry-regel
+   overnemen zou de legenda iets laten beloven wat er niet staat. */
+
+/* De Engelse tekst per lijnstaat, op de id's van TerraRegistry.LINE_STATES —
+   dezelfde id's als Core.ENDING. Een staat die daar bijkomt en hier niet, laat
+   de legenda luid vallen in plaats van stil een lege regel te tonen. */
+const MSPHERE_LIJNSTAAT_TEKST = {
+  closed:     { naam: 'Closed',     why: 'Both feet on Earth.' },
+  open:       { naam: 'Open',       why: 'Crosses the magnetopause — the same surface drawn around it.' },
+  unresolved: { naam: 'Unresolved', why: 'The integration, not the magnetosphere. The tracer ran out of room or out of steps, and that is counted separately instead of being added to open or closed.' }
+};
+
+/* Idem voor de twee gekozen vereenvoudigingen. Ze zijn KEUZES en geen
+   ontbrekende metingen: ze verdwijnen nooit en verschijnen nooit. */
+const MSPHERE_VEREENVOUDIGING_TEKST = {
+  'no-aberration': 'The magnetopause sits on the Sun line. The wind arrives a few degrees off it; this version does not model that aberration.',
+  'seed-quantised': 'The polar cap edge is quantised by the seed ladder — five shells, so the edge cannot be placed finer than the step between two of them. The step is printed with the value.'
+};
+
+function msphereLegendaRij(host, soort, kleur, naam, why) {
+  const rij = document.createElement('div');
+  rij.className = 'msp-leg-row';
+  const sw = document.createElement('span');
+  sw.className = 'msp-sw is-' + soort;
+  if (soort === 'line' || soort === 'dash') sw.style.borderTopColor = kleur;
+  else if (soort === 'dot') sw.style.color = kleur;
+  else if (soort === 'ramp') sw.style.background = kleur;
+  else sw.style.background = kleur;
+  const tekst = document.createElement('div');
+  tekst.className = 'msp-leg-text';
+  const n = document.createElement('div');
+  n.className = 'msp-leg-name';
+  n.textContent = naam;
+  const w = document.createElement('div');
+  w.className = 'msp-why';
+  w.textContent = why;
+  tekst.append(n, w);
+  rij.append(sw, tekst);
+  host.appendChild(rij);
+}
+
+function msphereLegendaKop(host, tekst) {
+  const h = document.createElement('h5');
+  h.textContent = tekst;
+  host.appendChild(h);
+}
+
+function msphereLegendaNoot(host, tekst) {
+  const d = document.createElement('div');
+  d.className = 'msp-leg-note';
+  d.textContent = tekst;
+  host.appendChild(d);
+}
+
+/* Eén keer bouwen, bij het opstarten. De inhoud verandert nooit: het zijn de
+   kleuren van de lagen en de teksten uit de registry, en geen van beide hangt
+   aan de tijd of aan de data. Per opening opnieuw bouwen zou werk zijn dat
+   niets kan opleveren. */
+function bouwMsphereLegenda() {
+  const host = document.getElementById('msphere-legend');
+  if (!host || !msphereBoundary || !msphereLines) return false;
+  const Registry = globalThis.TerraRegistry;
+
+  const cs = getComputedStyle(document.documentElement);
+  const token = (naam) => cs.getPropertyValue(naam).trim();
+  const inkt = (c) => (typeof c === 'string' ? c : '#' + c.getHexString());
+
+  host.replaceChildren();
+
+  /* ---- Wat er in de scene staat ---- */
+  msphereLegendaKop(host, 'In the scene');
+  msphereLegendaRij(host, 'line', msphereBoundary.colors.mp, 'Magnetopause',
+    'Where the wind’s pressure balances Earth’s field. Shue et al. 1998, driven by two measured quantities: the dynamic pressure and the north–south component of the interplanetary field.');
+  msphereLegendaRij(host, 'line', msphereBoundary.colors.shock, 'Bow shock',
+    'Where the wind first slows below its own signal speed. Scaled off the magnetopause with the magnetosonic Mach number — no Mach, no shock.');
+  if (msphereGrid) {
+    msphereLegendaRij(host, 'line', msphereGrid.colors.as,
+      'Scale grid — one line every ' + msphereGrid.stepRe + ' Re',
+      'In the plane the fixed view looks at, and only there: a scale needs a flat plane, so the free 3D view has none. The heavier lines are the axes through Earth.');
+  }
+  msphereLegendaRij(host, 'ramp',
+    'linear-gradient(90deg, ' + PARAMS.auroraLow + ', ' + PARAMS.auroraMid + ' 55%, ' + PARAMS.auroraHigh + ')',
+    'Aurora oval',
+    'NOAA OVATION. The model gives a CHANCE of aurora, not a brightness and not a height — the colour is a readability choice, not physics.');
+  if (geomag && geomag.config) {
+    msphereLegendaRij(host, 'line', '#' + geomag.config.dipoleColor.toString(16).padStart(6, '0'),
+      'Dipole axis',
+      'Where the magnetic axis points. The whole cavity hangs on it: GSM uses it to define its Y axis, which is why this one layer stays on here.');
+  }
+
+  /* ---- De veldlijnen, uit de registry ---- */
+  msphereLegendaKop(host, 'Field lines');
+  const staten = (Registry && Registry.LINE_STATES) || [];
+  const ontbreekt = [];
+  for (const st of staten) {
+    const t = MSPHERE_LIJNSTAAT_TEKST[st.id];
+    if (!t) { ontbreekt.push(st.id); continue; }
+    const sleutel = st.id === 'unresolved' ? 'unres' : st.id;
+    msphereLegendaRij(host, st.id === 'unresolved' ? 'dash' : 'line',
+      inkt(msphereLines.colors[sleutel]), t.naam, t.why);
+  }
+  /* GOOIEN EN NIET OVERSLAAN. Een lijnstaat die op het scherm getekend wordt en
+     hier ontbreekt, is een kleur zonder betekenis — en dat is precies de vorm
+     van fout die een legenda hoort uit te sluiten. */
+  if (ontbreekt.length) {
+    throw new Error('the legend is missing a line state: ' + ontbreekt.join(', '));
+  }
+  msphereLegendaNoot(host,
+    'Lighter and warmer lines leave the northern hemisphere, darker and cooler ones the southern. That is a shade WITHIN a state, not a fourth state — closed stays closed and open stays open.');
+  msphereLegendaNoot(host,
+    'With no boundary there is no topology, and then every line is drawn in one neutral ink instead: the tracer had nothing to cross, which is not the same as a quiet magnetosphere.');
+
+  /* ---- De tijdlijn ---- */
+  msphereLegendaKop(host, 'In the timeline');
+  msphereLegendaRij(host, 'bar', token('--msphere-open'), 'IMF sector · toward the Sun',
+    'Bx points sunward. Which side of the heliospheric current sheet Earth is on.');
+  msphereLegendaRij(host, 'bar', token('--msphere-mp'), 'IMF sector · away from the Sun',
+    'Bx points away. The undecided minutes get hatching and no colour — they are not a third sector, they are minutes in which Bx says nothing.');
+  msphereLegendaRij(host, 'bar', token('--msphere-measured'), 'Kp · published',
+    'A full three-hour block as the index publishes it.');
+  msphereLegendaRij(host, 'bar', token('--msphere-measured') + '80', 'Kp · still filling',
+    'The running block. Kp is the maximum over three hours, so this value can only go UP — read it as a lower bound.');
+  msphereLegendaRij(host, 'line', token('--msphere-goes'), 'GOES external',
+    'Measured minus the internal field at 6.62 Re, per component and per spacecraft. This is the only place in the whole scene where the field is actually measured.');
+  msphereLegendaRij(host, 'dash', token('--ink-faint'), 'Marks and hatching',
+    'A dashed mark on the standoff lane is the geostationary orbit at 6.62 Re; hatching means the source says nothing there, with the reason written alongside.');
+
+  /* ---- De zekerheidsklassen ---- */
+  msphereLegendaKop(host, 'Certainty');
+  msphereLegendaRij(host, 'dot', token('--msphere-measured'), 'Measured',
+    'Comes in as a number from an instrument.');
+  msphereLegendaRij(host, 'dot', token('--msphere-derived'), 'Derived',
+    'Computed from measurements, with no model in between.');
+  msphereLegendaRij(host, 'dot', token('--msphere-model'), 'Modelled',
+    'A published model evaluated on measurements. IGRF-14 inside, T89c outside, Shue 98 for the boundary.');
+
+  /* ---- De gekozen vereenvoudigingen ---- */
+  const simpel = (Registry && Registry.SIMPLIFICATIONS) || [];
+  if (simpel.length) {
+    msphereLegendaKop(host, 'Chosen simplifications');
+    const mist = [];
+    for (const sv of simpel) {
+      const tekst = MSPHERE_VEREENVOUDIGING_TEKST[sv.id];
+      if (!tekst) { mist.push(sv.id); continue; }
+      msphereLegendaNoot(host, tekst);
+    }
+    if (mist.length) {
+      throw new Error('the legend is missing a simplification: ' + mist.join(', '));
+    }
+  }
+  return true;
+}
+
 // `setupAuroraShell()` de bewaarde voorspelling alsnog op.
 function applyAuroraState() {
   if (aurora && auroraState.coordinates) {
@@ -10144,6 +10341,14 @@ if (globalThis.TerraCore) {
      registratievolgorde en die loopt van dichtbij naar ver — de holte om de
      aarde ligt binnen de baan van de zon. */
   viewStates.register('msphere', msphereState.definition);
+
+  /* De legenda ÉÉN KEER bouwen, hier, waar alle lagen bestaan. Zijn inhoud hangt
+     niet aan de tijd en niet aan de data — het zijn de kleuren van de lagen en de
+     teksten uit de registry — dus per opening opnieuw bouwen zou werk zijn dat
+     niets kan opleveren. Faalt hij, dan is dat een ontbrekende betekenis en geen
+     detail: de melding gaat naar de console en de rest van de app draait door. */
+  try { bouwMsphereLegenda(); }
+  catch (e) { console.error('[terra] legend:', e); }
 }
 
 viewStates.register('sun', {
@@ -10353,6 +10558,9 @@ if (IS_LOCAL) {
     get msphereTransport() { return msphereTransport; },
     get msphereGrid() { return msphereGrid; },
     get msphereLines() { return msphereLines; },
+    // Voor de tegenproef op de legenda-vangrail: een verzonnen lijnstaat in de
+    // registry moet hem luid laten vallen, niet stil een lege regel geven.
+    bouwLegenda: bouwMsphereLegenda,
     get sunMoon() { return sunMoon; },
     get active() { return active; },
     get spaceVoorheen() { return spaceVoorheen; },

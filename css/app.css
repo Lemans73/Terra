@@ -1117,6 +1117,51 @@
     font-size: 10px; line-height: 1.55; color: var(--ink-faint);
   }
 
+  /* ---- De legenda van de magnetosfeer (sessie 32) --------------------------
+     Vier groepen van rijen: een swatch, een naam, en de reden eronder. De
+     swatch is een LIJN en geen vlak, want alles wat hij uitlegt is een lijn —
+     op één na, de aurora, en die is dan ook het enige verloop. */
+  .msp-leg { margin-top: 4px; font-size: 11.5px; line-height: 1.45; }
+  .msp-leg h5 {
+    margin: 12px 0 5px;
+    padding-top: 8px;
+    border-top: 1px solid var(--hair);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  .msp-leg h5:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+  .msp-leg-row { display: flex; align-items: flex-start; gap: 9px; padding: 3px 0; }
+  /* De swatch krimpt niet mee en lijnt uit op de eerste tekstregel. `flex: none`
+     is hier niet cosmetisch: zonder dat perst flexbox een streep van 26 px tot
+     11 zodra de reden lang wordt, en dan verschilt de sleutel per rij. */
+  .msp-sw { flex: 0 0 26px; width: 26px; margin-top: 7px; }
+  .msp-sw.is-line { height: 0; border-top-width: 2px; border-top-style: solid; }
+  .msp-sw.is-dash { height: 0; border-top-width: 1.5px; border-top-style: dashed; }
+  .msp-sw.is-bar  { height: 10px; margin-top: 3px; border-radius: 2px; }
+  .msp-sw.is-ramp { height: 10px; margin-top: 3px; border-radius: 2px; }
+  /* De zekerheidsklasse is een STIP en geen streep, want hij markeert geen lijn
+     op het scherm maar een rij in de uitlezing. Dezelfde vorm als in de POC. */
+  .msp-sw.is-dot {
+    flex-basis: 26px;
+    height: 8px; margin-top: 4px;
+    display: block;
+    position: relative;
+  }
+  .msp-sw.is-dot::before {
+    content: ''; position: absolute; left: 9px; top: 0;
+    width: 8px; height: 8px; border-radius: 50%;
+    background: currentColor;
+  }
+  .msp-leg-text { flex: 1 1 auto; min-width: 0; }
+  .msp-leg-name { color: var(--ink); font-weight: 500; }
+  .msp-why { color: var(--ink-dim); }
+  /* Een regel zonder swatch: hij gaat over een KEUZE en niet over inkt. Inspringen
+     tot waar de tekst van de andere rijen begint, zodat de kolom één kolom blijft. */
+  .msp-leg-note { padding: 4px 0 4px 35px; color: var(--ink-faint); }
+
   /* ---- Cosmos-readout (zon en maan) ----
      Label boven waarde, net als de credits-lijst, zodat lange waarden als
      "387.509 km" niet met het label om de 248px paneelbreedte hoeven te vechten. */

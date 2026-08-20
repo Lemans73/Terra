@@ -101,9 +101,15 @@ export function createBoundaryLayer(THREE, deps) {
     lijn: { mp: 1.00, shock: 0.75 }
   };
 
-  const mp = bouwOppervlak(0x6fd3e8, INKT.net.mp);
+  /* De twee inkten staan hier als getal en NERGENS anders. De legenda (blok B5)
+     vraagt ze op via `colors` hieronder in plaats van ze in CSS over te tikken:
+     een swatch die de kleur van het oppervlak zegt te zijn en het niet is, is
+     erger dan geen swatch. */
+  const MP_INK = 0x6fd3e8, SHOCK_INK = 0xe8a86f;
+
+  const mp = bouwOppervlak(MP_INK, INKT.net.mp);
   mp.name = 'msphere:magnetopause';
-  const shock = bouwOppervlak(0xe8a86f, INKT.net.shock);
+  const shock = bouwOppervlak(SHOCK_INK, INKT.net.shock);
   shock.name = 'msphere:bowshock';
 
   /* De punten van één omwentelingsoppervlak, als lijnstukken.
@@ -331,6 +337,9 @@ export function createBoundaryLayer(THREE, deps) {
 
   return { group, update, orient, setVisible, setPartVisible, setOutline, setFade,
            dispose,
+           // Voor de legenda: wat er werkelijk getekend wordt, als CSS-kleur.
+           colors: { mp: '#' + MP_INK.toString(16).padStart(6, '0'),
+                     shock: '#' + SHOCK_INK.toString(16).padStart(6, '0') },
            outline: () => doorsnedeVlak,
            fade: () => vervaging,
            parts: { mp, shock } };
