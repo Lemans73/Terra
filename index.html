@@ -8405,6 +8405,68 @@ panels.register('settings', {
   close:  () => setSettingsOpen(false)
 });
 
+/* ---- LINKS EN RECHTS ZIJN OP EEN TELEFOON DEZELFDE PLEK (sessie 31, Terry) ----
+
+   Een groep is een plek op het scherm. Op een breed scherm staat het lagenpaneel
+   linksonder en Navigate rechtsonder: twee plekken, ze zitten elkaar niet in de
+   weg, en ze horen elkaar dus ook niet te sluiten. Op een telefoon zijn ze
+   allebei schermbreed onderaan — LETTERLIJK dezelfde plek — en dan ging Navigate
+   open ACHTER het lagenpaneel. Je moest eerst dat andere sluiten om te zien wat
+   je net had geopend.
+
+   Dus vallen de twee groepen daar samen tot één. Niet met een `isNarrow()` in
+   js/ui/panels.js — die module mag geen tweede breedtegrens kennen, dat staat in
+   zijn eigen kop — maar hier, waar `narrowMQ` al woont. De module krijgt alleen
+   te horen dat twee plekken er één zijn.
+
+   STAPELEN BOVENOP ELKAAR WAS HET ALTERNATIEF (Terry noemde het). Daar is niet
+   voor gekozen: een schermbreed vel onder een ander schermbreed vel is toestand
+   die je niet kunt zien, met een knop die "aan" blijft staan voor iets wat
+   nergens in beeld is. Eén vel tegelijk is wat een telefoon werkelijk toont. */
+const PANEEL_GROEP = { layers: 'left', details: 'left', nav: 'right', detail: 'right' };
+
+function borgPaneelGroepen() {
+  const smal = isNarrow();
+  for (const [key, groep] of Object.entries(PANEEL_GROEP)) {
+    panels.setGroup(key, smal ? 'bottom' : groep);
+  }
+  /* Bij het VERSMALLEN kunnen er al twee open staan uit wat nu één groep is.
+     De laatste blijft; de rest gaat dicht — anders zou het samenvallen van de
+     groepen pas bij de eerstvolgende klik effect hebben, en tot dan ligt er weer
+     een vel onder een vel. */
+  if (!smal) return;
+  const open = panels.openInGroup('bottom');
+  for (const k of open.slice(0, -1)) panels.close(k);
+}
+
+/* TWEE SEINEN EN NIET ÉÉN, en dat is gemeten. `change` op de media query is het
+   precieze sein, maar hij vuurt niet altijd: een viewport die door de
+   ontwikkeltools of door een ingebed paneel wordt overschreven, verandert wél de
+   breedte en `matches`, en stuurt géén `change`. Gemeten in dit project: op 1280
+   px stond `matches` op false terwijl de groepen nog op `bottom` hingen — en dan
+   sluiten Layers en Navigate elkaar op een breed scherm, precies waar dat niet
+   hoort.
+
+   `resize` erbij is goedkoop: vier toewijzingen, en het sluiten eronder gebeurt
+   alleen als er werkelijk twee vellen op één plek liggen. */
+narrowMQ.addEventListener('change', borgPaneelGroepen);
+window.addEventListener('resize', borgPaneelGroepen);
+borgPaneelGroepen();
+
+/* EN OP EEN TELEFOON BEGINT DE APP MET ALLES DICHT (sessie 31, Terry). Het
+   lagenpaneel stond standaard open, en op 375 px is dat meteen een vel over de
+   bol heen voordat je iets gedaan hebt. Zonder animatie: dit is geen sluiting
+   maar een beginstand, en een paneel dat bij het laden zichtbaar dichtklapt
+   leest als een storing. */
+if (isNarrow()) {
+  panelOpenWanted = false;
+  // Via de bestaande eindtoestand en niet met een eigen `style.display`: dat
+  // laatste is een tweede schrijver op ditzelfde element, en de intro-animatie
+  // hieronder wist het weer. Nu is er één weg naar "dicht".
+  finishPanelClose();
+  panels.sync();
+}
+
 // Weg 2 en 3: nog een keer op dezelfde knop, of op een andere uit dezelfde groep.
 panelOpenBtn.addEventListener('click', () => panels.toggle('layers'));
 navBtn.addEventListener('click', () => panels.toggle('nav'));
@@ -8722,9 +8784,15 @@ function navRestore() {
   navWasOpen = false;
   /* ALLEEN ALS DE HOEK NOG VRIJ IS. `panels.open()` sluit zijn groepsgenoten, dus
      zonder deze toets gooit het terugzetten van Navigate er iets uit dat de
-     bezoeker intussen zélf heeft geopend. Sinds de groepen per hoek lopen gaat het
-     alleen nog over 'right' — Layers linksonder mag gewoon open blijven staan. */
-  if (wasOpen && !panels.openInGroup('right').length) panels.open('nav');
+     bezoeker intussen zélf heeft geopend.
+
+     DE GROEP WORDT GEVRAAGD EN NIET INGETIKT. Hier stond `'right'`, en dat klopte
+     zolang die naam vastlag. Sinds sessie 31 vallen links en rechts op een
+     telefoon samen tot één groep (zie borgPaneelGroepen), dus een ingetikte naam
+     zou daar naar een groep kijken waar Navigate niet meer in zit — en dan gooit
+     het terugzetten alsnog het lagenpaneel eruit. */
+  const groep = panels.groupOf('nav');
+  if (wasOpen && !panels.openInGroup(groep).length) panels.open('nav');
 }
 
 function navForget() { navWasOpen = false; }
@@ -9354,9 +9422,19 @@ function dismissBoot() {
   // Minder beweging gevraagd: de interface staat er meteen, zonder inschuiven.
   if (REDUCED_MOTION) return;
   // GSAP-intro: header + paneel soepel in beeld
+  /* HET PANEEL DOET ALLEEN MEE ALS HET OPEN STAAT (sessie 31). Op een telefoon
+     begint de app met alles dicht, en dan is deze `.from()` een tweede schrijver
+     op een element dat net op `display: none` is gezet — plus de `clearProps`
+     hieronder, die de inline stijl daarna alsnog opruimt. Gemeten: het paneel
+     stond na twee seconden gewoon weer open, terwijl `panels.openKeys()` leeg
+     was. Toestand en beeld die uit elkaar lopen, en dat is precies de klasse
+     fout waar de knoppenrij in sessie 24 al eens aan onderdoor ging. */
+  const paneelDoetMee = panelOpenWanted;
   const intro = gsap.timeline();
-  intro.from('.masthead', { y: -16, opacity: 0, duration: 0.6, ease: 'power2.out' })
-       .from('.panel', { x: -18, opacity: 0, duration: 0.6, ease: 'power2.out' }, 0.1);
+  intro.from('.masthead', { y: -16, opacity: 0, duration: 0.6, ease: 'power2.out' });
+  if (paneelDoetMee) {
+    intro.from('.panel', { x: -18, opacity: 0, duration: 0.6, ease: 'power2.out' }, 0.1);
+  }
   // De modus-wissel staat los van de masthead en heeft een eigen centrering via
   // translateX(-50%). Die mag GSAP niet overschrijven, dus alleen opacity animeren.
   intro.from('.mode-switch', { opacity: 0, duration: 0.5, ease: 'power2.out' }, 0.25);
@@ -9368,7 +9446,8 @@ function dismissBoot() {
   // onzichtbare interface niet — dus forceren we het eindresultaat.
   setTimeout(() => {
     intro.progress(1);
-    gsap.set(['.masthead', '.panel'], { clearProps: 'all' });
+    gsap.set(paneelDoetMee ? ['.masthead', '.panel'] : ['.masthead'],
+             { clearProps: 'all' });
     gsap.set('.mode-switch', { clearProps: 'opacity' });   // niet 'all': transform is de centrering
   }, 2000);
 }

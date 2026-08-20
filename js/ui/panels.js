@@ -106,6 +106,34 @@ export function createPanelManager() {
   const openInGroup = (group) =>
     [...panels.entries()].filter(([key, p]) => p.group === group && isOpen(key)).map(([key]) => key);
 
+  /* ---------------------------------------------------------------
+     DE GROEP IS TE VERZETTEN, EN DAT IS GEEN OMWEG OM `isNarrow()` HEEN.
+
+     Een groep is een PLEK OP HET SCHERM (zie de kop). Op een breed scherm zijn
+     'left' en 'right' twee plekken: het lagenpaneel staat linksonder, Navigate
+     rechtsonder, en ze zitten elkaar niet in de weg. Op een telefoon zijn ze
+     LETTERLIJK dezelfde plek — allebei schermbreed onderaan — en dan hoort er
+     ook maar één te staan. Terry vond het gevolg: Navigate ging open ACHTER het
+     lagenpaneel, en je moest eerst dat andere sluiten om hem te zien.
+
+     Dat is geen tweede breedtegrens in deze module maar hetzelfde begrip: wie
+     weet dat twee plekken samenvallen, zegt dat hier. De schermbreedte blijft
+     waar hij hoort — bij de media query en bij `narrowMQ` in index.html.
+
+     `groupOf` hoort er onlosmakelijk bij: wie een groepsnaam ergens anders
+     INTIKT, breekt stil zodra hij hier verzet wordt. */
+  function setGroup(key, group) {
+    const p = panels.get(key);
+    if (!p) return false;
+    p.group = group || null;
+    return true;
+  }
+
+  const groupOf = (key) => {
+    const p = panels.get(key);
+    return p ? p.group : null;
+  };
+
   function open(key) {
     const p = panels.get(key);
     if (!p) return false;
@@ -148,6 +176,7 @@ export function createPanelManager() {
 
   return {
     register, open, close, toggle, isOpen, openKey, openKeys, openInGroup, sync,
+    setGroup, groupOf,
     onChange: (fn) => { listeners.push(fn); return fn; }
   };
 }

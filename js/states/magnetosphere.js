@@ -869,8 +869,14 @@ export function createMagnetosphereState(THREE, deps) {
           'stroke="none"/><path d="M9 4.5a9.5 9.5 0 0 0 0 15"/>' +
           '<path d="M2.5 8h3M2.5 12h3M2.5 16h3"/></svg>',
     views,
-    initialView: 'meridian',
-    camera: () => views.meridian.camera(),
+    /* DE VRIJE STAND IS DE BINNENKOMST (sessie 31, Terry). Hij stond op
+       `meridian` omdat de doorsnede het beeld is dat de vorm VERKLAART. Maar dat
+       is een tweede stap: eerst moet je zien dat er een holte om de aarde ligt,
+       en daarvoor kijk je eromheen. Bovendien is het nu de eerste optie in de
+       gleuf bovenin, en een eerste optie die niet de beginstand is, leest als
+       een fout. */
+    initialView: 'orbit',
+    camera: () => views.orbit.camera(),
 
     /* DE OVERGANG IS EEN EIGENSCHAP VAN DEZE STATE, niet van de navigatie.
        core/view-state.js weet dat er een vlucht loopt en hoe ver hij is; wat

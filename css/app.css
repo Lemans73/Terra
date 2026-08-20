@@ -32,22 +32,22 @@
        De tijdslider was er dus niet, en dat is precies waarom hij over het hoofd
        werd gezien.
 
-       Twee GEMETEN maten en drie lijnen die eruit volgen:
+       Twee GEMETEN maten en twee lijnen die eruit volgen:
 
-         --dock-h  39 px   11 px padding boven en onder, 15 px icoon, 2 px rand
-         --time-h  40 px   de tijdrij, op desktop én op 375 px even hoog
+         --dock-h      39 px   11 px padding boven en onder, 15 px icoon, 2 px rand
+         --time-ctl-h  40 px   de tijdrij: afspeelknoppen en schuiver, en niets
+                               daarboven. Op desktop én op 375 px even hoog.
 
          --dock-lift    de lijn boven de knoppenrij  -> daar staat de tijdrij
-         --time-lift    de lijn boven de tijdrij     -> daar stopt een paneel
-                        dat schermbreed is en het eiland dus zou raken
-         --panel-lift   waar een paneel daadwerkelijk stopt
+         --panel-lift   waar een paneel stopt
 
        `--panel-lift` is op een breed scherm gelijk aan `--dock-lift`, en dat is
        niet slordig maar uitgerekend: de tijdrij staat daar op `--dock-bottom`
        (28) en is 40 hoog, dus hij eindigt op 68 — ónder `--dock-lift` (81).
        Links overlapt hij sowieso niet: `.panel` loopt tot x=308 en het eiland
        begint op 316. Pas onder 640 px wordt het eiland schermbreed, en dáár
-       schuift `--panel-lift` op naar `--time-lift`.
+       stopt een paneel op de rand van de BEDIENING — hij mag dan over het
+       zwevende moment en over de tijdlijn heen. Zie de mobiele media-query.
 
        Waarom variabelen en geen ingetikte getallen: `.panel`, `.nav-panel`,
        `.readout` en `.qlist` moeten allemaal dezelfde onderrand aanhouden, en
@@ -58,13 +58,27 @@
     --dock-bottom: 28px;
     --dock-h: 39px;
     --dock-gap: 14px;
-    --time-h: 40px;
+    /* DE HOOGTE VAN DE BEDIENING: de afspeelknoppen en de schuiver, en niets
+       daarboven. Dat onderscheid is nieuw sinds sessie 31 en het is de hele
+       reden dat er op een telefoon weer scene te zien is.
+
+       Tot dan stond hier `--time-h`: "de hoogte van álles wat op de
+       tijdverdieping staat". Op 375 px was dat 74 — 40 (rij) + 6 + 28, waarbij
+       die 28 de hoogste stand van het zwevende moment is: daar verschijnt een
+       resetknop zodra het moment verschoven is (gemeten in sessie 26). In de
+       magnetosfeer kwam de tijdlijn van 132 px er nog bij, en dus 214.
+
+       Een paneel reserveerde die hele stapel, en dat kostte de halve scene voor
+       dingen die je achter dat paneel toch niet leest. Nu reserveert het alleen
+       de BEDIENING — die moet bereikbaar blijven — en bedekt het de rest. */
+    --time-ctl-h: 40px;
     --time-gap: 10px;
 
     /* ---- HET TERRA MODEL-VENSTER (B4, sessie 31) --------------------------
-       De hoogte staat hier omdat `--time-h` eruit volgt: die maat is "alles wat
-       op de tijdverdieping staat", en sinds deze sessie staat de tijdlijn daar
-       ook. Zie de noot bij --time-h in de mobiele media-query.
+       De hoogte staat hier omdat twee dingen hem lezen: de doos van het canvas,
+       en de plek waar het zwevende moment overheen klimt (zie de mobiele
+       media-query). Een paneel reserveert hem NIET — dat stopt op de rand van
+       de bediening en mag de tijdlijn bedekken.
 
        De acht kleuren dragen een voorvoegsel en de drie inktwaarden niet: `--ink`
        en familie zijn van de hele app, maar een globale `--model` of `--edge` zou
@@ -94,7 +108,6 @@
        arcering met de zin "no Bx or Bt", dus die plek is niet stil. */
     --msphere-band-ink: #0a1220;
     --dock-lift: calc(var(--dock-bottom) + var(--dock-h) + var(--dock-gap));
-    --time-lift: calc(var(--dock-lift) + var(--time-h) + var(--time-gap));
     --panel-lift: var(--dock-lift);
     /* Vrije ruimte boven een paneel, zodat de masthead er niet onder verdwijnt. */
     --panel-top-gap: 38px;
@@ -380,13 +393,13 @@
      blur, één handeling. Hij staat alleen op een smal scherm — daar is het
      detailvenster schermbreed en bedekt het de bol waar je doorheen kijkt.
 
-     `--time-lift` en niet `--dock-lift`: hij hoort boven de tijdrij te staan en
-     niet ernaast, want daar staat op deze breedte het moment al. */
+     Hij houdt dezelfde onderrand aan als een paneel (`--panel-lift`): het is een
+     vel dat over de scene ligt en het hoort op dezelfde lijn te stoppen. */
   .antipode-exit {
     position: fixed;
     left: 50%;
     transform: translateX(-50%);
-    bottom: calc(var(--time-lift) + env(safe-area-inset-bottom, 0px));
+    bottom: calc(var(--panel-lift) + env(safe-area-inset-bottom, 0px));
     z-index: var(--z-chrome);
     display: none;
     align-items: center;
@@ -2283,17 +2296,15 @@
 
   /* DE TIJDLIJN TELT NIET MEE VOOR WAAR EEN PANEEL STOPT (sessie 31, Terry).
 
-     Eerst deed hij dat wel: `--time-h` is "de hoogte van alles wat op de
-     tijdverdieping staat", en de strip staat daar. Maar op een telefoon kostte
-     dat 140 px paneelhoogte voor een uitlezing die je achter dat paneel toch
-     niet leest — en juist daar is de ruimte op.
+     Alleen de BEDIENING wordt gereserveerd — de afspeelknoppen en de schuiver.
+     Die moeten bereikbaar blijven terwijl een paneel openstaat, want dat is
+     waarmee je door de reeks loopt. De tijdlijn erboven en het zwevende moment
+     mogen bedekt worden: een uitlezing achter een paneel lees je toch niet, en
+     op een telefoon is de ruimte er niet om hem vrij te houden.
 
-     Dus mag een paneel de tijdlijn BEDEKKEN en stopt hij boven de BEDIENING:
-     de afspeelknoppen, de schuiver en het zwevende moment. Die drie moeten
-     bereikbaar en leesbaar blijven terwijl een paneel openstaat, want dat is
-     waarmee je door de reeks loopt. Zie de mobiele media-query, waar
-     `--panel-lift` gezet wordt; op desktop stopt een paneel toch al boven de
-     knoppenrij en staat de balk er ruim naast. */
+     Dat staat in de mobiele media-query, bij `--panel-lift`, en het geldt voor
+     élke state — de bediening is overal even hoog. Op desktop stopt een paneel
+     toch al boven de knoppenrij en staat de balk er ruim naast. */
 
   /* ---- Toast-meldingen (nieuwe real-time entries) ---- */
   #toasts {
@@ -2370,21 +2381,16 @@
        boven de knoppenrij maar boven de TIJDRIJ. Van onder naar boven:
        knoppenrij (12..51) · tijdrij (61..133) · paneel (vanaf 143).
 
-       `--time-h` IS HIER 74 EN NIET 40 (sessie 26). Die maat is niet "de hoogte van
-       .ti-row" maar "de hoogte van alles wat op de tijdverdieping staat", en sinds
-       het moment boven de baan zweeft hoort dat label erin.
+       EEN PANEEL STOPT HIER OP DE BEDIENING (sessie 31, Terry). Tot dan hield hij
+       de hele tijdverdieping vrij: 40 (rij) + 6 + 28 voor het zwevende moment —
+       dat is 20 px bij "now" en 28 zodra het verschoven is, want dan verschijnt
+       er een resetknop (gemeten in sessie 26). In de magnetosfeer kwam daar de
+       tijdlijn van 132 px bij, en dus 214.
 
-       GEMETEN op 375x812, en de meting week af van de schatting: het plaatje is
-       20 px hoog bij "now" en 28 px zodra het moment verschoven is — de resetknop
-       verschijnt dan, en die is 20 px plus 3 px padding boven en onder plus 2 px
-       rand. Dat maakt 40 (rij) + 6 (tussenruimte) + 28 = 74. Ik had 26 geschat en
-       kwam op 72 uit; dat ging goed omdat `--time-gap` het verschil opving, en dat
-       is toeval en geen ontwerp.
-
-       Laat je hem op 40 staan, dan stopt een paneel op 111 en valt het label
-       eronder — `--z-island` (8) ligt onder `--z-panel` (10), dus je ziet het
-       moment precies niet wanneer je het nodig hebt. Kosten: 34 px minder
-       paneelhoogte, en `.panel` zit meestal toch aan zijn `max-height: 62dvh`. */
+       Dat kostte de halve scene op 375x812. Nu bedekt een paneel het moment en
+       de tijdlijn en stopt hij op de rij eronder. De datum is dan niet zichtbaar
+       zolang er een paneel openstaat; dat is de ruil, en de bediening waarmee je
+       hem verzet ligt er nog gewoon onder. */
     :root {
       --dock-bottom: 12px;
       --dock-gap: 10px;
@@ -2394,8 +2400,18 @@
          ritme op die verdieping in plaats van twee. Geldt voor álle panelen,
          want ze hangen allemaal aan `--panel-lift`. */
       --time-gap: 6px;
-      --time-h: 74px;
-      --panel-lift: var(--time-lift);
+      /* ALLE ONDERSTE VENSTERS LIJNEN UIT OP DE BEDIENING (sessie 31, Terry).
+
+         Ze stopten boven de hele tijdverdieping, en dat kostte op 375 px de
+         halve scene. Nu stoppen ze op de rand van de knoppenrij en bedekken ze
+         wat daarboven staat: in de magnetosfeer de tijdlijn, overal het
+         zwevende moment. "We nemen voor lief dat de datum dan niet zichtbaar
+         is" — want een paneel is iets waar je even in leest, en de bediening
+         waarmee je het venster verzet blijft eronder bereikbaar.
+
+         Eén regel voor élke state: er is geen `body.msphere-on`-uitzondering
+         meer nodig, want de bediening is overal even hoog. */
+      --panel-lift: calc(var(--dock-lift) + var(--time-ctl-h) + var(--time-gap));
       /* Zes lanes op 132 px in plaats van 178: op 812 px hoog is de volle maat
          bijna een kwart van het scherm, en de scene is hier het onderwerp.
          `laneLayout` verdeelt naar gewicht, dus de verhoudingen blijven. */
@@ -2415,26 +2431,11 @@
        De prijs is de 140 px paneelhoogte die de vorige stap opleverde. Dat is
        een bewuste ruil: een tijdlijn die je half ziet is geen tijdlijn.
 
-       `--time-lift` en `--panel-lift` MOETEN HIER MEE. Een custom property wordt
-       opgelost op het element waar hij GEDECLAREERD staat, dus een override van
-       `--time-h` op <body> bereikt de `--time-lift` in `:root` niet. Gemeten toen
-       die regel ontbrak: het paneel lag er 93 px overheen. */
-    body.msphere-on {
-      /* 66 EN NIET 74, en dat verschil is gemeten. De 74 van het tijd-eiland is
-         40 (rij) + 6 + 28, waarbij die 28 de HOOGSTE stand van het moment is:
-         daar verschijnt een resetknop zodra het moment verschoven is. De
-         transportbalk heeft die knop niet — hij heeft alleen `#msp-val` — en
-         blijft daarmee op 20 px, verschoven of niet. Gemeten: 20 bij "now" én
-         bij "−13 h 14 min · 19 Aug, 22:24".
-
-         Op 74 laten staan reserveert acht pixels die niemand gebruikt, en dat
-         zag je: het gat tussen een paneel en het moment was 18 px waar de rest
-         van deze verdieping op 6 zit. */
-      --time-h: calc(66px + var(--msps-gap) + var(--msps-h));
-      --time-lift: calc(var(--dock-lift) + var(--time-h) + var(--time-gap));
-      --panel-lift: var(--time-lift);
-    }
-
+       LET OP als je hier ooit een state-eigen `--panel-lift` bij zet: een custom
+       property wordt opgelost op het element waar hij GEDECLAREERD staat. Een
+       override op <body> bereikt een afgeleide in `:root` dus niet, en dat is
+       niet in de code te zien — alleen op het scherm. Gemeten toen die val
+       toesloeg: het paneel lag er 93 px overheen. */
     /* HET MOMENT KLIMT OVER DE TIJDLIJN HEEN. Hij hangt absoluut aan `.ti-row`
        (zie de noot daar: uit de flow, zodat zijn breedte de sliderbaan niet
        inkort), dus optellen bij `bottom` is genoeg — de 6 px die hij van de rij
