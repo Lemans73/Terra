@@ -101,12 +101,13 @@ const PREFS_OUD = {
    Nu zijn het er twee, en wie meer wil krijgt dat terug zodra hij het
    één keer aanzet.
 
-   WAT DIT NIET DOET IS MINDER OPHALEN, en dat is nagemeten. `pull()`
-   in index.html kent alleen `adapter.enabled` en niet `active[laag]`,
-   dus de adapters bevragen hun bron ongeacht of hun laag zichtbaar is.
-   De aurora is de uitzondering: die hangt aan `syncAuroraLayer()` en
-   haalt zijn 924 KB pas op als hij aanstaat. Deze regels gaan dus over
-   wat je ZIET bij een eerste start, niet over verkeer.
+   EN DIT SCHEELT OOK OPHALEN, sinds sessie 36. Tot dan niet: `pull()`
+   in index.html kende alleen `adapter.enabled` en niet `active[laag]`,
+   dus bevroegen de adapters hun bron ongeacht of hun laag zichtbaar
+   was — gemeten ~512 KB per opstart voor lagen die niemand zag, met de
+   aurora als enige uitzondering. `syncLayerFeeds()` vertaalt de
+   laagstand nu door naar `adapter.enabled`, dus deze regels gaan over
+   wat je ziet bij een eerste start én over wat daarvoor gehaald wordt.
 ------------------------------------------------------------ */
 export const PREFS_DEFAULTS = {
   /* ---- De databronnen. `active` in index.html leest deze. ---- */

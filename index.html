@@ -2735,6 +2735,11 @@ const Adapters = {
   // paginastart raakt het niet, want deze adapter staat standaard uit.
   usgs: {
     layers: ['quake'],
+    /* TWEE ADAPTERS OP ÉÉN LAAG, en precies één ervan staat aan. `sourceGroup`
+       zegt dat: wie dit merk draagt, haalt alleen op als hij ook de GEKOZEN bron
+       is. Zonder dat merk zou de laag-poort verderop beide bronnen aanzetten
+       zodra de bevingslaag aanstaat, en dan komen ze allebei binnen. */
+    sourceGroup: 'quake',
     // STANDAARD UIT. EMSC dekt Europa en de Middellandse Zee onvergelijkbaar veel
     // fijner (gemeten: 819 events tegen 5 over een week M1+) en is wereldwijd
     // bijna een superset. USGS staat één vinkje ver weg voor wie de mondiale
@@ -2815,6 +2820,7 @@ const Adapters = {
   // er maar één bron tegelijk aan en is de ontdubbeling tussen bronnen verwijderd.
   emsc: {
     layers: ['quake'],
+    sourceGroup: 'quake',      // zie de noot bij usgs
     interval: 60_000,
     // GEMETEN grens (2026-08-08, één week juni, M1+): t/m 1997 antwoordt EMSC met
     // HTTP 204 en een lege body; 1998 → 135 · 2001 → 145 · 2004 → 247 · 2010 → 1294 ·
@@ -2951,19 +2957,23 @@ const Adapters = {
   // antwoord, tegen enkele kilobytes voor de vier hierboven. Twee dingen volgen
   // daaruit, en allebei zijn ze gemeten en geen voorzorg.
   //
-  // 1. `enabled: false` OM TE BEGINNEN. `pull()` slaat een adapter niet over omdat
-  //    zijn lagen uitstaan — `active` komt in het hele haalpad niet voor. Zonder
-  //    deze vlag haalt Terra dus bij élke paginastart bijna een megabyte op voor een
-  //    laag die standaard uit staat. `syncAuroraFetch()` zet hem om zodra de
-  //    bezoeker de laag aanzet; dat is dezelfde rem die de bronkeuze bij de
-  //    aardbevingen gebruikt.
+  // 1. `enabled: false` OM TE BEGINNEN. Dit was tot sessie 36 de ENIGE rem in de
+  //    app: `pull()` sloeg een adapter niet over omdat zijn lagen uitstonden, dus
+  //    zonder deze vlag kwam er bij élke paginastart bijna een megabyte binnen voor
+  //    een laag die standaard uit staat. Sinds syncLayerFeeds() geldt die rem voor
+  //    alle acht datalagen en is deze vlag alleen nog de fabrieksstand tot de poort
+  //    voor het eerst rekent. Hij blijft staan: hij is waar, en hij verklaart
+  //    waarom deze adapter de blauwdruk was.
   //
   // 2. EEN EIGEN HEALTH-ID, en niet het gedeelde 'swpc' van de vier hierboven. Een
   //    uitgezette adapter schrijft `warn · switched off` naar zijn health-id, dus
   //    met een gedeelde id zou de NOAA-regel permanent op "switched off" staan
-  //    terwijl de zonnevlekken gewoon binnenkomen. Bijkomend voordeel: deze fetch
-  //    loopt door zijn omvang eerder in de timeout van 15 s, en dan zie je dát ook
-  //    in plaats van dat een geslaagde xray-poll het een halve minuut later wegpoetst.
+  //    terwijl de zonnevlekken gewoon binnenkomen. Sinds de poort per laag geldt is
+  //    dat het verschil tussen vier regels die kloppen en één die klappert — zie
+  //    groepGeheelUit(), die dezelfde val bij de vier EONET-adapters afvangt.
+  //    Bijkomend voordeel: deze fetch loopt door zijn omvang eerder in de timeout
+  //    van 15 s, en dan zie je dát ook in plaats van dat een geslaagde xray-poll
+  //    het een halve minuut later wegpoetst.
   ovation: {
     layers: ['aurora'], healthId: 'ovation', interval: 5 * 60_000,
     enabled: false,
@@ -2986,8 +2996,8 @@ const Adapters = {
   // Gedefinieerd in js/compute/magnetosphere-feed.js, want ze horen bij die state
   // en niet bij dit bestand. Ze staan standaard UIT: samen 1,19 MB per ronde, en
   // dat haal je niet op voor een state die niemand geopend heeft. De state zet ze
-  // om bij enter() en weer terug bij exit(), net als syncAuroraLayer() dat voor
-  // OVATION doet.
+  // om bij enter() en weer terug bij exit(), net als syncLayerFeeds() dat voor
+  // de gewone datalagen doet.
   ...(msphereFeed ? msphereFeed.adapters : {}),
 
   // NASA EONET — natural events, ÉÉN AANROEP PER CATEGORIE.
@@ -3205,15 +3215,36 @@ let store = [];                    // alle genormaliseerde events
    js/core/prefs.js voor waarom dat bestand de ENIGE bron van een beginstand is
    en niet een laag eroverheen.
 
-   DIT SCHEELT GEEN VERKEER, en dat is gemeten: `pull()` verderop kent alleen
-   `adapter.enabled` en niet deze stand, dus een uitgezette laag haalt zijn bron
-   nog steeds op. Alleen de aurora hangt aan zijn laagstand (via
-   syncAuroraLayer) en scheelt dus wél zijn 924 KB. */
+   EN DIT SCHEELT VERKEER, sinds sessie 36. Tot dan kende `pull()` alleen
+   `adapter.enabled` en niet deze stand, dus haalde een uitgezette laag zijn bron
+   gewoon op: gemeten ~512 KB per opstart voor lagen die niemand zag. De aurora
+   was de enige met een poort. Nu vertaalt syncLayerFeeds() deze stand door naar
+   `adapter.enabled` en geldt hij voor alle acht. */
 const ACTIVE_SLEUTEL = { quake: 'layer.quake', volcano: 'layer.volcano',
   storm: 'layer.storm', ice: 'layer.ice', wildfire: 'layer.wildfire',
   aqi: 'layer.aqi', lightning: 'layer.lightning', aurora: 'layer.aurora' };
 const active = Object.fromEntries(
   Object.entries(ACTIVE_SLEUTEL).map(([k, s]) => [k, Prefs.get(s)]));
+
+/* DE GEKOZEN SEISMISCHE BRON IS EEN EIGEN STAND GEWORDEN (sessie 36).
+
+   Tot nu toe was de keuze AF TE LEIDEN uit `adapter.enabled`: aan betekende
+   gekozen. Dat kan niet blijven zodra de laagstand ook op `enabled` schrijft —
+   zet je de bevingslaag uit, dan staan beide bronnen uit en weet niemand meer
+   welke er gekozen was. `srcActief()` gaf dan niets terug, de radio's sprongen
+   los en `#src-current` toonde een streepje.
+
+   Dus: de KEUZE staat hier, en `enabled` is voortaan de UITKOMST van keuze én
+   laagstand samen. Zelfde scheiding als tussen `active` en het register — de ene
+   is wat je wilde, de andere is wat er nu geldt.
+
+   De beginwaarde komt uit de adapters zelf, zodat de fabrieksstand op één plek
+   staat: usgs draagt `enabled: false`, emsc niet, dus emsc is de bron. */
+let chosenSource = Object.values(Adapters)
+  .find(a => a.sourceGroup && a.enabled !== false)?.id || null;
+
+// Staat op false tot de eerste ophaalronde begint; zie de noot bij syncLayerFeeds().
+let eersteRondeGestart = false;
 
 // Lagen waarop het tijdvenster (preset + slider) van toepassing is. Alleen de
 // aardbevingsstroom is een echte tijdreeks van mómentgebeurtenissen. EONET-lagen
@@ -4887,7 +4918,7 @@ document.querySelectorAll('.layer').forEach(el => {
     render();
     // De aurora is de enige laag die zijn bron pas bevraagt als hij aanstaat; zie
     // de noot bij die functie. Idempotent, dus onvoorwaardelijk aanroepen mag.
-    syncAuroraLayer();
+    syncLayerFeeds();
   });
 });
 
@@ -5037,7 +5068,7 @@ function setLayerLocked(layer, vergrendeld, reden = 'source') {
     // normaal bedient. Zonder deze twee aanroepen blijft de app 924 KB per vijf
     // minuten halen voor een laag die op slot staat — en na het ontgrendelen zou
     // hij juist niets halen terwijl de rij weer aan staat.
-    syncAuroraLayer();
+    syncLayerFeeds();
     return;
   }
 
@@ -5046,7 +5077,7 @@ function setLayerLocked(layer, vergrendeld, reden = 'source') {
   rij.classList.add('locked', 'off');
   active[layer] = false;
   render();
-  syncAuroraLayer();
+  syncLayerFeeds();
 
   // Staat het uitklappen uit (LOCK_DETAILS), dan is dit geen knop maar een teken.
   // Een <button> die niets doet is erger dan geen knop: hij belooft een handeling.
@@ -5219,11 +5250,22 @@ async function refreshAqiInView() {
   // andere URL op dan de camera doet en slaat de edge cache alsnog niet aan.
   aqiBounds = viewBoundsSnapped();
   aqiFollowKey = aqiBounds;    // het volgen weet nu dat dit vak al gehaald is
-  await pull(Adapters.waqi);
+  /* ONGEACHT DE POORT, en dit is de enige plek die dat vraagt. Sinds sessie 36
+     sluit de haal-poort een adapter waarvan de laag uitstaat — en deze knop is
+     juist bedoeld om het opnieuw te proberen terwijl de laag uit of op slot
+     staat. Zonder deze vlag zou hij stil niets doen op precies het moment dat
+     iemand hem nodig heeft. */
+  await pull(Adapters.waqi, { ongeachtDePoort: true });
   if (!lockedLayers.has('aqi') && !active.aqi) {
     active.aqi = true;
+    /* EEN KNOP IS EEN KEUZE, DUS DIE BEWAART (sessie 36). Deze regel ontbrak: de
+       laag ging aan en was na een herlading weer weg, terwijl de rij ernaast
+       hetzelfde doet via de klik-lus. Zie de noot daar over keuze en
+       omstandigheid. */
+    Prefs.set(ACTIVE_SLEUTEL.aqi, true);
     document.querySelector('.layer[data-layer="aqi"]').classList.remove('off');
     render();
+    syncLayerFeeds();
   }
   if (btn) btn.classList.remove('spin');
   aqiRefreshing = false;
@@ -7240,7 +7282,7 @@ bindMsphereToggle('msp-wind-toggle', 'es-msp-wind',
 bindMsphereToggle('msp-dipole-toggle', 'es-msp-dipole',
   on => msphereState && msphereState.setPart('dipole', on), 'msp.dipole');
 /* De aurora loopt WEL via de bestaande poort: hij is een gewone Terra-laag met
-   een eigen adapter van 924 KB, en syncAuroraLayer() is de enige plek die
+   een eigen adapter van 924 KB, en syncLayerFeeds() is de enige plek die
    bepaalt of die bron bevraagd wordt. Een tweede weg ernaartoe zou precies de
    dubbele waarheid geven die daar in sessie 27 is dichtgezet. */
 /* START AAN, en dat is de spiegel van de rustreferentie hierboven: dit zijn de
@@ -7253,7 +7295,7 @@ bindMsphereToggle('msp-aurora-toggle', 'es-msp-aurora', on => {
   /* DEZE SCHAKELAAR EN DE AURORA-RIJ IN Layers ZIJN DEZELFDE LAAG, dus ze
      schrijven dezelfde sleutel. `bindMsphereToggle` doet dat al voor deze knop;
      `active.aurora` hierboven houdt het JS-object gelijk. */
-  syncAuroraLayer();
+  syncLayerFeeds();
 }, 'layer.aurora');
 
 const geomagToggles = [
@@ -8837,36 +8879,132 @@ function updateAuroraCount() {
   el.textContent = auroraState.peak == null ? '—' : Math.round(auroraState.peak) + '%';
 }
 
-/* DE POORT VOOR DE ZWAARSTE BRON VAN DE APP.
+/* DE HAAL-POORT PER LAAG.
 
-   OVATION is 924 KB per antwoord en de laag staat standaard uit. `pull()` slaat
-   een adapter echter niet over omdat zijn lagen uitstaan — `active` komt in het
-   hele haalpad niet voor — dus zonder deze functie haalt Terra dat bij elke
-   paginastart op voor iets wat niemand aanzette.
+   `pull()` slaat een adapter niet over omdat zijn lagen uitstaan — `active` kwam
+   in het hele haalpad niet voor. Tot sessie 36 had alleen OVATION een poort, en
+   die was er omdat 924 KB per antwoord te veel is om ongemerkt te halen. De rest
+   haalde gewoon door: GEMETEN ~512 KB per opstart voor lagen die niemand zag
+   (wildfires 243 · WAQI 168 · zee-ijs 90 · stormen 11), tegen 21 KB voor wat er
+   wél stond. De bliksemrelay deed dat zelfs elke 2,5 seconde.
 
-   AANROEPEN OP TWEE PLEKKEN, en dat is geen overdaad: de klik-lus (de bezoeker
-   zet hem aan) én `setLayerLocked()`, want een tijdslot zet `active[layer]`
-   RECHTSTREEKS op false, buiten die lus om, en het ontgrendelen zet hem via
-   `activeVoorSlot` net zo rechtstreeks terug. Zonder de tweede aanroep blijft de
-   app een megabyte per vijf minuten halen voor een laag die op slot staat.
+   DE POORT IS EEN VERTALING EN GEEN TWEEDE VOORWAARDE. Hij schrijft de laagstand
+   door naar `adapter.enabled`, en de vroege terugkeer die daar al op toetst doet
+   de rest. Dat is niet alleen korter: `pull()` toetst `enabled` ook NA het
+   netwerkverkeer (de race bij een bronwissel) en plandataVerversing() toetst hem
+   ook — een extra voorwaarde zou op alle drie de plekken herhaald moeten worden,
+   een vertaling nergens.
 
-   Idempotent, dus onvoorwaardelijk aanroepen mag: alleen een echte overgang van
-   uit naar aan zet een pull in gang. */
-function syncAuroraLayer() {
-  const ad = Adapters.ovation;
-  if (!ad) return;
-  const wil = !!active.aurora;
-  const was = ad.enabled !== false;
-  ad.enabled = wil;
-  if (aurora) aurora.setVisible(wil);
-  // Meteen halen bij het aanzetten: vijf minuten op het interval wachten zou
-  // lezen als een kapotte schakelaar.
-  if (wil && !was) pull(ad);
-  // En bij het uitzetten meteen de verbindingsregel bijwerken. Zonder dit blijft
-  // daar `live` staan tot het interval langskomt, en dat is een regel die zegt dat
-  // we een bron bevragen die we net hebben losgelaten. `pull()` zet hem daarna
-  // toch, dus dit loopt er alleen op vooruit.
-  if (!wil && was) setHealth(ad.healthId || ad.id, 'warn', 'switched off');
+   HIJ HANGT AAN `active` EN NIET AAN HET REGISTER, en dat is hetzelfde
+   onderscheid als bij de klik-lus: een tijdslot en de ruimteweergave zetten
+   `active[layer]` rechtstreeks, en die MOGEN de poort sturen — er valt dan
+   werkelijk niets te tonen. Wat ze niet mogen is de bewaarde voorkeur raken, en
+   dat doen ze ook niet.
+
+   ADAPTERS ZONDER LAGEN BLIJVEN BUITEN SCHOT. De vier SWPC-getallen voeden de
+   zonneactiviteit en de vijf magnetosfeer-feeds hebben hun eigen poort; die
+   dragen alle negen `layers: []` en zouden door een generieke laag-toets
+   permanent uit komen te staan.
+
+   VÓÓR DE EERSTE RONDE REKENT HIJ ALLEEN, EN HAALT HIJ NIET. Bij het opstarten
+   draait deze functie twee keer voordat de eerste ophaalronde begint — één keer
+   voor de bewaarde bronkeuze en één keer voor alle standen samen — en elke keer
+   is dat voor een adapter een overgang van uit naar aan. Zonder deze rem haalde
+   Terra USGS twee keer op en OVATION ook, en dat laatste is 924 KB per stuk.
+   GEMETEN in de resource-timeline: 2 verzoeken waar er één hoort. Dat was al zo
+   vóór de poort; de meting van deze sessie maakte het pas zichtbaar.
+
+   Idempotent, dus onvoorwaardelijk aanroepen mag: alleen een echte overgang doet
+   iets. */
+function syncLayerFeeds() {
+  for (const ad of Object.values(Adapters)) {
+    if (!ad.layers || !ad.layers.length) continue;
+    // MEERVOUD, want het contract staat het toe: `layers` wordt elders als lijst
+    // gebruikt. Nu draagt elke datalaag-adapter er één, maar een poort die
+    // `layers[0]` leest zou stil de verkeerde laag volgen zodra dat verandert.
+    const laagAan = ad.layers.some(l => active[l]);
+    // Twee adapters delen de bevingslaag en precies één is de gekozen bron.
+    const bronAan = ad.sourceGroup ? ad.id === chosenSource : true;
+    const wil = laagAan && bronAan;
+    const was = ad.enabled !== false;
+    ad.enabled = wil;
+    if (wil && !was && eersteRondeGestart) {
+      if (isStale(ad)) pull(ad); else herstelPoortHealth(ad);
+    }
+    if (!wil && was) meldPoortDicht(ad);
+  }
+  // De aurora is de enige laag met een eigen tekening naast zijn adapter.
+  if (aurora) aurora.setVisible(!!active.aurora);
+}
+
+/* METEEN HALEN BIJ HET AANZETTEN — MAAR NIET ELKE KEER.
+
+   Vijf minuten op het interval wachten leest als een kapotte schakelaar, dus een
+   verse laag haalt meteen op. Alleen: sinds de poort aan `active` hangt, sluit de
+   ruimteweergave ze ALLEMAAL zodra je omhoog kijkt, en zou elke terugkeer een
+   volledige herophaling geven — ook na tien seconden. Vandaar deze toets: is het
+   antwoord jonger dan het eigen interval, dan is er niets te halen.
+
+   EEN EIGEN TIJDSTEMPEL EN NIET DIE VAN DE VERBINDINGSREGEL. Die laatste is per
+   health-id, en vier EONET-adapters delen er één; bovendien schrijft ook
+   `switched off` hem. */
+function isStale(ad) {
+  return !ad.lastFetched || Date.now() - ad.lastFetched >= (ad.interval || 0);
+}
+
+/* DE VERBINDINGSREGEL BIJ HET DICHTGAAN — EN DE GEDEELDE HEALTH-ID IS DE VAL.
+
+   Zonder dit blijft daar `live` staan tot het interval langskomt, en dat is een
+   regel die zegt dat we een bron bevragen die we net hebben losgelaten.
+
+   Maar vier EONET-adapters delen `healthId: 'eonet'` en één regel kan niet vier
+   lagen tegelijk beschrijven: zet je de branden uit en de vulkanen aan, dan
+   schrijven `switched off` en `live` om beurten naar dezelfde regel en klappert
+   hij op de volgorde van binnenkomst. Precies deze fout is bij OVATION vermeden
+   met een eigen id — zie de noot in HEALTH_SOURCES.
+
+   Dus: `switched off` alleen als de HELE groep achter die id uit staat. Voor
+   USGS, EMSC, WAQI en de bliksem is dat een groep van één en verandert er niets;
+   voor de magnetosfeer gaat de groep als geheel aan en uit. */
+function groepGeheelUit(hid) {
+  return Object.values(Adapters)
+    .every(a => (a.healthId || a.id) !== hid || a.enabled === false);
+}
+/* PER HEALTH-ID EN NIET PER ADAPTER, en dat verschil is een bug geweest. De regel
+   hoort bij de GROEP: vier EONET-adapters delen er één. Bewaar je hem op de adapter
+   die de deur dichttrok, dan vindt de adapter die hem weer opent niets terug — zet
+   de vulkanen uit, dan de branden, en dan de vulkanen weer aan, en de regel bleef
+   op `switched off` staan boven een laag die stond te tekenen. GEMETEN in de
+   tegenmeting van sessie 36; de eerste drie stappen klopten en de vierde niet. */
+const healthVoorPoort = {};
+
+function meldPoortDicht(ad) {
+  const hid = ad.healthId || ad.id;
+  if (!hid || !groepGeheelUit(hid)) return;
+  // Wat er stond, om het terug te geven. Zelfde vorm als `activeVoorSlot` en
+  // `bronVoorWissel`: de app mag niet blijven zitten op een stand die zij zelf
+  // heeft afgedwongen. Zie herstelPoortHealth().
+  healthVoorPoort[hid] = sourceHealth[hid];
+  setHealth(hid, 'warn', 'switched off');
+}
+
+/* EN TERUGGEVEN ALS DE POORT WEER OPENGAAT ZONDER RONDE.
+
+   Is het antwoord nog vers, dan haalt de poort niets op — en dan blijft er
+   `switched off` staan boven een laag die gewoon staat te tekenen. Dat is precies
+   de soort regel die zegt dat we een bron niet bevragen terwijl je zijn data ziet.
+
+   ALLEEN ALS DE REGEL NOG VAN ONS IS. Kwam er ondertussen een echte ronde langs
+   voor een buurman in dezelfde groep, dan staat daar iets nieuwers en dat mag
+   deze onthouden waarde niet overschrijven. */
+function herstelPoortHealth(ad) {
+  const hid = ad.healthId || ad.id;
+  if (!hid) return;
+  const vorig = healthVoorPoort[hid];
+  delete healthVoorPoort[hid];
+  if (!vorig) return;
+  if (sourceHealth[hid] && sourceHealth[hid].note !== 'switched off') return;
+  setHealth(hid, vorig.state, vorig.note);
 }
 
 bindCosmosToggle('leaders-toggle', 'es-leaders', on => sunMoon.setVisible({ leaders: on }), 'sunmoon.leaders');
@@ -9945,14 +10083,17 @@ syncMagMaxAvailability();
 const srcRadios = [...document.querySelectorAll('#quake-sources input[data-src]')];
 const srcApplyBtn = document.getElementById('src-apply');
 const srcCurrentEl = document.getElementById('src-current');
-const srcIsOn = (id) => Adapters[id].enabled !== false;
+// DE KEUZE EN NIET DE UITKOMST. `enabled` is sinds sessie 36 de uitkomst van
+// keuze én laagstand samen, dus met de bevingslaag uit staan beide bronnen uit en
+// zou dit niets meer teruggeven. Zie `chosenSource` bij de laagstanden.
+const srcIsOn = (id) => id === chosenSource;
 const srcGekozen = () => srcRadios.find(r => r.checked)?.dataset.src;
 const srcActief = () => srcRadios.map(r => r.dataset.src).find(srcIsOn);
 
 function syncSrcUI() {
   const actief = srcActief();
-  // De radio's volgen de werkelijke stand van de adapters, niet andersom: staat er
-  // in de markup iets anders dan in Adapters, dan wint Adapters.
+  // De radio's volgen de werkelijke keuze, niet andersom: staat er in de markup
+  // iets anders dan in `chosenSource`, dan wint die laatste.
   srcRadios.forEach(r => { r.checked = r.dataset.src === actief; });
   if (srcCurrentEl) srcCurrentEl.textContent = (actief || '—').toUpperCase();
   srcApplyBtn.disabled = true;
@@ -9964,23 +10105,28 @@ srcRadios.forEach(r => {
 
 // Eén weg naar een bronwissel, of de aanleiding nu de knop is of de dekkingstoets
 // hieronder. Dat is belangrijker dan het lijkt: `syncSrcUI()` laat de radio's de
-// WERKELIJKE stand van de adapters volgen, dus een automatische wissel verspringt
-// zichtbaar in de interface in plaats van er stilletjes naast te gaan staan.
+// WERKELIJKE keuze volgen, dus een automatische wissel verspringt zichtbaar in de
+// interface in plaats van er stilletjes naast te gaan staan.
 function kiesBron(kies) {
   if (!kies) return;
-  for (const r of srcRadios) {
-    const id = r.dataset.src, adapter = Adapters[id];
-    if (id === kies) {
-      if (!srcIsOn(id)) { adapter.enabled = true; pull(adapter); }
-    } else if (srcIsOn(id)) {
-      adapter.enabled = false;
-      store = store.filter(d => !(d.layer === 'quake' && d.src === id));
-      // De voorraad van een uitgezette bron is niets meer waard: zet hem terug op
-      // niets, anders denkt het haal-beleid bij het weer aanzetten dat er al data is.
-      adapter.geladen = null;
-      setHealth(id, 'warn', 'switched off');
-    }
+  const vorige = chosenSource;
+  chosenSource = kies;
+  if (vorige && vorige !== kies) {
+    const oud = Adapters[vorige];
+    store = store.filter(d => !(d.layer === 'quake' && d.src === vorige));
+    /* De voorraad van een uitgezette bron is niets meer waard: zet hem terug op
+       niets, anders denkt het haal-beleid bij het weer aanzetten dat er al data is.
+       EN ZIJN TIJDSTEMPEL GAAT MEE, om precies dezelfde reden: isStale() zou de
+       nieuwe ronde anders overslaan omdat er "net" iets binnenkwam, en dan blijft
+       de laag leeg na een wissel heen en terug. */
+    oud.geladen = null;
+    oud.lastFetched = null;
   }
+  /* DE POORT REKENT `enabled` UIT, hier niet meer. Twee plekken die hetzelfde veld
+     schrijven lopen gegarandeerd uiteen, en dit was er één van. syncLayerFeeds()
+     zet de nieuwe bron aan als de laag ook aanstaat, zet de oude uit, haalt zo
+     nodig meteen op en werkt beide verbindingsregels bij. */
+  syncLayerFeeds();
   syncSrcUI();
   resetQuakeList();
   render();
@@ -10001,11 +10147,12 @@ srcApplyBtn.addEventListener('click', () => {
 
 /* DE BEWAARDE BRON, VÓÓR `syncSrcUI()`.
 
-   `syncSrcUI` laat de radio's de WERKELIJKE stand van de adapters volgen, dus
-   de adapters moeten eerst kloppen. `kiesBron` doet dat en start meteen de
-   ophaalronde — precies wat er bij een start op deze bron moet gebeuren.
+   `syncSrcUI` laat de radio's de WERKELIJKE keuze volgen, dus die moet eerst
+   kloppen. `kiesBron` zet hem en laat de poort de ophaalronde starten — als de
+   bevingslaag tenminste aanstaat, want anders valt er niets te tonen en dus ook
+   niets te halen.
 
-   Alleen als de bewaarde bron een andere is dan die nu aanstaat: anders zou een
+   Alleen als de bewaarde bron een andere is dan die nu gekozen is: anders zou een
    verse start een tweede pull afvuren voor de bron die al gekozen was. */
 {
   const bewaard = Prefs.get('quake.source');
@@ -10504,10 +10651,23 @@ async function pull(adapter, opties = {}) {
   // Meerdere adapters kunnen één regel in het verbindingspaneel delen (de vier
   // EONET-categorieën tonen samen als "NASA EONET").
   const hid = adapter.healthId || adapter.id;
-  // Door de bezoeker uitgezet (de bronkeuze bij aardbevingen). Het interval
-  // blijft tikken maar doet niets; aanzetten hervat zonder herstart.
-  if (adapter.enabled === false) {
-    if (hid) setHealth(hid, 'warn', 'switched off');
+  /* EERST DE BRON, DAN DE POORT, EN DIE VOLGORDE IS NIET WILLEKEURIG. Een
+     ontbrekende relay is een OORZAAK en een gesloten poort een gevolg: zonder
+     relay gaat de bliksemlaag op slot, gaat daarmee `active.lightning` uit en
+     sluit de poort — en dan zou de verbindingsregel `switched off` melden en de
+     echte reden verdwijnen. Wie de laag niet aan krijgt moet lezen waarom.
+     Vergrendelen voor een uitgezette laag is bovendien gewoon juist. */
+  if (!adapter.url) { // bron uit (bv. bliksem-relay niet geconfigureerd op de server)
+    if (hid) setHealth(hid, 'warn', 'off (no relay)');
+    adapter.layers.forEach(l => setLayerLocked(l, true, 'source'));
+    return;
+  }
+  // Uit: door de bezoeker (de laagstand of de bronkeuze) of door een omstandigheid
+  // die de laag afdwingt. Zie syncLayerFeeds(), die dit veld schrijft. Het interval
+  // blijft tikken maar doet niets; aanzetten hervat zonder herstart. De uitzondering
+  // is `ongeachtDePoort` — één knop die met opzet een gesloten poort passeert.
+  if (adapter.enabled === false && !opties.ongeachtDePoort) {
+    if (hid && groepGeheelUit(hid)) setHealth(hid, 'warn', 'switched off');
     return;
   }
   // EEN VAST TIJDVAK IN HET VERLEDEN VERANDERT NIET MEER. De interval-aanroep slaan
@@ -10515,11 +10675,6 @@ async function pull(adapter, opties = {}) {
   // nieuwe tijdstempel geven die niets nieuws zegt. Een expliciete pull (bronwissel,
   // venstersprong, andere preset) gaat wél gewoon door; alleen de klok wordt genegeerd.
   if (opties.vanInterval && adapter.venster && !bijNu()) return;
-  if (!adapter.url) { // bron uit (bv. bliksem-relay niet geconfigureerd op de server)
-    if (hid) setHealth(hid, 'warn', 'off (no relay)');
-    adapter.layers.forEach(l => setLayerLocked(l, true, 'source'));
-    return;
-  }
   // Het venster dat deze ronde ophaalt. Staat hier, synchroon met het opvragen van
   // `adapter.url` hieronder, zodat beide hetzelfde moment lezen — er zit geen `await`
   // tussen, dus verschuiven kan niet.
@@ -10554,13 +10709,17 @@ async function pull(adapter, opties = {}) {
     // regel schrijft dat antwoord de zojuist verwijderde events gewoon terug, en zie
     // je na het wisselen een fractie van de oude bron terugkomen. Zichtbaar geworden
     // op 2026-08-05: tot dan mochten beide bronnen aan staan en viel het niet op.
-    if (adapter.enabled === false) return;
+    if (adapter.enabled === false && !opties.ongeachtDePoort) return;
     // Wat er nu in huis is. Zolang het getoonde venster hierbinnen valt, hoeft er
     // niets opgehaald te worden — zie plandataVerversing(). Het venster is hierboven
     // vastgelegd, vóór het verzoek: pas ná de `await` uitrekenen zou het venster van
     // NU registreren terwijl het antwoord bij een ouder moment hoort. En pas hier
     // toekennen, want een antwoord dat we weggooien mag geen voorraad claimen.
     if (gevraagdVenster) adapter.geladen = gevraagdVenster;
+    // WANNEER ER VOOR HET LAATST ECHT IETS BINNENKWAM. Alleen hier, bij een antwoord
+    // dat we houden — isStale() leest hem om te bepalen of een laag die weer aangaat
+    // meteen moet halen of nog vers genoeg is. Een mislukte ronde verzet hem niet.
+    adapter.lastFetched = Date.now();
     const fresh = adapter.normalize(json);
     // Een adapter mag zelf bepalen wat "gezond" betekent. De bliksemrelay is het
     // voorbeeld: bereikbaar zijn en data leveren zijn daar twee verschillende dingen.
@@ -11052,6 +11211,15 @@ function herstelExtraLagen() {
   stateVerbergStand = null;
 }
 
+/* DE BOLLAGEN GAAN UIT ZOLANG JE ERGENS ANDERS KIJKT, en `spaceVoorheen` onthoudt
+   wat er stond. Sinds sessie 36 sluit dat ook hun haal-poort: er valt in deze
+   weergaven werkelijk niets te tonen, dus er valt ook niets te halen. Dat is een
+   OMSTANDIGHEID en geen keuze — het register wordt hier dus niet aangeraakt, net
+   als bij de tijdsloten.
+
+   En daarom kent syncLayerFeeds() een verse-toets: zonder die toets zou elke
+   terugkeer uit de ruimte alle adapters opnieuw laten halen, ook na tien
+   seconden. */
 const gebeurtenisLagen = {
   eventsOff() {
     for (const laag of Object.keys(active)) {
@@ -11059,10 +11227,12 @@ const gebeurtenisLagen = {
       active[laag] = false;
     }
     render();
+    syncLayerFeeds();
   },
   eventsRestore() {
     for (const laag of Object.keys(spaceVoorheen)) active[laag] = spaceVoorheen[laag];
     render();
+    syncLayerFeeds();
   }
 };
 
@@ -11368,7 +11538,7 @@ if (globalThis.TerraCore) {
          bol en geen tweede onderwerp — precies wat het hoort te zijn, maar wie
          er een opvallende laag van verwacht, ziet hem niet.
 
-         Alleen `active` en `syncAuroraLayer`, net als eventsOff/-Restore: de rij
+         Alleen `active` en `syncLayerFeeds`, net als eventsOff/-Restore: de rij
          in het lagenpaneel blijft ongemoeid, want die staat in deze states toch
          niet voor de keuze van de bezoeker. eventsRestore() zet zijn eigen
          instelling bij vertrek terug. */
@@ -11443,10 +11613,10 @@ if (globalThis.TerraCore) {
       auroraOn() {
         if (active.aurora) return;
         active.aurora = true;
-        syncAuroraLayer();
+        syncLayerFeeds();
       },
       auroraRestore() {
-        syncAuroraLayer();
+        syncLayerFeeds();
       }
     }
   });
@@ -11634,11 +11804,13 @@ for (const toepassen of prefsToepassers) {
 applyLayerToggles();      // de vier textuurlagen naar de shader-uniforms
 updateEarthLayers();      // en hun rijen + de wolkenschil
 if (wireframeOn) applyWireframe();
-/* De aurora ALTIJD, ook als hij uit staat: `syncAuroraLayer()` zet dan
-   `Adapters.ovation.enabled = false`, en dat is precies de poort die voorkomt
-   dat er 924 KB binnenkomt voor een laag die niemand ziet. Hem overslaan zou de
-   enige adapter die het goed doet weer opengooien. */
-syncAuroraLayer();
+/* DE POORT ALTIJD, en juist voor de lagen die UIT staan: `syncLayerFeeds()` zet
+   dan `enabled = false`, en dat is precies wat voorkomt dat de eerste ophaalronde
+   hieronder een halve megabyte binnenhaalt voor lagen die niemand ziet.
+
+   HIER EN NIET LATER. De ronde zelf staat verderop en loopt over álle adapters;
+   staat de poort dan nog open, dan is het verkeer al vertrokken. */
+syncLayerFeeds();
 
 /* DE OVERLAYS LOPEN NIET VIA `prefsToepassers` maar via hun eigen weg, en dat
    is geen inconsistentie: `setOverlay` HAALT het bestand op als het er nog niet
@@ -12002,6 +12174,8 @@ updateSunUniform();
 // verleden, dan verandert dat tijdvak niet meer en slaat pull() de ronde over (zie de
 // vroege terugkeer daar). De eerste ronde hieronder, de verbindingstest en de
 // inhaalronde na een pauze gaan wél altijd door — die zijn geen klok.
+// Vanaf hier mag de poort zelf ophalen; hiervoor deed de eerste ronde dat al.
+eersteRondeGestart = true;
 const firstPulls = {};
 for (const [id, adapter] of Object.entries(Adapters)) {
   firstPulls[id] = pull(adapter);
@@ -12048,12 +12222,23 @@ if (IS_LOCAL) {
   };
 }
 
-// (1) kernlaag binnen — korte adempauze zodat de render af is voor de intro speelt.
-// BEIDE seismische bronnen, want welke er aan staat is een instelling geworden: een
-// uitgezette adapter keert meteen terug uit pull() en zou het bootscherm anders
-// wegnemen vóórdat er ook maar iets geladen is.
-Promise.allSettled([firstPulls.usgs, firstPulls.emsc].filter(Boolean))
-  .then(() => setTimeout(dismissBoot, 400));
+/* (1) kernlaag binnen — korte adempauze zodat de render af is voor de intro speelt.
+
+   WACHTEN OP WAT ER ÉCHT GEHAALD WORDT, en dat is sinds sessie 36 niet meer
+   vanzelf de bevingen. Hier stonden de twee seismische bronnen met de redenering
+   dat je niet weet welke er aanstaat; nu kan de bevingslaag zelf uitstaan, en dan
+   keren ze allebei meteen terug uit pull() en valt het bootscherm binnen 400 ms
+   weg zonder dat er iets geladen is.
+
+   Dus: de adapters die de poort passeren. Zijn dat er nul, dan is er ook niets om
+   op te wachten en is meteen wegvallen precies goed. Adapters zonder lagen tellen
+   niet mee — die voeden de zonneactiviteit en de magnetosfeer, niet de bol. */
+{
+  const kernPulls = Object.entries(Adapters)
+    .filter(([, a]) => a.layers && a.layers.length && a.enabled !== false)
+    .map(([id]) => firstPulls[id]);
+  Promise.allSettled(kernPulls).then(() => setTimeout(dismissBoot, 400));
+}
 // (3) bovengrens — dit is het vangnet dat een hangende bron onschadelijk maakt
 setTimeout(dismissBoot, BOOT_MAX_MS);
 
