@@ -4147,6 +4147,22 @@ let earthLayerEnabled = { day: true,
 const LAYER_UNIFORM = { clouds:'hasClouds', specular:'hasSpecular', normal:'hasNormal' };
 
 // pas de toggle-keuzes toe op de shader-uniforms
+/* WANNEER DE ZWEVENDE WOLKENSCHIL ZICHTBAAR IS — VIER CONDITIES, ÉÉN PLEK.
+
+   Ze stonden verspreid over vier regels die elk `cloudMesh.visible` zetten, en
+   drie ervan kenden maar een deel van het verhaal. Eén regel deed
+   `cloudMesh.visible = !wireframeOn` en draaide ná `applyLayerToggles()` — dus
+   wie de wolken had uitgezet kreeg ze bij de volgende start alsnog terug, met de
+   knop op "off" en de shader-uniform op 0. Alleen de losse SCHIL stond nog aan.
+
+   Dat was op geen enkele uitlezing te zien: `hasClouds` klopte, de knop klopte,
+   en toch dreven er wolken. Vandaar deze functie: wie de schil zet, vraagt het
+   hier, en een vijfde conditie hoeft maar op één plek bij. */
+function wolkenSchilAan() {
+  return !!(earthLayerStatus.clouds && earthLayerEnabled.clouds
+            && globeMode === 'realistic' && !wireframeOn);
+}
+
 function applyLayerToggles() {
   if (!shaderMaterial) return;
   const u = shaderMaterial.uniforms;
@@ -4156,7 +4172,7 @@ function applyLayerToggles() {
   u.hasSpecular.value = (earthLayerStatus.specular && earthLayerEnabled.specular) ? 1 : 0;
   u.hasNormal.value   = (earthLayerStatus.normal   && earthLayerEnabled.normal)   ? 1 : 0;
   // de losse wolkenschil volgt dezelfde aan/uit-keuze als de schaduw
-  if (cloudMesh) cloudMesh.visible = cloudsOn && globeMode === 'realistic';
+  if (cloudMesh) cloudMesh.visible = wolkenSchilAan();
   // day/night kunnen we niet "uitzetten" zonder zwart; we mengen ze i.p.v. weglaten.
   // dayBlend 0 = alleen nacht, 1 = alleen dag, anders normale terminator-mix.
   u.dayEnabled.value   = earthLayerEnabled.day   ? 1 : 0;
@@ -4309,6 +4325,17 @@ function setupCloudSphere() {
     transparent: true, depthWrite: false, side: THREE.FrontSide
   });
   cloudMesh = new THREE.Mesh(new THREE.SphereGeometry(R, 64, 48), mat);
+  /* DE ZICHTBAARHEID METEEN, EN DAT IS DE KERN VAN EEN BUG UIT SESSIE 35.
+
+     Deze functie draait in `whenEarthMeshReady()`, dus NA `applyLayerToggles()`
+     en na het blok dat de bewaarde voorkeuren toepast. Een verse Mesh is in
+     three standaard zichtbaar, en er stond hier niets dat dat corrigeerde — dus
+     wie de wolken had uitgezet kreeg deze schil er alsnog bij, met de knop op
+     "off" en `hasClouds` op 0.
+
+     Dat was niet aan de uitlezing te zien: de knop klopte, de uniform klopte, en
+     toch dreven er wolken. De enige plek waar het zichtbaar was, was het scherm. */
+  cloudMesh.visible = wolkenSchilAan();
   earthMesh.add(cloudMesh); // erft exact de oriëntatie van de aarde → wolken op de juiste plek
 }
 
@@ -4435,11 +4462,9 @@ function applyWireframe() {
   // `earthMesh.visible = false` vanzelf mee — three's zichtbaarheid erft. De regel
   // hieronder is er voor het geval de wolkenschil ooit een zusje wordt (zoals de
   // aurora dat is), en kost verder niets.
-  if (wireframeOn) {
-    if (cloudMesh) cloudMesh.visible = false;
-  } else {
-    applyLayerToggles(); // herstelt o.a. de wolken-schil-zichtbaarheid
-  }
+  // `wolkenSchilAan()` kent de wireframe-stand zelf, dus hier geen tak meer.
+  if (cloudMesh) cloudMesh.visible = wolkenSchilAan();
+  if (!wireframeOn) applyLayerToggles();   // en de uniforms erbij
   syncLandPolygons();
   syncWireToggle();
 }
@@ -4543,7 +4568,10 @@ function applyGlobeMode() {
       // Niet onvoorwaardelijk aan: staat de wireframe aan, dan hoort de wolkenschil
       // weg te blijven. Zonder deze toets bracht een rondje Schematic → Realistic
       // de wolken terug in een doorkijk waar ze net waren uitgezet.
-      if (cloudMesh) cloudMesh.visible = !wireframeOn;
+      /* HIER STOND `!wireframeOn` EN VERDER NIETS, en dat was de bug die de
+         wolken terugbracht na een herstart: deze regel draait ná het toepassen
+         van de bewaarde voorkeuren en wist de keuze van de bezoeker. */
+      if (cloudMesh) cloudMesh.visible = wolkenSchilAan();
     } else {
       // bouw eenmalig, daarna hergebruiken
       const built = buildRealisticMaterial();
@@ -4568,7 +4596,7 @@ function applyGlobeMode() {
     }
   } else { // expert — schematische vector-kaart
     realisticActive = false;
-    if (cloudMesh) cloudMesh.visible = false; // geen zwevende wolken in deskundig modus
+    if (cloudMesh) cloudMesh.visible = wolkenSchilAan(); // in expert per definitie uit
     enterExpertMode({ world, THREE, bloomPass, gradePass, PARAMS });
   }
   // NA beide takken, want de stand hangt van `globeMode` én `wireframeOn` af en
@@ -12079,7 +12107,15 @@ function loadSketch() {
       const mesh = mod.createSketchMesh(THREE, {
         earthRadius: 100,
         altitude: PARAMS.sketchAltitude,
-        opacity: PARAMS.sketchOpacity,
+        /* UIT HET REGISTER EN NIET UIT PARAMS (sessie 35). `setOpacity()` in de
+           module doet `if (mesh)` en die mesh wordt hier pas gemaakt — dus elke
+           poging om de bewaarde stand eerder toe te passen ging stil verloren.
+           Hier is de eerste plek waar hij kan landen.
+
+           De fabrieksstand van dit register (100) komt overeen met
+           PARAMS.sketchOpacity (1.0); die blijft de waarde waar deze standaard
+           op afgestemd is. */
+        opacity: Prefs.get('draw.opacity') / 100,
         anisotropy: aniso
       });
       mesh.visible = sketchOn;
@@ -12162,17 +12198,19 @@ sketchOpacityEl?.addEventListener('input', e => {
   if (sketch) sketch.setOpacity(v / 100);
   Prefs.set('draw.opacity', v);
 });
-/* De bewaarde stand, en de dispatch NÁ de luisteraar — dezelfde volgorde als bij
-   de nachtschuif, en om dezelfde reden: ervóór is er nog niemand die luistert en
-   dan staat de schuif op de ene waarde en de laag op de andere.
+/* DE SCHUIF EN HET LABEL OP DE BEWAARDE STAND. De LAAG krijgt hetzelfde getal
+   zodra hij geladen is — zie `loadSketch()` hierboven — want op dit moment
+   bestaat hij nog niet en zou een dispatch stil niets doen.
 
    Deze schuif hoort bij een laag die de standalone eruit knipt, dus hij staat
-   binnen de markers. De sleutel heet daarom `draw.opacity` en niet naar de laag:
-   de bouwvangrail valt op elk voorkomen van die naam buiten de markers, en
+   binnen de knipmarkers. De sleutel heet daarom `draw.opacity` en niet naar de
+   laag: de bouwvangrail valt op elk voorkomen van die naam daarbuiten, en
    js/core/prefs.js ligt daarbuiten. */
 if (sketchOpacityEl) {
-  sketchOpacityEl.value = String(Prefs.get('draw.opacity'));
-  sketchOpacityEl.dispatchEvent(new Event('input'));
+  const pct = Prefs.get('draw.opacity');
+  sketchOpacityEl.value = String(pct);
+  const label = document.getElementById('sketch-opacity-val');
+  if (label) label.textContent = pct + '%';
 }
 
 document.getElementById('sketch-export')?.addEventListener('click', async () => {
