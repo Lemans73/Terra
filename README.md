@@ -149,6 +149,7 @@ itself.
 | `merge(prev, fresh)` | sources that accumulate history rather than replace it; lightning uses this |
 | `health(json)` | sources where "reachable" and "returning data" are different questions |
 | `healthId` | share one status indicator across several adapters, as the four EONET categories do |
+| `sourceGroup` | two adapters feeding one layer where only the chosen one runs, as USGS and EMSC do |
 | `keepOnEmpty` | treat an empty response as a hiccup rather than as truth |
 | `optional` | on failure, padlock the layer instead of reporting the whole app degraded |
 | `offlineNote` | the text shown inside that padlock |
@@ -161,6 +162,19 @@ itself.
 An adapter marked `optional` that fails puts its layers behind a padlock with
 an expandable panel explaining how to connect a backend. When the source comes
 back, the padlock lifts and the layer restores its previous state.
+
+### A layer nobody is looking at is not fetched
+
+An adapter runs only while at least one of its `layers` is switched on. Turning
+a layer off closes its source, turning it back on opens it again and fetches
+right away, unless the last answer is still younger than the adapter's own
+`interval`. Leaving Earth for the space, sun or magnetosphere view closes them
+all for the duration, since none of those views draws event layers.
+
+This keys off the working state and not off the saved preference, so a time
+padlock or a change of view steers the fetching without ever rewriting what the
+visitor chose. Adapters with an empty `layers` list stay outside all of it: they
+feed readouts rather than the globe, and there is no layer switch to consult.
 
 ### Following the chosen moment
 
