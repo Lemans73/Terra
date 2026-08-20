@@ -52,7 +52,7 @@ const MSPHERE_ORTHO_DIEPTE = 200000;
 
 export function createMagnetosphereState(THREE, deps) {
   const { world, boundary, wind, dipole, grid, scale, craft, fieldlines,
-          layers, Core, feed, clock } = deps;
+          layers, Core, feed, clock, parts } = deps;
 
   const origin = new THREE.Vector3(0, 0, 0);
   const _sun = new THREE.Vector3();
@@ -675,21 +675,33 @@ export function createMagnetosphereState(THREE, deps) {
 
      Vandaar: de voorkeur staat hier, en de zichtbaarheid is de voorkeur ÉN de
      mogelijkheid. */
-  let wilMagnetopauze = true;
-  let wilBoegschok = true;
-  let wilRaster = true;
-  let wilVeldlijnen = true;
-  let wilWind = true;
-  /* De rustreferentie staat standaard UIT: hij is een hulpmiddel om iets mee
-     te vergelijken, en wie er niet om vraagt heeft een tweede familie lijnen
-     door zijn beeld staan. */
-  let wilDipool = false;
-  /* De toestellen staan standaard AAN, anders dan de rustreferentie hierboven.
-     Dat is geen smaak: dit zijn de enige twee punten in de scene waar een
-     instrument het veld werkelijk gemeten heeft, en de uitlezing verwijst er al
-     naar met `Beyond 6.62 Re`. Een meting hoort niet achter een knop die je
-     eerst moet vinden. */
-  let wilToestellen = true;
+  /* DE ZEVEN VOORKEUREN, EN HUN BEGINSTAND KOMT VAN BUITEN (sessie 35).
+
+     Tot deze sessie stonden hier zeven literals, en die moesten overeenkomen
+     met de klasse `on` in de markup én met de `start`-parameter bij het
+     aanmelden — drie plekken die één verhaal vertelden. Nu geeft de aanroeper
+     ze mee uit js/core/prefs.js, dat de enige bron van een beginstand is.
+
+     De terugvallen hieronder zijn de fabrieksstanden zoals ze tot sessie 35
+     golden. Ze staan er zodat deze state ook zonder `parts` klopt — een
+     aanroeper die hem vergeet krijgt de oude app en geen lege scene. Wat ze
+     NIET zijn is een tweede waarheid: zodra `parts` er is, wint die. */
+  const _p = parts || {};
+  const _wil = (naam, terugval) =>
+    typeof _p[naam] === 'boolean' ? _p[naam] : terugval;
+
+  let wilMagnetopauze = _wil('magnetopause', true);
+  let wilBoegschok = _wil('bowshock', true);
+  let wilRaster = _wil('grid', true);
+  let wilVeldlijnen = _wil('fieldlines', true);
+  let wilWind = _wil('wind', true);
+  // De rustreferentie is een hulpmiddel om iets mee te vergelijken; wie er niet
+  // om vraagt heeft een tweede familie lijnen door zijn beeld staan.
+  let wilDipool = _wil('dipole', false);
+  // De toestellen zijn de enige twee punten in de scene waar een instrument het
+  // veld werkelijk gemeten heeft. Een meting hoort niet achter een knop die je
+  // eerst moet vinden.
+  let wilToestellen = _wil('goes', true);
   let huidigeView = null;
 
   function pasVoorkeurenToe() {

@@ -461,11 +461,11 @@
       <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
       <div class="acc-body">
-      <div class="elayer on" id="sound-toggle"><span class="edot"></span>Notification sound<span class="estat" id="es-sound">on</span></div>
+      <div class="elayer" id="sound-toggle"><span class="edot"></span>Notification sound<span class="estat" id="es-sound">on</span></div>
       <!-- Het plafond staat in PARAMS (labelCountMax = beginstand,
       labelCountCeiling = bovengrens); de JS zet `max` en `value` bij init uit die
       waarden, zodat de markup ze niet kan tegenspreken. -->
-      <div class="elayer on expandable" id="label-toggle">
+      <div class="elayer expandable" id="label-toggle">
       <span class="edot"></span>Quake labels
       <button class="row-expand" data-note="label-count" title="Label settings" aria-label="Label settings" aria-expanded="false">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
@@ -481,8 +481,32 @@
       <input type="range" id="label-count-slider" class="range" min="0" max="40" step="1" value="12" />
       </div>
       </div>
-      <div class="elayer on" id="rotate-toggle"><span class="edot"></span>Auto-rotate<span class="estat" id="es-rotate">on</span></div>
+      <div class="elayer" id="rotate-toggle"><span class="edot"></span>Auto-rotate<span class="estat" id="es-rotate">on</span></div>
       <div class="elayer" id="utc-toggle" data-utc><span class="edot"></span>Show times in UTC<span class="estat" id="es-utc">off</span></div>
+
+      <!-- DE WEG TERUG (sessie 35). Zonder deze knop is een bewaarde voorkeur
+           een val: wie iets uitzette en niet meer weet wát, kan er niet uit.
+           Hij staat onderaan Preferences omdat hij over álle voorkeuren gaat en
+           niet over een laag. -->
+      <div class="elayer expandable" id="prefs-reset" data-prefs="none">
+      <span class="edot"></span>Reset to defaults
+      <button class="row-expand" data-note="prefs-reset-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <span class="estat" id="es-prefs-reset">&#8212;</span>
+      </div>
+      <div class="layer-detail" id="prefs-reset-note">
+      Terra remembers what you switch on and off &#8212; layers, overlays, axes,
+      the magnetosphere parts, the texture options, the timeline span. It keeps
+      only what you changed, so a setting you never touched follows the default
+      and picks up any later improvement to it.
+      <br /><br />
+      What it deliberately does <b>not</b> remember: the moment you were looking
+      at, which view you were in, and where the camera pointed. Terra always
+      opens on Earth, at now.
+      <br /><br />
+      This clears all of it and reloads the page.
+      </div>
       </div>
       </section>
 
@@ -510,7 +534,7 @@
                  downloads of textuureenheden. Vandaar dat hij hier staat en niet
                  bij de kwaliteitskeuze eronder — je kiest wát er op de bol ligt,
                  niet hoe scherp. -->
-            <div class="elayer expandable on" id="ocean-toggle">
+            <div class="elayer expandable" id="ocean-toggle">
               <span class="edot"></span>Ocean floor
               <button class="row-expand" data-note="ocean-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
@@ -525,7 +549,7 @@
               adding a layer, so it costs one download the first time you switch
               it on &#8212; about 0.4 MB at 2K, about 4.9 MB at 8K.
             </div>
-            <div class="elayer on" id="wave-toggle"><span class="edot"></span>Wave animation<span class="estat" id="es-wave">on</span></div>
+            <div class="elayer" id="wave-toggle"><span class="edot"></span>Wave animation<span class="estat" id="es-wave">on</span></div>
             <div class="elayer" id="wire-toggle"><span class="edot"></span>Earth wireframe<span class="estat" id="es-wire">off</span></div>
             <div class="night-slider">
               <div class="ns-label">
@@ -959,7 +983,7 @@
       <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
       <div class="acc-body">
-      <div class="elayer on" id="eclipse-toggle"><span class="edot"></span>Shadow on Earth<span class="estat" id="es-eclipse">on</span></div>
+      <div class="elayer" id="eclipse-toggle"><span class="edot"></span>Shadow on Earth<span class="estat" id="es-eclipse">on</span></div>
       <div class="eclipse-state" id="eclipse-state">No eclipse at this moment.</div>
       <!-- Zonder deze knoppen zou vrijwel niemand de schaduw ooit te zien
       krijgen: er zijn twee tot vijf zonsverduisteringen per jaar, elk een
@@ -979,7 +1003,7 @@
       <div class="acc-body">
       <!-- Standaard AAN: dit is een meting, en die hoort te staan; de
       geschilderde zontextuur is dat niet. -->
-      <div class="elayer on expandable" id="sunspots-toggle">
+      <div class="elayer expandable" id="sunspots-toggle">
       <span class="edot"></span>Sunspots
       <button class="row-expand" data-note="sunspots-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
@@ -1363,7 +1387,7 @@
       <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
       <div class="acc-body">
-      <div class="elayer on expandable" id="msp-mp-toggle">
+      <div class="elayer expandable" id="msp-mp-toggle">
       <span class="edot"></span>Magnetopause
       <button class="row-expand" data-note="msp-mp-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
@@ -1380,7 +1404,7 @@
       The nose sits around ten Earth radii. A strong gust can push it inside
       geosynchronous orbit at 6.6 Re, which is why that distance matters.
       </div>
-      <div class="elayer on expandable" id="msp-bs-toggle">
+      <div class="elayer expandable" id="msp-bs-toggle">
       <span class="edot"></span>Bow shock
       <button class="row-expand" data-note="msp-bs-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
@@ -1404,7 +1428,7 @@
       and deflected wind &#8212; which is what the solar wind particles are
       flowing through when they bend around the nose.
       </div>
-      <div class="elayer on expandable" id="msp-lines-toggle">
+      <div class="elayer expandable" id="msp-lines-toggle">
       <span class="edot"></span>Field lines
       <button class="row-expand" data-note="msp-lines-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
@@ -1428,7 +1452,7 @@
       Lighter and warmer lines leave the northern hemisphere, darker and cooler
       ones the southern. That is a shade within a state, not a fourth state.
       </div>
-      <div class="elayer on expandable" id="msp-grid-toggle">
+      <div class="elayer expandable" id="msp-grid-toggle">
       <span class="edot"></span>Scale grid
       <button class="row-expand" data-note="msp-grid-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
@@ -1466,7 +1490,7 @@
       in the 3D view, and dashed &#8212; what comes out of a formula should not
       look like what was traced through a measured field.
       </div>
-      <div class="elayer on expandable" id="msp-wind-toggle">
+      <div class="elayer expandable" id="msp-wind-toggle">
       <span class="edot"></span>Solar wind
       <button class="row-expand" data-note="msp-wind-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
@@ -1491,7 +1515,7 @@
       straight stream through the magnetosphere would claim the opposite of
       what happens.
       </div>
-      <div class="elayer on expandable" id="msp-goes-toggle">
+      <div class="elayer expandable" id="msp-goes-toggle">
       <span class="edot"></span>GOES satellites
       <button class="row-expand" data-note="msp-goes-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
@@ -1538,7 +1562,7 @@
       partly measuring them. Those samples are flagged rather than dropped
       &#8212; leaving one out would be a claim of its own.
       </div>
-      <div class="elayer on" id="msp-aurora-toggle"><span class="edot"></span>Aurora oval<span class="estat" id="es-msp-aurora">on</span></div>
+      <div class="elayer" id="msp-aurora-toggle"><span class="edot"></span>Aurora oval<span class="estat" id="es-msp-aurora">on</span></div>
       </div>
       </section>
 
@@ -1697,15 +1721,15 @@
       </button>
       <div class="acc-body">
       <!-- Zon en maan hebben geen schakelaar: die horen er altijd te zijn. -->
-      <div class="elayer on" id="subpoint-toggle"><span class="edot"></span>Sub-points<span class="estat" id="es-subpoint">on</span></div>
-      <div class="elayer on" id="leaders-toggle"><span class="edot"></span>Leader lines<span class="estat" id="es-leaders">on</span></div>
-      <div class="elayer on" id="align-toggle"><span class="edot"></span>Sun&#8211;Moon line<span class="estat" id="es-align">on</span></div>
-      <div class="elayer on" id="tracks-toggle"><span class="edot"></span>Ground tracks<span class="estat" id="es-tracks">on</span></div>
-      <div class="elayer on" id="ticks-toggle"><span class="edot"></span>Hour marks<span class="estat" id="es-ticks">on</span></div>
+      <div class="elayer" id="subpoint-toggle"><span class="edot"></span>Sub-points<span class="estat" id="es-subpoint">on</span></div>
+      <div class="elayer" id="leaders-toggle"><span class="edot"></span>Leader lines<span class="estat" id="es-leaders">on</span></div>
+      <div class="elayer" id="align-toggle"><span class="edot"></span>Sun&#8211;Moon line<span class="estat" id="es-align">on</span></div>
+      <div class="elayer" id="tracks-toggle"><span class="edot"></span>Ground tracks<span class="estat" id="es-tracks">on</span></div>
+      <div class="elayer" id="ticks-toggle"><span class="edot"></span>Hour marks<span class="estat" id="es-ticks">on</span></div>
       <!-- De uitleg zit achter DEZELFDE uitklap-chevron als de
       aardbeving-filters, en staat in de rij zelf. Als losse knop eronder
       ("What are these?") was niet te zien waar hij bij hoorde. -->
-      <div class="elayer on expandable" id="twilight-toggle">
+      <div class="elayer expandable" id="twilight-toggle">
       <span class="edot"></span>Twilight bands
       <button class="row-expand" data-note="twilight-note" title="What are these?" aria-label="What are these?" aria-expanded="false">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
@@ -1739,7 +1763,7 @@
       naar twee tabs voor één laag: aanzetten op de ene, bedienen op de andere. De
       zon/maan-lagen zijn er zes en horen bij elkaar in dat lijstje; de tekenlaag
       is er één en heeft zijn eigen tab al. -->
-      <div class="elayer" id="sketch-toggle"><span class="edot"></span>Show on globe<span class="estat" id="es-sketch">off</span></div>
+      <div class="elayer" id="sketch-toggle" data-prefs="none"><span class="edot"></span>Show on globe<span class="estat" id="es-sketch">off</span></div>
       <p class="sk-lead">Draw on the map and it appears on the globe. Annotations
       live as data, not in the texture &#8212; export the file and someone else can
       open your marks on their own Terra.</p>
@@ -2036,6 +2060,7 @@ import { createFieldlinesLayer } from './js/layers/magnetosphere/fieldlines-laye
 import { createWindLayer } from './js/layers/magnetosphere/wind-layer.js';
 import { createDipoleLayer } from './js/layers/magnetosphere/dipole-layer.js';
 import { createMagnetosphereCraft } from './js/ui/magnetosphere-craft.js';
+import { Prefs, PREFS_DEFAULTS } from './js/core/prefs.js';
 import { createMagnetosphereScale } from './js/ui/magnetosphere-scale.js';
 import { MSPHERE_RE, MSPHERE_DRAW_MAX, pocNaarTerra }
   from './js/layers/magnetosphere/boundary-layer.js';
@@ -3147,7 +3172,23 @@ function renderHealth() {
 // ---- State ----------------------------------------------------
 
 let store = [];                    // alle genormaliseerde events
-const active = { quake:true, volcano:true, storm:true, ice:true, wildfire:true, aqi:false, lightning:true, aurora:false };
+/* DE ACHT DATALAGEN, EN HUN STAND KOMT UIT HET REGISTER.
+
+   Tot sessie 35 stond deze regel er als een literal met vijf lagen aan, en dan
+   opende Terra met vijf soorten markeringen over elkaar heen. Nu zijn het er
+   twee (aardbevingen en vulkanen) en onthoudt Terra wat je daarna aanzet — zie
+   js/core/prefs.js voor waarom dat bestand de ENIGE bron van een beginstand is
+   en niet een laag eroverheen.
+
+   DIT SCHEELT GEEN VERKEER, en dat is gemeten: `pull()` verderop kent alleen
+   `adapter.enabled` en niet deze stand, dus een uitgezette laag haalt zijn bron
+   nog steeds op. Alleen de aurora hangt aan zijn laagstand (via
+   syncAuroraLayer) en scheelt dus wél zijn 924 KB. */
+const ACTIVE_SLEUTEL = { quake: 'layer.quake', volcano: 'layer.volcano',
+  storm: 'layer.storm', ice: 'layer.ice', wildfire: 'layer.wildfire',
+  aqi: 'layer.aqi', lightning: 'layer.lightning', aurora: 'layer.aurora' };
+const active = Object.fromEntries(
+  Object.entries(ACTIVE_SLEUTEL).map(([k, s]) => [k, Prefs.get(s)]));
 
 // Lagen waarop het tijdvenster (preset + slider) van toepassing is. Alleen de
 // aardbevingsstroom is een echte tijdreeks van mómentgebeurtenissen. EONET-lagen
@@ -3197,7 +3238,7 @@ const MOMENT_LAYERS = new Set(['quake', 'storm']);
 // referenties naar de actieve 3D-glyph-objecten (voor per-frame animatie)
 let glyphList = [];
 let hovered = null;        // het 3D-object onder de muis (raycaster-highlight)
-let labelsOn = true;       // leader-line labels voor de zwaarste bevingen tonen
+let labelsOn = Prefs.get('pref.quakeLabels');   // leader-line labels voor de zwaarste bevingen
 let labelQuakes = [];      // de top-N bevingen die momenteel een label hebben
 // Plafond voor het aantal beving-labels (Settings → Preferences). Deze declaratie
 // hoort hier te blijven, bij de rest van de scene-state: rebuildLabels() wordt al
@@ -3209,13 +3250,13 @@ let labelBudget = PARAMS.labelCountMax;
 // toast-meldingen voor nieuwe real-time entries
 const seenIds = new Set(); // reeds geziene event-id's
 let initialLoadDone = false;
-let soundOn = true;        // meldingsgeluid aan/uit
+let soundOn = Prefs.get('pref.sound');          // meldingsgeluid aan/uit
 let audioCtx = null;
 
 // PARAMS → verplaatst naar ./js/config.js (Stap 0). Blijft een gedeelde
 // objectreferentie, dus de tuning-GUI muteert 'm ongewijzigd.
 
-let timeWindow = 'day';            // 'hour' | 'day' | 'week' — stuurt feed-keuze
+let timeWindow = Prefs.get('time.span');   // 'hour' | 'day' | 'week' — stuurt feed-keuze
 let magMin = 2;                    // ondergrens aardbeving-magnitude ("All" = QUAKE_FLOOR_MAG)
 // Bovengrens, `null` = geen. Sessie 14 wees een maximum nog af omdat de vraag
 // zeldzaam was; met EMSC erbij is de band M1-M2 pas gevuld en wordt "laat me
@@ -3250,7 +3291,12 @@ const OVERLAY_SOURCES = {
   borders: asset('assets/geo/ne_110m_admin_0_countries.geojson'),
   names:   asset('assets/geo/ne_110m_admin_0_countries.geojson') // zelfde bestand als borders
 };
-const overlayOn = { plates: false, borders: false, names: false };
+/* Ook deze drie komen uit het register. Ze stonden hier op `false` terwijl de
+   markup ze aan had staan — precies de drieslag die prefs.js opruimt. */
+const OVERLAY_SLEUTEL = { plates: 'overlay.plates', borders: 'overlay.borders',
+                          names: 'overlay.names' };
+const overlayOn = Object.fromEntries(
+  Object.entries(OVERLAY_SLEUTEL).map(([k, s]) => [k, Prefs.get(s)]));
 const overlayPaths = { plates: null, borders: null };   // lijn-overlays
 let countryLabels = null;                                // punt-overlay (landnamen)
 const overlayLoading = {};
@@ -3564,6 +3610,8 @@ function renderOverlays(force) {
 
 async function setOverlay(kind, on) {
   overlayOn[kind] = on;
+  // De enige schrijver van `overlayOn`, dus ook de enige plek die bewaart.
+  Prefs.set(OVERLAY_SLEUTEL[kind], on);
   const stat = document.getElementById('es-' + kind);
   const row = document.querySelector('.elayer[data-overlay="' + kind + '"]');
   if (row) row.classList.toggle('on', on);
@@ -3611,6 +3659,101 @@ function paintOverlayDots() {
 }
 paintOverlayDots();
 
+/* ============================================================
+   WAT ER NA DE LAAGOPBOUW NOG TOEGEPAST MOET WORDEN.
+
+   Elke schakelaar wordt aangemeld rond regel 7000-8600, en de lagen die ze
+   bedienen bestaan pas vanaf ~10590. Een bewaarde stand kan bij het aanmelden
+   dus wel de UI zetten (de klasse, het woordje "on") maar niet de laag zelf —
+   elke `apply` begint met `laag &&` en doet op dat moment stil niets.
+
+   GEMETEN: geomagToggles.forEach staat op 7045, `geomag` ontstaat op 10608.
+
+   Vandaar deze lijst. Elke binder duwt er zijn toepassing in, en één regel na
+   de laagopbouw draaien ze allemaal. Onvoorwaardelijk, ook als de stand de
+   fabrieksstand is: `setVisible(false)` op iets dat al uit staat is gratis, en
+   "alleen bij afwijking toepassen" zou betekenen dat de laag en de knop uit
+   elkaar kunnen lopen zodra iemand een fabrieksstand verzet.
+   ============================================================ */
+const prefsToepassers = [];
+
+/* ============================================================
+   WELKE SCHAKELAARRIJ BIJ WELKE SLEUTEL HOORT.
+
+   Deze tabel bestaat omdat de klasse `on` sinds sessie 35 NIET meer in de
+   markup staat. Dat was de derde plek waar een beginstand leefde, en hem daar
+   weghalen is de helft van het werk — de andere helft is dat iemand hem bij het
+   opstarten moet zetten. Zonder deze tabel staat een rij visueel uit terwijl
+   zijn laag aan is, en dat is een stillere fout dan de drieslag ooit was.
+
+   GEMETEN toen deze tabel er nog niet was: `sound-toggle` en `wave-toggle`
+   stonden op `aan: false` met het woordje "on" ernaast — de rij had zijn klasse
+   verloren en niemand zette hem terug.
+
+   De rijen die via `bindMsphereToggle`, `bindCosmosToggle` of `geomagToggles`
+   lopen zetten hun eigen klasse al; ze staan hier toch in, want deze tabel is
+   ook de VANGRAIL: elke `.elayer` met een id hoort erin te staan, en wat er
+   niet in staat wordt gemeld. Twee keer dezelfde klasse zetten is gratis.
+   ============================================================ */
+const PREFS_RIJEN = {
+  'sound-toggle': 'pref.sound', 'label-toggle': 'pref.quakeLabels',
+  'rotate-toggle': 'pref.autoRotate',
+  'ocean-toggle': 'tex.ocean', 'wave-toggle': 'tex.wave', 'wire-toggle': 'tex.wire',
+  'polarmotion-toggle': 'axes.polarmotion', 'eclipse-toggle': 'sunmoon.eclipse',
+  'sunspots-toggle': 'sunmoon.sunspots', 'lagrange-toggle': 'space.lagrange',
+  'msp-mp-toggle': 'msp.magnetopause', 'msp-bs-toggle': 'msp.bowshock',
+  'msp-lines-toggle': 'msp.fieldlines', 'msp-grid-toggle': 'msp.grid',
+  'msp-dipole-toggle': 'msp.dipole', 'msp-wind-toggle': 'msp.wind',
+  'msp-goes-toggle': 'msp.goes', 'msp-aurora-toggle': 'layer.aurora',
+  'skyplanets-toggle': 'sky.planets', 'ecliptic-toggle': 'sky.ecliptic',
+  'equator-toggle': 'sky.equator', 'ragrid-toggle': 'sky.ragrid',
+  'eclgrid-toggle': 'sky.eclgrid',
+  'rotaxis-toggle': 'axes.rotation', 'magaxis-toggle': 'axes.dipole',
+  'magdrift-toggle': 'axes.drift',
+  'subpoint-toggle': 'sunmoon.subpoint', 'leaders-toggle': 'sunmoon.leaders',
+  'align-toggle': 'sunmoon.align', 'tracks-toggle': 'sunmoon.tracks',
+  'ticks-toggle': 'sunmoon.ticks', 'twilight-toggle': 'sunmoon.twilight',
+  'utc-toggle': 'pref.utc'
+};
+
+/* De rijen op hun bewaarde stand zetten: de klasse waar de opmaak aan hangt, en
+   het woordje ernaast. Dit is UITSLUITEND de UI — de lagen zelf lopen via
+   `prefsToepassers`, want die bestaan op dit moment nog niet. */
+function prefsZetRijen() {
+  for (const [id, sleutel] of Object.entries(PREFS_RIJEN)) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    const aan = Prefs.get(sleutel);
+    el.classList.toggle('on', !!aan);
+    /* De statuscel heet `es-` plus de id zonder `-toggle`, op twee na die hun
+       eigen naam dragen. Niet raden maar zoeken: de cel staat IN de rij. */
+    const stat = el.querySelector('.estat');
+    if (stat) stat.textContent = aan ? 'on' : 'off';
+  }
+  /* EN DE ACHT DATALAGEN, die een andere grammatica hebben: hun rijen dragen
+     `off` in plaats van `on`. Tot sessie 35 klopte de markup toevallig met
+     `active`; nu komt `active` uit het register en moet de markup volgen.
+     GEMETEN zonder deze lus: alle acht stonden aan terwijl er nog maar twee in
+     het register aanstonden. */
+  for (const [laag, sleutel] of Object.entries(ACTIVE_SLEUTEL)) {
+    const rij = document.querySelector('.layer[data-layer="' + laag + '"]');
+    if (rij) rij.classList.toggle('off', !Prefs.get(sleutel));
+  }
+  /* EN DE VENSTERKNOP, die weer een DERDE grammatica heeft: `active` op een
+     <button>. De markup zet hem op `day`; staat er iets anders bewaard, dan
+     verhuist de klasse. Zonder dit wijst de knop naar een venster dat de app
+     niet gebruikt — een bediening die iets anders aanwijst dan wat er staat. */
+  const winKnoppen = [...document.querySelectorAll('#presets .preset')];
+  if (winKnoppen.length) {
+    const wil = Prefs.get('time.span');
+    // Alleen verplaatsen als de bewaarde waarde ook echt bestaat: een oude of
+    // verzonnen naam laat de app anders zonder actief venster achter.
+    if (winKnoppen.some((b) => b.dataset.win === wil)) {
+      winKnoppen.forEach((b) => b.classList.toggle('active', b.dataset.win === wil));
+    }
+  }
+}
+
 document.querySelectorAll('.elayer[data-overlay]').forEach(el => {
   el.addEventListener('click', () => setOverlay(el.dataset.overlay, !overlayOn[el.dataset.overlay]));
 });
@@ -3621,11 +3764,13 @@ document.querySelectorAll('.elayer[data-overlay]').forEach(el => {
 // van ~29 MB; de keuze wordt onthouden. Een ongeldige of oude waarde in
 // localStorage valt terug op de standaard.
 // LET OP: moet vóór `world` staan — de sterrenachtergrond leest 'm meteen.
+/* Sinds sessie 35 uit het gedeelde register; de oude losse sleutel
+   `terra-tex-quality` wordt daar bij de eerste start ingelezen en opgeruimd.
+   De geldigheidstoets blijft: een oude of onbekende naam in de opslag valt
+   terug op de standaard in plaats van de app zonder textuur te laten. */
 let texQuality = (() => {
-  try {
-    const saved = localStorage.getItem('terra-tex-quality');
-    return TEXTURE_SETS[saved] ? saved : DEFAULT_QUALITY;
-  } catch { return DEFAULT_QUALITY; }
+  const bewaard = Prefs.get('pref.texQuality');
+  return TEXTURE_SETS[bewaard] ? bewaard : DEFAULT_QUALITY;
 })();
 
 // ---- Oceaanbodem ----------------------------------------------------------
@@ -3646,12 +3791,7 @@ let texQuality = (() => {
 //
 // `null` en `'0'` zijn hier bewust niet hetzelfde. Nooit iets gekozen betekent de
 // standaard; expliciet uitgezet blijft uit, ook na een herbezoek.
-let oceanFloorOn = (() => {
-  try {
-    const bewaard = localStorage.getItem('terra-ocean-floor');
-    return bewaard === null ? true : bewaard === '1';
-  } catch { return true; }
-})();
+let oceanFloorOn = Prefs.get('tex.ocean');
 
 // ---- Eigen texturen -------------------------------------------------------
 //
@@ -3891,7 +4031,7 @@ let cloudMesh = null;       // losse zwevende wolkenschil-mesh
 let cloudsTexture = null;   // gedeelde wolkentextuur (schaduw + schil)
 let wireMesh = null;        // het grove lengte/breedte-rooster van de doorkijk (15°)
 let wireFineMesh = null;    // het fijne rooster (5°), alleen ingezoomd zichtbaar
-let wireframeOn = false;
+let wireframeOn = Prefs.get('tex.wire');
 let fogMesh = null;         // fresnel-mistschil (vertroebelt de randen)
 let fogOn = false;
 let realisticActive = false;
@@ -3921,7 +4061,7 @@ let _polarSpoor = null;
 // functie draait al tijdens de scene-opbouw. Stonden deze twee bij hun eigen code
 // 2000 regels lager, dan brak de module bij de eerste aanroep — de bug van sessie 11
 // en 14, voor de derde keer.
-let pmAan = false;
+let pmAan = Prefs.get('axes.polarmotion');
 let pmVenster = 365;          // dagen, of 'long' voor de jaargemiddelden sinds 1900
 // De aurora-schil (sessie 27). Zelfde TDZ-afspraak, met één verschil dat ertoe
 // doet: deze hangt niet in de scene maar aan de AARDE-MESH, en die bestaat pas
@@ -3957,12 +4097,7 @@ let laatsteBrandNoot = '';
 // TDZ-reden: fmtTime/fmtStamp lezen hem, en die draaien al bij de eerste klok-tick.
 // `null` betekent nooit iets gekozen en dus de standaard (lokaal, het oude gedrag);
 // '0' is een expliciete keuze en blijft uit. Zelfde onderscheid als terra-ocean-floor.
-let useUTC = (() => {
-  try {
-    const bewaard = localStorage.getItem('terra-utc');
-    return bewaard === null ? false : bewaard === '1';
-  } catch { return false; }
-})();
+let useUTC = Prefs.get('pref.utc');
 // De enige twee plekken waar de app een tijdstip naar tekst brengt. Voorheen stonden
 // er zes losse toLocale*-aanroepen verspreid door het bestand, elk met hun eigen
 // optie-object; dan mist een schakelaar er gegarandeerd één. `timeZone: undefined` is
@@ -3972,10 +4107,15 @@ const fmtTime  = (d, o) => d.toLocaleTimeString('en-GB', { ...o, ...tzOpt() });
 const fmtStamp = (d, o) => d.toLocaleString('en-GB', { ...o, ...tzOpt() });
 // Wordt de eclipsschaduw getekend? Staat hier en niet bij de Cosmos-code, want
 // updateSunUniform() leest hem tijdens de opbouw van de scene (zie de TDZ-noot).
-let eclipseWanted = true;
+let eclipseWanted = Prefs.get('sunmoon.eclipse');
 // laadstatus (is de textuur succesvol geladen) vs. gebruikerskeuze (aan/uit-toggle)
 let earthLayerStatus  = { day:false, night:false, clouds:false, specular:false, normal:false };
-let earthLayerEnabled = { day:true,  night:true,  clouds:true,  specular:true,  normal:true };
+/* `day` heeft geen schakelaar — de dagtextuur is de aarde zelf — en staat dus
+   niet in het register. De andere vier wel. */
+const TEX_SLEUTEL = { night: 'tex.night', clouds: 'tex.clouds',
+                      specular: 'tex.specular', normal: 'tex.normal' };
+let earthLayerEnabled = { day: true,
+  ...Object.fromEntries(Object.entries(TEX_SLEUTEL).map(([k, s]) => [k, Prefs.get(s)])) };
 
 
 // koppelt een laag aan de shader-uniform die hem aanstuurt
@@ -4578,7 +4718,12 @@ world.controls().maxDistance = PARAMS.zoomMaxDistance;
 // en pakt hij de draad weer op zodra het even stil is. De schakelaar in Instellingen
 // zet de functie helemaal uit; `autoRotateWanted` is daarvoor de bron van waarheid,
 // zodat een lopende pauze-timer nooit iets terugzet dat de bezoeker heeft uitgezet.
-let autoRotateWanted = !REDUCED_MOTION;
+/* REDUCED_MOTION WINT VAN DE BEWAARDE VOORKEUR, en niet andersom. Dat is geen
+   voorkeur van de bezoeker in Terra maar een instelling van zijn systeem: wie
+   beweging heeft uitgezet hoort geen draaiende bol te krijgen omdat hij ooit op
+   een ander apparaat op deze knop drukte. Andersom mag wel — de knop blijft
+   werken, want het is een voorkeur en geen verbod. */
+let autoRotateWanted = REDUCED_MOTION ? false : Prefs.get('pref.autoRotate');
 let autoRotateTimer = null;
 
 function pauseAutoRotate() {
@@ -4592,6 +4737,12 @@ function pauseAutoRotate() {
 
 function setAutoRotate(on) {
   autoRotateWanted = on;
+  /* VEILIG OM HIER TE SCHRIJVEN, en dat is nagekeken: deze functie wordt maar op
+     één plek aangeroepen — de klik op de schakelaar. `pauseAutoRotate` zet de
+     controls stil zonder `autoRotateWanted` aan te raken, dus een pauze tijdens
+     het slepen wordt niet als voorkeur bewaard. Zelfde onderscheid als bij
+     `active`: alleen een keuze telt, een omstandigheid niet. */
+  Prefs.set('pref.autoRotate', on);
   clearTimeout(autoRotateTimer);
   world.controls().autoRotate = on;
 }
@@ -4664,6 +4815,15 @@ document.querySelectorAll('.layer').forEach(el => {
     const layer = el.dataset.layer;
     if (lockedLayers.has(layer)) return;   // vergrendeld: aanzetten heeft geen zin
     active[layer] = !active[layer];
+    /* ALLEEN DE KLIK BEWAART, EN DAT IS EEN ONDERSCHEID DAT ERTOE DOET.
+
+       `active[layer]` wordt op drie plekken geschreven: hier, door de tijdsloten
+       (setLayerLocked), en door de ruimteweergave die alle bollagen tijdelijk
+       uitzet. Alleen deze is een KEUZE van de bezoeker; de andere twee zijn
+       omstandigheden. Zou het register die ook opvangen, dan onthield Terra
+       "wildfires uit" omdat je een keer in de ruimte hebt gekeken — en dat is
+       een voorkeur die niemand heeft uitgesproken. */
+    Prefs.set(ACTIVE_SLEUTEL[layer], active[layer]);
     el.classList.toggle('off', !active[layer]);
     render();
     // De aurora is de enige laag die zijn bron pas bevraagt als hij aanstaat; zie
@@ -5071,6 +5231,7 @@ document.querySelectorAll('.elayer').forEach(el => {
     const key = el.dataset.tex;
     if (!earthLayerStatus[key]) return; // niet-geladen lagen zijn niet schakelbaar
     earthLayerEnabled[key] = !earthLayerEnabled[key];
+    if (TEX_SLEUTEL[key]) Prefs.set(TEX_SLEUTEL[key], earthLayerEnabled[key]);
     applyLayerToggles();
     updateEarthLayers();
   });
@@ -5131,7 +5292,7 @@ async function setTextureQuality(q) {
     world.backgroundImageUrl(A.stars);
 
     texQuality = q;
-    try { localStorage.setItem('terra-tex-quality', q); } catch {}
+    Prefs.set('pref.texQuality', q);
     updateTexqUI();
     texqNote.textContent = A.label + ' actief.';
   } catch (e) {
@@ -5191,7 +5352,7 @@ async function setOceanFloor(on) {
 
     oceanFloorOn = on;
     u.glintStrength.value = glintFor(on);
-    try { localStorage.setItem('terra-ocean-floor', on ? '1' : '0'); } catch {}
+    Prefs.set('tex.ocean', on);
   } catch {
     // Mislukt laden verandert niets — de vorige textuur blijft gewoon staan.
   } finally {
@@ -5347,18 +5508,25 @@ updateCtexUI();
 
 // ---- Nachtzijde-helderheid ----
 const nightSliderEl = document.getElementById('night-slider');
+/* De bewaarde stand, en meteen toegepast. `shaderMaterial` bestaat hier al —
+   deze regel staat ná de opbouw van de aarde — dus dit kan rechtstreeks en
+   hoeft niet via `prefsToepassers`. */
+nightSliderEl.value = String(Prefs.get('pref.nightGlow'));
+nightSliderEl.dispatchEvent(new Event('input'));
 nightSliderEl.addEventListener('input', () => {
   const pct = parseInt(nightSliderEl.value, 10);
   document.getElementById('ns-val').textContent = pct + '%';
   if (shaderMaterial) shaderMaterial.uniforms.nightBrightness.value = pct / 100;
+  Prefs.set('pref.nightGlow', pct);
 });
 
 // ---- Golfanimatie-toggle: bevriest/hervat de bewegende waterruis ----
 // (tijdelijke instelling — handig om het effect snel te beoordelen)
-let waveAnimate = true;
+let waveAnimate = Prefs.get('tex.wave');
 const waveToggleEl = document.getElementById('wave-toggle');
 waveToggleEl.addEventListener('click', () => {
   waveAnimate = !waveAnimate;
+  Prefs.set('tex.wave', waveAnimate);
   waveToggleEl.classList.toggle('on', waveAnimate);
   document.getElementById('es-wave').textContent = waveAnimate ? 'on' : 'off';
 });
@@ -5988,6 +6156,7 @@ const labelToggleEl = document.getElementById('label-toggle');
 if (labelToggleEl) {
   labelToggleEl.addEventListener('click', () => {
     labelsOn = !labelsOn;
+    Prefs.set('pref.quakeLabels', labelsOn);
     labelToggleEl.classList.toggle('on', labelsOn);
     document.getElementById('es-label').textContent = labelsOn ? 'on' : 'off';
   });
@@ -6000,11 +6169,17 @@ const labelCountVal = document.getElementById('lc-val');
 let labelCountTimer = null;
 if (labelCountEl) {
   labelCountEl.max = String(PARAMS.labelCountCeiling);
+  // De bewaarde stand wint van de beginwaarde in de markup, en wordt geklemd op
+  // het plafond uit PARAMS — een oude opslag kan een hoger getal dragen dan wat
+  // deze versie nog toestaat.
+  labelBudget = Math.min(PARAMS.labelCountCeiling,
+                         Math.max(0, Number(Prefs.get('pref.labelCount'))));
   labelCountEl.value = String(labelBudget);
   if (labelCountVal) labelCountVal.textContent = String(labelBudget);
   labelCountEl.addEventListener('input', () => {
     const n = Number(labelCountEl.value);
     if (labelCountVal) labelCountVal.textContent = String(n);
+    Prefs.set('pref.labelCount', n);
     // Gesmoord: render() bouwt via rebuildLabels() alle label-elementen opnieuw, en
     // dat mag niet per sleepstap gebeuren. Zelfde patroon en dezelfde reden als
     // countryLabelRankDebounce (sessie 9) en buildTrack (sessie 14).
@@ -6418,10 +6593,30 @@ function playPing(layer) {
   } catch (e) { /* audio niet beschikbaar */ }
 }
 
+/* TERUG NAAR FABRIEK, en met een herlading erachteraan.
+
+   Zonder herlading zou dit alle zestig standen stuk voor stuk moeten terugzetten
+   — de klasse, het woordje, de laag, en bij de overlays ook een fetch. Dat is
+   precies de code die bij de eerste wijziging uit de pas loopt met wat het
+   opstarten doet, en dan zegt de knop "defaults" en levert iets anders. Één
+   `reset()` plus `location.reload()` is per constructie hetzelfde pad als een
+   eerste bezoeker. */
+{
+  const resetEl = document.getElementById('prefs-reset');
+  if (resetEl) resetEl.addEventListener('click', (e) => {
+    if (e.target.closest('.row-expand')) return;
+    Prefs.reset();
+    const stat = document.getElementById('es-prefs-reset');
+    if (stat) stat.textContent = 'reset';
+    location.reload();
+  });
+}
+
 const soundToggleEl = document.getElementById('sound-toggle');
 if (soundToggleEl) {
   soundToggleEl.addEventListener('click', () => {
     soundOn = !soundOn;
+    Prefs.set('pref.sound', soundOn);
     soundToggleEl.classList.toggle('on', soundOn);
     document.getElementById('es-sound').textContent = soundOn ? 'on' : 'off';
   });
@@ -6465,7 +6660,7 @@ function syncUTCUI() {
 
 function zetUTC(on) {
   useUTC = on;
-  try { localStorage.setItem('terra-utc', useUTC ? '1' : '0'); } catch {}
+  Prefs.set('pref.utc', useUTC);
   syncUTCUI();
   // Alles wat een tijd toont en NIET vanzelf herrendert, moet hier expliciet langs.
   // refreshTimeUI() trekt onderaan een volledige efemeride-herberekening; op een
@@ -6891,6 +7086,7 @@ function pmHerkomst(p, st) {
   if (rij && blok) {
     rij.addEventListener('click', async () => {
       pmAan = !pmAan;
+      Prefs.set('axes.polarmotion', pmAan);
       rij.classList.toggle('on', pmAan);
       pmZet('es-polarmotion', pmAan ? 'on' : 'off');
       blok.hidden = !pmAan;
@@ -6923,16 +7119,32 @@ function pmHerkomst(p, st) {
 
    START AAN, alle vier. Deze state toont zijn eigen onderwerp; iets uitzetten
    is hier de uitzondering en niet het beginpunt. */
-function bindMsphereToggle(id, statId, apply, start = true) {
+function bindMsphereToggle(id, statId, apply, sleutel) {
   const el = document.getElementById(id);
   if (!el) return;
-  let on = start;
+  /* DE BEGINSTAND KOMT UIT HET REGISTER EN NERGENS ANDERS MEER.
+
+     Tot sessie 35 was dit een `start`-parameter die met de klasse `on` in de
+     markup moest overeenkomen — twee plekken die één verhaal vertelden, met de
+     laag zelf als derde. Nu is er één bron, en de markup krijgt zijn klasse
+     hiervandaan in plaats van andersom. */
+  let on = Prefs.get(sleutel);
   el.classList.toggle('on', on);
+  const stat0 = document.getElementById(statId);
+  if (stat0) stat0.textContent = on ? 'on' : 'off';
+  /* HIER WORDT `apply` NIET AANGEROEPEN, en dat is geen vergetelheid.
+
+     Deze binders draaien vóórdat `msphereState` bestaat, dus een `apply` hier
+     zou stil niets doen — elke `apply` begint met `msphereState &&`. De state
+     krijgt zijn beginstanden daarom rechtstreeks uit het register mee, via
+     `parts` in zijn deps. Eén bron, en het toepassen gebeurt op de plek die
+     de laag ook echt kan bereiken. */
   el.addEventListener('click', (e) => {
     // De uitklapknop zit IN de rij; zonder dit zet elke klik op "wat is dit?"
     // ook de laag om. Dezelfde val als bij de lagenrijen.
     if (e.target.closest('.row-expand')) return;
     on = !on;
+    Prefs.set(sleutel, on);
     el.classList.toggle('on', on);
     const stat = document.getElementById(statId);
     if (stat) stat.textContent = on ? 'on' : 'off';
@@ -6940,22 +7152,22 @@ function bindMsphereToggle(id, statId, apply, start = true) {
   });
 }
 bindMsphereToggle('msp-mp-toggle', 'es-msp-mp',
-  on => msphereState && msphereState.setPart('magnetopause', on));
+  on => msphereState && msphereState.setPart('magnetopause', on), 'msp.magnetopause');
 bindMsphereToggle('msp-bs-toggle', 'es-msp-bs',
-  on => msphereState && msphereState.setPart('bowshock', on));
+  on => msphereState && msphereState.setPart('bowshock', on), 'msp.bowshock');
 bindMsphereToggle('msp-grid-toggle', 'es-msp-grid',
-  on => msphereState && msphereState.setPart('grid', on));
+  on => msphereState && msphereState.setPart('grid', on), 'msp.grid');
 bindMsphereToggle('msp-lines-toggle', 'es-msp-lines',
-  on => msphereState && msphereState.setPart('fieldlines', on));
+  on => msphereState && msphereState.setPart('fieldlines', on), 'msp.fieldlines');
 bindMsphereToggle('msp-wind-toggle', 'es-msp-wind',
-  on => msphereState && msphereState.setPart('wind', on));
+  on => msphereState && msphereState.setPart('wind', on), 'msp.wind');
 /* START OP UIT, en dat vierde argument is geen detail: `bindMsphereToggle`
    ZET de klasse bij het aanmelden, dus zonder dit staat de knop op "on" terwijl
    `wilDipool` in de state op false staat — en dan zet de eerste klik hem uit
    die al uit was. De rustreferentie is een hulpmiddel om iets mee te
    vergelijken; wie er niet om vraagt hoort hem niet te krijgen. */
 bindMsphereToggle('msp-dipole-toggle', 'es-msp-dipole',
-  on => msphereState && msphereState.setPart('dipole', on), false);
+  on => msphereState && msphereState.setPart('dipole', on), 'msp.dipole');
 /* De aurora loopt WEL via de bestaande poort: hij is een gewone Terra-laag met
    een eigen adapter van 924 KB, en syncAuroraLayer() is de enige plek die
    bepaalt of die bron bevraagd wordt. Een tweede weg ernaartoe zou precies de
@@ -6964,40 +7176,51 @@ bindMsphereToggle('msp-dipole-toggle', 'es-msp-dipole',
    enige twee punten in de scene waar een instrument het veld werkelijk gemeten
    heeft. Een meting hoort niet achter een knop die je eerst moet vinden. */
 bindMsphereToggle('msp-goes-toggle', 'es-msp-goes',
-  on => msphereState && msphereState.setPart('goes', on));
+  on => msphereState && msphereState.setPart('goes', on), 'msp.goes');
 bindMsphereToggle('msp-aurora-toggle', 'es-msp-aurora', on => {
   active.aurora = on;
+  /* DEZE SCHAKELAAR EN DE AURORA-RIJ IN Layers ZIJN DEZELFDE LAAG, dus ze
+     schrijven dezelfde sleutel. `bindMsphereToggle` doet dat al voor deze knop;
+     `active.aurora` hierboven houdt het JS-object gelijk. */
   syncAuroraLayer();
-});
+}, 'layer.aurora');
 
 const geomagToggles = [
-  ['rotaxis-toggle', 'es-rotaxis', on => geomag.setVisible({ rotation: on })],
-  ['magaxis-toggle', 'es-magaxis', on => geomag.setVisible({ dipole: on })],
-  ['magdrift-toggle', 'es-magdrift', on => geomag.setVisible({ trail: on })],
+  ['rotaxis-toggle', 'es-rotaxis', on => geomag.setVisible({ rotation: on }), 'axes.rotation'],
+  ['magaxis-toggle', 'es-magaxis', on => geomag.setVisible({ dipole: on }), 'axes.dipole'],
+  ['magdrift-toggle', 'es-magdrift', on => geomag.setVisible({ trail: on }), 'axes.drift'],
   // De sectie `Sky projections` hangt hier mee: het zijn dezelfde soort
   // schakelaars (geometrie op de bol, uit bij het opstarten) en die hoeven geen
   // eigen machinerie. Hun lagen zitten niet in `geomag`, dus de callbacks
   // vangen dat zelf af.
   ['skyplanets-toggle', 'es-skyplanets',
-    on => planets && planets.setVisible(on, momentNow(), world.camera())],
+    on => planets && planets.setVisible(on, momentNow(), world.camera()), 'sky.planets'],
   ['ecliptic-toggle', 'es-ecliptic',
-    on => disks && disks.setVisible({ ecliptic: on }, momentNow(), world.camera())],
+    on => disks && disks.setVisible({ ecliptic: on }, momentNow(), world.camera()), 'sky.ecliptic'],
   ['equator-toggle', 'es-equator',
-    on => disks && disks.setVisible({ equator: on }, momentNow(), world.camera())],
+    on => disks && disks.setVisible({ equator: on }, momentNow(), world.camera()), 'sky.equator'],
   ['ragrid-toggle', 'es-ragrid',
-    on => disks && disks.setVisible({ graduation: on }, momentNow(), world.camera())],
+    on => disks && disks.setVisible({ graduation: on }, momentNow(), world.camera()), 'sky.ragrid'],
   ['eclgrid-toggle', 'es-eclgrid',
-    on => disks && disks.setVisible({ eclipticGraduation: on }, momentNow(), world.camera())]
+    on => disks && disks.setVisible({ eclipticGraduation: on }, momentNow(), world.camera()), 'sky.eclgrid']
 ];
-geomagToggles.forEach(([id, statId, apply]) => {
+geomagToggles.forEach(([id, statId, apply, sleutel]) => {
   const el = document.getElementById(id);
   if (!el) return;
-  // Alle drie beginnen UIT. Die stand staat op drie plekken en die moeten
-  // hetzelfde zeggen: hier, de ontbrekende klasse `on` in de markup, en de
-  // setVisible() onderaan js/geomag-layer.js.
-  let on = false;
+  /* DE BEGINSTAND KOMT UIT HET REGISTER (sessie 35). Tot deze sessie stond hier
+     `let on = false` met de noot dat die stand op drie plekken moest
+     overeenkomen — hier, de ontbrekende klasse `on` in de markup, en de
+     setVisible() onderaan js/geomag-layer.js. Nu is er één bron; de markup
+     krijgt zijn klasse hiervandaan en de laag zijn stand via `prefsToepassers`,
+     want die bestaat op dit moment nog niet. */
+  let on = Prefs.get(sleutel);
+  el.classList.toggle('on', on);
+  const stat0 = document.getElementById(statId);
+  if (stat0) stat0.textContent = on ? 'on' : 'off';
+  prefsToepassers.push(() => apply(on));
   el.addEventListener('click', () => {
     on = !on;
+    Prefs.set(sleutel, on);
     el.classList.toggle('on', on);
     document.getElementById(statId).textContent = on ? 'on' : 'off';
     // De callback beslist zelf of zijn laag er is — sinds de ecliptica hier
@@ -7263,12 +7486,19 @@ function drawPhase(illum) {
 // De schakelaars. `sunMoon` kan nog null zijn als de gebruiker sneller klikt dan de
 // scene klaar is, vandaar de check. `start` moet overeenkomen met de klasse `on` in
 // de markup én met de beginstand in setVisible() onderaan sunmoon-layer.js.
-function bindCosmosToggle(id, statId, apply, start = true) {
+function bindCosmosToggle(id, statId, apply, sleutel) {
   const el = document.getElementById(id);
   if (!el) return;
-  let on = start;
+  // De beginstand uit het register, en de UI erop zetten. De LAAG bestaat hier
+  // nog niet; zie de noot bij `prefsToepassers`.
+  let on = Prefs.get(sleutel);
+  el.classList.toggle('on', on);
+  const stat0 = document.getElementById(statId);
+  if (stat0) stat0.textContent = on ? 'on' : 'off';
+  prefsToepassers.push(() => { if (sunMoon) apply(on); });
   el.addEventListener('click', () => {
     on = !on;
+    Prefs.set(sleutel, on);
     el.classList.toggle('on', on);
     document.getElementById(statId).textContent = on ? 'on' : 'off';
     if (!sunMoon) return;
@@ -7285,12 +7515,12 @@ function bindCosmosToggle(id, statId, apply, start = true) {
 // beginstanden moeten overeenkomen met `setVisible()` onderaan js/sunmoon-layer.js
 // én met de klasse `on` in de markup — drie plekken die één verhaal vertellen.
 bindCosmosToggle('subpoint-toggle', 'es-subpoint',
-  on => sunMoon.setVisible({ sunMark: on, moonMark: on }));
+  on => sunMoon.setVisible({ sunMark: on, moonMark: on }), 'sunmoon.subpoint');
 // Standaard uit — zie de noot in de markup. Dit is de vierde plek die met de
 // andere drie moet overeenkomen: markup zonder `on`, `setVisible` onderaan de
 // laag, en de `start`-parameter hier.
 bindCosmosToggle('sunspots-toggle', 'es-sunspots',
-  on => sunMoon.setVisible({ sunspots: on }), true);
+  on => sunMoon.setVisible({ sunspots: on }), 'sunmoon.sunspots');
 
 // ---- De zon van dichtbij bekijken ----------------------------
 //
@@ -7393,7 +7623,12 @@ function bouwPlanetenLijst() {
   if (!host || host.childElementCount) return;
   for (const k of PLANETS) {
     const rij = document.createElement('div');
-    rij.className = 'elayer on planet-row';
+    /* DE BEGINSTAND UIT HET REGISTER (sessie 35), en niet meer de vaste `on`
+       die hier stond. Deze rijen worden in JS gebouwd, dus ze hadden geen
+       markup-klasse om op te ruimen — maar wel dezelfde vaste stand, op een
+       plek waar je hem niet zoekt. */
+    const aanStart = Prefs.get('planet.' + k);
+    rij.className = 'elayer planet-row' + (aanStart ? ' on' : '');
     rij.dataset.planet = k;
     rij.innerHTML = '<span class="edot"></span>' + PLANET_INFO[k].name +
                     '<span class="estat" data-mag>&#8212;</span>';
@@ -7405,6 +7640,7 @@ function bouwPlanetenLijst() {
       // die krijgt daarom de handeling die je zelden wilt.
       if (e.target.classList.contains('edot')) {
         const aan = rij.classList.toggle('on');
+        Prefs.set('planet.' + k, aan);
         planets.setPlaneetVisible(k, aan);
         if (!aan && planets.focus() === k) planets.setFocus(null, momentNow());
       } else {
@@ -7417,6 +7653,10 @@ function bouwPlanetenLijst() {
       // openen. Zonder deze regel kies je wel een lichaam maar zie je niets.
       if (planets.focus()) showPlanet(planets.focus()); else hideDetail();
     });
+    /* EN DE LAAG ERACHTER. `planets` bestaat hier al — deze functie wordt ná de
+       laagopbouw aangeroepen — maar alleen als hij niet uitgezet is; vandaar de
+       toets. Zonder deze regel staat de rij uit terwijl de planeet er is. */
+    if (!aanStart && planets) planets.setPlaneetVisible(k, false);
     host.appendChild(rij);
   }
 }
@@ -7839,6 +8079,7 @@ document.getElementById('lagrange-toggle')?.addEventListener('click', () => {
   // `on` en niet `off`: dat is de klasse waar de opmaak aan hangt, en dezelfde die
   // elke andere `.elayer` in dit project gebruikt.
   const aan = document.getElementById('lagrange-toggle').classList.toggle('on');
+  Prefs.set('space.lagrange', aan);
   if (orbits) orbits.setLagrangeVisible(aan, momentNow(), world.camera());
   lagrange.setVisible(aan, momentNow(), world.camera());
   document.getElementById('es-lagrange').textContent = aan ? 'on' : 'off';
@@ -8545,11 +8786,11 @@ function syncAuroraLayer() {
   if (!wil && was) setHealth(ad.healthId || ad.id, 'warn', 'switched off');
 }
 
-bindCosmosToggle('leaders-toggle', 'es-leaders', on => sunMoon.setVisible({ leaders: on }));
-bindCosmosToggle('align-toggle', 'es-align', on => sunMoon.setVisible({ alignment: on }));
-bindCosmosToggle('tracks-toggle', 'es-tracks', on => sunMoon.setVisible({ tracks: on }));
-bindCosmosToggle('ticks-toggle', 'es-ticks', on => sunMoon.setVisible({ ticks: on }));
-bindCosmosToggle('twilight-toggle', 'es-twilight', on => sunMoon.setVisible({ twilight: on }));
+bindCosmosToggle('leaders-toggle', 'es-leaders', on => sunMoon.setVisible({ leaders: on }), 'sunmoon.leaders');
+bindCosmosToggle('align-toggle', 'es-align', on => sunMoon.setVisible({ alignment: on }), 'sunmoon.align');
+bindCosmosToggle('tracks-toggle', 'es-tracks', on => sunMoon.setVisible({ tracks: on }), 'sunmoon.tracks');
+bindCosmosToggle('ticks-toggle', 'es-ticks', on => sunMoon.setVisible({ ticks: on }), 'sunmoon.ticks');
+bindCosmosToggle('twilight-toggle', 'es-twilight', on => sunMoon.setVisible({ twilight: on }), 'sunmoon.twilight');
 
 // ---- Accordion ----
 // Werkt op elke `.acc` in het paneel, dus ook de andere tabs kunnen hem gebruiken
@@ -8874,6 +9115,7 @@ document.getElementById('ti-close')?.addEventListener('click', () => setTimePane
 const eclipseToggleEl = document.getElementById('eclipse-toggle');
 eclipseToggleEl?.addEventListener('click', () => {
   eclipseWanted = !eclipseWanted;
+  Prefs.set('sunmoon.eclipse', eclipseWanted);
   eclipseToggleEl.classList.toggle('on', eclipseWanted);
   document.getElementById('es-eclipse').textContent = eclipseWanted ? 'on' : 'off';
   updateSunUniform();
@@ -9058,7 +9300,19 @@ function toonSpeed() {
   const el = document.getElementById('play-speed-val');
   if (el) el.textContent = v < 1 ? `${Math.round(v * 60)} min/s` : `${v.toFixed(v < 10 ? 1 : 0)} h/s`;
 }
-document.getElementById('play-speed')?.addEventListener('input', toonSpeed);
+/* De afspeelsnelheid is een INSTELLING en geen moment — zie de drie
+   tijdbegrippen in js/core/prefs.js. Hij hoort dus bij wat bewaard blijft. */
+{
+  const speedEl = document.getElementById('play-speed');
+  if (speedEl) {
+    speedEl.value = String(Prefs.get('time.speed'));
+    speedEl.addEventListener('input', () => {
+      toonSpeed();
+      Prefs.set('time.speed', Number(speedEl.value));
+    });
+    toonSpeed();
+  }
+}
 
 function playStap(nu) {
   if (!playDir) return;
@@ -9105,6 +9359,7 @@ const wireToggleEl = document.getElementById('wire-toggle');
 if (wireToggleEl) {
   wireToggleEl.addEventListener('click', () => {
     wireframeOn = !wireframeOn;
+    Prefs.set('tex.wire', wireframeOn);
     applyWireframe(); // zet zelf de schakelaar gelijk, via syncWireToggle()
     /* Zet de bezoeker de doorkijk zélf uit terwijl er een antipode ligt, dan gaat
        die mee. De koorde loopt dan binnen een ondoorzichtige bol: onzichtbaar, maar
@@ -9532,6 +9787,9 @@ document.querySelectorAll('#presets .preset').forEach(btn => {
     document.querySelectorAll('#presets .preset').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     timeWindow = btn.dataset.win;
+    /* DE SCHAAL WEL, HET MOMENT NIET. Dit is welk TIJDVAK de tijdlijn beslaat en
+       niet waar de bezoeker daarin staat — een instelling dus, en die blijft. */
+    Prefs.set('time.span', timeWindow);
     // slider terug naar volledig venster bij wisselen preset
     sliderEl.value = 100;
     sliderFrac = 1;
@@ -10807,6 +11065,22 @@ if (globalThis.TerraCore) {
     scale: msphereScale,
     craft: msphereCraft,
     fieldlines: msphereLines,
+
+    /* DE BEGINSTANDEN VAN DE ZEVEN ONDERDELEN, uit het register (sessie 35).
+       Tot deze sessie stonden ze als literals in de state (`let wilWind = true`)
+       en moesten ze overeenkomen met de klasse `on` in de markup en met de
+       `start`-parameter bij het aanmelden. Nu is er één bron; zie
+       js/core/prefs.js voor waarom dat bestand die bron IS en niet een laag
+       eroverheen. */
+    parts: {
+      magnetopause: Prefs.get('msp.magnetopause'),
+      bowshock:     Prefs.get('msp.bowshock'),
+      fieldlines:   Prefs.get('msp.fieldlines'),
+      grid:         Prefs.get('msp.grid'),
+      dipole:       Prefs.get('msp.dipole'),
+      wind:         Prefs.get('msp.wind'),
+      goes:         Prefs.get('msp.goes')
+    },
     Core: globalThis.TerraCore,
     moment: momentNow,
     feed: msphereFeed,
@@ -11107,6 +11381,71 @@ viewStates.register('sun', {
    aanhoudt. Eerst de zon, dan het stelsel eromheen. */
 viewStates.register('space', spaceState.definition);
 
+/* ============================================================
+   DE BEWAARDE VOORKEUREN TOEPASSEN (sessie 35).
+
+   HIER en niet bij het aanmelden van de schakelaars. Die draaien rond regel
+   7000-8600 en zetten daar alleen de UI: de klasse `on` en het woordje ernaast.
+   De LAGEN die ze bedienen ontstaan pas rond 10600, en elke `apply` begint met
+   `laag &&` — dus een toepassing bij het aanmelden zou stil niets doen en de
+   knop en de scene uit elkaar laten lopen.
+
+   GEMETEN: geomagToggles.forEach staat op 7045 en `geomag` ontstaat op 10608.
+
+   Onvoorwaardelijk, ook waar de stand de fabrieksstand is. `setVisible(false)`
+   op iets dat al uit staat kost niets, en "alleen bij een afwijking toepassen"
+   zou betekenen dat de laag en de knop alsnog uiteenlopen zodra iemand een
+   fabrieksstand verzet. */
+/* EERST DE RIJEN, DAN DE LAGEN. De volgorde maakt niets uit voor het resultaat
+   — ze raken elkaar niet — maar wel voor het lezen: wat je ziet komt eerst. */
+prefsZetRijen();
+
+/* DE VANGRAIL, EN HIJ KIJKT NAAR TWEE KANTEN.
+
+   Een schakelaar zonder sleutel is een knop die stil niets bewaart; een sleutel
+   die nergens gelezen wordt is dode opslag die bij de volgende hernoeming blijft
+   hangen. Alleen de eerste helft controleren zou de tweede fout jarenlang laten
+   staan — dat is waarom `ontbrekend()` beide lijsten teruggeeft.
+
+   ALLEEN LOKAAL LUID. Op de live site zou een console-melding niemand bereiken
+   en alleen ruis geven; hier stopt hij de volgende die een rij toevoegt zonder
+   sleutel. `Prefs.get` klaagt bij een ONBEKENDE sleutel al uit zichzelf. */
+if (IS_LOCAL) {
+  const gebruikt = [...Object.values(PREFS_RIJEN), ...Object.values(ACTIVE_SLEUTEL),
+                    ...Object.values(OVERLAY_SLEUTEL), ...Object.values(TEX_SLEUTEL),
+                    'pref.texQuality', 'pref.labelCount', 'pref.nightGlow',
+                    'time.span', 'time.speed',
+                    ...PLANETS.map((k) => 'planet.' + k)];
+  const gat = Prefs.ontbrekend(gebruikt);
+  /* De rijen in de DOM die geen sleutel hebben. Een `.elayer` met een id die
+     niet in PREFS_RIJEN staat, bewaart niets — en dat is precies het soort
+     stille misser waar dit hele register voor bedoeld is. */
+  const zonder = [...document.querySelectorAll('.elayer')]
+    .filter((e) => e.id && !PREFS_RIJEN[e.id] && e.dataset.prefs !== 'none')
+    .map((e) => e.id);
+  if (zonder.length) console.warn('[prefs] schakelaars zonder sleutel:', zonder);
+  if (gat.ongebruikt.length) console.warn('[prefs] sleutels die niemand leest:', gat.ongebruikt);
+  if (gat.zonderSleutel.length) console.warn('[prefs] gebruikt maar niet in de tabel:', gat.zonderSleutel);
+}
+
+for (const toepassen of prefsToepassers) {
+  // Eén stukje voorkeur dat niet werkt mag de rest niet meenemen: dan zou een
+  // enkele laag die zich anders gedraagt de hele scene op fabrieksstanden
+  // achterlaten, en dat is precies het soort stille misser waar dit register
+  // voor bedoeld is.
+  try { toepassen(); } catch (e) { console.warn('[prefs] toepassen faalde:', e); }
+}
+
+/* DE OVERLAYS LOPEN NIET VIA `prefsToepassers` maar via hun eigen weg, en dat
+   is geen inconsistentie: `setOverlay` HAALT het bestand op als het er nog niet
+   is. Dat is een fetch en geen vlag, dus hij hoort door dezelfde functie te
+   gaan die de bezoeker ook gebruikt in plaats van door een tweede pad dat de
+   laadstatus niet kent. Alleen wat AAN moet: `setOverlay(x, false)` zou drie
+   keer een rij bijwerken die al klopt. */
+for (const [naam, sleutel] of Object.entries(OVERLAY_SLEUTEL)) {
+  if (Prefs.get(sleutel)) setOverlay(naam, true);
+}
+
 /* ---- Navigate (sessie 24) ----------------------------------------------
    HIER en niet bij de paneelknoppen hierboven: dit paneel leest het register,
    en dat is pas gevuld nadat álle states zich hebben aangemeld. Zou het eerder
@@ -11337,6 +11676,7 @@ if (IS_LOCAL) {
     get gradePass() { return gradePass; },
     get msphereScale() { return msphereScale; },
     get msphereCraft() { return msphereCraft; },
+    Prefs,
     // Voor de tegenproef op de legenda-vangrail: een verzonnen lijnstaat in de
     // registry moet hem luid laten vallen, niet stil een lege regel geven.
     bouwLegenda: bouwMsphereLegenda,
@@ -11426,11 +11766,23 @@ applyZoomRange();
 // lijst opflitst. De knop gelijkzetten hoeft hier niet meer: `panels.sync()` doet
 // dat sinds sessie 25 voor álle aangemelde knoppen in één keer.
 
-// Twee overlays staan standaard aan. Via setOverlay() en niet via `overlayOn`,
-// want de GeoJSON wordt pas op dat moment opgehaald — de stand ZET de lading in
-// gang. Landsgrenzen blijven uit: samen met de namen wordt het rommelig.
-setOverlay('plates', true);
-setOverlay('names', true);
+/* DE TWEE OVERLAYS DIE HIER STONDEN, ZIJN VERHUISD NAAR HET REGISTER (sessie 35).
+
+   Er stond: `setOverlay('plates', true); setOverlay('names', true);` — de VIERDE
+   plek waar een beginstand leefde, naast `overlayOn`, de markup en de knop. Die
+   twee regels draaiden ONVOORWAARDELIJK en dus ook ná de bewaarde voorkeuren:
+   wie de plaatgrenzen uitzette kreeg ze bij de volgende start gewoon terug, en
+   erger nog, `setOverlay(..., true)` schreef die stand dan als voorkeur weg.
+
+   GEMETEN vóór deze verwijdering: `overlay.plates` en `overlay.names` waren de
+   enige twee van de 55 getoetste schakelaars die hun stand niet overleefden, en
+   ze stonden allebei niet in de opslag — precies het patroon van een waarde die
+   op de fabrieksstand wordt teruggezet en daarmee gewist.
+
+   De fabrieksstanden staan nu in js/core/prefs.js (`overlay.plates` en
+   `overlay.names` op true, `overlay.borders` op false — samen met de namen wordt
+   het rommelig) en de lading gaat langs de lus bij `prefsToepassers`, die
+   `setOverlay()` gebruikt en dus dezelfde fetch in gang zet. */
 
 // Eerste stand meteen zetten; daarna houdt de setInterval hem bij.
 updateSunUniform();
