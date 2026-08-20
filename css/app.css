@@ -923,8 +923,9 @@
   @keyframes aqi-spin { to { transform: rotate(360deg); } }
 
   /* ---- Tab-navigatie ---- */
-  /* De titel in de paneelkop. Staat er alleen wanneer de tabrij verborgen is —
-     zie de media query onderaan. */
+  /* De titel in de paneelkop. Staat er alleen wanneer de tabrij verborgen is, en
+     dat gebeurt op twee manieren: op een smal scherm (de media query onderaan) en
+     buiten de aarde (het blok hieronder). */
   .panel-title {
     display: none;
     /* `flex: 1` duwt de sluitknop naar rechts: de kop is een flexrij zonder
@@ -934,6 +935,28 @@
     letter-spacing: 0.08em; text-transform: uppercase;
     color: var(--ink-dim);
   }
+  /* BUITEN DE AARDE BLIJFT ER ÉÉN TAB OVER, EN EEN TABRIJ MET ÉÉN TAB IS RUIS
+     (sessie 36, Terry).
+
+     De tekentab hoort bij de aarde als kaart en verdwijnt in de drie andere
+     weergaven; wat overblijft is Layers, en die vult het paneel toch al helemaal.
+     Precies dezelfde keuze als op een smal scherm, waar de media query onderaan
+     de rij om dezelfde reden weghaalt en de titel ervoor in de plaats zet.
+
+     OP ZIJN ID en niet op `.panel .tabs`: een selector die de plek noemt breekt
+     stil bij een verhuizing, en dat is in sessie 25 al een keer gebeurd. De
+     magnetosfeer toetst verderop al op dit id — die regel staat daar en niet hier,
+     tussen de rest van wat die state opruimt.
+
+     DE TITEL STOND ER TOT NU TOE NIET BIJ. In de magnetosfeer ging de tabrij al
+     weg zonder dat de titel verscheen, dus was de paneelkop leeg op het kruisje
+     na — terwijl de regel hierboven belooft dat hij er dan staat. Die belofte
+     wordt hier waargemaakt, voor alle drie de weergaven tegelijk. */
+  body.space-on #panel-tabs,
+  body.sun-view #panel-tabs { display: none; }
+  body.msphere-on .panel .panel-title,
+  body.space-on .panel .panel-title,
+  body.sun-view .panel .panel-title { display: block; }
   .panel .tabs, .detail-panel .tabs {
     flex: 1 1 auto; min-width: 0;
     display: flex; gap: 4px; margin: 0; padding: 3px;
@@ -3190,4 +3213,35 @@
     .panel .tabs { display: none !important; }
     .panel .panel-title { display: block; }
   }
+  /* TEKENEN HOORT BIJ DE AARDE ALS KAART (sessie 36, Terry).
+
+     Buiten de aarde is er geen kaart om op te tekenen: de magnetosfeer toont een
+     doorsnede door een veld, Space een stelsel op ware afstand, Sun een ster. De
+     tab verklaart daar niets en is er dus niet — dezelfde redenering als de
+     Legend-tab die alleen BINNEN de magnetosfeer staat.
+
+     DIT IS DE HELFT DIE CSS DOET. De andere helft staat in index.html en klikt de
+     actieve tab weg. Zonder die tweede helft houdt het tabpanel zijn `.show`
+     terwijl zijn knop verdwenen is, en dat is precies de bug die deze sessie
+     opende: in de magnetosfeer gaat de hele tabrij uit (zie #panel-tabs hierboven),
+     dus wie hier stond zag één paneel zonder enige weg terug.
+
+     GEEN `!important`, en dat is gemeten en geen gok. `.panel .tab` weegt (0,2,0)
+     en `.tabpanel.show` ook; deze regels wegen (0,4,1) en winnen dus op eigen
+     kracht. De buurregel hierboven heeft de vlag wél nodig omdat een mediaquery
+     niets aan gewicht toevoegt. Dit is dezelfde val die commit 3232ed1 moest
+     repareren bij de Legend-tab — daar won `.detail-panel .tab` van een kale
+     klasse en stond de tab overal. */
+  body.msphere-on .panel .tab[data-tab="sketch"],
+  body.space-on .panel .tab[data-tab="sketch"],
+  body.sun-view .panel .tab[data-tab="sketch"],
+  body.msphere-on .panel .tabpanel[data-panel="sketch"],
+  body.space-on .panel .tabpanel[data-panel="sketch"],
+  body.sun-view .panel .tabpanel[data-panel="sketch"],
+  /* Het bewerkscherm gaat mee, net als in de mediaquery hierboven. De JS sluit hem
+     netjes met behoud van werk; dit is de vangrail eronder voor het geval die weg
+     een keer niet loopt. */
+  body.msphere-on .sketch-editor,
+  body.space-on .sketch-editor,
+  body.sun-view .sketch-editor { display: none; }
   /* SKETCH:END */

@@ -11085,8 +11085,14 @@ spaceState = createSpaceState(THREE, {
         ...aardgebondenVersiering(),
         typeof wireMesh !== 'undefined' ? wireMesh : null
       ]);
+      /* En de lagen die zichzelf hebben aangemeld. Die horen bij de aarde als
+         kaart, en hier is de aarde een lichaam tussen de andere. Hun schakelaar
+         zit bovendien in een tab die deze weergave niet toont, en een stand die
+         je niet kunt terugdraaien hoort niet aan te blijven staan. Zie de noot
+         bij `stateVerbergHaken`. */
+      verbergExtraLagen();
     },
-    environmentRestore() { environment.restore(); }
+    environmentRestore() { environment.restore(); herstelExtraLagen(); }
   }
 });
 
@@ -11532,10 +11538,15 @@ viewStates.register('sun', {
        hebben `depthTest: false`, dus die tekenen dwars door alles heen.
        Geen van beide betekent hier iets: dit beeld gaat over de zon. */
     environment.hide(aardgebondenVersiering(), { includeGlobe: false });
+    // De aarde blijft staan maar is hier een stip op 420 eenheden, en de lagen
+    // die zichzelf hebben aangemeld hebben hun schakelaar in een tab die deze
+    // weergave niet toont. Zie de noot bij `stateVerbergHaken`.
+    verbergExtraLagen();
   },
   exit() {
     sunMoon.meshes.sunGlow.visible = true;
     environment.restore();
+    herstelExtraLagen();
   }
 });
 
@@ -12249,34 +12260,80 @@ document.getElementById('sketch-clear-all')?.addEventListener('click', async () 
 // Bij het opstarten alleen laden als er iets te tonen is. `hasStored()` kijkt naar
 // het bestaan van de sleutel en parseert niets — deze beslissing mag niets kosten
 // voor de meeste bezoekers, die nooit getekend hebben.
-// Vangrail voor draaien of verkleinen tijdens het tekenen: sluit de editor met
-// behoud van werk, verlaat de tab en dooft de laag.
-function handhaafSketchViewport() {
-  if (sketchMogelijk()) return;
+/* TERUGTREKKEN UIT DE TEKENTAB: verlaat hem als hij openstaat en sluit het
+   bewerkscherm met behoud van werk.
 
+   Twee vangrails lopen hierlangs — de schermmaat hieronder en de weergavestand
+   daaronder — en ze verschillen alleen in wat er dáárna met de laag gebeurt.
+   Vandaar de callback: een smal scherm dooft hem definitief, een andere weergave
+   laat dat over aan stateVerbergHaken, die de stand onthoudt en bij terugkeer
+   teruggeeft. "Alles aan" zetten bij vertrek zou een laag aanzetten die de
+   bezoeker zelf had uitgezet, en dat onderscheid staat elders in dit bestand al
+   drie keer opgeschreven.
+
+   DE VOLGORDE IS NIET VRIJ. Wat er ná dit terugtrekken gebeurt, gebeurt pas ná
+   closeEditor(): diens onClose zet de laag juist aan. */
+function verlaatSketchTab(daarna) {
   // Op de verdwenen tab blijven staan geeft een leeg paneel.
   const tab = document.querySelector('.panel .tab[data-tab="sketch"]');
   if (tab?.classList.contains('active')) {
     document.querySelector('.panel .tab[data-tab="lagen"]')?.click();
   }
-
-  // De schakelaar zit in de verborgen tab, dus de laag mag niet aan blijven.
-  // Doven moet ná closeEditor(): diens onClose zet hem juist aan.
-  const doofDeLaag = () => { if (sketchOn) setSketchVisible(false); };
+  const klaar = daarna || (() => {});
   const scherm = document.getElementById('sketch-editor');
   if (scherm && !scherm.hidden) {
     import('./js/sketch-editor.js')
-      .then(ed => { ed.closeEditor(true); doofDeLaag(); })
-      .catch(doofDeLaag);
+      .then(ed => { ed.closeEditor(true); klaar(); })
+      .catch(klaar);
   } else {
-    doofDeLaag();
+    klaar();
   }
+}
+
+// Vangrail voor draaien of verkleinen tijdens het tekenen: sluit de editor met
+// behoud van werk, verlaat de tab en dooft de laag.
+function handhaafSketchViewport() {
+  if (sketchMogelijk()) return;
+  // De schakelaar zit in de verborgen tab, dus de laag mag niet aan blijven — en
+  // hier definitief, want een smal scherm gaat niet vanzelf weer over.
+  verlaatSketchTab(() => { if (sketchOn) setSketchVisible(false); });
 }
 // Drie ingangen, want niet elke omgeving vuurt matchMedia's `change`.
 sketchMQ.addEventListener('change', handhaafSketchViewport);
 window.addEventListener('resize', handhaafSketchViewport);
 window.addEventListener('orientationchange', handhaafSketchViewport);
 handhaafSketchViewport();
+
+/* DE TEKENTAB HOORT BIJ DE AARDE, EN DAT MOET AFGEDWONGEN WORDEN (sessie 36, Terry).
+
+   css/app.css haalt de knop en het paneel weg zodra je de aarde verlaat, maar een
+   verborgen knop verzet zijn eigen `.show` niet: bedraadTabs() hangt aan een klik
+   en die kan niet meer komen. Wie in de tekentab stond en naar de magnetosfeer
+   ging, kreeg daar dus één paneel zonder tabrij en zonder weg terug — in die state
+   gaat #panel-tabs in zijn geheel uit, dus ook de knop die je eruit had geholpen.
+   Terugkomen kon alleen door de state te verlaten, daar van tab te wisselen en
+   opnieuw naar binnen te gaan.
+
+   ALLEEN BIJ EEN ECHTE STATEWISSEL. `notify()` vuurt óók bij `goToView()`, dus
+   zonder deze vergelijking zou elke wissel van camerastand — Meridian, Top, 3D
+   orbit — de tab opnieuw verzetten terwijl je binnen hetzelfde aanzicht blijft.
+   Dezelfde vergelijking en dezelfde reden als bij de Details-tabs.
+
+   EN NIETS TERUGZETTEN BIJ TERUGKEER. Het detailvenster doet dat ook niet, en het
+   sluit aan bij de regel dat Terra opent op de aarde: waar je stond is een
+   omstandigheid en geen keuze.
+
+   DE LAAG ZELF STAAT HIER NIET. Die meldt zich aan bij stateVerbergHaken, en de
+   drie states doven en herstellen haar via environmentOff/environmentRestore. Eén
+   plek die de stand onthoudt is er precies één genoeg. */
+let vorigeStateVoorPaneel = null;
+viewStates.onChange((actief) => {
+  const was = vorigeStateVoorPaneel;
+  vorigeStateVoorPaneel = actief;
+  if (actief === was) return;
+  if (!actief) return;      // terug op de aarde: hier valt niets af te dwingen
+  verlaatSketchTab();
+});
 
 {
   let stored = false;
