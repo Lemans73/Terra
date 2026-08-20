@@ -173,6 +173,62 @@ export function createMagnetosphereState(THREE, deps) {
     return _mid.copy(zonAs).multiplyScalar(-MSPHERE_DRAW_MAX * MSPHERE_RE * 0.42);
   }
 
+  /* ==========================================================
+     DE SCENE STAAT BOVEN HET MIDDEN (sessie 33, Terry).
+
+     Het midden van het SCHERM is niet het midden van wat je ziet. Onderin staat
+     de tijdlijn (223 px op een breed scherm) en bovenin de standenkiezer, dus de
+     vrije band ligt hoger dan het geometrische midden. GEMETEN op 1300x730: de
+     band loopt van 49 tot 479, midden op 264 tegen een schermmidden van 365 —
+     101 px, oftewel 14 % van de hoogte. Op een telefoon is dat aandeel groter,
+     want de tijdlijn krimpt niet mee met het scherm.
+
+     HET DRAAIPUNT ZAKT, DE SCENE STIJGT. Wat gecentreerd wordt is het draaipunt,
+     dus een draaipunt ONDER het midden van de holte tilt de holte omhoog. Dat is
+     ook meteen waarom het zo en niet met een frustumverschuiving
+     (`camera.setViewOffset`) gaat: die zou een tweede plek maken waar de
+     projectie gebouwd wordt, náást de orthografische override in borgProjectie —
+     en die bouwt zijn matrix met de hand, dus de verschuiving zou daar
+     stilzwijgend wegvallen.
+
+     Bijvangst die geen bijvangst is: omdat het draaipunt MEEDRAAIT met de holte,
+     blijft de scene boven het midden staan hoe je ook om haar heen draait. Een
+     schermverschuiving zou dat ook doen; een vaste wereldoffset niet.
+
+     IN PIXELS OMGEREKEND PER AFSTAND, zodat de lift op het scherm constant is en
+     niet met de zoom meegroeit. De vrije band is een eigenschap van het SCHERM
+     en niet van hoe ver je weg staat.
+  ========================================================== */
+  const _lift = new THREE.Vector3(), _liftAs = new THREE.Vector3();
+  const _liftRicht = new THREE.Vector3();
+  let liftPxNu = 0;
+
+  /* Wereldeenheden per schermpixel op deze afstand. De vlakke standen zijn
+     orthografisch met beeldhoogte = afstand x MSPHERE_ORTHO_K; de vrije stand is
+     perspectief en dan is het de halve beeldhoogte maal twee. */
+  function wereldPerPixel(afstand, vlak) {
+    const cam = world.camera();
+    const h = Math.max(1, world.height ? world.height() : window.innerHeight || 1);
+    if (vlak) return (afstand * MSPHERE_ORTHO_K) / h;
+    const fov = (cam.fov || 50) * Math.PI / 180;
+    return (2 * afstand * Math.tan(fov / 2)) / h;
+  }
+
+  /* De liftvector: langs "omhoog", maar met de component langs de KIJKRICHTING
+     eruit. Zonder die projectie schuift een deel van de lift de camera in of uit
+     in plaats van omhoog — bij 21 graden elevatie is dat 7 % van de verschuiving,
+     en erger: het verandert de afstand, en daar hangen zowel de orthografische
+     beeldhoogte als de draaipuntfactor aan. */
+  function liftVector(uit, omhoog, richting, wereld) {
+    _liftAs.copy(omhoog);
+    _liftAs.addScaledVector(richting, -_liftAs.dot(richting));
+    const L = _liftAs.length();
+    if (!(L > 1e-6) || !(wereld > 0)) return uit.set(0, 0, 0);
+    return uit.copy(_liftAs).multiplyScalar(-wereld / L);   // draaipunt ZAKT
+  }
+
+  const liftPx = () => (deps.liftPx ? deps.liftPx() : 0);
+
   /* DE KIJKRICHTING VAN DE VRIJE STAND, apart omdat er TWEE dingen aan hangen:
      waar de camera gaat staan, en op welke afstand van de AARDE dat is. Dat
      tweede getal is de ijkmaat van het meeschuivende draaipunt — zie
@@ -219,6 +275,15 @@ export function createMagnetosphereState(THREE, deps) {
   function targetFrom(direction, distance, up, midden, vlak) {
     const b = bounds(vlak);
     const doel = midden ? midden.clone() : origin.clone();
+    /* HIER WORDT DE LIFT VASTGELEGD, en dit is de enige plek waar hij gemeten
+       wordt. `deps.liftPx()` leest de DOM, en dat mag hier: kadreren gebeurt bij
+       binnenkomst en bij een standwissel, niet per muisbeweging. Wat er daarna
+       nog aan verschuift, rekent draaipuntGsm uit de gecachte waarde. */
+    liftPxNu = liftPx();
+    if (up && liftPxNu) {
+      liftVector(_lift, up, direction, liftPxNu * wereldPerPixel(distance, vlak));
+      doel.add(_lift);
+    }
     return { pos: direction.clone().multiplyScalar(distance).add(doel), target: doel,
              min: b.min, max: Math.max(b.max, distance * 1.6),
              up: up ? up.clone() : null };
@@ -887,7 +952,21 @@ export function createMagnetosphereState(THREE, deps) {
      dezelfde -0,42 x tekengrens als kaderMidden, alleen frame-onafhankelijk. */
   function draaipuntGsm(uit, afstandTotAarde) {
     const f = draaipuntFactor(afstandTotAarde);
-    return uit.set(0, 0, -MSPHERE_DRAW_MAX * MSPHERE_RE * 0.42 * f);
+    uit.set(0, 0, -MSPHERE_DRAW_MAX * MSPHERE_RE * 0.42 * f);
+    /* En de lift erbij, in hetzelfde frame. `_upGsm` is de camerastand van dit
+       moment in de rig — dus dit klopt ook nadat de bezoeker zelf gedraaid heeft.
+       De afstand is die tot het draaipunt en niet tot de aarde: de lift is een
+       SCHERMmaat, en wat de schermmaat bepaalt is hoe ver het draaipunt weg
+       staat. `f` raakt hem niet: de vrije band ligt waar hij ligt, ook als je
+       inzoomt. */
+    if (!liftPxNu) return uit;
+    const afstandTotDraaipunt = _camGsm.distanceTo(uit) || afstandTotAarde;
+    _liftRicht.copy(_camGsm).sub(uit);
+    if (_liftRicht.lengthSq() < 1e-9) return uit;
+    _liftRicht.normalize();
+    liftVector(_lift, _upGsm, _liftRicht,
+               liftPxNu * wereldPerPixel(afstandTotDraaipunt, vlakkeStand));
+    return uit.add(_lift);
   }
 
   /* WIE DE CAMERA HET LAATST VERZETTE, HEEFT GELIJK.

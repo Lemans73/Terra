@@ -8946,6 +8946,40 @@ borgPaneelGroepen();
    dezelfde val die in sessie 31 93 px paneeloverlap kostte. */
 const PANEL_TOP_MARGE = 10;   // ademruimte tussen de masthead en de paneelrand
 
+/* ---- Waar de scene optisch hoort te staan (sessie 33, Terry) --------------
+   De magnetosfeer kadreert op het midden van het SCHERM, en dat is niet het
+   midden van wat je ziet: onderaan staat de tijdlijn en bovenin de
+   standenkiezer, dus de vrije band ligt hoger dan het geometrische midden.
+   GEMETEN op 1300x730: de band loopt van 49 tot 479, met zijn midden op 264
+   tegen een schermmidden van 365 — 101 px, oftewel 14 % van de hoogte. Op een
+   telefoon is het aandeel groter, want de tijdlijn krimpt niet mee.
+
+   DE STANDENKIEZER EN NIET DE MASTHEAD als bovengrens. De masthead is een
+   gradiënt met het woordmerk LINKS; hij bedekt het midden niet. De kiezer staat
+   wél centraal boven de scene, en op een telefoon zakt hij een rij — die
+   verplaatsing zit hier per constructie in, want er wordt gemeten.
+
+   IN PIXELS EN GECACHET. De state rekent hem per muisbeweging om naar
+   wereldeenheden (het draaipunt verschuift met de zoom), en drie
+   `getBoundingClientRect()`-aanroepen per beweging is een geforceerde reflow
+   per frame. Dus hier meten, op dezelfde momenten als `--panel-top-gap`. */
+let msphereLiftPx = 0;
+
+function borgMsphereLift() {
+  const H = window.innerHeight || 0;
+  const boven = document.getElementById('view-switch') || document.querySelector('.masthead');
+  const onder = document.getElementById('msphere-time');
+  if (!(H > 0)) { msphereLiftPx = 0; return 0; }
+  const b = boven ? boven.getBoundingClientRect() : null;
+  const o = onder ? onder.getBoundingClientRect() : null;
+  // Een element dat niet zichtbaar is telt niet mee: buiten deze state heeft de
+  // tijdlijn hoogte 0, en dan is de band gewoon het hele scherm.
+  const van = b && b.height > 0 ? b.bottom : 0;
+  const tot = o && o.height > 0 ? o.top : H;
+  msphereLiftPx = tot > van ? H / 2 - (van + tot) / 2 : 0;
+  return msphereLiftPx;
+}
+
 function borgPanelTopGap() {
   const mast = document.querySelector('.masthead');
   if (!mast) return null;
@@ -8957,17 +8991,18 @@ function borgPanelTopGap() {
 }
 
 borgPanelTopGap();
+borgMsphereLift();
 // Dezelfde twee seinen als de paneelgroepen, en om dezelfde reden: een viewport
 // die door de ontwikkeltools wordt overschreven vuurt geen `change`.
-window.addEventListener('resize', borgPanelTopGap);
-narrowMQ.addEventListener('change', borgPanelTopGap);
+window.addEventListener('resize', () => { borgPanelTopGap(); borgMsphereLift(); });
+narrowMQ.addEventListener('change', () => { borgPanelTopGap(); borgMsphereLift(); });
 /* EN BIJ ELKE PANEELWISSEL, want de eerste meting is te vroeg. GEMETEN: bij het
    uitvoeren van deze regel is de masthead 71 px, en zodra de webfont en de
    ondertitel staan 84 — dus het paneel begon 13 px te hoog, precies over de
    onderrand van de klok. Een paneel dat opengaat is het enige moment waarop dit
    getal iets doet, dus dat is ook het goedkoopste moment om het te verversen:
    één getBoundingClientRect per klik. */
-panels.onChange(borgPanelTopGap);
+panels.onChange(() => { borgPanelTopGap(); borgMsphereLift(); });
 
 /* EN OP EEN TELEFOON BEGINT DE APP MET ALLES DICHT (sessie 31, Terry). Het
    lagenpaneel stond standaard open, en op 375 px is dat meteen een vel over de
@@ -10279,6 +10314,17 @@ if (globalThis.TerraCore) {
     Core: globalThis.TerraCore,
     moment: momentNow,
     feed: msphereFeed,
+
+    /* Hoeveel de scene omhoog moet om optisch in de vrije band te vallen, in
+       SCHERMpixels. De state rekent hem zelf om naar wereldeenheden, want dat
+       hangt van de afstand en de projectie af — en die twee kent alleen hij.
+
+       VERS GEMETEN bij elke aanroep, en dat kan omdat de state hem alleen
+       opvraagt als hij KADREERT — bij binnenkomst en bij een standwissel, niet
+       per muisbeweging. Dat laatste is precies waarom de state hem cachet: de
+       tijdlijn heeft pas hoogte zodra `body.msphere-on` staat, dus een waarde
+       die vóór de binnenkomst gemeten is, is nul. */
+    liftPx: () => borgMsphereLift(),
 
     /* DE STATE MELDT DAT HIJ GEBOUWD HEEFT, en dat is de enige weg waarlangs de
        uitlezing verse getallen krijgt. Niet vanuit de tik-lus: de veldlijnen
