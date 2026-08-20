@@ -1209,10 +1209,44 @@
     background: currentColor;
   }
   .msp-leg-text { flex: 1 1 auto; min-width: 0; }
-  .msp-leg-name { color: var(--ink); font-weight: 500; }
-  .msp-why { color: var(--ink-dim); }
-  /* Een regel zonder swatch: hij gaat over een KEUZE en niet over inkt. Inspringen
-     tot waar de tekst van de andere rijen begint, zodat de kolom één kolom blijft. */
+
+  /* ---- ELKE UITLEG ZIT ACHTER EEN KLIK (sessie 34, Terry) ----
+
+     De legenda draagt 22 sleutels met elk een alinea eronder, en samen was dat
+     een lap tekst waarin je de sleutel zelf niet meer vond — terwijl dát is wat
+     je opzoekt terwijl je naar de scene kijkt. Dicht is de legenda een LIJST:
+     swatch, naam, klaar. Wie meer wil, klikt.
+
+     DE NAAM IS DE KNOP en er staat geen apart knopje naast. Een tweede
+     doelwit naast een regel die zelf al de hele breedte heeft, is een kleiner
+     doelwit voor hetzelfde. */
+  .msp-leg-name {
+    display: flex; align-items: baseline; gap: 6px; width: 100%;
+    background: transparent; border: none; padding: 0; margin: 0;
+    font: inherit; font-weight: 500; color: var(--ink);
+    text-align: left; cursor: pointer;
+  }
+  .msp-leg-name > span { flex: 1 1 auto; min-width: 0; }
+  .msp-chev {
+    flex: 0 0 11px; width: 11px; height: 11px;
+    align-self: center; color: var(--ink-faint);
+    transition: transform 0.18s ease;
+  }
+  .msp-leg-row.open .msp-chev { transform: rotate(180deg); }
+  .msp-leg-name:hover { color: var(--ink); }
+  .msp-leg-name:hover .msp-chev { color: var(--ink-dim); }
+  @media (prefers-reduced-motion: reduce) { .msp-chev { transition: none; } }
+
+  /* DICHT IS DE STAND BIJ HET BOUWEN, en de klasse zet `display` — dat verslaat
+     het `hidden`-attribuut, en dat is in dit bestand inmiddels een bekende. */
+  .msp-why { display: none; color: var(--ink-dim); padding: 2px 0 5px; }
+  .msp-leg-row.open .msp-why { display: block; }
+
+  /* Een regel zonder swatch: hij gaat over een KEUZE en niet over inkt. De lege
+     swatch blijft wel staan, zodat de namen van álle regels in één kolom
+     uitlijnen — inspringen met padding zou een tweede kolom maken die bij de
+     eerste lange naam uit de pas loopt. */
+  .msp-sw.is-none { visibility: hidden; }
   .msp-leg-note { padding: 4px 0 4px 35px; color: var(--ink-faint); }
 
   /* ---- Cosmos-readout (zon en maan) ----

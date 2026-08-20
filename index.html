@@ -712,18 +712,6 @@
   <div class="detail-panel" id="details-panel" hidden>
     <div class="panel-head">
       <div class="tabs" role="tablist">
-        <button class="tab active" data-tab="d-earth" title="Earth" aria-label="Earth">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>
-          <span class="tab-label">Earth</span>
-        </button>
-        <button class="tab" data-tab="d-sunmoon" title="Sun &amp; Moon" aria-label="Sun and Moon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20z" fill="currentColor" stroke="none"/></svg>
-          <span class="tab-label">Sun &amp; Moon</span>
-        </button>
-        <button class="tab" data-tab="d-planets" title="Planets" aria-label="Planets">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><ellipse cx="12" cy="12" rx="10" ry="4.2" transform="rotate(-24 12 12)"/></svg>
-          <span class="tab-label">Planets</span>
-        </button>
         <!-- DE LEGENDA IS EEN EIGEN TAB EN GEEN SECTIE MEER (sessie 34, Terry).
              Hij stond onderin het Earth-tabblad, onder de conditie- en
              veldsecties, en dat is de verkeerde plek voor het ding dat je
@@ -736,6 +724,19 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h4M4 12h4M4 18h4"/><path d="M12 6h8M12 12h8M12 18h8"/></svg>
           <span class="tab-label">Legend</span>
         </button>
+        <button class="tab active" data-tab="d-earth" title="Earth" aria-label="Earth">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>
+          <span class="tab-label">Earth</span>
+        </button>
+        <button class="tab" data-tab="d-sunmoon" title="Sun &amp; Moon" aria-label="Sun and Moon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20z" fill="currentColor" stroke="none"/></svg>
+          <span class="tab-label">Sun &amp; Moon</span>
+        </button>
+        <button class="tab" data-tab="d-planets" title="Planets" aria-label="Planets">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><ellipse cx="12" cy="12" rx="10" ry="4.2" transform="rotate(-24 12 12)"/></svg>
+          <span class="tab-label">Planets</span>
+        </button>
+
       </div>
       <button class="panel-collapse" id="details-collapse" title="Close panel" aria-label="Close details panel">&#215;</button>
     </div>
@@ -876,16 +877,12 @@
     </div>
 
     <div class="tabpanel" data-panel="d-legend">
-
-      <section class="acc open msphere-only" data-acc="msphere-legend">
-      <button class="acc-head" type="button" aria-expanded="true">
-      <span>Legend</span>
-      <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-      </button>
-      <div class="acc-body">
+      <!-- GEEN ACCORDEON HIER (sessie 34, Terry). Een tab die precies één sectie
+           draagt en die sectie dan óók nog een eigen kop met klapje geeft, is
+           een tab in een tab: twee keer hetzelfde woord boven elkaar en een
+           klik die niets kan opleveren wat de tab niet al deed. De inhoud
+           begint meteen met zijn eigen eerste kop, "In the scene". -->
       <div class="msp-leg" id="msphere-legend"></div>
-      </div>
-      </section>
     </div>
 
     <div class="tabpanel" data-panel="d-sunmoon">
@@ -3741,8 +3738,7 @@ const gradePass = new ShaderPass({
        pass byte-voor-byte wat hij was; daar is de gewone zon een echte bol in
        sunmoon-layer.js en heeft dit niets toe te voegen. */
     sunDir:     { value: new THREE.Vector2(-1, 0) },
-    sunGlow:    { value: 0 },
-    sunRing:    { value: 0 }
+    sunGlow:    { value: 0 }
   },
   vertexShader: `
     varying vec2 vUv;
@@ -3756,7 +3752,6 @@ const gradePass = new ShaderPass({
     uniform vec3 tint;
     uniform vec2 sunDir;
     uniform float sunGlow;
-    uniform float sunRing;
     varying vec2 vUv;
     void main() {
       vec2 dir = vUv - 0.5;                      // richting vanaf het midden
@@ -3769,16 +3764,18 @@ const gradePass = new ShaderPass({
       float l = dot(col, vec3(0.299, 0.587, 0.114));
       col = mix(vec3(l), col, saturation);       // saturatie
       col *= tint;                               // koele tint
-      /* DE ZONZIJDE KENT TWEE VORMEN, want de kant van de zon is niet altijd
-         een kant. Staat hij opzij, dan loopt de gloed van 0 in het midden naar
-         1 aan de rand waar hij staat. Kijk je er recht in, dan ligt elke rand
-         er even ver vanaf en wordt het een vignette. sunRing mengt tussen
-         die twee; de macht drukt hem in beide gevallen tegen de rand.
-         Additief en warm — een hue die de stand verraadt, geen tweede
-         lichtbron. Op sunGlow = 0 valt de hele term weg. */
-      float kant   = clamp(dot(dir, sunDir) * 2.0, 0.0, 1.0);
-      float rondom = clamp(length(dir) * 2.0, 0.0, 1.0);
-      float zon = mix(kant, rondom, sunRing);
+      /* DE GLOED HEEFT ALTIJD EEN KANT, en dat is de correctie van Terry na
+         het zien ervan. Er stond een tweede vorm naast: keek je recht in de
+         zon, dan lag elke rand er even ver vanaf en werd het een vignette
+         rondom. Dat oogde flets — vier zwakke randen in plaats van één die
+         iets zegt. Nu kantelt de RICHTING in plaats van dat de vorm wisselt:
+         naar boven als je in de zon kijkt, naar beneden als hij in de rug
+         staat, opzij daartussenin. Zie zetZonGloed().
+
+         De macht drukt hem tegen de rand. Additief en warm — een hue die de
+         stand verraadt, geen tweede lichtbron. Op sunGlow = 0 valt de hele
+         term weg, en dat is buiten deze state altijd zo. */
+      float zon = clamp(dot(dir, sunDir) * 2.0, 0.0, 1.0);
       col += vec3(1.0, 0.72, 0.42) * (sunGlow * pow(zon, 2.2));
       gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
     }
@@ -5321,11 +5318,24 @@ waveToggleEl.addEventListener('click', () => {
    HET IS EEN VRAAG OVER DE CAMERA EN NIET OVER EEN PLEK. `zonKijk` is de
    zonrichting in CAMERARUIMTE; three kijkt langs -Z, dus n = -z loopt van +1
    (recht in de zon) via 0 (de zon opzij — dat is precies de doorsnede) naar -1
-   (de zon in de rug). Drie standen, één continue overgang:
+   (de zon in de rug).
 
-     n -> +1   elke rand ligt even ver van de zon   -> rondom, volle sterkte
-     n ~=  0   de zon staat opzij                   -> rand aan die kant
-     n -> -1   tegenlicht, dus weer geen kant       -> onderrand, gedempt
+   DE GLOED HEEFT ALTIJD EEN KANT, en die kant KANTELT met n:
+
+     n -> +1   je kijkt in de zon      -> bovenrand, volle sterkte
+     n ~=  0   de zon staat opzij      -> rand aan die kant
+     n -> -1   tegenlicht              -> onderrand, gedempt
+
+   Er stond hier een tweede VORM naast: bij n -> +1 werd het een vignette
+   rondom, want dan ligt elke rand even ver van de zon. Terry heeft dat gezien
+   en het was flets — vier zwakke randen zeggen samen minder dan één. Nu draait
+   alleen de RICHTING, en de twee uitersten zijn elkaars spiegel: boven als hij
+   voor je staat, onder als hij achter je staat. `op` en `neer` doen precies
+   hetzelfde werk met omgekeerd teken.
+
+   DE STERKTE BLIJFT WEL ASYMMETRISCH, en dat is geen slordigheid maar de
+   informatie zelf: in de zon kijken is helder, tegenlicht is gedempt. Alleen
+   de PLEK is gespiegeld, niet de hoeveelheid.
 
    DE VLAKKE STANDEN HEBBEN GEEN EIGEN TAK NODIG. In Meridian en Top staat de
    camera loodrecht op de zonlijn, dus n is daar per constructie 0 en geeft de
@@ -5362,13 +5372,21 @@ function zetZonGloed(cam) {
            .applyQuaternion(_gloedQ.copy(cam.quaternion).invert());
   const n = -_gloedZon.z;
   const len = Math.hypot(_gloedZon.x, _gloedZon.y);
-  // Zakt de zon achter ons, dan zakt de gloed naar de onderrand.
+  /* Twee kantelingen met omgekeerd teken, en per constructie nooit allebei
+     tegelijk: `op` vraagt n > 0 en `neer` n < 0. Wat er van de ZIJkant
+     overblijft is precies wat die twee niet opeisen, dus de drie tellen altijd
+     op tot één en de richting blijft een eenheidsvector-in-wording. */
+  const op = _soep(0, 0.5, n);
   const neer = _soep(0, -0.5, n);
-  const dx = (len > 1e-6 ? _gloedZon.x / len : 0) * (1 - neer);
-  const dy = (len > 1e-6 ? _gloedZon.y / len : -1) * (1 - neer) - neer;
+  const zij = 1 - op - neer;
+  const ux = len > 1e-6 ? _gloedZon.x / len : 0;
+  const uy = len > 1e-6 ? _gloedZon.y / len : 0;
+  const dx = ux * zij;
+  const dy = uy * zij + op - neer;
   const l2 = Math.hypot(dx, dy) || 1;
   u.sunDir.value.set(dx / l2, dy / l2);
-  u.sunRing.value = _soep(0.35, 0.95, n);
+  /* De sterkte kantelt NIET mee. In de zon kijken is helder, tegenlicht is
+     gedempt — en dát verschil is wat de gloed te zeggen heeft. */
   u.sunGlow.value = MSPHERE_GLOED * (n >= 0 ? 1 : 1 + n * (1 - MSPHERE_TEGENLICHT));
 }
 
@@ -8115,32 +8133,89 @@ const MSPHERE_LIJNSTAAT_TEKST = {
 
 /* Idem voor de twee gekozen vereenvoudigingen. Ze zijn KEUZES en geen
    ontbrekende metingen: ze verdwijnen nooit en verschijnen nooit. */
+/* NAAM ÉN TEKST, sinds de legenda uitklapbaar werd (sessie 34): zonder naam is
+   er niets om op te klikken, en "Note" zes keer onder elkaar zegt niets. De
+   registry heeft wel een `label`, maar dat is Nederlands en dat bestand blijft
+   byte-identiek — dus staat de Engelse naam hier, naast de tekst die er al was. */
 const MSPHERE_VEREENVOUDIGING_TEKST = {
-  'no-aberration': 'The magnetopause sits on the Sun line. The wind arrives a few degrees off it; this version does not model that aberration.',
-  'seed-quantised': 'The polar cap edge is quantised by the seed ladder — five shells, so the edge cannot be placed finer than the step between two of them. The step is printed with the value.'
+  'no-aberration': { naam: 'The boundary sits on the Sun line',
+    why: 'The magnetopause sits on the Sun line. The wind arrives a few degrees off it; this version does not model that aberration.' },
+  'seed-quantised': { naam: 'The polar cap edge is quantised',
+    why: 'The polar cap edge is quantised by the seed ladder — five shells, so the edge cannot be placed finer than the step between two of them. The step is printed with the value.' }
 };
 
-function msphereLegendaRij(host, soort, kleur, naam, why) {
+/* ==========================================================
+   DE LEGENDA IS EEN LIJST, EN DE UITLEG ZIT ERACHTER (sessie 34, Terry).
+
+   Tweeëntwintig sleutels met elk een alinea eronder maakten er een lap tekst
+   van waarin je de sleutel zelf niet meer vond — terwijl dát is wat je opzoekt
+   terwijl je naar de scene kijkt. Dicht: swatch, naam, klaar. Wie meer wil,
+   klikt de naam aan.
+
+   ÉÉN BOUWER VOOR RIJEN EN NOTEN. Een noot is precies een rij zonder inkt: een
+   titel met een alinea eronder. Waren het twee mechanismen, dan liep de ene
+   vroeg of laat uit de pas met de andere — dezelfde reden die de drie
+   readings-knoppen in sessie 33 tot één bouwer terugbracht.
+
+   EN DAAROM KRIJGT ELKE NOOT EEN TITEL. Zonder titel is er niets om op te
+   klikken, en "Note" zes keer onder elkaar zegt niets. De vier vaste noten
+   hebben er hier een gekregen; de vereenvoudigingen halen de hunne uit
+   MSPHERE_VEREENVOUDIGING_TEKST, naast de tekst die daar al stond.
+========================================================== */
+function msphereLegendaBouw(host, opts) {
   const rij = document.createElement('div');
-  rij.className = 'msp-leg-row';
+  rij.className = 'msp-leg-row' + (opts.soort === 'none' ? ' is-note' : '');
   const sw = document.createElement('span');
-  sw.className = 'msp-sw is-' + soort;
-  if (soort === 'line' || soort === 'dash') sw.style.borderTopColor = kleur;
-  else if (soort === 'dot') sw.style.color = kleur;
-  else if (soort === 'ramp') sw.style.background = kleur;
-  else sw.style.background = kleur;
+  sw.className = 'msp-sw is-' + opts.soort;
+  const k = opts.kleur;
+  if (opts.soort === 'line' || opts.soort === 'dash') sw.style.borderTopColor = k;
+  else if (opts.soort === 'dot') sw.style.color = k;
+  else if (opts.soort !== 'none') sw.style.background = k;
+
   const tekst = document.createElement('div');
   tekst.className = 'msp-leg-text';
-  const n = document.createElement('div');
-  n.className = 'msp-leg-name';
-  n.textContent = naam;
+
+  const knop = document.createElement('button');
+  knop.type = 'button';
+  knop.className = 'msp-leg-name';
+  knop.setAttribute('aria-expanded', 'false');
+  const label = document.createElement('span');
+  label.textContent = opts.naam;
+  knop.append(label, msphereChevron());
+
   const w = document.createElement('div');
   w.className = 'msp-why';
-  w.textContent = why;
-  tekst.append(n, w);
+  w.textContent = opts.why;
+
+  tekst.append(knop, w);
   rij.append(sw, tekst);
   host.appendChild(rij);
 }
+
+function msphereChevron() {
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('class', 'msp-chev');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke', 'currentColor');
+  svg.setAttribute('stroke-width', '2.6');
+  svg.setAttribute('stroke-linecap', 'round');
+  svg.setAttribute('stroke-linejoin', 'round');
+  svg.setAttribute('aria-hidden', 'true');
+  const p = document.createElementNS(ns, 'polyline');
+  p.setAttribute('points', '6 9 12 15 18 9');
+  svg.appendChild(p);
+  return svg;
+}
+
+const msphereLegendaRij = (host, soort, kleur, naam, why) =>
+  msphereLegendaBouw(host, { soort, kleur, naam, why });
+
+/* Een noot is een rij zonder inkt. De lege swatch blijft staan zodat álle
+   namen in één kolom uitlijnen. */
+const msphereLegendaNoot = (host, naam, why) =>
+  msphereLegendaBouw(host, { soort: 'none', kleur: null, naam, why });
 
 function msphereLegendaKop(host, tekst) {
   const h = document.createElement('h5');
@@ -8148,17 +8223,25 @@ function msphereLegendaKop(host, tekst) {
   host.appendChild(h);
 }
 
-function msphereLegendaNoot(host, tekst) {
-  const d = document.createElement('div');
-  d.className = 'msp-leg-note';
-  d.textContent = tekst;
-  host.appendChild(d);
+/* ÉÉN LUISTERAAR OP DE HELE LEGENDA, en niet achtentwintig op de rijen.
+
+   De legenda wordt één keer gebouwd, maar `replaceChildren()` staat er nog aan
+   het begin van de bouwer: zou hij ooit opnieuw draaien, dan waren alle
+   luisteraars weg en de knoppen dood — stil, en pas te merken als iemand klikt.
+   Delegeren overleeft dat per constructie. */
+function bedraadMsphereLegenda() {
+  const host = document.getElementById('msphere-legend');
+  if (!host) return;
+  host.addEventListener('click', (e) => {
+    const knop = e.target.closest('.msp-leg-name');
+    if (!knop || !host.contains(knop)) return;
+    const rij = knop.closest('.msp-leg-row');
+    if (!rij) return;
+    const open = rij.classList.toggle('open');
+    knop.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
 }
 
-/* Eén keer bouwen, bij het opstarten. De inhoud verandert nooit: het zijn de
-   kleuren van de lagen en de teksten uit de registry, en geen van beide hangt
-   aan de tijd of aan de data. Per opening opnieuw bouwen zou werk zijn dat
-   niets kan opleveren. */
 function bouwMsphereLegenda() {
   const host = document.getElementById('msphere-legend');
   if (!host || !msphereBoundary || !msphereLines) return false;
@@ -8197,9 +8280,9 @@ function bouwMsphereLegenda() {
     'linear-gradient(90deg, ' + mspTint['strong-south'].basis + ', ' + mspTint['strong-south'].diep + ')',
     'Magnetopause · Bz below −10 nT',
     'Strongly southward. This is where the standoff can drop inside geosynchronous orbit at 6.6 Re, which is why it gets a colour of its own.');
-  msphereLegendaNoot(host,
+  msphereLegendaNoot(host, 'How deep the colour runs',
     'Within each of those three, the DEPTH says how much is coupling in — the same Newell number the readout gives as “× normal”. It runs deepest at the nose, where the wind arrives head-on and the surface takes its full pressure; the flanks take only the part along their own normal. Colour says which way the field points, depth says how much of it gets through.');
-  msphereLegendaNoot(host,
+  msphereLegendaNoot(host, 'When there is no Bz',
     'With no Bz there is no state to show, and the boundary falls back to plain blue: the shape still stands, because that hangs on the pressure, but nothing is claimed about what is coming in. That is not the same as a quiet magnetosphere.');
   msphereLegendaRij(host, 'line', msphereBoundary.colors.shock, 'Bow shock',
     'Where the wind first slows below its own signal speed. Scaled off the magnetopause with the magnetosonic Mach number — no Mach, no shock. It does not take the colours above: it hangs entirely on the standoff and adds no measurement of its own.');
@@ -8243,9 +8326,9 @@ function bouwMsphereLegenda() {
   if (ontbreekt.length) {
     throw new Error('the legend is missing a line state: ' + ontbreekt.join(', '));
   }
-  msphereLegendaNoot(host,
+  msphereLegendaNoot(host, 'North and south, within a state',
     'Lighter and warmer lines leave the northern hemisphere, darker and cooler ones the southern. That is a shade WITHIN a state, not a fourth state — closed stays closed and open stays open.');
-  msphereLegendaNoot(host,
+  msphereLegendaNoot(host, 'When there is no boundary',
     'With no boundary there is no topology, and then every line is drawn in one neutral ink instead: the tracer had nothing to cross, which is not the same as a quiet magnetosphere.');
 
   /* ---- De tijdlijn ---- */
@@ -8278,9 +8361,9 @@ function bouwMsphereLegenda() {
     msphereLegendaKop(host, 'Chosen simplifications');
     const mist = [];
     for (const sv of simpel) {
-      const tekst = MSPHERE_VEREENVOUDIGING_TEKST[sv.id];
-      if (!tekst) { mist.push(sv.id); continue; }
-      msphereLegendaNoot(host, tekst);
+      const t = MSPHERE_VEREENVOUDIGING_TEKST[sv.id];
+      if (!t) { mist.push(sv.id); continue; }
+      msphereLegendaNoot(host, t.naam, t.why);
     }
     if (mist.length) {
       throw new Error('the legend is missing a simplification: ' + mist.join(', '));
@@ -10827,7 +10910,7 @@ if (globalThis.TerraCore) {
      teksten uit de registry — dus per opening opnieuw bouwen zou werk zijn dat
      niets kan opleveren. Faalt hij, dan is dat een ontbrekende betekenis en geen
      detail: de melding gaat naar de console en de rest van de app draait door. */
-  try { bouwMsphereLegenda(); }
+  try { bouwMsphereLegenda(); bedraadMsphereLegenda(); }
   catch (e) { console.error('[terra] legend:', e); }
 }
 
@@ -10934,26 +11017,40 @@ viewStates.onChange((actief, view) => {
 // zonnestelsel. Zie borgTrackPresets() waarom dit aan `onChange` hangt en niet aan
 // setSpaceView().
 viewStates.onChange(borgTrackPresets);
-/* EEN TAB DIE VERDWIJNT MAG JE NIET ACHTERLATEN (sessie 34).
+/* WELKE DETAILS-TAB ER GELDT, HANGT AF VAN WAAR JE STAAT (sessie 34, Terry).
 
-   In de magnetosfeer verbergt de CSS `Sun & Moon` en `Planets` — daar is geen
-   zon en geen planeet om te lezen. Stond de bezoeker op een van die twee, dan
-   is zijn ACTIEVE tab ineens onzichtbaar terwijl `.tabpanel.show` er nog onder
-   staat: een kop zonder knop boven een paneel dat over iets anders gaat.
+   In de magnetosfeer is de LEGENDA de eerste tab en de standaard: je kijkt naar
+   een beeld met een stuk of tien kleuren erin, en de vraag die je dan hebt is
+   wat ze betekenen. `Sun & Moon` en `Planets` zijn hier verborgen — er is geen
+   zon en geen planeet om te lezen — dus wie op een van die twee stond, kijkt
+   anders naar een kop zonder knop boven een paneel dat over iets anders gaat.
 
-   EEN KLIK OP EARTH EN NIET DE KLASSEN ZELF ZETTEN. Dan loopt het langs
-   precies dezelfde weg als een echte klik, inclusief het terugzetten van de
-   scrollstand die `bedraadTabs` doet. Twee plekken die tabs schakelen is er
-   één te veel — dezelfde reden waarom die functie per container bedraad is en
-   niet met één globale selector. */
+   EN BIJ VERTREK TERUG NAAR EARTH, want buiten deze state verklaart de legenda
+   niets en is zijn tab dus ook weg.
+
+   ALLEEN BIJ EEN ECHTE STATEWISSEL. `notify()` vuurt óók bij `goToView()`
+   (view-state.js:285), dus zonder deze vergelijking zou elke wissel van
+   camerastand — Meridian, Top, 3D orbit — de tab terugzetten terwijl je binnen
+   hetzelfde aanzicht blijft. Dezelfde val die het detailvenster hieronder met
+   `vorigeState` afvangt, en om precies dezelfde reden.
+
+   EEN KLIK EN NIET DE KLASSEN ZELF ZETTEN. Dan loopt het langs dezelfde weg als
+   een echte klik, inclusief het terugzetten van de scrollstand die
+   `bedraadTabs` doet. Twee plekken die tabs schakelen is er één te veel. */
+let vorigeStateVoorTabs = null;
 viewStates.onChange((actief) => {
-  if (actief !== 'msphere') return;
+  const was = vorigeStateVoorTabs;
+  vorigeStateVoorTabs = actief;
+  if (actief === was) return;
   const dp = document.getElementById('details-panel');
   const huidig = dp && dp.querySelector('.tab.active');
   if (!huidig) return;
-  if (huidig.dataset.tab !== 'd-sunmoon' && huidig.dataset.tab !== 'd-planets') return;
-  const earth = dp.querySelector('.tab[data-tab="d-earth"]');
-  if (earth) earth.click();
+  const naar = actief === 'msphere'
+    ? 'd-legend'
+    : (huidig.dataset.tab === 'd-legend' ? 'd-earth' : null);
+  if (!naar || huidig.dataset.tab === naar) return;
+  const knop = dp.querySelector('.tab[data-tab="' + naar + '"]');
+  if (knop) knop.click();
 });
 /* EEN ANDER AANZICHT IS EEN ANDER ONDERWERP (sessie 26, na Terry's test).
    Het detailvenster gaat over ÉÉN ding, en dat ding hoort bij waar je staat: de
