@@ -7964,8 +7964,35 @@ function bouwMsphereLegenda() {
   msphereLegendaKop(host, 'In the scene');
   msphereLegendaRij(host, 'line', msphereBoundary.colors.mp, 'Magnetopause',
     'Where the wind’s pressure balances Earth’s field. Shue et al. 1998, driven by two measured quantities: the dynamic pressure and the north–south component of the interplanetary field.');
+  /* DE TINTEN VAN DE GRENS, ELK OP ZIJN EIGEN REGEL, EN DE DIEPTE IN EEN NOOT.
+     Drie hues zijn drie toestanden en horen dus drie swatches te krijgen; de
+     diepte is geen vierde toestand maar een schaal die over alle drie loopt, en
+     die als vierde swatch tonen zou hem als toestand laten lezen. Dezelfde
+     scheiding die de veldlijnen maken tussen hun drie staten en de
+     halfrondtint erbovenop.
+
+     De ramps komen LIVE uit de laag (`tints`), zodat een swatch niet kan gaan
+     afwijken van wat er getekend staat — dezelfde reden waarom `colors`
+     bestaat. */
+  const mspTint = msphereBoundary.tints;
+  msphereLegendaRij(host, 'ramp',
+    'linear-gradient(90deg, ' + mspTint.north.basis + ', ' + mspTint.north.diep + ')',
+    'Magnetopause · Bz northward',
+    'The field arriving with the wind points the same way as Earth’s own. Little reconnects, and the cavity stays shut.');
+  msphereLegendaRij(host, 'ramp',
+    'linear-gradient(90deg, ' + mspTint.south.basis + ', ' + mspTint.south.diep + ')',
+    'Magnetopause · Bz southward',
+    'Antiparallel to Earth’s field at the nose, so the two can reconnect and the boundary opens.');
+  msphereLegendaRij(host, 'ramp',
+    'linear-gradient(90deg, ' + mspTint['strong-south'].basis + ', ' + mspTint['strong-south'].diep + ')',
+    'Magnetopause · Bz below −10 nT',
+    'Strongly southward. This is where the standoff can drop inside geosynchronous orbit at 6.6 Re, which is why it gets a colour of its own.');
+  msphereLegendaNoot(host,
+    'Within each of those three, the DEPTH says how much is coupling in — the same Newell number the readout gives as “× normal”. It runs deepest at the nose, where the wind arrives head-on and the surface takes its full pressure; the flanks take only the part along their own normal. Colour says which way the field points, depth says how much of it gets through.');
+  msphereLegendaNoot(host,
+    'With no Bz there is no state to show, and the boundary falls back to plain blue: the shape still stands, because that hangs on the pressure, but nothing is claimed about what is coming in. That is not the same as a quiet magnetosphere.');
   msphereLegendaRij(host, 'line', msphereBoundary.colors.shock, 'Bow shock',
-    'Where the wind first slows below its own signal speed. Scaled off the magnetopause with the magnetosonic Mach number — no Mach, no shock.');
+    'Where the wind first slows below its own signal speed. Scaled off the magnetopause with the magnetosonic Mach number — no Mach, no shock. It does not take the colours above: it hangs entirely on the standoff and adds no measurement of its own.');
   if (msphereGrid) {
     msphereLegendaRij(host, 'line', msphereGrid.colors.as,
       'Scale grid — one line every ' + msphereGrid.stepRe + ' Re',

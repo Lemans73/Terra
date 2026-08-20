@@ -1138,6 +1138,19 @@ export function createMagnetosphereState(THREE, deps) {
     const rows = feed ? feed.rows() : null;
     const s = rows && rows[cursor] ? rows[cursor] : null;
 
+    /* DE TINT HANGT AAN HET MOMENT EN NIET AAN OF ER EEN OPPERVLAK STAAT, dus
+       hij wordt hier gezet en niet verderop naast `boundary.update`. Een grens
+       die zo meteen wegvalt bij een ontbrekende pdyn heeft nog steeds een
+       Bz-toestand, en als hij terugkomt hoort hij die al te dragen in plaats
+       van één bouw lang de neutrale tint te tonen.
+
+       Zonder rij gaan er twee nullen heen en niet twee nullen-als-getal:
+       `setTint` leest een ontbrekende Bz als "geen toestand" en een ontbrekende
+       koppeling als "geen impact", en dat zijn twee verschillende uitspraken
+       dan rustig weer. */
+    boundary.setTint(s ? s.bz : null,
+                     s ? Core.Physics.entryRate(s) : null);
+
     /* GEEN RIJ IS GEEN MOMENT. De veldlijnen hangen niet aan de zonnewind —
        IGRF en T89 rekenen zonder — maar ze hangen wél aan een TIJD, en zonder
        reeks is er geen moment om het veld op te evalueren. Verderop, na de

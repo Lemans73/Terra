@@ -103,11 +103,137 @@ export function createBoundaryLayer(THREE, deps) {
   ========================================================== */
   const MSPHERE_NABIJ = 0.10;
 
+  /* ==========================================================
+     DE KLEUR ZEGT WAT ER BINNENKOMT (sessie 34, Terry).
+
+     De VORM draagt de krimping al — dat is letterlijk wat de neus doet — dus
+     een kleur die hetzelfde zegt, zegt niets nieuws. Wat de kleur hier draagt
+     is de IMPACT: hoeveel van die wind werkelijk naar binnen komt.
+
+     DRIE KANALEN, EN ZE DRAGEN DRIE VERSCHILLENDE GROOTHEDEN.
+
+       tint      de Bz-toestand, uit `Core.Boundary.tintOf` — noordwaarts,
+                 zuidwaarts, of sterk zuidwaarts onder -10 nT. Die functie
+                 staat in de byte-identieke fysicalaag en `TINTS.mp-bz` in
+                 registry.js legt de betekenis vast, dus Terra krijgt hier
+                 GEEN tweede drempelstelsel naast een dat er al is.
+       diepte    de koppeling (`Physics.entryRate`), geklemd op 8x normaal.
+                 Dat is de enige grootheid in dit beeld die zegt HOEVEEL er
+                 binnenkomt; r0 staat al drie keer op het scherm.
+       verloop   de lokale druk: cos^2 van de hoek tussen de normaal en de
+                 zonlijn. De Newtoniaanse drukwet, en precies waarom de NEUS
+                 de standoff draagt — daar komt de wind loodrecht aan, op de
+                 flank alleen de component langs de normaal.
+
+     VERDIEPEN IS VERZADIGEN EN NIET VERDONKEREN. Op een donkere achtergrond
+     leest een lagere lichtheid als wegzakken, en dat is het tegendeel van
+     meer impact. De diepe tinten zijn dezelfde hue op volle verzadiging en
+     hoger uit.
+
+     DE BASISTINTEN ZIJN DIE VAN DE REGISTRY EN BLIJVEN DAT. Alleen het diepe
+     eind is nieuw. Een eerdere poging verschoof ook de basis omlaag — dat gaf
+     een bredere ramp, maar de grens werd op een gewone dag 24 % stiller en bij
+     sterk zuidwaartse Bz zelfs 59 %, en dat is de hoofdvorm van dit hele beeld.
+     GEMETEN tegen de achtergrond (#05070d) op een mediaan moment: deze ramp
+     houdt 0,92 tot 1,05x de helderheid die de grens vandaag heeft.
+
+     HOE VER DE RAMP MOET REIKEN IS GEMETEN EN NIET GEKOZEN, op de 9861 rijen
+     van de gemeten week. Een eerste poging hield de verdieping op 1,15x
+     luminantie, en toen haalde de ZUID-staat — juist de interessante — over
+     de hele ramp maar dE 4,2 en op een mediaan moment 1,2: onzichtbaar. Deze
+     ramp geeft vol dE 18 tot 24 en op een mediaan moment 5,7 tot 7,3, ruim
+     boven de drempel van ongeveer 2,3 waarop een groot vlak van kleur
+     verandert.
+
+     EN DE DRIE STATEN BEZETTEN ELK EEN ANDER STUK VAN DIE RAMP, wat precies
+     is waarom hue en diepte samen meer zeggen dan elk apart:
+
+       north          38,3 % van de week, koppeling mediaan 0,22 · max 1,68
+                      -> komt nooit voorbij de helft van zijn ramp
+       south          61,3 %,             mediaan 1,18 · max 4,76
+       strong-south    0,4 %,             mediaan 2,91 · max 4,86
+                      -> arriveert vrijwel vol, en dat is de storm
+
+     Ondiep cyaan is rustig, half oranje is gewone koppeling, vol roze is
+     storm. Geen van die drie uitspraken staat in de vorm alleen.
+
+     DE SCHOK KLEURT NIET MEE. Hij hangt volledig aan r0 en voegt geen eigen
+     meting toe; hem laten meekleuren zou twee oppervlakken hetzelfde laten
+     zeggen. Zijn `uImpact` staat daarom op nul, en niet zijn tint op zichzelf.
+
+     GEEN Bz IS GEEN TOESTAND. Dan valt de grens terug op de neutrale tint —
+     de vorm staat er nog (die hangt aan pdyn), maar over open of dicht is er
+     niets te zeggen. Dat is dezelfde scheiding die de veldlijnen maken met
+     `bounded: false`.
+  ========================================================== */
+  const MSPHERE_TINTEN = {
+    'north':        { basis: 0x4fd1c5, diep: 0x00fff0 },
+    'south':        { basis: 0xf2a33c, diep: 0xffd24a },
+    'strong-south': { basis: 0xe85a9b, diep: 0xff7ad0 },
+    /* De neutrale stand krijgt óók een diep eind, en het wordt nooit getoond:
+       zonder Bz geeft `entryRate` null en staat de impact op nul. Het staat er
+       omdat een tint zonder tegenhanger de enige uitzondering in de tabel zou
+       zijn, en de volgende lezer dan moet uitzoeken of dat opzet is. */
+    'none':         { basis: 0x6ea8ff, diep: 0x9ec9ff }
+  };
+
+  /* Hoe hard de koppeling moet lopen voor de volle diepe tint.
+
+     DRIE, EN DAT IS EEN KWANTIEL EN GEEN ROND GETAL. `entryRate` klemt zelf op
+     8x normaal, maar die bovenkant is een uitschieter: over de gemeten week
+     ligt de mediaan op 0,81x, p90 op 1,97 en p99 op 3,54, en boven de 3 zit
+     2,3 % van alle monsters. Op 3 vol betekent dus: een gewone dag staat een
+     kwart de ramp in, een drukke dag tweederde, en een storm helemaal. Zou dit
+     op 8 staan — de klem van de functie zelf — dan zat 97,7 % van de week in
+     de onderste helft en deed het kanaal niets. */
+  const MSPHERE_KOPPELING_VOL = 3;
+
+  /* HOEVEEL VERDIEPING HET HELE OPPERVLAK SOWIESO KRIJGT.
+
+     Het drukverloop is cos^2 van de hoek met de zonlijn, en over de GETEKENDE
+     vorm is dat scheef: gemiddeld 0,209, want de staart loopt tot 60 Re en telt
+     1584 van de punten waar de neus er 144 heeft. Als kaal gewicht kost het
+     verloop dus een deel van het kanaal dat de intentie was.
+
+     GEMETEN, bij volle impact en met de schok uit, als totale luminantie over
+     het beeld (nulmeting zonder de schil eraf):
+
+       zonder verloop      +204 %      het hele oppervlak verdiept
+       bodem 0,00          +151 %      74 % daarvan blijft over
+       bodem 0,35          ~+186 %     ~82 %
+       bodem 0,55          +180 %      88 %
+
+     En het verloop zelf, als helderheid van de neus tegen die van de staart:
+     1,68 bij bodem 0 · 1,49 bij 0,35 · 1,40 bij 0,55, tegen 1,23 met het
+     verloop helemaal uit — die 1,23 is de doorkijk en de vorm, niet de druk.
+     Bodem 0,35 houdt dus ruwweg 82 % van de impact en 60 % van het
+     verloopcontrast, en dat is de verhouding die Terry's twee woorden
+     beschrijven: de impact is de intentie, de lokale druk de toevoeging.
+
+     TWEE WAARSCHUWINGEN BIJ DIE GETALLEN, allebei omdat ze anders te stellig
+     lezen. Het staartvakje bevat maar 12 pixels — de trend is monotoon en over
+     vijf standen consistent, maar het is geen scherpe meting. En een eerdere
+     ronde gaf hier +4,4 %, wat tot een bodem van 0,55 leidde; die meting stond
+     op een camera die bij het opstarten op een 0x0-canvas NaN was geworden, dus
+     hij mat een leeg beeld. Dezelfde faalvorm als de twee van sessie 33: een
+     echte meting op een foute opstelling leest als een echt resultaat. */
+  const MSPHERE_DRUKBODEM = 0.35;
+
   function bouwOppervlak(kleur, opacity) {
     const geo = new THREE.BufferGeometry();
     const mat = new THREE.ShaderMaterial({
       uniforms: {
         uColor:   { value: new THREE.Color(kleur).convertSRGBToLinear() },
+        /* De diepe tegenhanger van diezelfde kleur. Begint gelijk aan de
+           basis, zodat een oppervlak dat nooit een tint krijgt (de schok)
+           per constructie niets doet in plaats van iets onbedoelds. */
+        uDeep:    { value: new THREE.Color(kleur).convertSRGBToLinear() },
+        uImpact:  { value: 0 },
+        uPressure:{ value: 1 },
+        /* De BODEM van het drukverloop: hoeveel van de verdieping het hele
+           oppervlak sowieso krijgt, ook waar de wind er langs scheert in
+           plaats van op te botsen. Zie de noot bij MSPHERE_DRUKBODEM. */
+        uFloor:   { value: MSPHERE_DRUKBODEM },
         uOpacity: { value: opacity },
         /* Eén op eén betekent GEEN doorkijk. Dat is de stand voor de vlakke
            standen: daar is het oppervlak al tot zijn omtrek teruggebracht en is
@@ -116,18 +242,40 @@ export function createBoundaryLayer(THREE, deps) {
       },
       vertexShader: `
         varying float vFade;
+        varying float vPress;
         uniform float uNear;
         void main() {
           vec4 mv = modelViewMatrix * vec4(position, 1.0);
           vec3 n = normalize(normalMatrix * normal);
           float toward = dot(n, normalize(-mv.xyz));
           vFade = mix(1.0, uNear, smoothstep(-0.15, 0.35, toward));
+          /* DE ZONLIJN IS IN DEZE GEOMETRIE DE LOKALE +Z, en dat is geen
+             toeval maar de permutatie uit vulOppervlak: Terra-z <- GSM-x.
+             Dus normal.z IS de component van de normaal langs de zonlijn,
+             zonder één extra uniform of matrixvermenigvuldiging. Ongedraaid
+             en dus onafhankelijk van waar de camera staat — dit is een
+             eigenschap van het oppervlak, niet van het uitzicht. */
+          float c = max(0.0, normal.z);
+          vPress = c * c;
           gl_Position = projectionMatrix * mv;
         }`,
       fragmentShader: `
-        uniform vec3 uColor; uniform float uOpacity; varying float vFade;
+        uniform vec3 uColor; uniform vec3 uDeep;
+        uniform float uImpact; uniform float uPressure; uniform float uFloor;
+        uniform float uOpacity;
+        varying float vFade; varying float vPress;
         void main() {
-          gl_FragColor = vec4(uColor, uOpacity * vFade);
+          /* De druk MODULEERT de impact en knijpt hem niet af. Het verschil is
+             gemeten en het was groot: met een kaal vPress als gewicht voegde de
+             impact bij vol kanaal nog maar 4,4 % licht toe waar hij vlak 33 %
+             geeft, want de staart telt tien keer zoveel punten als de neus en
+             staat daar op nul. De bodem laat het hele oppervlak meedoen; wat
+             het verloop erbovenop doet is de neus eruit tillen.
+
+             uPressure op nul zet het verloop uit zonder de shader te
+             herschrijven, en dan kleurt het oppervlak overal gelijk. */
+          float p = mix(1.0, mix(uFloor, 1.0, vPress), uPressure);
+          gl_FragColor = vec4(mix(uColor, uDeep, uImpact * p), uOpacity * vFade);
           #include <colorspace_fragment>
         }`,
       transparent: true, depthWrite: false
@@ -150,17 +298,57 @@ export function createBoundaryLayer(THREE, deps) {
      van de pixels boven de achtergrond uit, met de kale doorsnede 0,06 %.
 
      Dus twee sets waarden, en niet één compromis dat in beide gevallen net
-     niet klopt. */
+     niet klopt.
+
+     DE SCHOK KREEG MINDER DEKKING TOEN HIJ ROOD WERD, en dat is precies het
+     omgekeerde van wat ik had UITGEREKEND. De redenering was: rood is bij
+     gelijke verzadiging ongeveer half zo licht als het oranje dat hier stond
+     (lineaire luminantie 0,4631 tegen 0,2763), dus de dekking moet mee omhoog
+     om "rooder" niet stilzwijgend "zwakker" te laten betekenen. Dat gaf 0,57.
+
+     GEMETEN GAF DAT 2,61x ZOVEEL LICHT, en de schok overstemde de
+     magnetopauze — verhouding 0,94 waar hij 2,44 hoort te zijn. De oorzaak is
+     de bloom-pass: die heeft een DREMPEL, en #ff5340 heeft zijn rode kanaal op
+     255 waar #e8a86f nergens boven 232 komt. Het rood slaat er dus doorheen en
+     het bleke oranje niet. Een luminantiemodel kan dat niet zien, want het is
+     niet lineair. Dit is waarom er in dit project via de composer gemeten wordt
+     en niet via de renderer.
+
+     Dus gemeten in plaats van gerekend, drempelvrij (de som van de luminantie
+     over het hele beeld, met een nulmeting zonder de schil eraf) en per set:
+
+       vol net     oud #e8a86f @0,55 -> 0,143.  Rood haalt dat op 0,25.
+       doorsnede   oud #e8a86f @0,75 -> 0,0244. Rood haalt dat op 0,70.
+
+     Twee verschillende factoren, en dat is geen ruis: in het volle net kruisen
+     4560 lijnstukken elkaar en bouwt de helderheid zich op tot boven die
+     bloomdrempel, in de doorsnede ligt er per plek precies één lijn en gebeurt
+     dat nauwelijks. Daarom staan hier twee sets en niet één met een factor.
+
+     De verhouding blijft waar hij hoort: de magnetopauze houdt 2,4x zoveel
+     licht in het volle net en 1,8x in de doorsnede, dus hij blijft de
+     hoofdvorm. Wat er veranderde is de KLEUR en niets anders — precies wat er
+     gevraagd is. */
   const INKT = {
-    net:  { mp: 0.55, shock: 0.34 },
-    lijn: { mp: 1.00, shock: 0.75 }
+    net:  { mp: 0.55, shock: 0.25 },
+    lijn: { mp: 1.00, shock: 0.70 }
   };
 
   /* De twee inkten staan hier als getal en NERGENS anders. De legenda (blok B5)
      vraagt ze op via `colors` hieronder in plaats van ze in CSS over te tikken:
      een swatch die de kleur van het oppervlak zegt te zijn en het niet is, is
-     erger dan geen swatch. */
-  const MP_INK = 0x6fd3e8, SHOCK_INK = 0xe8a86f;
+     erger dan geen swatch.
+
+     DE BOEGSCHOK IS ROOD GEWORDEN (sessie 34, Terry): #e8a86f -> #ff5340. Niet
+     alleen omdat hij in werkelijkheid dichter bij rood staat, maar omdat blok 2
+     de magnetopauze het oranje #f2a33c laat lenen bij zuidwaartse Bz — en de
+     twee oppervlakken liggen genesteld, een paar Re uit elkaar. GEMETEN in
+     CIE76 tegen alle vier de tinten die de grens kan aannemen: #e8a86f zat op
+     24 van het zuid-oranje, #ff5340 op 48, en op minstens 48 van elk van de
+     andere drie. De dipoolas (#ff7a4d) staat dichterbij in hue, maar die is een
+     stompje IN de aarde met dertig Re en twee oppervlakken ertussen — buren
+     wegen naar waar ze staan, niet naar waar ze in een tabel staan. */
+  const MP_INK = MSPHERE_TINTEN.none.basis, SHOCK_INK = 0xff5340;
 
   const mp = bouwOppervlak(MP_INK, INKT.net.mp);
   mp.name = 'msphere:magnetopause';
@@ -343,6 +531,72 @@ export function createBoundaryLayer(THREE, deps) {
      de doorkijk een ShaderMaterial, en die leest zijn eigen dekking uit de
      shader. `material.opacity` zetten zou stil niets doen — dezelfde val die de
      PoC beschrijft bij `tintBoundary`. */
+  /* De Bz-toestand van dit moment en hoe hard de koppeling loopt. Ze staan
+     hier als toestand en niet als argument van `schrijfInkt`, om precies de
+     reden die hierboven staat: één schrijver per uniform. */
+  let tintStaat = 'none', impact = 0, bzNu = null;
+
+  /* ==========================================================
+     DE TINT WISSELT VLOEIEND EN NIET MET EEN KLIK.
+
+     `tintOf` schakelt hard op Bz = 0 en op -10 nT, en dat zijn de goede
+     drempels — noord tegen zuid is werkelijk de scheiding die telt. Maar Bz
+     SCHOMMELT om die nul heen, en een harde snede maakt van die ruis een
+     gebeurtenis. GEMETEN over de reeks van zeven dagen: 662 tintwissels in 168
+     uur, gemiddeld 3,95 per uur en 15 in het drukste, terwijl 23,9 % van alle
+     monsters binnen 1 nT van de drempel ligt. Bij afspelen op 10 min/s klapt de
+     hoofdvorm van dit beeld dan meermaals per seconde van cyaan naar oranje, op
+     een verschil dat er niet is.
+
+     Dus een BAND om elke drempel, waarbinnen de twee tinten in elkaar
+     overlopen. Buiten de band staat er exact de kleur die de registry noemt;
+     erbinnen een mengsel. Cyaan en oranje liggen bijna tegenover elkaar, dus
+     dat mengsel is bleek — en dat is juist wat er te zeggen valt: op Bz nul is
+     de toestand werkelijk onbeslist, en een bleke grens zegt dat. Dezelfde
+     uitspraak die de sectorlane doet met `onbeslist`.
+
+     DE BREEDTE IS DE RUIS EN GEEN ROND GETAL. Tussen twee opeenvolgende
+     monsters verspringt Bz mediaan 0,24 nT (p75 0,59 · p90 1,30). Een band van
+     1 nT is daar ruwweg vier keer zo breed, dus een gewone stap verplaatst de
+     kleur een achtste van de ramp — te klein om als klik te lezen. Breder mag
+     niet zomaar: op ±1 staat 24,6 % van de monsters in het mengsel, op ±2 is
+     dat 45,8 %, en dan is de hoofdvorm van dit beeld bijna de helft van de tijd
+     bleek. Op ±0,5 is het 12,7 %, maar dan is de band nog maar twee mediane
+     stappen breed en komt het klikken terug.
+
+     `tintOf` BLIJFT DE AUTORITEIT OVER HET WOORD. Wat hier zachter wordt is de
+     VERF, niet de uitspraak: de legenda, de uitlezing en `tint()` lezen nog
+     steeds de discrete staat. Een tekening die tussen twee waarden in zit mag
+     dat laten zien; een bewering mag dat niet.
+  ========================================================== */
+  const MSPHERE_TINTBAND = 1;
+
+  const _a = new THREE.Color(), _b = new THREE.Color();
+
+  /* De twee kleuren van dit moment — basis en diep — als lineaire THREE.Color.
+     Mengen gebeurt in de LINEAIRE ruimte omdat de shader daar ook rekent. */
+  function tintPaar(bz, uitBasis, uitDiep) {
+    const T = MSPHERE_TINTEN, B = MSPHERE_TINTBAND;
+    const zet = (k, uitB, uitD) => {
+      uitB.setHex(T[k].basis).convertSRGBToLinear();
+      uitD.setHex(T[k].diep).convertSRGBToLinear();
+    };
+    if (!Number.isFinite(bz)) { zet('none', uitBasis, uitDiep); return; }
+    const meng = (k1, k2, t) => {
+      zet(k1, uitBasis, uitDiep); zet(k2, _a, _b);
+      uitBasis.lerp(_a, t); uitDiep.lerp(_b, t);
+    };
+    // Rond de nul: noord <-> zuid.
+    if (bz >= B) zet('north', uitBasis, uitDiep);
+    else if (bz > -B) meng('north', 'south', (B - bz) / (2 * B));
+    // Rond de -10: zuid <-> sterk zuid.
+    else if (bz >= Core.Boundary.STRONG_SOUTH_NT + B) zet('south', uitBasis, uitDiep);
+    else if (bz > Core.Boundary.STRONG_SOUTH_NT - B)
+      meng('south', 'strong-south',
+           (Core.Boundary.STRONG_SOUTH_NT + B - bz) / (2 * B));
+    else zet('strong-south', uitBasis, uitDiep);
+  }
+
   function schrijfInkt() {
     const inkt = doorsnedeVlak ? INKT.lijn : INKT.net;
     // Eén betekent GEEN doorkijk: in een doorsnede is er niets om doorheen te
@@ -352,6 +606,31 @@ export function createBoundaryLayer(THREE, deps) {
     shock.material.uniforms.uOpacity.value = inkt.shock * vervaging;
     mp.material.uniforms.uNear.value = nabij;
     shock.material.uniforms.uNear.value = nabij;
+
+    tintPaar(bzNu, mp.material.uniforms.uColor.value,
+                   mp.material.uniforms.uDeep.value);
+    mp.material.uniforms.uImpact.value = impact;
+    /* IN DE DOORSNEDE VERVALT HET DRUKVERLOOP. Daar staat alleen de omtrek,
+       en die loopt van de neus tot de staart: het verloop zou dan als een
+       gradiënt LANGS een lijn lezen in plaats van als druk OVER een oppervlak.
+       De impact blijft wel staan — die is een eigenschap van het moment en
+       niet van de weergave. */
+    mp.material.uniforms.uPressure.value = doorsnedeVlak ? 0 : 1;
+  }
+
+  /* DE TOESTAND VAN DIT MOMENT, ALS TINT EN DIEPTE.
+
+     `bz` in nT en `koppeling` als veelvoud van normaal (`Physics.entryRate`).
+     Allebei mogen ze ontbreken, en dat is dan geen nul maar een toestandloze
+     grens: `tintOf` geeft null zonder Bz-meting en de tint valt terug op
+     neutraal — de vorm staat er nog, want die hangt aan pdyn, maar over wat er
+     binnenkomt is niets te zeggen. Nul zou "rustig" beweren. */
+  function setTint(bz, koppeling) {
+    bzNu = Number.isFinite(bz) ? bz : null;
+    tintStaat = Core.Boundary.tintOf(bz) || 'none';
+    impact = Number.isFinite(koppeling)
+      ? Math.max(0, Math.min(1, koppeling / MSPHERE_KOPPELING_VOL)) : 0;
+    schrijfInkt();
   }
 
   function setOutline(vlak) {
@@ -458,11 +737,19 @@ export function createBoundaryLayer(THREE, deps) {
     group.clear();
   }
 
+  const css = (n) => '#' + n.toString(16).padStart(6, '0');
+
   return { group, update, orient, setVisible, setPartVisible, setOutline, setFade,
-           dispose,
-           // Voor de legenda: wat er werkelijk getekend wordt, als CSS-kleur.
-           colors: { mp: '#' + MP_INK.toString(16).padStart(6, '0'),
-                     shock: '#' + SHOCK_INK.toString(16).padStart(6, '0') },
+           setTint, dispose,
+           /* Voor de legenda: wat er werkelijk getekend wordt, als CSS-kleur.
+              `mp` is de NEUTRALE tint — de stand zonder Bz-meting — en `tints`
+              draagt de vier ramps waar de legenda zijn verloopjes uit bouwt.
+              Eén bron, zodat een swatch niet kan gaan afwijken van de scene. */
+           colors: { mp: css(MP_INK), shock: css(SHOCK_INK) },
+           tints: Object.fromEntries(Object.entries(MSPHERE_TINTEN).map(
+             ([k, v]) => [k, { basis: css(v.basis), diep: css(v.diep) }])),
+           tint: () => tintStaat,
+           impact: () => impact,
            outline: () => doorsnedeVlak,
            fade: () => vervaging,
            parts: { mp, shock } };
