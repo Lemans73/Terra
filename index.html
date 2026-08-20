@@ -8754,7 +8754,7 @@ function setPanelOpen(open) {
 
    WAT DE BEHEERDER NIET OVERNEEMT is het ÓPENEN van dat venster: dat kan niet
    zonder inhoud, en die komt van `showDetail(d)`. Alleen de sluitkant loopt
-   hierlangs. Dat het openen tóch Navigate wegzet, doet `navYield()` — die moet
+   hierlangs. Dat het openen tóch Navigate wegzet, doet `detailYield()` — die moet
    het bovendien ONTHOUDEN, zodat Navigate terugkomt als het venster sluit, en
    dat kan een groep niet.
 
@@ -9184,61 +9184,76 @@ const detail = createDetailPanel({
   onClose: hideDetail
 });
 
-/* ---- Navigate wijkt voor het detailvenster, en komt terug (sessie 26) ------
-   Navigate en het detailvenster delen de rechteronderhoek. Ze passen daar niet
+/* ---- Een paneel wijkt voor het detailvenster, en komt terug (sessie 26) ----
+   Het venster deelt een schermhoek met de panelen daar. Ze passen er niet
    allebei: `--z-panel` (10) ligt onder `--z-detail` (40), dus het paneel zou
-   onder het venster verdwijnen — en een paneel dat je niet ziet maar dat wél
+   ONDER het venster verdwijnen — en een paneel dat je niet ziet maar dat wél
    kliks vangt is erger dan een paneel dat netjes opzij gaat.
 
-   DAT ZE ELKAAR SLUITEN REGELT `js/ui/panels.js` INMIDDELS ZELF: ze zitten samen
-   in groep 'right'. Wat een groep NIET kan is onthouden, en dat is precies wat
-   hier nog overblijft — Navigate hoort terug te komen zodra het venster sluit,
-   en alleen als hij er stond. Drie functies dus, en geen enkele daarvan sluit
-   iets wat de beheerder al sluit.
+   DAT ZE ELKAAR SLUITEN REGELT `js/ui/panels.js` INMIDDELS ZELF: ze zitten in
+   dezelfde groep. Wat een groep NIET kan is onthouden, en dat is precies wat
+   hier overblijft — het paneel hoort terug te komen zodra het venster sluit, en
+   alleen als het er stond. Drie functies dus, en geen enkele daarvan sluit iets
+   wat de beheerder al sluit.
 
-   `navForget()` is de derde, en die is geen detail: `clearView()` sluit eerst
-   alle panelen en komt dán bij het venster. Zonder het geheugen te wissen zou
-   dat Navigate OPENEN — het omgekeerde van "maak het beeld vrij".
+   HET GAAT OM DE HELE GROEP EN NIET ALLEEN OM NAVIGATE (sessie 32). Tot nu toe
+   stond hier letterlijk `panels.close('nav')`, en op een breed scherm klopte dat:
+   het venster staat rechtsonder, Navigate ook, en het lagenpaneel links. Op een
+   telefoon vallen die twee hoeken sinds sessie 31 SAMEN tot één groep, en dan
+   klopt het niet meer. GEMETEN op 375x812: het venster van 355x487 stond over een
+   Details-paneel van 355x503 dat gewoon open bleef — precies de toestand die je
+   niet kunt zien waar de één-vel-regel voor bestaat, en zichtbaar geworden zodra
+   de magnetosfeer zijn uitlezing vanuit dát paneel liet openen.
 
-   BEKEND EN GEACCEPTEERD: opent iemand Navigate zélf terwijl het venster open
-   staat en sluit hij hem daarna weer, dan komt Navigate bij het sluiten van het
-   venster alsnog één keer terug. Repareren kost een schaduwvariabele die de
-   nav-stand bijhoudt, en dat is de tweede waarheid waar `panels.js` juist voor
-   waarschuwt. */
-let navWasOpen = false;
+   Nu wijkt alles wat de groep van het venster deelt, en komt terug. Op een breed
+   scherm is die groep `'right'` en is Navigate daar de enige bewoner, dus daar
+   verandert er niets — nagerekend, niet aangenomen.
 
-function navYield() {
+   `detailForget()` is de derde, en die is geen detail: `clearView()` sluit eerst
+   alle panelen en komt dán bij het venster. Zonder het geheugen te wissen zou dat
+   het paneel OPENEN — het omgekeerde van "maak het beeld vrij".
+
+   BEKEND EN GEACCEPTEERD: opent iemand een paneel zélf terwijl het venster open
+   staat en sluit hij het daarna weer, dan komt het bij het sluiten van het venster
+   alsnog één keer terug. Repareren kost een schaduwvariabele die de paneelstand
+   bijhoudt, en dat is de tweede waarheid waar `panels.js` juist voor waarschuwt. */
+let yieldedPanels = [];
+
+function detailYield() {
   // Staat het venster al open, dan staat de herinnering er al. Zonder deze uitgang
   // overschrijft een klik van beving A naar beving B hem met "dicht" — een stand
   // die de eerste klik zelf heeft veroorzaakt.
   if (detailVisible) return;
-  navWasOpen = panels.isOpen('nav');
-  if (navWasOpen) panels.close('nav');
+  /* DE GROEP WORDT GEVRAAGD EN NIET INGETIKT. Sinds sessie 31 vallen links en
+     rechts op een telefoon samen (zie borgPaneelGroepen), dus een ingetikte naam
+     zou daar naar een groep kijken waar het venster niet in zit. */
+  const groep = panels.groupOf('detail');
+  yieldedPanels = panels.openInGroup(groep).filter((k) => k !== 'detail');
+  for (const k of yieldedPanels) panels.close(k);
 }
 
-function navRestore() {
-  const wasOpen = navWasOpen;
-  navWasOpen = false;
+function detailRestore() {
+  const terug = yieldedPanels;
+  yieldedPanels = [];
   /* ALLEEN ALS DE HOEK NOG VRIJ IS. `panels.open()` sluit zijn groepsgenoten, dus
-     zonder deze toets gooit het terugzetten van Navigate er iets uit dat de
-     bezoeker intussen zélf heeft geopend.
+     zonder deze toets gooit het terugzetten er iets uit dat de bezoeker intussen
+     zélf heeft geopend.
 
-     DE GROEP WORDT GEVRAAGD EN NIET INGETIKT. Hier stond `'right'`, en dat klopte
-     zolang die naam vastlag. Sinds sessie 31 vallen links en rechts op een
-     telefoon samen tot één groep (zie borgPaneelGroepen), dus een ingetikte naam
-     zou daar naar een groep kijken waar Navigate niet meer in zit — en dan gooit
-     het terugzetten alsnog het lagenpaneel eruit. */
-  const groep = panels.groupOf('nav');
-  if (wasOpen && !panels.openInGroup(groep).length) panels.open('nav');
+     EN MAAR ÉÉN, de laatste. Een groep toont per definitie één paneel tegelijk,
+     dus twee terugzetten zou betekenen dat de eerste de tweede meteen weer sluit —
+     een lus die eindigt op een willekeurige winnaar. */
+  if (!terug.length) return;
+  const groep = panels.groupOf('detail');
+  if (!panels.openInGroup(groep).length) panels.open(terug[terug.length - 1]);
 }
 
-function navForget() { navWasOpen = false; }
+function detailForget() { yieldedPanels = []; }
 
 function hideDetail() {
   if (!detailVisible) return;
   detailVisible = false;
   detail.hide();
-  navRestore();
+  detailRestore();
   /* HIER EN NIET IN `detail.onClose` (sessie 28). Die haak vuurt alleen bij een
      sluiting door de gebruiker zélf, niet vanuit `hide()` — en `hide()` is precies
      de weg die de app neemt bij `clearView()`, een state-wissel of een sprong naar
@@ -9310,7 +9325,7 @@ function clearView() {
   if (!isNarrow()) return;
   // Eerst vergeten: de lus hieronder sluit ook het detailvenster, en dat zou
   // Navigate terugzetten terwijl je juist om een vrij beeld vroeg.
-  navForget();
+  detailForget();
   // Het detailvenster zit sinds sessie 26 in de beheerder en gaat dus mee in deze
   // lus. Het TIJDPANEEL niet — dat heeft geen groep en geen knop, en moet daarom
   // apart. Op een telefoon is het schermbreed, en je vroeg om de bol.
@@ -9457,9 +9472,9 @@ antipodeUitgang?.addEventListener('click', () => {
    de view die híéronder ligt, waardoor de sluitknop een terugpijl wordt. Alleen de
    zonnegebieden geven hem mee; overal elders is hij afwezig en sluit de knop gewoon. */
 function showDetail(d, opts) {
-  // Vóór beide takken, want allebei zetten ze `detailVisible` — en navYield() leest
+  // Vóór beide takken, want allebei zetten ze `detailVisible` — en detailYield() leest
   // die vlag om te weten of de herinnering al staat.
-  navYield();
+  detailYield();
   /* Een ander onderwerp betekent een andere antipode. Toetsen op de PLEK en niet
      blindweg opruimen: `showDetail(d)` wordt ook aangeroepen om dezelfde beving te
      hertekenen nadat de knop is omgezet, en een blinde `hideAntipode()` zou de
@@ -10475,7 +10490,7 @@ viewStates.onChange(borgTrackPresets);
    scene — glow, environment, camera — en dit is interface. Bovendien dekt `onChange`
    alle vier de wegen waarlangs de state verandert, waar `enter()` er maar één van is.
 
-   Het venster laat hiermee ook Navigate wijken (zie navYield), en dat is precies de
+   Het venster laat hiermee ook Navigate wijken (zie detailYield), en dat is precies de
    bedoeling: je hebt Sun aangetikt, dus je bent er. Sluit je de readings, dan staat
    Navigate er weer. */
 let vorigeState = viewStates.activeState();
@@ -10490,11 +10505,11 @@ viewStates.onChange((actief) => {
      Op een breed scherm speelt dat niet: daar staat Navigate rechtsonder naast
      de scene en blijft hij gewoon staan.
 
-     NA `hideDetail()`, want die roept `navRestore()` aan en zou Navigate anders
-     meteen terugzetten. En `navForget()` erbij: zonder dat komt hij alsnog terug
+     NA `hideDetail()`, want die roept `detailRestore()` aan en zou Navigate anders
+     meteen terugzetten. En `detailForget()` erbij: zonder dat komt hij alsnog terug
      zodra het detailvenster de volgende keer sluit — de herinnering zou dan een
      stand bewaren die de bezoeker nooit gevraagd heeft. */
-  if (isNarrow()) { navForget(); panels.close('nav'); }
+  if (isNarrow()) { detailForget(); panels.close('nav'); }
   if (actief === 'sun') showSolarActivity();
   /* DE MAGNETOSFEER OPENT ZIJN CONDITIES ALLEEN OP EEN BREED SCHERM (Terry,
      sessie 32). De zon doet het overal en dat blijft voorlopig zo; hier ligt het
