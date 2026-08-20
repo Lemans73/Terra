@@ -71,11 +71,66 @@ export function createBoundaryLayer(THREE, deps) {
      tekent ook de diagonaal van elk vlak, en dan lees je een driehoeksnet
      in plaats van een rooster van meridianen en ringen. Precies de fout
      die het aarde-rooster in sessie 28 dichter deed lijken dan het was. */
+  /* ==========================================================
+     DE DOORKIJK: DE NABIJE WAND VERVAAGT (sessie 33, Terry).
+
+     Het volle net is 4560 lijnstukken die elkaar overal kruisen. Van binnenuit
+     staan er tralies over de aarde en de veldlijnen, en zie je wél DÁT er een
+     grens is maar niet meer waar. Alleen de verre wand leest als een kom.
+
+     `side: BackSide` zou dit voor een MESH oplossen, maar met de diagonalen
+     eruit zijn dit lijnen — er valt niets weg te cullen. Dus per VERTEX, met de
+     analytische normaal tegen de richting naar de camera. Dat is bovendien een
+     betere oplossing dan BackSide: die snijdt hard op de silhouetlijn, waar de
+     schil élke rib tegelijk verliest en de omtrek dus flikkert bij het draaien.
+     Een smoothstep over dezelfde grootheid laat de overgang lopen.
+
+     NAAR DE CAMERA TOE, NIET DE KIJKRICHTING VAN DE CAMERA. Bij een
+     perspectiefcamera verschillen die twee aan de rand van het beeld, en juist
+     daar vult deze schil het hele scherm.
+
+     `MSPHERE_NABIJ` IS 0,10 EN GEEN 0. De nabije wand helemaal weglaten is
+     precies wat BackSide doet, en dan is de NEUS het stuk dat ontbreekt — waar je
+     recht op de schil kijkt staat de normaal per definitie naar je toe. Net het
+     stuk dat de standoff draagt. Een tiende laat de vorm daar doorschemeren
+     zonder dat er tralies ontstaan.
+
+     `#include <colorspace_fragment>` IS GEEN NETHEID MAAR DE HELFT VAN DE
+     HELDERHEID. Three rekent lineair en codeert bij het schrijven naar sRGB; een
+     eigen shader die alleen `gl_FragColor` zet slaat die stap over. De PoC mat
+     dat dat ruwweg een factor twee kost, precies in het bereik waar deze laag
+     leeft — getekend, gemeten, en niet te zien.
+  ========================================================== */
+  const MSPHERE_NABIJ = 0.10;
+
   function bouwOppervlak(kleur, opacity) {
     const geo = new THREE.BufferGeometry();
-    const mat = new THREE.LineBasicMaterial({
-      color: new THREE.Color(kleur), transparent: true, opacity,
-      depthWrite: false
+    const mat = new THREE.ShaderMaterial({
+      uniforms: {
+        uColor:   { value: new THREE.Color(kleur).convertSRGBToLinear() },
+        uOpacity: { value: opacity },
+        /* Eén op eén betekent GEEN doorkijk. Dat is de stand voor de vlakke
+           standen: daar is het oppervlak al tot zijn omtrek teruggebracht en is
+           er niets om doorheen te kijken. Zie schrijfInkt(). */
+        uNear:    { value: MSPHERE_NABIJ }
+      },
+      vertexShader: `
+        varying float vFade;
+        uniform float uNear;
+        void main() {
+          vec4 mv = modelViewMatrix * vec4(position, 1.0);
+          vec3 n = normalize(normalMatrix * normal);
+          float toward = dot(n, normalize(-mv.xyz));
+          vFade = mix(1.0, uNear, smoothstep(-0.15, 0.35, toward));
+          gl_Position = projectionMatrix * mv;
+        }`,
+      fragmentShader: `
+        uniform vec3 uColor; uniform float uOpacity; varying float vFade;
+        void main() {
+          gl_FragColor = vec4(uColor, uOpacity * vFade);
+          #include <colorspace_fragment>
+        }`,
+      transparent: true, depthWrite: false
     });
     const lijn = new THREE.LineSegments(geo, mat);
     // De staart loopt ver buiten elke redelijke bounding sphere; three zou hem
@@ -117,24 +172,59 @@ export function createBoundaryLayer(THREE, deps) {
      `straalBijHoek` is een functie zodat dezelfde bouwer de magnetopauze
      én de boegschok kan maken: die twee delen hun vorm en verschillen
      alleen in hun straal. */
+  /* DE NORMAAL VAN EEN OMWENTELINGSOPPERVLAK, ANALYTISCH.
+
+     De doorkijk-shader heeft er één per vertex nodig, en het oppervlak geeft hem
+     zonder rekenwerk prijs: het is r(theta), rondgedraaid om de zonlijn. Met
+
+       A = dr/dtheta * cos(theta) - r * sin(theta)     (dx/dtheta)
+       B = dr/dtheta * sin(theta) + r * cos(theta)     (drho/dtheta)
+
+     is het kruisproduct van de twee raakvectoren evenredig met
+     `(B, -A*sin a, -A*cos a)` in GSM. Twee ijkpunten die dat sluitend maken:
+
+       neus (theta 0)   dr = 0, dus (r0, 0, 0) — pal naar de zon, en dat is
+                        precies waar de neus naartoe wijst
+       flank (90 graden) A = -r, B = dr, dus (dr, r sin a, r cos a) — radiaal
+                        naar buiten, met een sunwaartse kanteling omdat de
+                        staart openflaart
+
+     `dr/dtheta` NUMERIEK en niet analytisch: `straalBijHoek` is een closure die
+     ook de boegschok bedient (dezelfde vorm, andere schaal), en een tweede
+     afgeleide-formule zou bij de eerste wijziging van Shue uit de pas lopen. Een
+     centrale differentie over 1e-4 rad is hier ruim nauwkeuriger dan een
+     normaal die alleen een vervaging stuurt. */
+  const MSPHERE_DTHETA = 1e-4;
+
   function vulOppervlak(lijn, thetas, straalBijHoek) {
     const nT = thetas.length, punten = [];
     // Het net: één ring per theta, één meridiaan per roll.
     const P = new Float32Array(nT * N_ROLL * 3);
+    const N = new Float32Array(nT * N_ROLL * 3);
     for (let i = 0; i < nT; i++) {
       const th = thetas[i];
       const r = straalBijHoek(th);
       // In GSM: x langs de zonlijn, de rest op een cirkel eromheen.
       const x = r * Math.cos(th), rho = r * Math.sin(th);
+      // Centrale differentie, eenzijdig op de neus waar theta niet negatief mag.
+      const t0 = Math.max(th - MSPHERE_DTHETA, 0), t1 = th + MSPHERE_DTHETA;
+      const dr = (straalBijHoek(t1) - straalBijHoek(t0)) / (t1 - t0);
+      const A = dr * Math.cos(th) - r * Math.sin(th);
+      const B = dr * Math.sin(th) + r * Math.cos(th);
       for (let j = 0; j < N_ROLL; j++) {
         const a = (j / N_ROLL) * Math.PI * 2;
+        const sa = Math.sin(a), ca = Math.cos(a);
         const k = (i * N_ROLL + j) * 3;
         // GSM (x, y, z) -> Terra (y, z, x). Zie pocNaarTerra; hier
         // uitgeschreven omdat het per punt gebeurt en een Vector3 per punt
         // 3456 objecten per herbouw zou kosten.
-        P[k]     = rho * Math.sin(a) * MSPHERE_RE;   // Terra x  <- GSM y
-        P[k + 1] = rho * Math.cos(a) * MSPHERE_RE;   // Terra y  <- GSM z
+        P[k]     = rho * sa * MSPHERE_RE;            // Terra x  <- GSM y
+        P[k + 1] = rho * ca * MSPHERE_RE;            // Terra y  <- GSM z
         P[k + 2] = x * MSPHERE_RE;                   // Terra z  <- GSM x
+        // Dezelfde permutatie op de normaal, en die is schaalvrij.
+        const nx = -A * sa, ny = -A * ca, nz = B;
+        const L = Math.hypot(nx, ny, nz) || 1;
+        N[k] = nx / L; N[k + 1] = ny / L; N[k + 2] = nz / L;
       }
     }
     // Meridianen (langs theta) en ringen (rond de as), zonder diagonalen.
@@ -151,6 +241,7 @@ export function createBoundaryLayer(THREE, deps) {
     lijn.geometry.dispose();
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(P, 3));
+    geo.setAttribute('normal', new THREE.BufferAttribute(N, 3));
     geo.setIndex(idx);
     lijn.geometry = geo;
     return { punten: nT * N_ROLL, lijnstukken: idx.length / 2 };
@@ -183,18 +274,32 @@ export function createBoundaryLayer(THREE, deps) {
     top: [Math.PI / 2, 3 * Math.PI / 2]
   };
 
+  /* DE DOORSNEDE KRIJGT ÓÓK NORMALEN, en niet omdat ze hier iets doen: `uNear`
+     staat in deze stand op 1 en de vervaging is dus vlak. Maar de shader draait
+     wél, en `normalize(vec3(0.0))` is een deling door nul — in GLSL geen fout
+     maar NaN, en een NaN in `vFade` maakt de hele lijn onzichtbaar zonder dat
+     er iets gemeld wordt. Precies de faalvorm die deze codebase telkens weer
+     vangt, dus liever twaalf regels rekenwerk dan een lege doorsnede. */
   function vulDoorsnede(lijn, thetas, straalBijHoek, vlak) {
     const nT = thetas.length, rollen = ROLLEN[vlak] || ROLLEN.meridian;
     const P = new Float32Array(nT * rollen.length * 3);
+    const N = new Float32Array(nT * rollen.length * 3);
     for (let j = 0; j < rollen.length; j++) {
-      const a = rollen[j];
+      const a = rollen[j], sa = Math.sin(a), ca = Math.cos(a);
       for (let i = 0; i < nT; i++) {
         const th = thetas[i], r = straalBijHoek(th);
         const x = r * Math.cos(th), rho = r * Math.sin(th);
+        const t0 = Math.max(th - MSPHERE_DTHETA, 0), t1 = th + MSPHERE_DTHETA;
+        const dr = (straalBijHoek(t1) - straalBijHoek(t0)) / (t1 - t0);
+        const A = dr * Math.cos(th) - r * Math.sin(th);
+        const B = dr * Math.sin(th) + r * Math.cos(th);
         const k = (j * nT + i) * 3;
-        P[k]     = rho * Math.sin(a) * MSPHERE_RE;   // Terra x  <- GSM y
-        P[k + 1] = rho * Math.cos(a) * MSPHERE_RE;   // Terra y  <- GSM z
+        P[k]     = rho * sa * MSPHERE_RE;            // Terra x  <- GSM y
+        P[k + 1] = rho * ca * MSPHERE_RE;            // Terra y  <- GSM z
         P[k + 2] = x * MSPHERE_RE;                   // Terra z  <- GSM x
+        const nx = -A * sa, ny = -A * ca, nz = B;
+        const L = Math.hypot(nx, ny, nz) || 1;
+        N[k] = nx / L; N[k + 1] = ny / L; N[k + 2] = nz / L;
       }
     }
     // Elke kromme als aaneengesloten lijnstukken; de twee krommen raken elkaar
@@ -207,6 +312,7 @@ export function createBoundaryLayer(THREE, deps) {
     lijn.geometry.dispose();
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(P, 3));
+    geo.setAttribute('normal', new THREE.BufferAttribute(N, 3));
     geo.setIndex(idx);
     lijn.geometry = geo;
     return { punten: nT * rollen.length, lijnstukken: idx.length / 2 };
@@ -225,10 +331,27 @@ export function createBoundaryLayer(THREE, deps) {
      dat gebeurt — en dat is nu net het geval waarvoor de vervaging bestaat. */
   let vervaging = 1;
 
+  /* DRIE SCHRIJVERS OP DEZELFDE TWEE GETALLEN, en daarom één functie.
+
+     `setOutline` bepaalt welke set inkt erbij hoort (net of doorsnede),
+     `setFade` hoeveel je daar op dit moment van ziet, en sinds sessie 33 hangt
+     de DOORKIJK aan dezelfde wissel — hij bestaat alleen in het volle net. Zou
+     elk van de drie zijn eigen toekenning hebben, dan wiste de laatste schrijver
+     de andere uit en was het toeval wie je zag.
+
+     De waarden gaan naar UNIFORMS en niet naar `material.opacity`: dit is sinds
+     de doorkijk een ShaderMaterial, en die leest zijn eigen dekking uit de
+     shader. `material.opacity` zetten zou stil niets doen — dezelfde val die de
+     PoC beschrijft bij `tintBoundary`. */
   function schrijfInkt() {
     const inkt = doorsnedeVlak ? INKT.lijn : INKT.net;
-    mp.material.opacity = inkt.mp * vervaging;
-    shock.material.opacity = inkt.shock * vervaging;
+    // Eén betekent GEEN doorkijk: in een doorsnede is er niets om doorheen te
+    // kijken, want daar staat alleen de omtrek.
+    const nabij = doorsnedeVlak ? 1 : MSPHERE_NABIJ;
+    mp.material.uniforms.uOpacity.value = inkt.mp * vervaging;
+    shock.material.uniforms.uOpacity.value = inkt.shock * vervaging;
+    mp.material.uniforms.uNear.value = nabij;
+    shock.material.uniforms.uNear.value = nabij;
   }
 
   function setOutline(vlak) {
