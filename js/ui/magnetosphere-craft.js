@@ -100,6 +100,17 @@ export function createMagnetosphereCraft(THREE, opts) {
   const { canvas, world, boundary, Core, Data, RE, toTerra } = opts;
   if (!canvas || !boundary || !Core || !Data || !toTerra) return null;
 
+  /* HOE OUD EEN SAMPLE MAG ZIJN, EN VANAF WANNEER DAT ERBIJ STAAT. Allebei van
+     de aanroeper, uit dezelfde constante die de uitlezing leest — zie de noot
+     bij `msphereGoesRij` in index.html. Een eigen getal hier zou de marker en
+     het paneel op hetzelfde moment iets anders laten zeggen.
+
+     De terugvallen zijn die van de PoC (`Data.Goes.at` staat zelf op 120 s),
+     zodat deze module zonder de twee opties nog steeds klopt in plaats van
+     stil een uur oud sample te tonen. */
+  const TOL_MS = Number.isFinite(opts.tolMs) ? opts.tolMs : 120_000;
+  const OUD_MS = Number.isFinite(opts.oudMs) ? opts.oudMs : 120_000;
+
   const ctx = canvas.getContext('2d');
   const _p = new THREE.Vector3(), _o = new THREE.Vector3(), _r = new THREE.Vector3();
   /* Drie schermpunten die per frame hergebruikt worden. Ze staan hier en niet
@@ -146,6 +157,14 @@ export function createMagnetosphereCraft(THREE, opts) {
   function craftLabel(g) {
     let s = 'GOES-' + g.satellite;
     if (Number.isFinite(g.ext)) s += '  ' + g.ext.toFixed(0) + ' nT';
+    /* HOE OUD DIT SAMPLE IS, en alleen boven de oude grens van 120 s. Daaronder
+       verandert er niets aan wat er stond, dus de ruimere tolerantie voegt toe
+       en neemt niets weg. PER MARKER en niet één keer voor beide: de twee
+       toestellen publiceren onafhankelijk, en elke marker heeft hier zijn eigen
+       plek om het te zeggen. In het paneel staat de oudste van de twee. */
+    if (Number.isFinite(g.ouderdom) && g.ouderdom > OUD_MS) {
+      s += '  ' + Math.round(g.ouderdom / 60_000) + ' min old';
+    }
     if (g.arcjet) s += '  arcjet';
     if (g.offPlane) s += '  (out of plane, ' + g.offAxis + ' ' +
                          g.offset.toFixed(1) + ' Re)';
@@ -330,11 +349,16 @@ export function createMagnetosphereCraft(THREE, opts) {
       /* De externe restterm, en langs dezelfde functie als de uitlezing:
          gemeten min het interne veld op die plek. Ontbreekt de rij of de
          component, dan blijft dit null en valt het getal uit het label. */
-      let ext = null;
-      const rij = Data.Goes.at(craft, tijd);
+      let ext = null, ouderdom = null;
+      const rij = Data.Goes.at(craft, tijd, TOL_MS);
       if (rij && coeff) {
         const rest = Core.Goes.residual(rij, craft.longitude, coeff);
-        if (Number.isFinite(rest.Hp)) { ext = rest.Hp; gemeten++; }
+        if (Number.isFinite(rest.Hp)) {
+          ext = rest.Hp; gemeten++;
+          // De afstand tot het moment dat de scene toont, niet tot de wandklok:
+          // op een teruggezette tijdlijn is dat een heel ander getal.
+          ouderdom = tijd - rij.time;
+        }
       }
 
       toestellen.push({
@@ -344,7 +368,7 @@ export function createMagnetosphereCraft(THREE, opts) {
         // De twee componenten die uit een tekenvlak kunnen wijzen, in Re.
         uitMeridian: gsm.y,
         uitTop: gsm.z,
-        ext,
+        ext, ouderdom,
         arcjet: !!(rij && rij.arcjet),
         // Het eerste toestel is de primaire en krijgt de vollere inkt.
         primary: i === 0
@@ -353,7 +377,12 @@ export function createMagnetosphereCraft(THREE, opts) {
 
     // De projectie is niet veranderd maar de INHOUD wel: opnieuw tekenen.
     handtekening = '';
-    return (laatsteBron = { toestellen: toestellen.length, gemeten });
+    return (laatsteBron = { toestellen: toestellen.length, gemeten,
+      // De leeftijd per sample, in seconden. Zonder dit is niet te toetsen of
+      // de ruimere tolerantie werkelijk iets binnenhaalt dat er eerst uit viel.
+      ouderdomS: toestellen.map((t) => Number.isFinite(t.ouderdom)
+        ? Math.round(t.ouderdom / 1000) : null),
+      tolS: Math.round(TOL_MS / 1000) });
   }
 
   /* De handtekening: twee geprojecteerde ijkpunten. Beweegt de camera, dan
@@ -408,7 +437,7 @@ export function createMagnetosphereCraft(THREE, opts) {
 
       lijst.push({
         satellite: t.satellite, x: _punt.x, y: _punt.y,
-        ext: t.ext, arcjet: t.arcjet, primary: t.primary,
+        ext: t.ext, ouderdom: t.ouderdom, arcjet: t.arcjet, primary: t.primary,
         offPlane, offset, offAxis: vlak === 'top' ? 'z' : 'y',
         visible: !achterAarde
               && _punt.z > -1 && _punt.z < 1

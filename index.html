@@ -1523,6 +1523,16 @@
       closer to the truth, and the number beside the marker is what tells you
       that.
       <br /><br />
+      When a label says <b>4 min old</b>, that is the age of the sample rather
+      than a delay in the app. NOAA publishes the magnetometers a few minutes
+      behind the wall clock, while the solar wind feed is propagated to arrival
+      time, so at &#8220;now&#8221; the newest GOES sample is typically two to
+      six minutes old. It is used anyway, up to ten minutes: ring current and
+      tail current move over hours, so a sample a few minutes old is the same
+      sample. Past ten minutes the number drops out rather than going stale
+      quietly. Below two minutes no age is shown, because there is nothing to
+      warn about.
+      <br /><br />
       A marker marked <b>arcjet</b> changes colour and gains a ring: the
       satellite&#8217;s own thrusters were firing, and the magnetometer was
       partly measuring them. Those samples are flagged rather than dropped
@@ -7997,22 +8007,65 @@ const mspWeg = (tekst) => ({ absent: true, text: tekst });
    dus wat overblijft is extern veld plus instrumentfout. ÉÉN component (Hp,
    parallel aan de spin-as), en dat staat erbij: de asymmetrie-toets die de
    lengtegraadfout ooit ving heeft alle drie de componenten nodig. */
+/* HOE OUD EEN GOES-SAMPLE MAG ZIJN, EN ÉÉN GETAL VOOR BEIDE LEZERS.
+
+   `Data.Goes.at` staat standaard op 120 seconden, en dat is de waarde van de
+   PoC. Die deugt daar: de PoC leest een reeks op minuutrijen en 120 s dekt er
+   twee. Hier niet, en dat is GEMETEN: de GOES-publicatie loopt 2 tot 6 minuten
+   achter op de wandklok (op het meetmoment 363 s), terwijl de scene bij "nu"
+   op het laatste AANGEKOMEN windmonster staat. Bij nu viel het sample dus
+   structureel buiten de tolerantie, en dan zei de app "no sample at this
+   moment" — technisch waar, en praktisch het tegendeel van wat er aan de hand
+   is: de meting bestaat, ze is een paar minuten oud.
+
+   Tien minuten, en dat is verdedigbaar omdat het over de RINGSTROOM en de
+   STAARTSTROOM gaat. Die veranderen in uren, niet in minuten; het interne veld
+   dat eraf getrokken wordt verschuift met 0,0002 nT per dag. Een sample van
+   vier minuten oud is voor deze grootheid hetzelfde sample.
+
+   MAAR DAT MAG NIET ONGEMERKT. Boven de OUDE grens van 120 s zegt de app hoe
+   oud het is — daaronder verandert er niets aan wat er stond, dus de ruimere
+   tolerantie voegt alleen toe en neemt niets weg.
+
+   ÉÉN CONSTANTE, TWEE LEZERS: deze rij en de markers in de scene. Twee
+   tolerantiegetallen zouden twee plekken geven die op hetzelfde moment iets
+   anders zeggen, en dat is precies wat `s.time` in de state juist dichtzet. */
+const MSPHERE_GOES_TOL_MS = 10 * 60_000;
+const MSPHERE_GOES_OUD_MS = 120_000;
+
+/* "4 min old", of niets als het sample vers genoeg is. Afgerond op hele
+   minuten: een seconde nauwkeurigheid suggereert een precisie die niet de
+   vraag is — de vraag is of je naar dit moment kijkt of naar een vorig. */
+function msphereGoesOuderdom(tijd, rijTijd) {
+  const dt = tijd - rijTijd;
+  if (!(dt > MSPHERE_GOES_OUD_MS)) return '';
+  return Math.round(dt / 60_000) + ' min old';
+}
+
 function msphereGoesRij(tijd, coeff) {
   const Core = globalThis.TerraCore, Data = globalThis.TerraData;
   if (!msphereFeed || !Core || !Data) return mspWeg('not loaded');
   const lijst = msphereFeed.goes ? msphereFeed.goes() : [];
   if (!lijst.length) return mspWeg('not loaded');
   const stukken = [];
+  let oudste = 0;
   for (const craft of lijst) {
     // `Data.Goes.at` is een opzoeking in rijen die de feed al binnen heeft — niet
     // te verwarren met `Data.Goes.read()`, dat langs pull() heen zou halen.
-    const rij = Data.Goes.at(craft, tijd);
+    const rij = Data.Goes.at(craft, tijd, MSPHERE_GOES_TOL_MS);
     if (!rij) continue;
     const rest = Core.Goes.residual(rij, craft.longitude, coeff);
     if (!Number.isFinite(rest.Hp)) continue;
     stukken.push('G' + craft.satellite + ' ' + rest.Hp.toFixed(0) + (rij.arcjet ? '✳' : ''));
+    oudste = Math.max(oudste, tijd - rij.time);
   }
-  return stukken.length ? stukken.join('   ') : mspWeg('no sample at this moment');
+  if (!stukken.length) return mspWeg('no sample at this moment');
+  /* ÉÉN ACHTERVOEGSEL VOOR DE HELE RIJ, en de OUDSTE van de twee. Per toestel
+     een eigen leeftijd zou hier vier getallen op één regel zetten waar de vraag
+     er maar één is: hoe vers is wat hier staat. In de scene staat het wél per
+     stuk, want daar heeft elke marker zijn eigen plek om het te zeggen. */
+  const oud = msphereGoesOuderdom(tijd, tijd - oudste);
+  return stukken.join('   ') + (oud ? '   · ' + oud : '');
 }
 
 function msphereView() {
@@ -8362,6 +8415,8 @@ function bouwMsphereLegenda() {
   if (msphereCraft) {
     msphereLegendaRij(host, 'dot', msphereCraft.colors.goes, 'GOES satellites',
       'The only place in this scene where an instrument measures the field. Two weather satellites on the geostationary belt at 6.62 Re; the number beside each is what the magnetometer read minus the internal field the model puts there, so what is left is ring, tail and magnetopause current. Same figure as the GOES external row in Details, from the same sample.');
+    msphereLegendaNoot(host, 'When a label says “4 min old”',
+      'The age of the sample, not a delay in the app. NOAA publishes these magnetometers a few minutes behind the clock while the wind feed is propagated to arrival time, so at “now” the newest sample is typically two to six minutes old. It is used anyway, up to ten minutes, because ring and tail current move over hours; past that the number drops out instead of going stale quietly. Under two minutes nothing is said, because there is nothing to warn about.');
     msphereLegendaRij(host, 'hollow', msphereCraft.colors.goes, 'Hollow — beside the plane',
       'In a cross-section, a hollow marker means the craft is more than half an Earth radius out of the plane you are looking at, and the label says by how much. That is nearly always the case: the belt lies on Earth’s equator, while both fixed views cut through planes set by the magnetic axis. Over a day the offset runs a median 4.7 Re in Meridian and 1.2 Re in Top — same statement, four times smaller. A filled dot would claim the craft sits where you see it.');
     msphereLegendaRij(host, 'ring', msphereCraft.colors.arcjet, 'Arcjet minutes',
@@ -10736,7 +10791,11 @@ if (globalThis.TerraCore) {
     canvas: document.getElementById('msphere-craft'),
     world, boundary: msphereBoundary,
     Core: globalThis.TerraCore, Data: globalThis.TerraData,
-    RE: MSPHERE_RE, toTerra: pocNaarTerra
+    RE: MSPHERE_RE, toTerra: pocNaarTerra,
+    /* DEZELFDE TOLERANTIE ALS DE UITLEZING, uit dezelfde constante. Zie de
+       lange noot bij `msphereGoesRij`: twee getallen zouden twee plekken geven
+       die op hetzelfde moment iets anders zeggen. */
+    tolMs: MSPHERE_GOES_TOL_MS, oudMs: MSPHERE_GOES_OUD_MS
   });
 
   msphereState = createMagnetosphereState(THREE, {
