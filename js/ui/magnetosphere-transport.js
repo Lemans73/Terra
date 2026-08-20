@@ -44,7 +44,15 @@ const MSPT_SNELHEDEN = [1, 10, 20];     // data-minuten per seconde
 const MSPT_STANDAARD = 1;               // index van 10 min/s
 
 export function createMagnetosphereTransport(deps) {
-  const { state, feed, fmtStamp, formatOffset } = deps;
+  /* `onCursor` IS DE HAAK VOOR WIE DE CURSOR OOK TOONT (B4). Deze balk is de
+     enige plek waar de cursor verzet wordt — schuiven, afspelen en "now" komen
+     alle drie langs `toon()` — dus dat is ook de enige plek die het hoeft te
+     melden. De tijdlijn eronder hangt eraan.
+
+     Aan de BALK en niet aan de state: de state bezit de cursor en hoort niet te
+     weten wie hem allemaal tekent. Dezelfde snede als "de state bezit de
+     cursor, deze balk toont hem" in de kop hierboven. */
+  const { state, feed, fmtStamp, formatOffset, onCursor } = deps;
 
   const el = (id) => document.getElementById(id);
   const wortel = el('msphere-time');
@@ -158,6 +166,11 @@ export function createMagnetosphereTransport(deps) {
      elkaar lopen.
   ---------------------------------------------------------- */
   function toon() {
+    /* VOORAAN EN NIET ACHTERAAN. `toon()` heeft drie vroege uitgangen — geen
+       momentknop, geen reeks, geen rij — en achter een `return` gemeld worden is
+       precies hoe een tweede toehoorder stil wegvalt. De tijdlijn leest de
+       cursor en de reeks zelf, dus de volgorde maakt hem niets uit. */
+    if (onCursor) onCursor();
     const rows = feed.rows();
     const max = eindeBaan();
     if (schuif) {

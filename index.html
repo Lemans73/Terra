@@ -318,6 +318,19 @@
        hieronder zet `display`, en display in een klasse verslaat het
        hidden-attribuut — dezelfde val als bij .ti-panel. -->
   <div class="msphere-time" id="msphere-time">
+    <!-- HET TERRA MODEL-VENSTER (B4, sessie 31). Zes lanes die de vraag
+         beantwoorden die de 3D-scene niet kan stellen: waarom staat de
+         magnetopauze daar? Hij hangt BINNEN .msphere-time, als eerste kind van
+         diezelfde kolom-flexbox, en dat is geen toeval — zo delen de strip en de
+         knoppenrij één onderrand, en gelden alle rooster- en mobielcorrecties
+         van sessie 20, 25 en 26 hier meteen. Een eigen band eronder zou een
+         tweede onderrand zijn die apart onderhouden moet worden.
+
+         De maat staat in de stylesheet en het bufferattribuut in JS: een canvas
+         is een vervangen element en valt zonder CSS-doos terug op zijn
+         intrinsieke breedte. Zie js/ui/magnetosphere-strip.js. -->
+    <canvas class="msphere-strip" id="msphere-strip"
+      aria-label="Solar wind and magnetosphere over time"></canvas>
     <div class="ti-row">
       <div class="ti-play">
         <button class="play-btn" id="msp-back" title="Play backwards" aria-label="Play backwards">&#9664;</button>
@@ -334,8 +347,16 @@
         <button class="ti-val" id="msp-val" type="button"
         title="Back to the latest measurement">now</button>
       </div>
-      <button class="play-btn mspt-rate" id="msp-rate" type="button"
-      title="Playback speed" aria-label="Playback speed">10 min/s</button>
+      <!-- TWEE KNOPPEN IN ÉÉN GRIDVAK. `.ti-row` heeft vier kolommen en de
+           vierde ("more") droeg tot nu toe alleen de snelheidsknop. Een vijfde
+           kolom erbij zou de sliderbaan korter maken, en die baan is precies
+           waar sessie 20 en 26 om draaiden. -->
+      <div class="mspt-knoppen">
+        <button class="play-btn mspt-window" id="msp-window" type="button"
+        title="Time window" aria-label="Time window">24h</button>
+        <button class="play-btn mspt-rate" id="msp-rate" type="button"
+        title="Playback speed" aria-label="Playback speed">10 min/s</button>
+      </div>
     </div>
   </div>
 
@@ -1756,6 +1777,7 @@ import { createMagnetosphereGrid } from './js/layers/magnetosphere/grid-layer.js
 import { MSPHERE_RE, MSPHERE_DRAW_MAX } from './js/layers/magnetosphere/boundary-layer.js';
 import { createMagnetosphereFeed, MSPHERE_HEALTH_ID } from './js/compute/magnetosphere-feed.js';
 import { createMagnetosphereTransport } from './js/ui/magnetosphere-transport.js';
+import { createMagnetosphereStrip } from './js/ui/magnetosphere-strip.js';
 import { createEnvironmentToggle } from './js/core/globe-root.js';
 import { skyFrame } from './js/compute/frames.js';
 import { createViewStates } from './js/core/view-state.js';
@@ -2374,6 +2396,10 @@ const msphereFeed = (globalThis.TerraData && globalThis.TerraCore)
         // De balk toont de cursor en de grenzen van de baan, en die verschuiven
         // allebei met elke ronde: er komen rijen bij aan de staart.
         if (msphereTransport) msphereTransport.toon();
+        /* En de tijdlijn gooit zijn spec weg. `nieuweData` en niet `toon`: die
+           spec is een functie van de DATA, en er zijn net rijen bijgekomen —
+           aan de staart van de wind, of een heel GOES-bestand. */
+        if (msphereStrip) msphereStrip.nieuweData();
       }
     })
   : null;
@@ -6869,7 +6895,8 @@ bindCosmosToggle('sunspots-toggle', 'es-sunspots',
    het init-blok. Zelfde TDZ-familie als de rest. */
 let viewStates = null, spaceState = null, planets = null;
 // De magnetosfeer. Zelfde TDZ-afspraak als de andere states.
-let msphereState = null, msphereBoundary = null, msphereTransport = null, msphereGrid = null;
+let msphereState = null, msphereBoundary = null, msphereTransport = null;
+let msphereGrid = null, msphereStrip = null;
 let disks = null, lagrange = null, orbits = null, environment = null;
 /* `panels` en `navPanel` staan hier om dezelfde reden als de rij hierboven, en
    niet bij hun eigen code verderop: `setPanelOpen()` leest `panels` en die
@@ -9662,8 +9689,32 @@ if (globalThis.TerraCore) {
      state blijft de enige die weet welk moment er getoond wordt. Zonder feed
      is er niets om doorheen te lopen, dus dan komt hij er ook niet. */
   if (msphereFeed) {
+    /* HET TERRA MODEL-VENSTER EERST, want de transportbalk krijgt hem als haak
+       mee. Zie de noot bij `onCursor` daar: die balk is de enige plek waar de
+       cursor verzet wordt, dus ook de enige die het hoeft te melden.
+
+       IN EEN try/catch, EN DAT IS GEEN SLORDIGHEID. De enige fout die deze
+       bouwer gooit is een onvolledig palet, en dat MOET luid zijn: een
+       ontbrekende kleur tekent zwart, en een lane die er is maar onzichtbaar
+       blijft is erger dan een lane die ontbreekt. De app zelf omleggen voor een
+       ontbrekende CSS-variabele is te zwaar — dus: melding in de console, en een
+       leeg vlak van 178 px waar de tijdlijn hoort te staan. Dat laatste is de
+       eigenlijke vangrail; niemand mist een gat van die maat. */
+    try {
+      msphereStrip = createMagnetosphereStrip({
+        state: msphereState, feed: msphereFeed,
+        Core: globalThis.TerraCore, Chart: globalThis.Chart,
+        Sector: globalThis.Sector, StripLanes: globalThis.TerraStrip,
+        moment: momentNow
+      });
+    } catch (e) {
+      console.error('Terra: de tijdlijn van de magnetosfeer kon niet opgezet worden.', e);
+      msphereStrip = null;
+    }
+
     msphereTransport = createMagnetosphereTransport({
-      state: msphereState, feed: msphereFeed, fmtStamp, formatOffset
+      state: msphereState, feed: msphereFeed, fmtStamp, formatOffset,
+      onCursor: () => { if (msphereStrip) msphereStrip.toon(); }
     });
     if (msphereTransport) msphereTransport.toon();
   }
@@ -9751,6 +9802,13 @@ viewStates.onChange((actief, view) => {
     if (actief === 'msphere') msphereTransport.toon();
     else msphereTransport.stop();
   }
+  /* De tijdlijn volgt dezelfde weg. Bij binnenkomst opnieuw bouwen en niet
+     alleen tekenen: het canvas had buiten deze state `display: none` en dus
+     geen maat, en een spec die op een doos van nul gebouwd is, blijft dat. */
+  if (msphereStrip) {
+    if (actief === 'msphere') msphereStrip.nieuweData();
+    else msphereStrip.stop();
+  }
   /* WAT EEN STAND BETEKENT, WEET DE STATE — en sinds sessie 31 vertelt hij dat
      niet meer hierlangs. Deze haak vuurde ná `goToView()`, dus op frame 0: de
      projectie, de hemel, het raster en de omtrek klapten er allemaal om terwijl
@@ -9836,6 +9894,7 @@ if (IS_LOCAL) {
     get spaceState() { return spaceState; },
     get msphereState() { return msphereState; },
     get msphereBoundary() { return msphereBoundary; },
+    get msphereStrip() { return msphereStrip; },
     // De feed staat NIET achter een getter met een null-val: hij wordt vóór de
     // Adapters-literal gebouwd en is hier dus altijd al af. Wel als getter, om
     // dezelfde reden als de rest — één regel die uit de toon valt leest als een

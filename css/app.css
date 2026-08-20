@@ -60,6 +60,31 @@
     --dock-gap: 14px;
     --time-h: 40px;
     --time-gap: 10px;
+
+    /* ---- HET TERRA MODEL-VENSTER (B4, sessie 31) --------------------------
+       De hoogte staat hier omdat `--time-h` eruit volgt: die maat is "alles wat
+       op de tijdverdieping staat", en sinds deze sessie staat de tijdlijn daar
+       ook. Zie de noot bij --time-h in de mobiele media-query.
+
+       De acht kleuren dragen een voorvoegsel en de drie inktwaarden niet: `--ink`
+       en familie zijn van de hele app, maar een globale `--model` of `--edge` zou
+       in een app met dertig lagen vroeg of laat iets anders gaan betekenen. De
+       waarden komen uit de PoC, waar ze als SET zijn afgestemd — losse
+       vervangingen breken de contrastverhoudingen die daar gemeten zijn.
+
+       De drieslag MEASURED · DERIVED · MODEL is de kern: wat een instrument zag,
+       wat daar rekenkundig uit volgt, en wat een model beweert. Drie kleuren die
+       je uit elkaar moet kunnen houden zonder legenda erbij te houden. */
+    --msps-h: 178px;
+    --msps-gap: 8px;                 /* de gap van .msphere-time zelf */
+    --msphere-measured: #4fd1c5;
+    --msphere-derived:  #6ea8ff;
+    --msphere-model:    #b98cff;
+    --msphere-goes:     #ffd166;
+    --msphere-open:     #f2a33c;
+    --msphere-mp:       #6ea8ff;
+    --msphere-saa:      #d4564f;
+    --msphere-edge:     rgba(140,170,210,0.16);
     --dock-lift: calc(var(--dock-bottom) + var(--dock-h) + var(--dock-gap));
     --time-lift: calc(var(--dock-lift) + var(--time-h) + var(--time-gap));
     --panel-lift: var(--dock-lift);
@@ -2166,12 +2191,70 @@
   .msphere-only { display: none; }
   body.msphere-on .msphere-only { display: block; }
 
-  /* De snelheidsknop neemt de kolom over die in het eiland de klok-uitklapper
-     draagt. Zelfde breedte-gedrag (auto), zodat de sliderbaan even lang blijft. */
-  .mspt-rate {
+  /* De twee knoppen delen de kolom die in het eiland de klok-uitklapper draagt.
+     Zelfde breedte-gedrag (auto), zodat de sliderbaan even lang blijft. */
+  .mspt-knoppen {
     grid-area: more;
+    display: flex;
+    gap: 4px;
+  }
+  .mspt-rate, .mspt-window {
     font-variant-numeric: tabular-nums;
-    min-width: 46px;
+  }
+  .mspt-rate { min-width: 46px; }
+  .mspt-window { min-width: 30px; }
+
+  /* ---- Het TERRA MODEL-venster (B4) ----
+     De DOOS staat hier en het bufferattribuut in JS — zie de noot bij het
+     canvas in index.html. `display: block` want een canvas is inline en zou
+     anders een regelafstand onder zich krijgen die de flexbox meerekent. */
+  .msphere-strip {
+    display: block;
+    width: 100%;
+    height: var(--msps-h);
+    /* DEZELFDE ONDERGROND ALS .ti-row, want het is dezelfde verdieping. Zonder
+       achtergrond zweeft een grafiek van dunne lijnen rechtstreeks op de scene,
+       en juist in deze state staat daar de magnetosfeer — lichte lijnen op
+       lichte lijnen.
+
+       EEN INGEZETTE RING EN GEEN `border`. Een rand telt mee in de doos, en de
+       tekenmaat komt uit `getBoundingClientRect()`: twee pixels verschil tussen
+       de doos en het tekenvlak zetten de hele registratie scheef. Een
+       `inset box-shadow` neemt geen ruimte in en ziet er hetzelfde uit. */
+    background: rgba(11,16,24,0.72);
+    backdrop-filter: blur(14px);
+    box-shadow: inset 0 0 0 1px var(--hair);
+    border-radius: 12px;
+    /* Aanwijzen mag, en dat is het halve nut: de captie leest per lane uit wat
+       er onder de muis staat. */
+    pointer-events: auto;
+    touch-action: none;
+  }
+
+  /* DE BALK WORDT BREDER IN DEZE STATE. `max-width: 560px` is de maat van het
+     tijd-eiland, waar één schuiver en een klok in staan. Zes lanes houden daar
+     na de asgoot van chart.js (52 px) ~508 px plotbreedte over; zonder de cap
+     loopt hij tot de panelen aan weerszijden en wordt dat ruim 800 op een
+     scherm van 1440. Op mobiel staat `max-width: none` al. */
+  body.msphere-on .msphere-time { max-width: none; }
+
+  /* EN DE TIJDVERDIEPING WORDT HOGER. `--time-h` is niet "de hoogte van .ti-row"
+     maar "de hoogte van alles wat op de tijdverdieping staat" — zie de lange
+     noot in de mobiele media-query. Laat je hem op 40 staan, dan stopt een
+     paneel onder de strip en ligt het er op mobiel overheen.
+
+     EN `--time-lift` MOET HIER MEE, HOE OVERBODIG DAT OOK LIJKT.
+
+     Een custom property wordt opgelost op het element waar hij GEDECLAREERD is,
+     niet waar hij gebruikt wordt. `--time-lift` staat in `:root` en leest daar
+     dus de `--time-h` van `:root` — een override op `<body>` bereikt hem niet.
+     Wat er dan gebeurt is niet zichtbaar in de code en wél op het scherm:
+     GEMETEN op 375x812 met de strip erbij, liep het paneel er 93 px overheen.
+     Deze regel is die reparatie, en hij hoort bij élke variabele die uit
+     `--time-h` volgt. */
+  body.msphere-on {
+    --time-h: calc(40px + var(--msps-gap) + var(--msps-h));
+    --time-lift: calc(var(--dock-lift) + var(--time-h) + var(--time-gap));
   }
 
   /* ---- Toast-meldingen (nieuwe real-time entries) ---- */
@@ -2268,6 +2351,25 @@
       --dock-bottom: 12px;
       --dock-gap: 10px;
       --time-h: 74px;
+      --panel-lift: var(--time-lift);
+      /* Zes lanes op 132 px in plaats van 178: op 812 px hoog is de volle maat
+         bijna een kwart van het scherm, en de scene is hier het onderwerp.
+         `laneLayout` verdeelt naar gewicht, dus de verhoudingen blijven. */
+      --msps-h: 132px;
+    }
+    /* Dezelfde optelling als op desktop, met de 74 van hierboven. Het grondgetal
+       staat er twee keer in en dat is met opzet: `--time-h` wordt op twee plekken
+       gezet en een afgeleide variabele ertussen zou de meting in de noot
+       hierboven onleesbaar maken.
+
+       `--panel-lift` MOET HIER OOK OPNIEUW, om dezelfde reden als `--time-lift`
+       hierboven: hij is in `:root` gedeclareerd als `var(--time-lift)` en heeft
+       die daar al opgelost. Hier is hij bovendien wél in gebruik — op een breed
+       scherm stopt een paneel boven de KNOPPENRIJ en op deze breedte boven de
+       TIJDVERDIEPING, en die verdieping is nu 212 px in plaats van 74. */
+    body.msphere-on {
+      --time-h: calc(74px + var(--msps-gap) + var(--msps-h));
+      --time-lift: calc(var(--dock-lift) + var(--time-h) + var(--time-gap));
       --panel-lift: var(--time-lift);
     }
     /* Volle breedte, en GEEN transform die opgeheven moet worden — zie de noot bij

@@ -53,7 +53,10 @@ export function createMagnetosphereFeed(deps) {
      `solarState` + `applySolarState()`: elke adapter schrijft in de voorraad en
      roept `herleid()`, zodat de volgorde waarin de twee antwoorden binnenkomen
      niet uitmaakt. */
-  const supply = { wind: null, kpRows: null, nonNumbers: 0 };
+  const supply = { wind: null, kpRows: null, nonNumbers: 0,
+                   // GOES (B4): de lengtegraden en de twee slots apart, want ze
+                   // komen uit drie bestanden en in willekeurige volgorde binnen.
+                   goesLon: null, goesMag: { primary: null, secondary: null } };
   let series = null;
 
   /* De reeks: één rij per minuut op de AANKOMSTKLOK, met pdyn, r0 en de sector
@@ -110,6 +113,101 @@ export function createMagnetosphereFeed(deps) {
     return { state: 'live', note: kern + ' · Kp ' + laatste.kp.toFixed(2) };
   }
 
+
+  /* ==========================================================
+     GOES — DE METING WAAR HET MODEL TEGENAAN LIGT (B4, sessie 31).
+
+     Drie adapters, en ze voeden de TIJDLIJN en niet de vorm. `Series.derive`
+     kent GOES niet: Shue rekent met pdyn en Bz, en het magnetometersignaal op
+     6,6 Re is waar je die uitkomst aan kunt houden. Daarom stond dit blok in
+     sessie 30 bewust nog niet in de feed — het is driekwart van al het
+     verkeer voor iets wat de magnetopauze niet verplaatst.
+
+     DE PARSERS KOMEN UIT DE PoC, DE WEG NAAR BUITEN NIET. `Data.Goes.parseLon`
+     en `parseMag` worden hier aangeroepen; `Data.Goes.read()` niet, want die
+     haalt met `Net.json` op en gaat daarmee langs Terra's `pull()` heen — dan
+     staat er een bron in de app die in het verbindingenpaneel niet bestaat.
+
+     HET VENSTER STUURT WELK BESTAND, en dat is gemeten (sessie 30):
+       7 dagen  1.828.308 B      1 dag  260.406 B      6 uur  65.419 B
+     Dus 24 h haalt het dagbestand — 520 KB voor twee toestellen — en 3 D en
+     7 D het weekbestand. Het interval staat op een KWARTIER en niet op vijf
+     minuten: deze lane is context bij een venster van een dag tot een week, en
+     de variatie binnen een kwartier is niet waar je naar kijkt. Wie hem ooit
+     scherper wil hebben zonder het verkeer: het bestand van zes uur is 65 KB
+     en dekt de rechterrand.
+  ========================================================== */
+  /* EENRICHTING, EN DAT IS MET OPZET. Wie het weekbestand eenmaal heeft, houdt
+     het: het dekt het dagvenster ook, dus terugschakelen zou 520 KB kosten om
+     mínder te weten. Zonder deze regel klappert het tussen 3,5 MB en 520 KB bij
+     elke klik op de vensterkiezer. */
+  let goesBestand = '1-day';
+
+  /* De URL komt uit de bouwer van de PoC met het venster erin gewisseld, en
+     niet uit een eigen samenstelling: dan kan het pad hier niet uit de pas gaan
+     lopen met de kopie zodra SWPC iets verhuist. */
+  const goesUrl = (slot) => Data.Goes.urlMag(slot).replace('7-day', goesBestand);
+
+  function goesAdapter(slot) {
+    return {
+      layers: [], healthId: MSPHERE_HEALTH_ID, interval: 15 * 60_000,
+      enabled: false, optional: true,
+      offlineNote: 'GOES ' + slot + ' unreachable',
+      // Een GETTER, want `pull()` leest `adapter.url` als waarde op het moment
+      // van ophalen. Een vaste string zou het venster van bij het opzetten
+      // vasthouden.
+      get url() { return goesUrl(slot); },
+      parseText,
+      normalize(json) {
+        supply.goesMag[slot] = Data.Goes.parseMag(json);
+        goesBinnen();
+        return [];
+      },
+      health: healthNoot
+    };
+  }
+
+  /* GOES RAAKT DE REEKS NIET, dus geen `herleid()` — die rekent 10.008 rijen
+     opnieuw door voor een lane die er niet in voorkomt. Alleen een seintje dat
+     er iets te hertekenen is. */
+  function goesBinnen() { if (onUpdate) onUpdate(); }
+
+  /* De toestellen, samengesteld zoals `Data.Goes.read()` dat doet: lengtegraad
+     erbij, terugval op de gepubliceerde slotpositie, en één keer per satelliet.
+     Twee slots kunnen hetzelfde toestel zijn. */
+  function goesLijst() {
+    const lons = supply.goesLon || {};
+    const uit = [];
+    for (const slot of ['primary', 'secondary']) {
+      const b = supply.goesMag[slot];
+      if (!b) continue;
+      let lon = lons[b.satellite];
+      // GEPUBLICEERD ALS GRADEN WEST, POSITIEF — `parseLon` heeft ze al ontkend.
+      // Letterlijk nemen zet het toestel 145 graden mis; dat bleef onzichtbaar
+      // zolang alleen Hp gebruikt werd en viel om zodra He erbij kwam.
+      if (!Number.isFinite(lon)) lon = Data.Goes.FALLBACK_LON[b.satellite];
+      if (!Number.isFinite(lon)) continue;
+      if (uit.some((o) => o.satellite === b.satellite)) continue;
+      uit.push({ satellite: b.satellite, longitude: lon, rows: b.rows });
+    }
+    return uit;
+  }
+
+  /* De vensterkiezer vraagt hier om een breder bestand. Geeft terug of er iets
+     in gang gezet is, zodat de aanroeper weet dat er data onderweg is.
+
+     DE OUDE RIJEN BLIJVEN STAAN tot de nieuwe binnen zijn. Wissen zou de lane
+     leeg maken gedurende de 3,5 MB die eronder wegloopt, en een lege lane leest
+     als een instrument dat stilviel — precies de verwarring waar de
+     `beyond`-arcering voor bestaat. */
+  function zetGoesBreed() {
+    if (goesBestand === '7-day') return false;
+    goesBestand = '7-day';
+    pull(adapters.msphereGoesPrimary);
+    pull(adapters.msphereGoesSecondary);
+    return true;
+  }
+
   const adapters = {
     /* DE WIND IS DE ENIGE BRON DIE NIET OPTIONEEL IS. Zonder pdyn en Bz is er
        geen r0 en dus geen magnetopauze — dan hoort de app "limited
@@ -155,7 +253,28 @@ export function createMagnetosphereFeed(deps) {
         return [];
       },
       health: healthNoot
-    }
+    },
+
+    /* DE LENGTEGRAADFEED IS 307 BYTES EN VERANDERT ZELDEN — zes uur is royaal.
+       Valt hij weg, dan neemt goesLijst() de gepubliceerde slotposities. Dat is
+       geen verzinsel maar de tabel die NOAA zelf noemt, en zonder lengtegraad
+       is er geen instrumentframe en dus geen lane. */
+    msphereGoesLon: {
+      layers: [], healthId: MSPHERE_HEALTH_ID, interval: 6 * 60 * 60_000,
+      enabled: false, optional: true,
+      offlineNote: 'GOES longitudes unreachable',
+      url: Data.Goes.urlLon,
+      parseText,
+      normalize(json) {
+        supply.goesLon = Data.Goes.parseLon(json);
+        goesBinnen();
+        return [];
+      },
+      health: healthNoot
+    },
+
+    msphereGoesPrimary: goesAdapter('primary'),
+    msphereGoesSecondary: goesAdapter('secondary')
   };
 
   /* DE POORT. Zelfde vorm als syncAuroraLayer() in index.html, en om dezelfde
@@ -195,6 +314,23 @@ export function createMagnetosphereFeed(deps) {
        Een tijd vóór de reeks geeft dus index 0 en niet "niets" — wie wil weten
        of een moment binnen het venster valt, vraagt `span()`. */
     indexAt: (t) => (series && series.length ? Data.Series.indexAt(series, t) : -1),
+
+    /* WAT DE TIJDLIJN NODIG HEEFT EN DE SCENE NIET (B4).
+
+       Ze stonden alle drie al binnen; ze kwamen alleen niet naar buiten. De
+       reeks draagt pdyn, r0 en de sector, maar de Kp-lane tekent BLOKKEN uit de
+       ruwe index (een stapfunctie van drie uur mag geen helling krijgen) en de
+       GOES-lane heeft de rijen per toestel nodig. `KpIndex` gaat mee omdat
+       `Strip.spec` hem aanroept voor de scheiding tussen gepubliceerd en nog
+       vullend — twee soorten zekerheid die niet dezelfde inkt horen te krijgen. */
+    kpRows: () => supply.kpRows,
+    goes: goesLijst,
+    KpIndex: Data.KpIndex,
+
+    /* De vensterkiezer van de tijdlijn vraagt hierom zodra hij voorbij 24 uur
+       gaat. Zie de noot bij goesBestand: eenrichting. */
+    zetGoesBreed,
+    goesBestand: () => goesBestand,
 
     span: () => (series && series.length
       ? { van: series[0].time, tot: series[series.length - 1].time }
