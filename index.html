@@ -8887,6 +8887,47 @@ narrowMQ.addEventListener('change', borgPaneelGroepen);
 window.addEventListener('resize', borgPaneelGroepen);
 borgPaneelGroepen();
 
+/* ---- Een paneel begint onder de masthead (sessie 32, Terry) ---------------
+   `--panel-top-gap` in css/app.css stond op een geraden 38 px, en de masthead
+   meet 84 — dus zodra een paneel hoog genoeg werd om die grens te halen, stond
+   de wereldklok erachter. De legenda van de magnetosfeer is het eerste dat zo
+   hoog wordt, maar de fout zat er al: hij was alleen nooit bereikt.
+
+   GEMETEN EN NIET INGETIKT. Hoe hoog de masthead is, weet alleen de masthead:
+   hij groeit met zijn padding, zijn lettergrootte en zijn ondertitel, en die
+   drie verschillen per breedte. Een tweede getal in de stylesheet zou bij de
+   eerstvolgende wijziging daarvan stil uit de pas lopen — precies waarom dit
+   hier staat en niet daar.
+
+   OP `documentElement` EN NIET OP `<body>`: een custom property wordt opgelost
+   waar hij GEDECLAREERD staat, en `--panel-top-gap` staat in `:root`. Een
+   override op body zou de `max-height` die eruit gerekend wordt nooit bereiken —
+   dezelfde val die in sessie 31 93 px paneeloverlap kostte. */
+const PANEL_TOP_MARGE = 10;   // ademruimte tussen de masthead en de paneelrand
+
+function borgPanelTopGap() {
+  const mast = document.querySelector('.masthead');
+  if (!mast) return null;
+  const h = Math.round(mast.getBoundingClientRect().height);
+  if (!(h > 0)) return null;   // verborgen of nog niet gelayout: laat de CSS-waarde staan
+  const gap = h + PANEL_TOP_MARGE;
+  document.documentElement.style.setProperty('--panel-top-gap', gap + 'px');
+  return gap;
+}
+
+borgPanelTopGap();
+// Dezelfde twee seinen als de paneelgroepen, en om dezelfde reden: een viewport
+// die door de ontwikkeltools wordt overschreven vuurt geen `change`.
+window.addEventListener('resize', borgPanelTopGap);
+narrowMQ.addEventListener('change', borgPanelTopGap);
+/* EN BIJ ELKE PANEELWISSEL, want de eerste meting is te vroeg. GEMETEN: bij het
+   uitvoeren van deze regel is de masthead 71 px, en zodra de webfont en de
+   ondertitel staan 84 — dus het paneel begon 13 px te hoog, precies over de
+   onderrand van de klok. Een paneel dat opengaat is het enige moment waarop dit
+   getal iets doet, dus dat is ook het goedkoopste moment om het te verversen:
+   één getBoundingClientRect per klik. */
+panels.onChange(borgPanelTopGap);
+
 /* EN OP EEN TELEFOON BEGINT DE APP MET ALLES DICHT (sessie 31, Terry). Het
    lagenpaneel stond standaard open, en op 375 px is dat meteen een vel over de
    bol heen voordat je iets gedaan hebt. Zonder animatie: dit is geen sluiting

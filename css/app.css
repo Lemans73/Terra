@@ -103,13 +103,21 @@
        en dat is geen toeval maar dezelfde uitspraak — zuidwaarts weer, open
        veld.
 
-       `--msphere-unres` ligt een derde op de RGB-lijn richting `closed`: de
-       verwantschap met cyaan hoort zichtbaar te zijn, want onopgelost gaat over
-       de INTEGRATIE en niet over een derde fysische toestand. Het
-       betekenisonderscheid wordt gedragen door de streepjes en de dunnere lijn,
-       niet door de kleur. */
+       `--msphere-unres` deelt de familie met `closed`: de verwantschap met cyaan
+       hoort zichtbaar te zijn, want onopgelost gaat over de INTEGRATIE en niet
+       over een derde fysische toestand. Het betekenisonderscheid wordt gedragen
+       door de streepjes, de dunnere lijn en een lagere dekking — niet door de
+       kleur.
+
+       LICHTER DAN DE POC (#588f9c), en dat is een meting en geen smaak. Die
+       waarde is gekozen op de POC's eigen achtergrond; op Terra's zwart haalde
+       zijn ZUIDELIJKE tint contrast 3,15 terwijl alle andere lijnen boven de 7,5
+       zitten — onzichtbaar, en daardoor niet meer te onderscheiden van de
+       gestippelde lijn die dezelfde familie draagt (Terry, sessie 32). Op deze
+       waarde is de donkerste tint 8,93, en ligt zuid-dicht 0,338 van
+       noord-onopgelost in plaats van 0,194. Drie dempingen zijn genoeg. */
     --msphere-closed:   #4fd1c5;
-    --msphere-unres:    #588f9c;
+    --msphere-unres:    #93b9c4;
     --msphere-mp:       #6ea8ff;
     --msphere-saa:      #d4564f;
     --msphere-edge:     rgba(140,170,210,0.16);
@@ -123,7 +131,24 @@
     --msphere-band-ink: #0a1220;
     --dock-lift: calc(var(--dock-bottom) + var(--dock-h) + var(--dock-gap));
     --panel-lift: var(--dock-lift);
-    /* Vrije ruimte boven een paneel, zodat de masthead er niet onder verdwijnt. */
+    /* VRIJE RUIMTE BOVEN EEN PANEEL, en dit getal is een BEGINWAARDE.
+
+       38 px was geraden, en het klopte niet: GEMETEN op 1281x881 loopt de
+       masthead tot 84 px en het merk met de wereldklok van 18 tot 66, terwijl
+       het paneel op 38 begon en 28 tot 308 breed is. De legenda van de
+       magnetosfeer maakt het paneel zo hoog dat hij die grens ook echt haalt, en
+       dan staat de klok achter een paneel (Terry, sessie 32).
+
+       Een paneel hoort onder de masthead te beginnen, en hoe hoog die is weet
+       alleen de masthead zelf — hij groeit met zijn padding, zijn lettergrootte
+       en zijn ondertitel. Daarom MEET index.html hem en schrijft hij deze
+       variabele op `documentElement` (zie borgPanelTopGap). Deze waarde blijft
+       staan als vangnet voor het moment vóór die meting, en als beginstand voor
+       de standalone waar de meting om welke reden dan ook niet zou lopen.
+
+       LET OP: dit is een custom property, en die wordt opgelost waar hij
+       GEDECLAREERD staat. Overschrijven moet dus op `:root` gebeuren en niet op
+       `<body>` — dat kostte in sessie 31 al 93 px paneeloverlap. */
     --panel-top-gap: 38px;
 
     /* ---- DE Z-LADDER (sessie 25) ----------------------------------------

@@ -87,18 +87,38 @@ const FL_PALET = {
   plain:  '--ink-dim'
 };
 
-/* DE HALFRONDTINT: ±12 % helderheid plus 6,5 graden naar warm of ervandaan.
+/* DE HALFRONDTINT, EN WAAROM HIJ ASYMMETRISCH IS (sessie 32, na Terry's blik).
 
    SUBTIEL IS EEN EIS. De drie staten zijn de uitspraak waar de hele legenda om
    draait; liggen noord en zuid net zo ver uit elkaar als open en dicht, dan
    leest het beeld als zes categorieën in plaats van drie met een nuance.
 
+   De POC's ±12 % haalde dat niet, en op Terra's zwart nog minder. GEMETEN over
+   de negen tinten:
+
+     zuid-onopgelost #3b666b   contrast 3,15 op de scene-achtergrond, tegen
+                               7,5 tot 8,3 voor alle andere — onzichtbaar dus,
+                               precies wat Terry meldde
+     zuid-dicht vs noord-onopgelost   0,194, terwijl de BASISkleuren van die
+                               twee staten 0,307 uit elkaar liggen: de nuance
+                               was de staat aan het overstemmen
+     open noord vs zuid        0,338, groter dan het verschil tussen dicht en
+                               onopgelost — "het rode aan de bovenkant tegen de
+                               lijnen onderaan", ook Terry
+
+   Dus: OMHOOG MEER DAN OMLAAG. Een schil die donkerder wordt verdwijnt in het
+   zwart; een die lichter wordt niet. Met +8 % en −4 % blijft de richting
+   ("lichter en warmer is noord") volledig overeind terwijl de donkerste tint van
+   3,15 naar 8,93 contrast gaat en de spreiding binnen een staat onder de 0,20
+   zakt — een vijfde van het verschil tussen dicht en open.
+
    WARM IS EEN PLEK EN GEEN OFFSET. `hue + dh` voor noord is meetbaar fout: de
    drie staten liggen op verschillende plekken van de kleurcirkel, dus dezelfde
    offset maakt cyaan blauwer en oranje geler — noord zou dan bij de ene staat
    warmer en bij de andere koeler worden. Vandaar de kortste weg naar h = 0. */
-const FL_HEMI_LIFT = 0.12;
-const FL_HEMI_HUE = 0.018;
+const FL_HEMI_LIFT_N = 0.08;
+const FL_HEMI_LIFT_Z = 0.04;
+const FL_HEMI_HUE = 0.012;
 
 function flNaarWarm(h) {
   let d = -h;
@@ -141,8 +161,8 @@ export function createFieldlinesLayer(THREE, opts) {
     const hsl = {};
     basis.getHSL(hsl);
     const warm = flNaarWarm(hsl.h) * FL_HEMI_HUE;
-    const noord = basis.clone().offsetHSL(warm, 0, FL_HEMI_LIFT);
-    const zuid = basis.clone().offsetHSL(-warm, 0, -FL_HEMI_LIFT);
+    const noord = basis.clone().offsetHSL(warm, 0, FL_HEMI_LIFT_N);
+    const zuid = basis.clone().offsetHSL(-warm, 0, -FL_HEMI_LIFT_Z);
     tinten[sleutel] = {
       vlak: basis.clone().convertSRGBToLinear(),
       1: noord.convertSRGBToLinear(),
