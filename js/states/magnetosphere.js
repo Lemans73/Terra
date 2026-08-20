@@ -115,9 +115,23 @@ export function createMagnetosphereState(THREE, deps) {
      waar hij heen gaat ZONDER eerst `vlakkeStand` te verzetten — dat verzetten
      was namelijk precies de helft van de overgang die op frame 0 omklapte. Wie
      geen vlag meegeeft, vraagt naar de stand die er nu getekend wordt. */
+  /* DE KADERMAAT VAN DE VRIJE STAND, en 0,75 is uitgerekend en niet geprobeerd.
+
+     Hier stond 0,55, en dat klopte zolang de camera voor 85 % lángs de zonlijn
+     keek: de vorm was dan sterk verkort en paste in een kleinere bol. Sinds de
+     stand naar Meridian is gedraaid (sessie 33) staat hij BREEDZIJDS, en dan telt
+     zijn echte omvang.
+
+     Vanaf het kadermidden op −25,2 Re ligt de neus 45 Re weg en het staarteinde
+     35, met daar een flankstraal van ~30 — dus hypot(35, 30) = 46 Re, en 46/60 =
+     0,77. Afgerond naar 0,75, want de flank aan de neuszijde is smaller.
+
+     GEMETEN vóór de correctie, op 1300×730: de boegschok liep van x = 220 tot
+     x = 1301 en raakte y = 1. Precies één pixel buiten beeld aan twee kanten —
+     het soort fout dat op één schermmaat nog net niet opvalt. */
   const overviewDistance = (vlak = vlakkeStand) => (vlak
     ? orthoAfstand()
-    : fitDistance(MSPHERE_DRAW_MAX * MSPHERE_RE * 0.55));
+    : fitDistance(MSPHERE_DRAW_MAX * MSPHERE_RE * 0.75));
 
   /* De zoomgrenzen, en ook die verschillen per projectie.
 
@@ -163,13 +177,37 @@ export function createMagnetosphereState(THREE, deps) {
      waar de camera gaat staan, en op welke afstand van de AARDE dat is. Dat
      tweede getal is de ijkmaat van het meeschuivende draaipunt — zie
      draaipuntFactor — en het mocht daar niet uit een tweede formule komen. */
-  /* Schuin op de zonlijn: de neus in beeld én de staart herkenbaar. De
-     verhouding staat hier als GENORMALISEERDE GSM-componenten, en niet als drie
-     losse getallen die daarna genormaliseerd worden — dan is het ook zonder
+  /* DE VRIJE STAND IS MERIDIAN, EEN STAP OPZIJ EN OMHOOG (sessie 33, Terry).
+
+     Hier stond (0,85 · 0,50 · 0,45): een camera die voor 85 % LÁNGS de zonlijn
+     keek. Dat is 59,5 graden azimut vanaf Meridian, en het gevolg was dat de
+     holte schuin omhoog liep in plaats van vlak te liggen. Terry: "de 3D orbit
+     heeft een schuine kanteling omhoog als we het model van de zijkant bekijken;
+     we willen dat de basis dezelfde oriëntatie kent als de meridian."
+
+     DE MEETKUNDE ERACHTER, want dit is uit te rekenen en niet te proberen. Met
+     `up` op de GSM-Z-as is de schermhoek van de zonlijn `atan2(-dz*dx, -dy)`,
+     dus de afwijking van horizontaal hangt aan het PRODUCT van de azimut- en de
+     elevatiecomponent. Meridian is (0,1,0) en geeft per constructie 0. Gemeten
+     over de kandidaten:
+
+       0,85 / 0,50 / 0,45   azimut 59,5°   elevatie 24,5°   zonlijn 35,2° scheef
+       0,50 / 0,80 / 0,33          32,0°             19,3°           11,7°
+       0,38 / 0,85 / 0,36          24,1°             21,1°            9,2°
+       0,30 / 0,90 / 0,32          18,4°             18,6°            6,1°
+
+     0,38/0,85/0,36 gekozen: de zonlijn ligt binnen tien graden van horizontaal —
+     genoeg om als "vlak" te lezen — en er blijft 24 graden azimut en 21 graden
+     elevatie over, dus je ziet nog steeds RÓND de vorm en niet erdoorheen. Nog
+     dichter bij Meridian (0,30/0,90/0,32) maakt van de vrije stand een tweede
+     doorsnede, en dan is er geen reden meer om er twee te hebben.
+
+     De verhouding staat hier als GENORMALISEERDE GSM-componenten, en niet als
+     drie losse getallen die daarna genormaliseerd worden — dan is het ook zonder
      assenstelsel uit te rekenen hoe ver die stand van de aarde af ligt. */
   const ORBIT_EENHEID = (() => {
-    const L = Math.hypot(0.85, 0.5, 0.45);
-    return { x: 0.85 / L, y: 0.5 / L, z: 0.45 / L };
+    const L = Math.hypot(0.38, 0.85, 0.36);
+    return { x: 0.38 / L, y: 0.85 / L, z: 0.36 / L };
   })();
 
   function orbitRichting(a) {
@@ -481,8 +519,20 @@ export function createMagnetosphereState(THREE, deps) {
         // vorm, en dan is perspectief wat de diepte draagt.
         // Schuin op de zonlijn: de neus in beeld én de staart herkenbaar.
         const a = gsmAssen();
+        /* "OMHOOG" IS DE GSM-Z-AS, PRECIES ALS IN MERIDIAN (sessie 33, Terry).
+
+           Hier stond `null`, en dat betekent niet "geen voorkeur" maar "geef me
+           de STANDAARD terug" (zie de noot bij `up` in core/view-state.js) —
+           Terra's wereld-Y, oftewel de geografische noordpool. Die staat scheef
+           op het GSM-frame waarin deze hele scene leeft, en dat is de kanteling
+           die je van opzij zag: de holte liep omhoog terwijl de doorsnede hem
+           recht liet zien.
+
+           Met a.z heeft de vrije stand dezelfde horizon als Meridian, en wat er
+           dán nog kantelt ís de holte — die beweegt met de dipoolstand mee, en
+           straks met de zonnewind. Dát is wat er te zien hoort te zijn. */
         return targetFrom(orbitRichting(a).clone(), overviewDistance(false),
-                          null, kaderMidden(a.x), false);
+                          a.z, kaderMidden(a.x), false);
       }
     },
     meridian: {
@@ -1128,6 +1178,25 @@ export function createMagnetosphereState(THREE, deps) {
       rigGevuld = false;
       _laatstGeschreven.set(NaN, NaN, NaN);
       world.controls().addEventListener('change', opBesturing);
+      /* DE HEMEL GAAT UIT IN DE HELE STATE (sessie 33, Terry).
+
+         Hij stond alleen uit in de twee doorsnedes, en de reden dáár was dat een
+         doorsnede geen uitzicht is. In de vrije stand leek een sterrenveld dus
+         gewoon te kloppen — tot je gaat afspelen. Dan blijkt hij te VEGEN, en
+         Terry las dat als een achtergrond die animeert.
+
+         Wat er werkelijk beweegt is de camera. De camerastelling woont sinds
+         sessie 30 in het GSM-frame: bij afspelen staat de holte stil en draait de
+         aarde erin, dus de camera draait in WERELDcoördinaten mee met de zonlijn.
+         De sterren staan stil — globe.gl's achtergrondschil beweegt niet — en
+         precies daarom vegen ze langs.
+
+         Een sterrenveld dat beweegt terwijl de bezoeker stilstaat, zegt dat híj
+         draait. Dat is onwaar, en het is niet te repareren door de hemel mee te
+         draaien: dan staan de sterren niet meer waar ze horen. Dus uit. De camera
+         is hier aan de zonlijn gebonden en niet aan de hemel; wat erachter hoort
+         te staan is niets. */
+      if (layers.skyOff) layers.skyOff();
       if (layers.auroraOn) layers.auroraOn();
       if (feed) feed.setEnabled(true);
       // De reeks kan er al liggen van een vorig bezoek — de feed houdt hem
@@ -1159,11 +1228,11 @@ export function createMagnetosphereState(THREE, deps) {
          te vervagen — en een half vervaagde grens of een half gemengde
          projectie die blijft staan, neemt hij mee naar de aarde. */
       overgangAfbreken();
-      /* ONVOORWAARDELIJK, en niet alleen wanneer we uit een vlakke stand komen.
-         Verlaat je de state vanuit Meridian, dan is de hemel daar uitgezet en
-         zet niemand hem terug — je komt dan terug op een aarde in het zwart.
-         Gemeten, en het is precies de faalvorm die je niet ziet als je alleen
-         via de vrije stand test: dáár staan de sterren toch al aan. */
+      /* De tegenhanger van de `skyOff()` in enter(). Hij stond hier al vóór
+         sessie 33, toen alleen de doorsnedes de hemel uitzetten: verlaat je de
+         state vanuit Meridian, dan zette niemand hem terug en kwam je op een
+         aarde in het zwart. Nu is de state ZELF de schakelaar en is dit de enige
+         plek waar hij weer aangaat. */
       if (layers.skyRestore) layers.skyRestore();
       if (layers.atmosphereRestore) layers.atmosphereRestore();
       boundary.setVisible(false);
@@ -1241,7 +1310,11 @@ export function createMagnetosphereState(THREE, deps) {
   let mengVan = 0, mengNaar = 0;
   let naarView = null, naarVlak = false;
   let naarRaster = null;
-  let grensWisselt = false, rasterWisselt = false, hemelWisselt = false;
+  /* `hemelWisselt` stond hier tot sessie 33. De hemel wisselt niet meer per
+     stand — hij gaat uit bij `enter()` en komt terug bij `exit()` — dus die vlag
+     zou altijd onwaar zijn, en een tak die nooit loopt is een tak die de
+     volgende lezer laat denken dat er iets gebeurt. */
+  let grensWisselt = false, rasterWisselt = false;
   let gewisseld = false;
 
   const dalZicht = (e) => {
@@ -1256,7 +1329,7 @@ export function createMagnetosphereState(THREE, deps) {
   const zichtbaarRaster = () =>
     (grid && grid.group.visible ? grid.plane() : null);
 
-  /* Naast grensWisselt / rasterWisselt / hemelWisselt; zie overgangBegin. */
+  /* Naast grensWisselt en rasterWisselt; zie overgangBegin. */
   let veldWisselt = false;
 
   function overgangBegin(vanNaam, naarNaam) {
@@ -1284,7 +1357,6 @@ export function createMagnetosphereState(THREE, deps) {
 
     grensWisselt  = (naarVlak ? naarNaam : null) !== boundary.outline();
     rasterWisselt = naarRaster !== zichtbaarRaster();
-    hemelWisselt  = naarVlak !== vlakkeStand;
     /* De veldlijnen wisselen alleen als hun ZADEN wisselen, en dat is niet bij
        elke standwissel zo: Meridian zaait op twee lengtegraden, de andere twee
        standen op acht. Orbit -> Top verandert er dus niets aan, en dan hoort er
@@ -1305,9 +1377,6 @@ export function createMagnetosphereState(THREE, deps) {
   function wisselInHetDal() {
     vlakkeStand = naarVlak;
     huidigeView = naarView;
-    if (hemelWisselt && layers.skyOff && layers.skyRestore) {
-      if (naarVlak) layers.skyOff(); else layers.skyRestore();
-    }
     /* Het raster vervangt de sterren, en het vlak volgt de kijkrichting:
        Meridian kijkt langs GSM Y en heeft dus het X-Z-vlak, Top kijkt langs
        GSM Z en heeft X-Y. In de vrije stand geen van beide — een raster is
@@ -1372,7 +1441,7 @@ export function createMagnetosphereState(THREE, deps) {
   function overgangAfbreken() {
     overgangLoopt = false;
     gewisseld = true;
-    grensWisselt = rasterWisselt = hemelWisselt = veldWisselt = false;
+    grensWisselt = rasterWisselt = veldWisselt = false;
     naarView = null; naarRaster = null; naarVlak = false;
     mengVan = mengNaar = 0;
     if (boundary.setFade) boundary.setFade(1);

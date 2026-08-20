@@ -46,10 +46,29 @@ export function createMagnetosphereGrid(THREE, opts) {
   /* Twee inkten: de assen door de oorsprong dragen meer, want zij zeggen
      waar de aarde staat en waar de zonlijn loopt. Dezelfde keuze als in
      overlay.js, dat `axisInk` en `gridInk` uit elkaar houdt. */
-  const RASTER_INKT = { raster: 0.55, as: 0.85 };
+  const RASTER_INKT = { raster: 0.80, as: 1.00 };
 
-  // Eén plek voor de twee inkten; de legenda leest ze via `colors` hieronder.
-  const RASTER_INK = 0x2b3d52, AS_INK = 0x46617f;
+  /* Eén plek voor de twee inkten; de legenda leest ze via `colors` hieronder.
+
+     OPGEHOOGD IN SESSIE 33, en dat was geen smaakkwestie. Terry: "het raster is
+     niet meer zo goed zichtbaar als eerst." GEMETEN op de draaiende scene, met
+     alleen het raster in beeld en een pixelrij dwars door de negen verticale
+     lijnen:
+
+       #2b3d52 @0,55 (was)   1 van de 9 lijnen boven de achtergrond, piek +37
+       #3d5570 @0,70         9 van de 9, piek +25
+       #4a6685 @0,80         9 van de 9, piek +46
+       #57769a @0,90        10, piek +67
+
+     Acht van de negen lijnen stonden dus onder de detectiedrempel — niet "minder
+     goed zichtbaar" maar wég, en het enige dat je nog zag was de as. Dat het pas
+     nu opviel komt doordat de veldlijnen er sinds sessie 32 naast staan met
+     vijftien keer zoveel inkt.
+
+     #4a6685 gekozen: elke lijn haalt nu de piek die de AS voorheen haalde, en de
+     as gaat mee omhoog zodat het onderscheid blijft — hij is de enige lijn die
+     iets beweert, namelijk waar de aarde staat en waar de zonlijn loopt. */
+  const RASTER_INK = 0x4a6685, AS_INK = 0x6f93b8;
 
   const matRaster = new THREE.LineBasicMaterial({
     color: new THREE.Color(RASTER_INK), transparent: true,

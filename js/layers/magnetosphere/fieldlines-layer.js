@@ -107,17 +107,28 @@ const FL_PALET = {
                                lijnen onderaan", ook Terry
 
    Dus: OMHOOG MEER DAN OMLAAG. Een schil die donkerder wordt verdwijnt in het
-   zwart; een die lichter wordt niet. Met +8 % en −4 % blijft de richting
-   ("lichter en warmer is noord") volledig overeind terwijl de donkerste tint van
-   3,15 naar 8,93 contrast gaat en de spreiding binnen een staat onder de 0,20
-   zakt — een vijfde van het verschil tussen dicht en open.
+   zwart; een die lichter wordt niet.
+
+   EN DE ONDERSTE IS NOG EEN KEER OMHOOG (sessie 33, Terry): "het gaat met name
+   om de donkergroene kleur iets lichter te maken". Van −4 % naar −2 %. GEMETEN
+   over vier standen, met de zuidelijke tint tegen de scene-achtergrond:
+
+     +8/−4 (was)   spreiding in `closed` 0,143   zuid-contrast  9,68
+     +8/−2 (nu)                          0,113                 10,27
+     +8/−1                               0,104                 10,48
+     +7/ 0                               0,076                 10,78
+
+   NIET VERDER DAN DIT. Bij +7/0 is de spreiding binnen een staat 0,076, en dan
+   is "welk halfrond" niet meer af te lezen — een nuance die je niet kunt zien is
+   erger dan geen nuance, want hij belooft er wel een. De grens ligt dus niet bij
+   "zo dicht mogelijk" maar bij "nog net te onderscheiden", en 0,113 is dat.
 
    WARM IS EEN PLEK EN GEEN OFFSET. `hue + dh` voor noord is meetbaar fout: de
    drie staten liggen op verschillende plekken van de kleurcirkel, dus dezelfde
    offset maakt cyaan blauwer en oranje geler — noord zou dan bij de ene staat
    warmer en bij de andere koeler worden. Vandaar de kortste weg naar h = 0. */
 const FL_HEMI_LIFT_N = 0.08;
-const FL_HEMI_LIFT_Z = 0.04;
+const FL_HEMI_LIFT_Z = 0.02;
 const FL_HEMI_HUE = 0.012;
 
 function flNaarWarm(h) {
