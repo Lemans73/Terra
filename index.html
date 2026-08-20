@@ -721,6 +721,28 @@
 
     <div class="tabpanel show" data-panel="d-earth">
 
+      <!-- DE MAGNETOSFEER-CONDITIES (sessie 32, blok B5). Zelfde vorm als het
+           magneetveld en de zonneactiviteit hieronder: de weg naar het venster
+           staat hier, de getallen staan daar.
+
+           `.msphere-only` en niet `hidden`: die klasse zet `display`, en display
+           in een klasse verslaat het attribuut — zesde keer in dit project. Buiten
+           deze state is er geen moment waarop deze veertien waarden gelden, dus
+           dan hoort de rij er niet te staan in plaats van uitgegrijsd. -->
+      <section class="acc open msphere-only" data-acc="msphere-open">
+      <button class="acc-head" type="button" aria-expanded="true">
+      <span>Magnetosphere</span>
+      <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="acc-body">
+      <p class="space-uitleg">What the solar wind is doing at the moment on the
+      timeline, what shape that makes, and how much of the drawn field lies
+      beyond the last orbit that can measure it &#8212; fourteen readings, each
+      marked as measured, derived or modelled.</p>
+      <button class="apply" id="msphere-open">Read the conditions</button>
+      </div>
+      </section>
+
       <section class="acc" data-acc="rot-axis">
       <button class="acc-head" type="button" aria-expanded="false">
       <span>Earth&#8217;s axis</span>
@@ -4269,6 +4291,10 @@ function updateSunUniform() {
   if (spaceState) spaceState.tik();
   // De magnetosfeer hangt aan dezelfde tik: de zonrichting IS hier het
   // onderwerp, dus het frame moet met de tijdkiezer meelopen.
+  // De uitlezing hangt NIET hier maar aan `onBuild` van de state zelf: die vuurt
+  // ook bij de inhaalslag van de wandklokvloer, en dat is een moment dat geen
+  // enkele tik raakt. Twee schrijvers zouden hier bovendien in de verkeerde
+  // volgorde staan — deze regel loopt vóór de herbouw die zij zou moeten lezen.
   if (msphereState) msphereState.tik();
   // De ecliptica en de Lagrange-punten hangen aan dezelfde klok. Beide doen
   // niets zolang ze onzichtbaar zijn, en dat is de normale stand.
@@ -7604,6 +7630,182 @@ function applySolarState() {
 
 // Zet de binnengekomen voorspelling in beeld. Kan met een lege schil overweg: de
 // adapter kan eerder klaar zijn dan globe.gl met zijn aarde-mesh, en dan haalt
+
+/* ---- De magnetosfeer-condities in het detailvenster (sessie 32, blok B5) ---
+   Dezelfde drieslag als bij de zon en het magneetveld — view / tonen /
+   bijwerken — en om dezelfde reden: het paneel is waar je iets aanzet, dit
+   venster is waar je de getallen over één ding leest. Wat in Layers blijft zijn
+   de vijf schakelaars, want die tekenen iets.
+
+   `kind: 'msphere'` is een EIGEN soort. De feed poll't elke vijf minuten en de
+   klok tikt bij elke sliderstap; zonder eigen soort zou de eerste de beste
+   daarvan het detail overschrijven van waar je net op klikte.
+
+   VEERTIEN RIJEN IN DRIE SECTIES, en die indeling is de POC's en draagt de
+   hele redenering: wat er GEMETEN binnenkomt, wat daar MEETKUNDIG uit volgt, en
+   wat niets kan tegenspreken. Zonder die scheiding leest een modelgetal als een
+   meting, en dat is precies wat dit project nergens wil.
+
+   ELKE RIJ IS AFWEZIG-VAST. Geen enkele ontbrekende meting mag als nul of als
+   een terugval verschijnen; de rij zegt wát er ontbreekt. Dat is geen
+   beleefdheid: `standoff(0, bz)` geeft 23 Re uit een druk die niet bestaat, en
+   dat is een magnetosfeer twee keer zo groot als de grootste ooit gemeten. */
+
+/* De kleur van de kicker komt uit dezelfde variabele als de magnetopauze zelf.
+   Eén bron: verandert die kleur, dan verandert deze mee. */
+const msphereKicker = () =>
+  getComputedStyle(document.documentElement).getPropertyValue('--msphere-mp').trim() || '#6ea8ff';
+
+/* De sector komt in het Nederlands uit data.js, en dat bestand blijft
+   byte-identiek — zie SYNC.md. Terra vertaalt hem hier, net zoals de tijdlijn
+   dat met zijn lane-labels doet. Een sector die hier ontbreekt valt op als
+   Nederlands in een Engelse app, en dus niet stil. */
+const MSPHERE_SECTOR_TEKST = {
+  'naar de zon':   'toward the Sun',
+  'van de zon af': 'away from the Sun',
+  'onbeslist':     'undecided'
+};
+
+const mspGetal = (v, n, eenheid) =>
+  Number.isFinite(v) ? v.toFixed(n) + (eenheid ? ' ' + eenheid : '') : null;
+const mspWeg = (tekst) => ({ absent: true, text: tekst });
+
+/* De externe restterm per toestel: gemeten min intern op 6,618 Re. Die
+   aftrekking is EXACT — het interne veld daar verandert met 0,0002 nT per dag —
+   dus wat overblijft is extern veld plus instrumentfout. ÉÉN component (Hp,
+   parallel aan de spin-as), en dat staat erbij: de asymmetrie-toets die de
+   lengtegraadfout ooit ving heeft alle drie de componenten nodig. */
+function msphereGoesRij(tijd, coeff) {
+  const Core = globalThis.TerraCore, Data = globalThis.TerraData;
+  if (!msphereFeed || !Core || !Data) return mspWeg('not loaded');
+  const lijst = msphereFeed.goes ? msphereFeed.goes() : [];
+  if (!lijst.length) return mspWeg('not loaded');
+  const stukken = [];
+  for (const craft of lijst) {
+    // `Data.Goes.at` is een opzoeking in rijen die de feed al binnen heeft — niet
+    // te verwarren met `Data.Goes.read()`, dat langs pull() heen zou halen.
+    const rij = Data.Goes.at(craft, tijd);
+    if (!rij) continue;
+    const rest = Core.Goes.residual(rij, craft.longitude, coeff);
+    if (!Number.isFinite(rest.Hp)) continue;
+    stukken.push('G' + craft.satellite + ' ' + rest.Hp.toFixed(0) + (rij.arcjet ? '✳' : ''));
+  }
+  return stukken.length ? stukken.join('   ') : mspWeg('no sample at this moment');
+}
+
+function msphereView() {
+  if (!msphereState || !viewStates.isActive('msphere')) return null;
+  const Core = globalThis.TerraCore;
+  const b = msphereState.laatsteBouw();
+  // Nog niets binnen: geen leeg venster met veertien streepjes openen.
+  if (!b || !b.rij) return null;
+  const s = b.rij;
+  const veld = msphereState.laatsteVeld();
+  const g = veld && veld.geom;
+
+  const rows = [];
+  rows.push([{ section: 'Solar wind on arrival' }]);
+  rows.push(['Speed', mspGetal(s.v, 0, 'km/s') || mspWeg('absent')]);
+  rows.push(['Density', mspGetal(s.n, 2, '/cm³') || mspWeg('absent')]);
+  rows.push(['IMF Bz', mspGetal(s.bz, 1, 'nT') || mspWeg('absent')]);
+  rows.push(['IMF sector', s.sector === 'onbeslist'
+    ? mspWeg(MSPHERE_SECTOR_TEKST[s.sector])
+    : (MSPHERE_SECTOR_TEKST[s.sector] || s.sector)]);
+  /* DE AANSTROOMHOEK, en bij een ontbrekende vector het WOORD en niet 0°. Nul
+     graden is een echte stand — pal langs de zonlijn — dus hem tonen waar niets
+     gemeten is, verzint een meting. */
+  const wdir = Core.Flow.windDir(s.vx, s.vy, s.vz);
+  rows.push(['Inflow', wdir.gemeten
+    ? Core.Flow.windOffAxis(wdir).toFixed(1) + '° off the Sun line'
+    : mspWeg('along −X (no vector)')]);
+  rows.push(['Dyn. pressure', s.pdyn !== null
+    ? s.pdyn.toFixed(2) + ' nPa' : mspWeg('no density or speed')]);
+  /* KP LOOPT EEN PAAR UUR ACHTER, en dat is geen storing: de index wordt per
+     blok van drie uur gepubliceerd. T89 valt dan terug op band 2 — een
+     HUISWAARDE, en die hoort benoemd te worden in plaats van meegeteld als
+     meting. */
+  const band = Core.T89.band(s.kp);
+  rows.push(['Kp', Number.isFinite(s.kp)
+    ? s.kp.toFixed(2) + '   band ' + band
+    : mspWeg('not published yet · band 2 (house value)')]);
+
+  rows.push([{ section: 'The geometry that follows' }]);
+  /* GEEN TERUGVAL. Shue 98 is per definitie een functie van pdyn en Bz, dus
+     buiten die twee metingen bestaat er geen waarheidsgetrouwe r₀ — ook geen
+     benaderde. De rij zegt wát er ontbreekt. */
+  rows.push(['Standoff r₀', b.ok && b.r0 !== null
+    ? b.r0.toFixed(2) + ' Re'
+    : mspWeg(s.pdyn === null ? 'no boundary — no pressure' : 'no boundary — no Bz')]);
+  rows.push(['Bow shock', b.ok && b.rbs !== null
+    ? b.rbs.toFixed(2) + ' Re'
+    : mspWeg(!b.ok || b.r0 === null ? 'no boundary to scale from'
+                                    : 'no Mach — no temperature or Bt')]);
+  /* ZONDER GRENS IS DIT GEEN NUL MAAR EEN NIET-VRAAG. De tally telt dan nul
+     open en de rest dicht, wat er precies uitziet als een rustige, volledig
+     gesloten magnetosfeer — terwijl de tracer alleen niets had om tegenaan te
+     kruisen. Hetzelfde geldt een rij lager voor de poolkaprand, die per
+     definitie op de OPEN set staat. */
+  if (!g) {
+    rows.push(['Open / closed', mspWeg('field lines are off')]);
+    rows.push(['Polar cap edge', mspWeg('field lines are off')]);
+  } else if (g.bounded === false) {
+    rows.push(['Open / closed', mspWeg('not classifiable — no boundary')]);
+    rows.push(['Polar cap edge', mspWeg('not determinable — no open set')]);
+  } else {
+    const t = g.tally, opgelost = t.open + t.closed;
+    rows.push(['Open / closed', t.open + ' / ' + t.closed +
+      (t.unresolved ? '  (+' + t.unresolved + ' unresolved)' : '') +
+      (opgelost ? ' · ' + (100 * t.open / opgelost).toFixed(0) + '% open' : '')]);
+    const n = g.polarCap[1], z = g.polarCap[-1];
+    const rand = (c) => c && c.edge !== null
+      ? c.edge.toFixed(0) + '°' + (c.ambiguous ? '?' : '') : 'none open';
+    const tekst = rand(n) + ' N · ' + rand(z) + ' S' +
+      (n && n.seedStep ? '   ±' + n.seedStep.toFixed(0) + '°' : '');
+    rows.push(['Polar cap edge',
+      (n && n.edge !== null) || (z && z.edge !== null) ? tekst : mspWeg(tekst)]);
+  }
+  const koppeling = Core.Physics.entryRate(s);
+  rows.push(['Coupling', koppeling === null
+    ? mspWeg('not computed — no Bz') : koppeling.toFixed(2) + '× normal']);
+
+  rows.push([{ section: 'What nothing can contradict' }]);
+  /* DE VALIDATIEHORIZON. Elke onafhankelijke meting die dit project van het
+     veld heeft zit op de geostationaire baan — twee satellieten op één schil.
+     De eerlijke vraag is dus niet "hoe goed is het model" maar "hoeveel van wat
+     er staat ligt voorbij het laatste dat het kan tegenspreken". Berekend per
+     herbouw, nooit ingetypt: het getal beweegt met Kp en pdyn. */
+  rows.push(['Beyond 6.62 Re', g && g.horizon
+    ? g.horizon.beyondPct.toFixed(1) + '% of the line length'
+    : mspWeg(g ? 'no lines to measure' : 'field lines are off')]);
+  rows.push(['GOES external', msphereGoesRij(s.time, msphereState.gsmAssen().coeff)]);
+
+  return {
+    kind: 'msphere',
+    kicker: 'MAGNETOSPHERE',
+    color: msphereKicker(),
+    headline: 'Conditions at this moment',
+    rows,
+    link: { href: 'https://www.swpc.noaa.gov/products/real-time-solar-wind',
+            label: 'Real-time solar wind' }
+  };
+}
+
+function showMsphereConditions() {
+  const v = msphereView();
+  if (v) showDetail(v);
+}
+
+/* Hangt aan dezelfde tik als de scene: elke sliderstap, elke afspeelstap en elke
+   nieuwe binnenkomst van de feed komt hier langs. Alleen hertekenen als dit
+   venster de condities toont — anders overschrijft een poll de gebeurtenis die
+   je net opende. `refresh` en niet `show`: het venster hoort niet opnieuw in te
+   vliegen terwijl je aan de schuiver trekt. */
+function updateMsphereReadout() {
+  if (!detail || detail.kind() !== 'msphere') return;
+  const v = msphereView();
+  if (v) detail.refresh(v);
+}
+
 // `setupAuroraShell()` de bewaarde voorspelling alsnog op.
 function applyAuroraState() {
   if (aurora && auroraState.coordinates) {
@@ -8512,6 +8714,9 @@ document.getElementById('details-collapse').addEventListener('click', () => pane
 // De weg van Details naar het magneetveld-detail. De readings zelf staan in het
 // venster; dit is de rij die je erheen brengt.
 document.getElementById('geomag-open')?.addEventListener('click', showGeomag);
+// En de weg naar de condities van de magnetosfeer. Alleen in die state te zien
+// (.msphere-only), want buiten de state is er geen moment waarop het geldt.
+document.getElementById('msphere-open')?.addEventListener('click', showMsphereConditions);
 // Idem voor de zonneactiviteit. Tweede ingang: bij Navigate → Sun openen de readings
 // vanzelf, zie de onChange-haak in het init-blok.
 document.getElementById('solar-open')?.addEventListener('click', showSolarActivity);
@@ -9706,6 +9911,13 @@ if (globalThis.TerraCore) {
     moment: momentNow,
     feed: msphereFeed,
 
+    /* DE STATE MELDT DAT HIJ GEBOUWD HEEFT, en dat is de enige weg waarlangs de
+       uitlezing verse getallen krijgt. Niet vanuit de tik-lus: de veldlijnen
+       hebben een wandklokvloer, en de inhaalslag daarvan valt in een timer die
+       buiten elke tik ligt. Gemeten zonder dit: de tally bleef staan op een
+       moment dat de standoff ernaast al verlaten had. */
+    onBuild: () => updateMsphereReadout(),
+
     /* DE KLOK, ALS DRIE HANDELINGEN EN NIET ALS VARIABELE.
 
        De magnetosfeer heeft geen eigen tijd; hij BEGRENST de bestaande tot het
@@ -10079,6 +10291,18 @@ viewStates.onChange((actief) => {
      stand bewaren die de bezoeker nooit gevraagd heeft. */
   if (isNarrow()) { navForget(); panels.close('nav'); }
   if (actief === 'sun') showSolarActivity();
+  /* DE MAGNETOSFEER OPENT ZIJN CONDITIES ALLEEN OP EEN BREED SCHERM (Terry,
+     sessie 32). De zon doet het overal en dat blijft voorlopig zo; hier ligt het
+     anders, en het verschil is de tijdlijn. Onderin staat al een uitlezing over
+     zeven dagen, dus de bezoeker komt niet met lege handen binnen — en op 375 px
+     geldt één vel tegelijk, dus een venster dat vanzelf opengaat bedekt precies
+     de holte die je kwam bekijken.
+
+     LATER dan de rest van deze haak, want de feed kan er nog niet zijn: dan geeft
+     `msphereView()` null en gebeurt er niets. De eerstvolgende binnenkomst van
+     data laat het venster dicht — dat is bewust: vanzelf openen hoort bij
+     AANKOMEN, niet bij een poll die een halve minuut later binnenvalt. */
+  if (actief === 'msphere' && !isNarrow()) showMsphereConditions();
 });
 borgTrackPresets();
 backBtn.hidden = !viewStates.activeState();

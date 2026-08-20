@@ -1790,11 +1790,41 @@
   .readout .row {
     display: flex;
     justify-content: space-between;
+    /* EEN TUSSENRUIMTE, WANT EEN WAARDE MAG EEN ZIN ZIJN (sessie 32). Tot nu toe
+       stond er rechts altijd een getal van hooguit tien tekens. De magnetosfeer
+       zet er zinnen neer — "not published yet · band 2 (house value)" — en
+       `space-between` zonder gap laat die tegen zijn sleutel aan lopen zodra de
+       regel omslaat. Gemeten in het venster van 280 px. */
+    gap: 10px;
     font-size: 12px;
     padding: 4px 0;
     border-top: 1px solid var(--hair);
   }
+  /* De sleutel krimpt niet mee: hij is de kortste van de twee en hoort in één
+     stuk leesbaar te blijven. De waarde vult de rest en lijnt rechts uit, zodat
+     een kolom getallen een kolom blijft. */
+  .readout .row .k { flex: 0 0 auto; }
+  .readout .row .v { flex: 1 1 auto; text-align: right; }
+  /* De sectiekop tussen de rijen (sessie 32). Dezelfde vorm als in de POC: een
+     bovenrand die zwaarder is dan die van een rij, en kleine kapitalen. De
+     eerste kop krijgt geen extra ruimte erboven — daar staat de headline al. */
+  .readout .sec {
+    margin: 10px 0 2px;
+    padding-top: 8px;
+    border-top: 1px solid var(--hair);
+    font-size: 10px;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  .readout .sec:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+  /* Een rij direct ná een kop heeft zijn eigen bovenrand niet nodig: die van de
+     kop staat er al, en twee lijnen op vier pixels leest als een fout. */
+  .readout .sec + .row { border-top: 0; }
   .readout .row .k { color: var(--ink-dim); }
+  /* Een waarde die er niet is. Geen getal, dus ook niet de nadruk van een getal —
+     en cursief, zodat "no density or speed" niet als een meting leest. */
+  .readout .row .v.absent { color: var(--ink-faint); font-style: italic; }
   .readout .row .v { font-variant-numeric: tabular-nums; }
   .readout .row .v a { color: #5fcdfb; text-decoration: none; }
   .readout .row .v a:hover { text-decoration: underline; }

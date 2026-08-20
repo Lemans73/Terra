@@ -121,9 +121,28 @@ export function createDetailPanel(env) {
     return document.createTextNode(v == null || v === '' ? '—' : String(v));
   }
 
+  /* EEN SECTIEKOP IS EEN RIJ ZONDER WAARDE (sessie 32).
+
+     Aanleiding: de magnetosfeer heeft veertien uitleeswaarden en de INDELING
+     ervan draagt betekenis — wat gemeten binnenkomt, wat daar meetkundig uit
+     volgt, en wat niets kan tegenspreken. Veertien rijen achter elkaar maakt
+     van die drie uitspraken één lijst.
+
+     EXPLICIET EN NIET IMPLICIET. Een rij van lengte één, of een waarde die
+     `undefined` is in plaats van `null`, zou hetzelfde doen en zou de volgende
+     aanroeper stil in de val laten lopen: `[k, null]` moet een streepje geven en
+     `[k]` een kop, en dat verschil ziet niemand terug op de plek waar hij het
+     intikt. `{ section: '…' }` staat er als wat het is. */
   function drawRows(rows) {
     rowsEl.replaceChildren();
     for (const [k, v] of rows || []) {
+      if (k && typeof k === 'object' && k.section) {
+        const secEl = document.createElement('div');
+        secEl.className = 'sec';
+        secEl.textContent = k.section;
+        rowsEl.appendChild(secEl);
+        continue;
+      }
       const rowEl = document.createElement('div');
       rowEl.className = 'row';
       const keyEl = document.createElement('span');
@@ -131,7 +150,13 @@ export function createDetailPanel(env) {
       keyEl.textContent = k;
       const valEl = document.createElement('span');
       valEl.className = 'v';
-      valEl.appendChild(valueNode(v));
+      /* AFWEZIG IS EEN VORM EN GEEN WAARDE. `{ absent: true, text: 'no Bz' }`
+         zegt: hier hoort een getal en er is er geen, en dít is de reden. Die
+         tekst mag niet leiden als een meting, dus hij krijgt de bleke cursieve
+         inkt — dezelfde afspraak als in de POC, waar het paneel over ontbrekende
+         metingen de helft van zijn bestaansrecht ontleent. */
+      if (v && typeof v === 'object' && v.absent) valEl.classList.add('absent');
+      valEl.appendChild(valueNode(v && typeof v === 'object' && v.absent ? v.text : v));
       rowEl.append(keyEl, valEl);
       rowsEl.appendChild(rowEl);
     }
@@ -213,7 +238,11 @@ export function createDetailPanel(env) {
        kicker    tekst bovenaan
        color     kleur van die tekst
        headline  de naam van het ding
-       rows      [[label, waarde], …]   waarde: string, {text, href} of Node
+       rows      [[label, waarde], …]   waarde: string, {text, href} of Node.
+                 Een rij `[{ section: 'Kop' }]` tekent een sectiekop in plaats
+                 van een sleutel/waarde-paar; een waarde
+                 `{ absent: true, text: '…' }` tekent bleek en cursief. Zie
+                 drawRows.
        plot      (el) => void           optioneel, tekent in een leeg element
        actions   [{label, title, icon, run}]  optioneel
        link      { href, label }        optioneel, de "meer info"-link

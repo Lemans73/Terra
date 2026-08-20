@@ -971,8 +971,25 @@ export function createMagnetosphereState(THREE, deps) {
   }
 
   /* Bouwen uit het monster onder de cursor. Apart van `enter()` omdat de
-     klok hem ook aanroept: de zonrichting schuift, dus het frame draait mee. */
+     klok hem ook aanroept: de zonrichting schuift, dus het frame draait mee.
+
+     DE AANKONDIGING ZIT IN DE MANTEL EN NIET IN DE KERN, en dat is niet uit
+     netheid. `herbouwKern` heeft twee uitgangen — met en zonder oppervlak — en
+     de derde die er ooit bij komt zou de melding vergeten. Wie ernaar luistert
+     (de uitlezing in index.html) krijgt hem dus per constructie bij élke bouw.
+
+     ZONDER DEZE MELDING LOOPT DE UITLEZING ACHTER OP ZICHZELF. Gemeten: de
+     inhaalslag van de wandklokvloer bouwt de veldlijnen opnieuw, maar niets
+     vertelde het venster dat — de tally stond dan van een moment dat de r₀
+     ernaast allang verlaten had. Precies het soort halve waarheid dat het hele
+     paneel moet uitsluiten. */
   function herbouw() {
+    const uit = herbouwKern();
+    if (deps.onBuild) deps.onBuild(uit);
+    return uit;
+  }
+
+  function herbouwKern() {
     const a = gsmAssen();
     boundary.orient(a.x, a.dip);
     /* De groep draagt de framerotatie al; die is dus ook de rotatie waarmee de
