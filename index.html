@@ -724,6 +724,18 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><ellipse cx="12" cy="12" rx="10" ry="4.2" transform="rotate(-24 12 12)"/></svg>
           <span class="tab-label">Planets</span>
         </button>
+        <!-- DE LEGENDA IS EEN EIGEN TAB EN GEEN SECTIE MEER (sessie 34, Terry).
+             Hij stond onderin het Earth-tabblad, onder de conditie- en
+             veldsecties, en dat is de verkeerde plek voor het ding dat je
+             opslaat terwijl je naar de scene kijkt: je moest langs twee
+             accordeons scrollen om te zien wat een kleur betekent.
+
+             `msphere-only`, want buiten deze state verklaart hij niets — en een
+             tab die leeg opengaat is erger dan een tab die er niet is. -->
+        <button class="tab msphere-only" data-tab="d-legend" title="Legend" aria-label="Legend">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h4M4 12h4M4 18h4"/><path d="M12 6h8M12 12h8M12 18h8"/></svg>
+          <span class="tab-label">Legend</span>
+        </button>
       </div>
       <button class="panel-collapse" id="details-collapse" title="Close panel" aria-label="Close details panel">&#215;</button>
     </div>
@@ -740,20 +752,6 @@
            in een klasse verslaat het attribuut — zesde keer in dit project. Buiten
            deze state is er geen moment waarop deze veertien waarden gelden, dus
            dan hoort de rij er niet te staan in plaats van uitgegrijsd. -->
-      <section class="acc open msphere-only" data-acc="msphere-open">
-      <button class="acc-head" type="button" aria-expanded="true">
-      <span>Magnetosphere</span>
-      <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-      </button>
-      <div class="acc-body">
-      <p class="space-uitleg">What the solar wind is doing at the moment on the
-      timeline, what shape that makes, and how much of the drawn field lies
-      beyond the last orbit that can measure it &#8212; fourteen readings, each
-      marked as measured, derived or modelled.</p>
-      <button class="apply" id="msphere-open">Read the conditions</button>
-      </div>
-      </section>
-
       <section class="acc" data-acc="rot-axis">
       <button class="acc-head" type="button" aria-expanded="false">
       <span>Earth&#8217;s axis</span>
@@ -829,6 +827,20 @@
       </div>
       </section>
 
+      <section class="acc open msphere-only" data-acc="msphere-open">
+      <button class="acc-head" type="button" aria-expanded="true">
+      <span>Magnetosphere</span>
+      <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="acc-body">
+      <p class="space-uitleg">What the solar wind is doing at the moment on the
+      timeline, what shape that makes, and how much of the drawn field lies
+      beyond the last orbit that can measure it &#8212; fourteen readings, each
+      marked as measured, derived or modelled.</p>
+      <button class="apply" id="msphere-open">Read the conditions</button>
+      </div>
+      </section>
+
       <!-- DE LEGENDA (sessie 32, blok B5).
 
            WAT HIER STAAT IS GEEN MARKUP MAAR EEN LEEG VAK. De swatches worden
@@ -842,15 +854,7 @@
            TerraRegistry, met een Terra-zijdige Engelse tekst per id en een
            vangrail die luid stopt bij een id zonder tekst. De registry blijft zo
            de enige die zegt WELKE er zijn; Terra levert de woorden. -->
-      <section class="acc msphere-only" data-acc="msphere-legend">
-      <button class="acc-head" type="button" aria-expanded="false">
-      <span>Legend</span>
-      <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-      </button>
-      <div class="acc-body">
-      <div class="msp-leg" id="msphere-legend"></div>
-      </div>
-      </section>
+      
 
       <!-- HET MAGNEETVELD IS EEN RIJ EN GEEN SECTIE (sessie 25). De vier waarden en
            de poolplot stonden hier als accordeon; ze staan nu in het detailvenster,
@@ -867,6 +871,19 @@
       leans away from the rotation axis, and how strong the field is &#8212; read from
       IGRF for the moment you are looking at.</p>
       <button class="apply" id="geomag-open">Read the field</button>
+      </div>
+      </section>
+    </div>
+
+    <div class="tabpanel" data-panel="d-legend">
+
+      <section class="acc open msphere-only" data-acc="msphere-legend">
+      <button class="acc-head" type="button" aria-expanded="true">
+      <span>Legend</span>
+      <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="acc-body">
+      <div class="msp-leg" id="msphere-legend"></div>
       </div>
       </section>
     </div>
@@ -1358,7 +1375,30 @@
       The nose sits around ten Earth radii. A strong gust can push it inside
       geosynchronous orbit at 6.6 Re, which is why that distance matters.
       </div>
-      <div class="elayer on" id="msp-bs-toggle"><span class="edot"></span>Bow shock<span class="estat" id="es-msp-bs">on</span></div>
+      <div class="elayer on expandable" id="msp-bs-toggle">
+      <span class="edot"></span>Bow shock
+      <button class="row-expand" data-note="msp-bs-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <span class="estat" id="es-msp-bs">on</span>
+      </div>
+      <div class="layer-detail" id="msp-bs-note">
+      Where the solar wind first slows below its own signal speed and piles up.
+      It is not a second surface with its own physics: it is the magnetopause
+      scaled outward by the <b>magnetosonic Mach number</b>, so it shares the
+      shape and adds only a second nose distance.
+      <br /><br />
+      That Mach number has its own inputs &#8212; speed, density, temperature
+      and field strength &#8212; and if any of them is missing there is no
+      shock at all. It does not fall back to a guess: the formula has a
+      numerical floor at Mach 1.2 that a missing measurement would slip
+      through as though it were real, putting the shock nearly four times too
+      far out without a single warning.
+      <br /><br />
+      Between it and the magnetopause lies the <b>magnetosheath</b>, the slowed
+      and deflected wind &#8212; which is what the solar wind particles are
+      flowing through when they bend around the nose.
+      </div>
       <div class="elayer on expandable" id="msp-lines-toggle">
       <span class="edot"></span>Field lines
       <button class="row-expand" data-note="msp-lines-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
@@ -3687,7 +3727,22 @@ const gradePass = new ShaderPass({
     aberration: { value: PARAMS.gradeAberration },
     contrast:   { value: PARAMS.gradeContrast },
     saturation: { value: PARAMS.gradeSaturation },
-    tint:       { value: new THREE.Color(1 - 0.08 * PARAMS.gradeTemp, 1, 1 + 0.08 * PARAMS.gradeTemp) }
+    tint:       { value: new THREE.Color(1 - 0.08 * PARAMS.gradeTemp, 1, 1 + 0.08 * PARAMS.gradeTemp) },
+    /* DE ZONZIJDE-GLOED (sessie 34, geport uit de magnetosfeer-PoC).
+
+       De zon is in de magnetosfeer-state geen object: op 23.500 aardstralen
+       liegt elke bol over schaal óf over afstand, en de registry zegt dat ook
+       (`wind-flow`: "de zon zelf staat nooit in beeld"). Wat er wél kan is zijn
+       KANT verraden met een warme schermrand.
+
+       DRIE UNIFORMS EN GEEN LAAG. Hij hoort hier omdat hij een eigenschap van
+       het BEELD is en niet van de scene — een object zou een plek claimen die
+       er niet is. Buiten de magnetosfeer staat `sunGlow` op nul en is deze
+       pass byte-voor-byte wat hij was; daar is de gewone zon een echte bol in
+       sunmoon-layer.js en heeft dit niets toe te voegen. */
+    sunDir:     { value: new THREE.Vector2(-1, 0) },
+    sunGlow:    { value: 0 },
+    sunRing:    { value: 0 }
   },
   vertexShader: `
     varying vec2 vUv;
@@ -3699,6 +3754,9 @@ const gradePass = new ShaderPass({
     uniform float contrast;
     uniform float saturation;
     uniform vec3 tint;
+    uniform vec2 sunDir;
+    uniform float sunGlow;
+    uniform float sunRing;
     varying vec2 vUv;
     void main() {
       vec2 dir = vUv - 0.5;                      // richting vanaf het midden
@@ -3711,6 +3769,17 @@ const gradePass = new ShaderPass({
       float l = dot(col, vec3(0.299, 0.587, 0.114));
       col = mix(vec3(l), col, saturation);       // saturatie
       col *= tint;                               // koele tint
+      /* DE ZONZIJDE KENT TWEE VORMEN, want de kant van de zon is niet altijd
+         een kant. Staat hij opzij, dan loopt de gloed van 0 in het midden naar
+         1 aan de rand waar hij staat. Kijk je er recht in, dan ligt elke rand
+         er even ver vanaf en wordt het een vignette. sunRing mengt tussen
+         die twee; de macht drukt hem in beide gevallen tegen de rand.
+         Additief en warm — een hue die de stand verraadt, geen tweede
+         lichtbron. Op sunGlow = 0 valt de hele term weg. */
+      float kant   = clamp(dot(dir, sunDir) * 2.0, 0.0, 1.0);
+      float rondom = clamp(length(dir) * 2.0, 0.0, 1.0);
+      float zon = mix(kant, rondom, sunRing);
+      col += vec3(1.0, 0.72, 0.42) * (sunGlow * pow(zon, 2.2));
       gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
     }
   `
@@ -5241,6 +5310,68 @@ waveToggleEl.addEventListener('click', () => {
 });
 
 // ---- Animatie-loop: waterruis-uniform + 3D-glyph-animaties ----
+/* ==========================================================
+   WAAR DE ZON STAAT, ALS RANDGLOED (sessie 34, Terry).
+
+   In de magnetosfeer is de zon geen object — zie de noot bij de uniforms in de
+   grade-pass — maar zijn RICHTING is de hele reden dat de holte de vorm heeft
+   die hij heeft. Zonder enige aanwijzing moet de bezoeker uit de vorm afleiden
+   welke kant dat is, en dat is precies andersom.
+
+   HET IS EEN VRAAG OVER DE CAMERA EN NIET OVER EEN PLEK. `zonKijk` is de
+   zonrichting in CAMERARUIMTE; three kijkt langs -Z, dus n = -z loopt van +1
+   (recht in de zon) via 0 (de zon opzij — dat is precies de doorsnede) naar -1
+   (de zon in de rug). Drie standen, één continue overgang:
+
+     n -> +1   elke rand ligt even ver van de zon   -> rondom, volle sterkte
+     n ~=  0   de zon staat opzij                   -> rand aan die kant
+     n -> -1   tegenlicht, dus weer geen kant       -> onderrand, gedempt
+
+   DE VLAKKE STANDEN HEBBEN GEEN EIGEN TAK NODIG. In Meridian en Top staat de
+   camera loodrecht op de zonlijn, dus n is daar per constructie 0 en geeft de
+   algemene regel hierboven exact de kant die er hoort te staan. De PoC houdt
+   die tak wél apart, maar daar is `sunLeft` een aparte bron van waarheid; hier
+   IS de camerastand de bron, en een tweede tak zou een tweede antwoord kunnen
+   geven op dezelfde vraag.
+
+   DE ZONRICHTING KOMT UIT DE GRENSGROEP EN NIET UIT `gsmAssen()`. Die laatste
+   rekent IGRF en de GSM-basis opnieuw uit, en dat is per frame te duur voor een
+   richting die met vijftien graden per uur beweegt. De groep draagt dezelfde
+   rotatie al, en GSM +X is daarin de lokale +Z: één bron, nul extra rekenwerk,
+   en per constructie hetzelfde frame als het oppervlak.
+========================================================== */
+const MSPHERE_GLOED = 0.18;      // live afgeregeld in de PoC; 0,5 was te fel
+const MSPHERE_TEGENLICHT = 0.5;  // wat er overblijft met de zon pal in de rug
+
+const _gloedZon = new THREE.Vector3();
+const _gloedQ = new THREE.Quaternion();
+const _soep = (a, b, x) => {                   // smoothstep, ook met b < a
+  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+};
+
+function zetZonGloed(cam) {
+  const u = gradePass && gradePass.uniforms;
+  if (!u || !u.sunGlow) return;
+  /* BUITEN DEZE STATE IS HIJ NUL, en dan valt de hele term in de shader weg.
+     Daar tekent sunmoon-layer.js een echte zon met een echte plek; een tweede
+     aanwijzing ernaast zou over die plek liegen. */
+  if (!msphereBoundary || !inMagnetosfeer()) { u.sunGlow.value = 0; return; }
+
+  _gloedZon.set(0, 0, 1).applyQuaternion(msphereBoundary.group.quaternion)
+           .applyQuaternion(_gloedQ.copy(cam.quaternion).invert());
+  const n = -_gloedZon.z;
+  const len = Math.hypot(_gloedZon.x, _gloedZon.y);
+  // Zakt de zon achter ons, dan zakt de gloed naar de onderrand.
+  const neer = _soep(0, -0.5, n);
+  const dx = (len > 1e-6 ? _gloedZon.x / len : 0) * (1 - neer);
+  const dy = (len > 1e-6 ? _gloedZon.y / len : -1) * (1 - neer) - neer;
+  const l2 = Math.hypot(dx, dy) || 1;
+  u.sunDir.value.set(dx / l2, dy / l2);
+  u.sunRing.value = _soep(0.35, 0.95, n);
+  u.sunGlow.value = MSPHERE_GLOED * (n >= 0 ? 1 : 1 + n * (1 - MSPHERE_TEGENLICHT));
+}
+
 /* Het vorige frame-moment van de windlaag. Buiten de lus, want hij moet twee
    aanroepen overleven; `null` betekent "eerste frame", en die krijgt dt = 0
    in plaats van de tijd sinds het opstarten. */
@@ -5379,6 +5510,7 @@ function animateShader() {
     msphereWind.step(_windVorig === null ? 0 : gt - _windVorig);
     _windVorig = gt;
   }
+  zetZonGloed(_cam);
   updateHover();      // raycaster-highlight bijwerken
   positionLabels();   // leader-line labels herpositioneren
   requestAnimationFrame(animateShader);
@@ -10802,6 +10934,27 @@ viewStates.onChange((actief, view) => {
 // zonnestelsel. Zie borgTrackPresets() waarom dit aan `onChange` hangt en niet aan
 // setSpaceView().
 viewStates.onChange(borgTrackPresets);
+/* EEN TAB DIE VERDWIJNT MAG JE NIET ACHTERLATEN (sessie 34).
+
+   In de magnetosfeer verbergt de CSS `Sun & Moon` en `Planets` — daar is geen
+   zon en geen planeet om te lezen. Stond de bezoeker op een van die twee, dan
+   is zijn ACTIEVE tab ineens onzichtbaar terwijl `.tabpanel.show` er nog onder
+   staat: een kop zonder knop boven een paneel dat over iets anders gaat.
+
+   EEN KLIK OP EARTH EN NIET DE KLASSEN ZELF ZETTEN. Dan loopt het langs
+   precies dezelfde weg als een echte klik, inclusief het terugzetten van de
+   scrollstand die `bedraadTabs` doet. Twee plekken die tabs schakelen is er
+   één te veel — dezelfde reden waarom die functie per container bedraad is en
+   niet met één globale selector. */
+viewStates.onChange((actief) => {
+  if (actief !== 'msphere') return;
+  const dp = document.getElementById('details-panel');
+  const huidig = dp && dp.querySelector('.tab.active');
+  if (!huidig) return;
+  if (huidig.dataset.tab !== 'd-sunmoon' && huidig.dataset.tab !== 'd-planets') return;
+  const earth = dp.querySelector('.tab[data-tab="d-earth"]');
+  if (earth) earth.click();
+});
 /* EEN ANDER AANZICHT IS EEN ANDER ONDERWERP (sessie 26, na Terry's test).
    Het detailvenster gaat over ÉÉN ding, en dat ding hoort bij waar je staat: de
    zonneactiviteit bij de zon, een planeet bij het zonnestelsel, een aardbeving bij
@@ -10928,6 +11081,12 @@ if (IS_LOCAL) {
     get msphereLines() { return msphereLines; },
     get msphereWind() { return msphereWind; },
     get msphereDipole() { return msphereDipole; },
+    /* Om dezelfde reden als `stepSunFlight` hierboven: deze functie draait in
+       de rAF-lus, en in een verborgen paneel loopt die niet. Zonder deze haak
+       is de zonzijde-gloed alleen met het oog te beoordelen, en dat is precies
+       wat hij niet moet zijn — hij is een uitspraak over waar de zon staat. */
+    zetZonGloed,
+    get gradePass() { return gradePass; },
     get msphereScale() { return msphereScale; },
     // Voor de tegenproef op de legenda-vangrail: een verzonnen lijnstaat in de
     // registry moet hem luid laten vallen, niet stil een lege regel geven.

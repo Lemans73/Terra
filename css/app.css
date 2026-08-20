@@ -606,6 +606,14 @@
   /* ---- Inklapbaar paneel ---- */
   /* Zit sinds sessie 9 in de vaste kop als flex-item, niet meer absoluut gepositioneerd
      over de tabbalk heen. Hoogte gelijk aan de tabbalk zodat ze uitlijnen. */
+  /* HET KRUISJE STAAT ALTIJD RECHTS IN DE KOP (sessie 34, Terry), ongeacht wat
+     ervoor staat. De kop draagt een titel, een tabrij en dan deze knop, en die
+     eerste twee groeien met hun inhoud: bij een korte titel en weinig tabs
+     kroop het kruisje mee naar het midden. `margin-left: auto` en niet
+     `justify-content: space-between` op de kop, want dat laatste zou ook de
+     titel en de tabrij uit elkaar duwen. */
+  .panel-head .panel-collapse { margin-left: auto; }
+
   .panel-collapse {
     flex: 0 0 auto;
     width: 30px; height: 30px;
@@ -2394,6 +2402,31 @@
      `hidden`-attribuut. */
   .msphere-only { display: none; }
   body.msphere-on .msphere-only { display: block; }
+
+  /* ---- De Details-tabs in deze state (sessie 34, Terry) ----
+
+     Alleen Earth geldt hier: `environmentOff()` zet zon en maan uit en de
+     planeten staan er niet, dus twee van de drie tabs openen op iets dat er
+     niet is. Ze verdwijnen, en de legenda neemt hun plek in.
+
+     OP HUN `data-tab` EN NIET OP EEN GEDEELDE KLASSE. Een `.msphere-hide` zou
+     de volgende bewoner van die klasse stil meenemen — dezelfde val die dit
+     bestand al een paar keer heeft opgeschreven. Dit noemt precies de twee. */
+  body.msphere-on .detail-panel .tab[data-tab="d-sunmoon"],
+  body.msphere-on .detail-panel .tab[data-tab="d-planets"] { display: none; }
+
+  /* EEN TAB IS EEN FLEXDOOS EN GEEN BLOK. De algemene regel hierboven zet
+     `display: block`, en dan valt het label onder het icoon in plaats van
+     ernaast. Dit zet hem terug op wat `.detail-panel .tab` zelf gebruikt. */
+  body.msphere-on .detail-panel .tab.msphere-only { display: flex; }
+
+  /* GEEN STREEP BOVEN DE EERSTE ZICHTBARE SECTIE (sessie 34, Terry).
+     `.acc:first-child` haalt de streep weg bij de eerste sectie in de DOM —
+     maar in deze state is dat er een die verborgen is, dus bleef er een lijn
+     boven Magnetosphere staan met niets erboven. Op zijn `data-acc` en niet op
+     `:first-of-type`: die telt de verborgen buren mee en gaat bij de volgende
+     toevoeging stil verkeerd. */
+  body.msphere-on .panel .acc[data-acc="msphere-layers"] { border-top: none; }
 
   /* De twee knoppen delen de kolom die in het eiland de klok-uitklapper draagt.
      Zelfde breedte-gedrag (auto), zodat de sliderbaan even lang blijft. */
