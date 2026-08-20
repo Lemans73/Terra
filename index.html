@@ -1690,7 +1690,7 @@
       <div class="acc-body">
       <div class="elayer" id="rotaxis-toggle"><span class="edot"></span>Rotation axis<span class="estat" id="es-rotaxis">off</span></div>
       <div class="elayer expandable" id="magaxis-toggle">
-      <span class="edot"></span>Magnetic axis
+      <span class="edot"></span>Geomagnetic axis
       <button class="row-expand" data-note="magaxis-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
@@ -1710,7 +1710,32 @@
       Published tables quote geodetic latitude, roughly 0.06&#176; higher than the
       geocentric value shown here. The figures themselves are in Almanac.
       </div>
-      <div class="elayer" id="magdrift-toggle"><span class="edot"></span>Pole drift 1900&#8211;2030<span class="estat" id="es-magdrift">off</span></div>
+      <!-- DEZE RIJ HAD GEEN UITLEG, en dat was precies de rij die hem het hardst
+           nodig had (sessie 35, na een vraag van een gebruiker). De as hierboven
+           legt het onderscheid met de dip pole al uit, maar wie alleen "Pole
+           drift" leest denkt aan de pool die naar Siberië rent — en dat is de
+           andere. -->
+      <div class="elayer expandable" id="magdrift-toggle">
+      <span class="edot"></span>Pole drift 1900&#8211;2030
+      <button class="row-expand" data-note="magdrift-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <span class="estat" id="es-magdrift">off</span>
+      </div>
+      <div class="layer-detail" id="magdrift-note">
+      The path of the <b>geomagnetic</b> north pole &#8212; the dipole-fit pole
+      from the axis above, not the dip pole.
+      <br /><br />
+      Both drift, but not together and not to the same place. The <b>dip pole</b>
+      is the one that has been crossing the Arctic towards Siberia since the
+      1990s, and fast enough that IGRF had to be re-issued out of schedule in
+      2019. This track moves more slowly and more smoothly, because it follows
+      only the first three coefficients rather than the full field.
+      <br /><br />
+      One dot per five-year epoch, the line interpolated in between. It does not
+      depend on the moment you are viewing: the whole track is drawn at once,
+      1900 to 2030, which is as far as the model reaches.
+      </div>
       </div>
       </section>
 
@@ -8490,8 +8515,13 @@ const MSPHERE_LIJNSTAAT_TEKST = {
 const MSPHERE_VEREENVOUDIGING_TEKST = {
   'no-aberration': { naam: 'The boundary sits on the Sun line',
     why: 'The magnetopause sits on the Sun line. The wind arrives a few degrees off it; this version does not model that aberration.' },
+  /* DE ± IN DE UITLEZING WORDT HIER VERKLAARD EN NERGENS ANDERS (sessie 35).
+     Een gebruiker vroeg wat `±10°` betekent; het antwoord stond al in deze
+     tekst, maar zonder te zeggen WELKE stap er geprint wordt. Dat detail is
+     hier bijgeschreven in plaats van in een tweede noot ernaast — twee plekken
+     die hetzelfde uitleggen lopen bij de eerste wijziging uit de pas. */
   'seed-quantised': { naam: 'The polar cap edge is quantised',
-    why: 'The polar cap edge is quantised by the seed ladder — five shells, so the edge cannot be placed finer than the step between two of them. The step is printed with the value.' }
+    why: 'The edge is read off rather than computed: it is the lowest seeded latitude whose line actually crosses the boundary. The seeds sit on an uneven ladder — 56, 66, 72, 78, 84 degrees — so the edge cannot be placed finer than the step between two rungs, and that step is printed after the value as ±. It is deliberately the LARGER of the two neighbouring gaps, because that is the distance over which the edge could have slipped past unseen; quoting the smaller one would make the answer look sharper than it is. The real edge lies somewhere in that band.' }
 };
 
 /* ==========================================================
@@ -8669,8 +8699,8 @@ function bouwMsphereLegenda() {
     'NOAA OVATION. The model gives a CHANCE of aurora, not a brightness and not a height — the colour is a readability choice, not physics.');
   if (geomag && geomag.config) {
     msphereLegendaRij(host, 'line', '#' + geomag.config.dipoleColor.toString(16).padStart(6, '0'),
-      'Dipole axis',
-      'Where the magnetic axis points. The whole cavity hangs on it: GSM uses it to define its Y axis, which is why this one layer stays on here.');
+      'Geomagnetic axis',
+      'The axis of the dipole that best fits the field, from the first three IGRF coefficients. The whole cavity hangs on it: GSM uses it to define its Y axis, which is why this one layer stays on here. Where it meets the surface are the geomagnetic poles — not the dip poles a compass points to.');
   }
 
   /* ---- De veldlijnen, uit de registry ---- */
@@ -8694,6 +8724,13 @@ function bouwMsphereLegenda() {
     'Lighter and warmer lines leave the northern hemisphere, darker and cooler ones the southern. That is a shade WITHIN a state, not a fourth state — closed stays closed and open stays open.');
   msphereLegendaNoot(host, 'When there is no boundary',
     'With no boundary there is no topology, and then every line is drawn in one neutral ink instead: the tracer had nothing to cross, which is not the same as a quiet magnetosphere.');
+  /* DE TWEE TEKENS IN DE POOLKAPRAND (sessie 35, na een vraag van een gebruiker).
+     `Polar cap edge · 66° N · 78°? S ±10°` stond er zonder dat iets uitlegde wat
+     de `?` en de `±` betekenen. Een legenda die elke KLEUR verklaart maar twee
+     tekens in een uitleesregel niet, laat precies het deel onverklaard dat een
+     getal van een schatting onderscheidt. */
+  msphereLegendaNoot(host, 'Polar cap edge · what a “?” after it means',
+    'Some lines below the edge could not be classified: the integrator ran out of room or out of steps. If any of those turn out to be open, the true edge sits LOWER than the figure shown. The mark says this is a ceiling rather than a measurement — and unresolved lines are never counted as open, because doing that once put the edge tens of degrees too far towards the equator.');
 
   /* ---- De tijdlijn ---- */
   msphereLegendaKop(host, 'In the timeline');
