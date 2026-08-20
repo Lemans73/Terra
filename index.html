@@ -3282,11 +3282,11 @@ let audioCtx = null;
 // objectreferentie, dus de tuning-GUI muteert 'm ongewijzigd.
 
 let timeWindow = Prefs.get('time.span');   // 'hour' | 'day' | 'week' — stuurt feed-keuze
-let magMin = 2;                    // ondergrens aardbeving-magnitude ("All" = QUAKE_FLOOR_MAG)
+let magMin = Prefs.get('quake.magMin');   // ondergrens magnitude ("All" = QUAKE_FLOOR_MAG)
 // Bovengrens, `null` = geen. Sessie 14 wees een maximum nog af omdat de vraag
 // zeldzaam was; met EMSC erbij is de band M1-M2 pas gevuld en wordt "laat me
 // alleen de kleine bevingen zien" een echte vraag.
-let magMax = null;
+let magMax = Prefs.get('quake.magMax');
 let sliderFrac = 1;                // 0..1 — toont events tot dit deel van het venster (1 = alles)
 let globeMode = 'realistic';       // 'realistic' | 'expert'
 
@@ -4236,7 +4236,13 @@ function buildRealisticMaterial() {
         hasNormal:   { value: normalTex ? 1 : 0 },
         dayEnabled:   { value: 1 },
         nightEnabled: { value: 1 },
-        nightBrightness: { value: 0.12 },
+        /* UIT HET REGISTER EN NIET UIT EEN LITERAL (sessie 35). Dit materiaal
+           wordt in een `.then()` gebouwd, ná het laden van vijf texturen, en dus
+           ruim ná het blok dat de bewaarde voorkeuren toepast. Een vaste 0,12
+           hier overschreef daarom stilletjes de stand die de bezoeker had
+           gekozen: de schuif zei 20 %, de scene toonde 12. Zelfde patroon als
+           `glintStrength` twee regels lager, dat `oceanFloorOn` al zo leest. */
+        nightBrightness: { value: Prefs.get('pref.nightGlow') / 100 },
         normalStrength: { value: 2.5 },  // overdrijving van de normal-map-helling
         reliefStrength: { value: 4.0 },  // emboss-uitvergroting → hardere reliëflijnen
         glintStrength:  { value: glintFor(oceanFloorOn) }, // sterkte zonneglinster
@@ -5533,17 +5539,29 @@ updateCtexUI();
 
 // ---- Nachtzijde-helderheid ----
 const nightSliderEl = document.getElementById('night-slider');
-/* De bewaarde stand, en meteen toegepast. `shaderMaterial` bestaat hier al —
-   deze regel staat ná de opbouw van de aarde — dus dit kan rechtstreeks en
-   hoeft niet via `prefsToepassers`. */
-nightSliderEl.value = String(Prefs.get('pref.nightGlow'));
-nightSliderEl.dispatchEvent(new Event('input'));
 nightSliderEl.addEventListener('input', () => {
   const pct = parseInt(nightSliderEl.value, 10);
   document.getElementById('ns-val').textContent = pct + '%';
   if (shaderMaterial) shaderMaterial.uniforms.nightBrightness.value = pct / 100;
   Prefs.set('pref.nightGlow', pct);
 });
+
+/* DE SCHUIF EN HET LABEL OP DE BEWAARDE STAND. De UNIFORM staat hier NIET bij:
+   die krijgt hetzelfde getal bij de opbouw van het materiaal (zoek op
+   `nightBrightness`), want dat gebeurt in een `.then()` die veel later draait en
+   elke waarde die hier gezet wordt weer zou overschrijven.
+
+   Twee lezers dus, één bron. Dat kostte twee mislukte rondes: eerst een dispatch
+   vóór de luisteraar hierboven — schuif 20, label 12 — en daarna een dispatch op
+   het juiste moment maar nog steeds te vroeg voor het materiaal: schuif én label
+   goed, scene donkerder dan de bediening beweerde. Dat verschil staat op geen
+   enkele schermafdruk; je moet de uniform uitlezen. */
+{
+  const pct = Prefs.get('pref.nightGlow');
+  nightSliderEl.value = String(pct);
+  const label = document.getElementById('ns-val');
+  if (label) label.textContent = pct + '%';
+}
 
 // ---- Golfanimatie-toggle: bevriest/hervat de bewegende waterruis ----
 // (tijdelijke instelling — handig om het effect snel te beoordelen)
@@ -9859,6 +9877,7 @@ document.querySelectorAll('#mag-presets .preset').forEach(btn => {
     document.querySelectorAll('#mag-presets .preset').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     magMin = parseInt(btn.dataset.mag, 10);
+    Prefs.set('quake.magMin', magMin);
     syncMagMaxAvailability();
     resetQuakeList();
     render();
@@ -9869,10 +9888,21 @@ document.querySelectorAll('#magmax-presets .preset').forEach(btn => {
   btn.addEventListener('click', () => {
     if (btn.disabled) return;
     magMax = btn.dataset.magmax === '' ? null : parseInt(btn.dataset.magmax, 10);
+    Prefs.set('quake.magMax', magMax);
     syncMagMaxAvailability();
     resetQuakeList();
     render();
   });
+});
+/* DE ONDERGRENS-KNOP OP DE BEWAARDE STAND. `syncMagMaxAvailability()` hieronder
+   doet dat al voor de BOVENgrens — die leest `magMax` — maar de ondergrens had
+   geen zo'n functie: zijn `active` stond vast in de markup. Zonder deze lus
+   wijst de knop naar M2 terwijl de app op M5 filtert.
+
+   `syncMagMaxAvailability()` corrigeert daarna een bewaarde bovengrens die onder
+   de ondergrens ligt; dat kan als iemand ze in de omgekeerde volgorde verzette. */
+document.querySelectorAll('#mag-presets .preset').forEach((b) => {
+  b.classList.toggle('active', parseInt(b.dataset.mag, 10) === magMin);
 });
 syncMagMaxAvailability();
 
@@ -9928,7 +9958,31 @@ function kiesBron(kies) {
   render();
 }
 
-srcApplyBtn.addEventListener('click', () => kiesBron(srcGekozen()));
+srcApplyBtn.addEventListener('click', () => {
+  const kies = srcGekozen();
+  /* ALLEEN DEZE KNOP BEWAART, en niet `kiesBron` zelf.
+
+     `kiesBron` wordt óók aangeroepen door de dekkingstoets verderop: reist de
+     bezoeker naar een jaar dat de gekozen catalogus niet dekt, dan wisselt de app
+     zelf van bron. Dat is een omstandigheid en geen voorkeur — zou het meelopen,
+     dan onthield Terra 'USGS' omdat je één keer naar 1950 bent gereisd. Zelfde
+     onderscheid als bij de datalagen en bij auto-rotate. */
+  Prefs.set('quake.source', kies);
+  kiesBron(kies);
+});
+
+/* DE BEWAARDE BRON, VÓÓR `syncSrcUI()`.
+
+   `syncSrcUI` laat de radio's de WERKELIJKE stand van de adapters volgen, dus
+   de adapters moeten eerst kloppen. `kiesBron` doet dat en start meteen de
+   ophaalronde — precies wat er bij een start op deze bron moet gebeuren.
+
+   Alleen als de bewaarde bron een andere is dan die nu aanstaat: anders zou een
+   verse start een tweede pull afvuren voor de bron die al gekozen was. */
+{
+  const bewaard = Prefs.get('quake.source');
+  if (bewaard && Adapters[bewaard] && bewaard !== srcActief()) kiesBron(bewaard);
+}
 syncSrcUI();
 
 // ---- De bron moet het gekozen tijdvak wél hebben -----------------------------
@@ -10937,6 +10991,39 @@ const aardgebondenVersiering = () => [
    erbij kwam stond hier de tweede letterlijke kopie van deze twee functies, en
    twee plekken die hetzelfde onthouden lopen gegarandeerd uiteen — precies het
    argument waarmee view-state.js zelf bestaat. */
+/* ============================================================
+   LAGEN DIE EEN STATE NIET WIL ZIEN, MAAR DIE HIER NIET BIJ NAAM MOGEN.
+
+   `environment.hide()` neemt groepen, en voor de meeste lagen is dat genoeg. De
+   tekenlaag kan dat niet: de standalone knipt haar eruit, en de bouwvangrail
+   valt op elk voorkomen van haar naam buiten de knipmarkers — ook in commentaar.
+   Eén verwijzing naar haar groep in dit blok laat de build omvallen; het
+   schrijven van déze noot deed dat ook.
+
+   Vandaar een lijst die de laag ZELF vult, van binnen de markers. Elke haak
+   leest zijn eigen stand en kan hem zetten; de state onthoudt wat er stond en
+   geeft dat bij vertrek terug — net als `environment.hide/restore`, en om
+   dezelfde reden: bij het verlaten "alles aan" zetten zou een laag aanzetten
+   die de bezoeker zelf had uitgezet.
+   ============================================================ */
+const stateVerbergHaken = [];
+let stateVerbergStand = null;
+
+function verbergExtraLagen() {
+  if (stateVerbergStand) return;          // al verborgen; niet twee keer bewaren
+  stateVerbergStand = stateVerbergHaken.map((h) => {
+    const was = h.lees();
+    h.zet(false);
+    return was;
+  });
+}
+
+function herstelExtraLagen() {
+  if (!stateVerbergStand) return;
+  stateVerbergHaken.forEach((h, i) => h.zet(stateVerbergStand[i]));
+  stateVerbergStand = null;
+}
+
 const gebeurtenisLagen = {
   eventsOff() {
     for (const laag of Object.keys(active)) {
@@ -11213,10 +11300,22 @@ if (globalThis.TerraCore) {
          zet dat terug — niet "alles aan", want dan zet je bij het verlaten de
          maan aan voor wie hem zelf had uitgezet. */
       environmentOff() {
-        environment.hide([sunMoon && sunMoon.group], { includeGlobe: false });
+        /* DE PLANEETINDICATOREN GAAN MEE UIT (sessie 35, Terry), om dezelfde
+           reden als zon en maan: ze staan op een schaal die hier niet klopt.
+           De projectie zet ze op de bol alsof ze daar liggen, terwijl deze
+           weergave tot 60 Re reikt en over een holte gaat die de zonnewind
+           uitslijpt. Wil je planeten op ware afstand zien, dan is dat de
+           Space-weergave en niet deze. */
+        environment.hide([sunMoon && sunMoon.group, planets && planets.group],
+                         { includeGlobe: false });
+        /* En de lagen die zichzelf hebben aangemeld — nu alleen de tekenlaag.
+           Die hoort bij de aarde als kaart, niet bij een doorsnede door het
+           magneetveld. Zie de noot bij `stateVerbergHaken`. */
+        verbergExtraLagen();
       },
       environmentRestore() {
         environment.restore();
+        herstelExtraLagen();
       },
 
       /* DE AURORA-OVAAL HOORT BIJ DIT ONDERWERP en staat daarom aan, ook als de
@@ -11452,6 +11551,12 @@ if (IS_LOCAL) {
                     ...Object.values(OVERLAY_SLEUTEL), ...Object.values(TEX_SLEUTEL),
                     'pref.texQuality', 'pref.labelCount', 'pref.nightGlow',
                     'time.span', 'time.speed',
+                    'quake.source', 'quake.magMin', 'quake.magMax',
+                    /* De schuif van de tekenlaag. Hij WORDT gelezen, maar binnen
+                       de knipmarkers — de standalone kent hem dus niet, en daar
+                       draait deze vangrail ook niet (IS_LOCAL is false zodra de
+                       pagina van file:// komt). */
+                    'draw.opacity',
                     ...PLANETS.map((k) => 'planet.' + k)];
   const gat = Prefs.ontbrekend(gebruikt);
   /* De rijen in de DOM die geen sleutel hebben. Een `.elayer` met een id die
@@ -11472,6 +11577,29 @@ for (const toepassen of prefsToepassers) {
   // voor bedoeld is.
   try { toepassen(); } catch (e) { console.warn('[prefs] toepassen faalde:', e); }
 }
+
+/* DRIE LAGEN DIE HUN STAND LANGS EEN EIGEN FUNCTIE KRIJGEN.
+
+   Deze drie lezen hun beginstand wél uit het register — `earthLayerEnabled`,
+   `wireframeOn` en `active.aurora` staan hierboven al goed — maar hun LAAG hoort
+   dat pas als de bijbehorende functie draait. Zonder deze regels klopt de knop en
+   de scene niet, en dat is de stilste variant van fout die er is.
+
+   GEMETEN zonder dit blok: wolken uit in het paneel maar zichtbaar op de bol,
+   wireframe aan in het paneel maar een gewone aarde, en de aurora aangevinkt
+   terwijl `Adapters.ovation.enabled` op false bleef staan en de bron dus nooit
+   bevraagd werd.
+
+   Ze staan hier en niet in `prefsToepassers`, want het zijn geen per-schakelaar
+   toepassingen maar drie functies die de hele stand in één keer doorzetten. */
+applyLayerToggles();      // de vier textuurlagen naar de shader-uniforms
+updateEarthLayers();      // en hun rijen + de wolkenschil
+if (wireframeOn) applyWireframe();
+/* De aurora ALTIJD, ook als hij uit staat: `syncAuroraLayer()` zet dan
+   `Adapters.ovation.enabled = false`, en dat is precies de poort die voorkomt
+   dat er 924 KB binnenkomt voor een laag die niemand ziet. Hem overslaan zou de
+   enige adapter die het goed doet weer opengooien. */
+syncAuroraLayer();
 
 /* DE OVERLAYS LOPEN NIET VIA `prefsToepassers` maar via hun eigen weg, en dat
    is geen inconsistentie: `setOverlay` HAALT het bestand op als het er nog niet
@@ -11981,6 +12109,15 @@ function setSketchVisible(on) {
 
 document.getElementById('sketch-toggle')?.addEventListener('click', () => setSketchVisible(!sketchOn));
 
+/* AANMELDEN BIJ DE STATES, van hieruit en niet van daaruit. Deze laag hoort bij
+   de aarde als kaart; in een doorsnede door het magneetveld staat een tekening
+   op de bol die daar niets te zoeken heeft. De state zet hem uit bij binnenkomst
+   en geeft de stand terug bij vertrek — ook als die "uit" was. */
+stateVerbergHaken.push({
+  lees: () => sketchOn,
+  zet: (aan) => { if (aan !== sketchOn) setSketchVisible(aan); }
+});
+
 // Terugkoppeling blijft IN de tab en gebruikt bewust showToast() niet: die is voor
 // gebeurtenissen op de kaart — hij speelt een geluid, bewaart een melding in de
 // geschiedenis en vliegt bij een klik naar een locatie die hier niet bestaat.
@@ -12023,7 +12160,20 @@ sketchOpacityEl?.addEventListener('input', e => {
   const v = +e.target.value;
   document.getElementById('sketch-opacity-val').textContent = v + '%';
   if (sketch) sketch.setOpacity(v / 100);
+  Prefs.set('draw.opacity', v);
 });
+/* De bewaarde stand, en de dispatch NÁ de luisteraar — dezelfde volgorde als bij
+   de nachtschuif, en om dezelfde reden: ervóór is er nog niemand die luistert en
+   dan staat de schuif op de ene waarde en de laag op de andere.
+
+   Deze schuif hoort bij een laag die de standalone eruit knipt, dus hij staat
+   binnen de markers. De sleutel heet daarom `draw.opacity` en niet naar de laag:
+   de bouwvangrail valt op elk voorkomen van die naam buiten de markers, en
+   js/core/prefs.js ligt daarbuiten. */
+if (sketchOpacityEl) {
+  sketchOpacityEl.value = String(Prefs.get('draw.opacity'));
+  sketchOpacityEl.dispatchEvent(new Event('input'));
+}
 
 document.getElementById('sketch-export')?.addEventListener('click', async () => {
   const m = await loadSketch().catch(() => null);

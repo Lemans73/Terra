@@ -184,6 +184,24 @@ export const PREFS_DEFAULTS = {
   'pref.labelCount': 12,
   'pref.nightGlow':  12,
 
+  /* ---- De aardbevingen: de bron en het magnitudevenster ----
+     `quake.source` is de adapter-id ('emsc' of 'usgs'). ALLEEN DE KNOP schrijft
+     hem: de dekkingstoets in index.html wisselt ook van bron zodra de gekozen
+     die periode niet dekt, en dat is een omstandigheid en geen voorkeur. Zou
+     die meeschrijven, dan onthield Terra 'USGS' omdat je één keer naar 1950
+     reisde. Zelfde onderscheid als bij de datalagen en bij auto-rotate.
+
+     `quake.magMax` is null voor 'geen bovengrens' — en null is hier een echte
+     waarde en geen ontbrekende. */
+  'quake.source': 'emsc',
+  'quake.magMin': 2,
+  'quake.magMax': null,
+
+  /* ---- De tekenlaag: alleen de doorzichtigheid ----
+     Haar VORMEN en haar zichtbaarheid blijven bij haarzelf (zie de noot
+     bovenaan); dit is de schuif ernaast, en die is een gewone voorkeur. */
+  'draw.opacity': 100,
+
   /* ---- De tijdlijn: de SCHAAL en de SNELHEID, niet het moment ----
      `time.span` draagt de waarde die `timeWindow` in index.html gebruikt, en dat
      is 'hour' | 'day' | 'week' — niet de tekst op de knop. Een eerste versie had
