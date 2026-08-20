@@ -62,6 +62,34 @@ export function createMagnetosphereTransport(deps) {
   let raf = null;
   let vorigeTijd = 0;
 
+  /* DE AFSPEELSTAND IS EEN KOMMAGETAL EN DE CURSOR IS DAT NIET.
+
+     De state bezit de cursor en die is een RIJNUMMER: `zetCursor` rondt af,
+     want er is geen rij tussen 5000 en 5001. Zolang het afspelen zijn stand uit
+     die cursor terugleest, gaat de breuk elke frame verloren — en bij 60 fps
+     ís de stap een breuk. GEMETEN, na één seconde afspelen vanaf rij 5000:
+
+       1 min/s   verwacht 1 rij    kwam 0
+       10 min/s  verwacht 10       kwam 0
+       20 min/s  verwacht 20       kwam 0
+
+     Nul bij alle drie, want 10 min/s bij dt = 1/60 is 0,167 rij en dat rondt
+     terug naar waar hij al stond. De schuiver werkte wel: die zet een geheel
+     getal ineens.
+
+     DE TOETS ZAG DIT NIET, en dat is de les die hier hoort. De rAF-stub voerde
+     `dt` op het plafond van 0,1 s — zes keer een echte frame, en daarboven is
+     de stap groot genoeg om wél af te ronden. Een lus die alleen bij onwerkelijk
+     grote tijdstappen getoetst wordt, is niet getoetst op de enige tijdstap die
+     in het wild voorkomt.
+
+     Dus houdt het afspelen zijn eigen stand bij, in rijen maar met komma, en is
+     de cursor van de state nog steeds de enige waarheid over welke rij er
+     getoond wordt. `null` betekent: er speelt niets af, dus er is geen stand om
+     te onthouden — bij de volgende start wordt hij vers uit de cursor gezet, en
+     dan kan hij ook niet verouderen ten opzichte van de schuiver. */
+  let positie = null;
+
   const minPerSec = () => MSPT_SNELHEDEN[snelheid];
 
   /* Waar de baan ophoudt. Niet rows.length - 1: zie de kop. */
@@ -81,21 +109,23 @@ export function createMagnetosphereTransport(deps) {
      zich voordoet als een stap.
   ---------------------------------------------------------- */
   function stap(nu) {
-    if (!richting) return;
+    if (!richting || positie === null) return;
     const dt = Math.min(0.1, (nu - vorigeTijd) / 1000);
     vorigeTijd = nu;
-    // Eén rij is één minuut op de aankomstklok, dus minuten/s IS rijen/s.
-    const doel = state.cursor() + richting * minPerSec() * dt;
+    // Eén rij is één minuut op de aankomstklok, dus minuten/s IS rijen/s. Het
+    // optellen gebeurt op `positie` en niet op de teruggelezen cursor — zie de
+    // noot daar.
+    positie += richting * minPerSec() * dt;
     const max = eindeBaan();
-    if (doel <= 0 || doel >= max) {
-      state.zetCursor(doel <= 0 ? 0 : max);
+    if (positie <= 0 || positie >= max) {
+      state.zetCursor(positie <= 0 ? 0 : max);
       // Aan de rand houdt het op, en de knop laat dat zien. Stilletjes blijven
       // draaien op een cursor die niet meer beweegt leest als een hapering.
       zetRichting(0);
       toon();
       return;
     }
-    state.zetCursor(doel);
+    state.zetCursor(positie);
     toon();
     raf = requestAnimationFrame(stap);
   }
@@ -112,7 +142,12 @@ export function createMagnetosphereTransport(deps) {
     if (d !== 0) {
       state.volgtNu(false);
       vorigeTijd = performance.now();
+      // Vers uit de cursor: dáár staat de bezoeker, ook als hij net gesleept
+      // heeft of op "now" klikte.
+      positie = state.cursor();
       raf = requestAnimationFrame(stap);
+    } else {
+      positie = null;
     }
   }
 
