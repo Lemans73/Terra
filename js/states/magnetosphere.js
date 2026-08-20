@@ -51,7 +51,7 @@ import { MSPHERE_RE, MSPHERE_DRAW_MAX, pocNaarTerra }
 const MSPHERE_ORTHO_DIEPTE = 200000;
 
 export function createMagnetosphereState(THREE, deps) {
-  const { world, boundary, grid, fieldlines, layers, Core, feed, clock } = deps;
+  const { world, boundary, grid, scale, fieldlines, layers, Core, feed, clock } = deps;
 
   const origin = new THREE.Vector3(0, 0, 0);
   const _sun = new THREE.Vector3();
@@ -573,8 +573,12 @@ export function createMagnetosphereState(THREE, deps) {
      ook als de bezoeker hem aan heeft staan. In de vrije stand is er geen vlak
      om een schaal op te leggen. */
   function pasRasterToe() {
-    if (!grid) return;
-    grid.setPlane(vlakkeStand && wilRaster && huidigeView ? huidigeView : null);
+    const vlak = vlakkeStand && wilRaster && huidigeView ? huidigeView : null;
+    if (grid) grid.setPlane(vlak);
+    /* De getallen langs de assen horen bij het raster en niet ernaast: ze staan
+       op zijn lijnen, ze verschijnen met hem en ze verdwijnen met hem. Eén
+       schrijver voor "welk vlak" dus, hier. */
+    if (scale) scale.setPlane(vlak);
   }
 
   /* ==========================================================
@@ -1146,6 +1150,7 @@ export function createMagnetosphereState(THREE, deps) {
       world.controls().removeEventListener('change', opBesturing);
       huidigeView = null;
       if (grid) grid.setPlane(null);
+      if (scale) scale.setPlane(null);
       if (boundary.setOutline) boundary.setOutline(null);
       vlakkeStand = false;
       zetSleepgedrag(false);
@@ -1334,6 +1339,7 @@ export function createMagnetosphereState(THREE, deps) {
     const zicht = dalZicht(e);
     if (grensWisselt && boundary.setFade) boundary.setFade(zicht);
     if (rasterWisselt && grid && grid.setFade) grid.setFade(zicht);
+    if (rasterWisselt && scale) scale.setFade(zicht);
     if (veldWisselt && fieldlines) fieldlines.setFade(zicht);
 
     if (!gewisseld && e >= 0.5) { wisselInHetDal(); gewisseld = true; }
@@ -1353,6 +1359,7 @@ export function createMagnetosphereState(THREE, deps) {
     } else if (orthoOrigineel) world.camera().updateProjectionMatrix();
     if (boundary.setFade) boundary.setFade(1);
     if (grid && grid.setFade) grid.setFade(1);
+    if (scale) scale.setFade(1);
     if (fieldlines) fieldlines.setFade(1);
     veldWisselt = false;
     // De aangekomen stand is de nieuwe waarheid voor de camerastelling.
@@ -1370,6 +1377,7 @@ export function createMagnetosphereState(THREE, deps) {
     mengVan = mengNaar = 0;
     if (boundary.setFade) boundary.setFade(1);
     if (grid && grid.setFade) grid.setFade(1);
+    if (scale) scale.setFade(1);
     if (fieldlines) fieldlines.setFade(1);
     laatProjectieLos();
   }

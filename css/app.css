@@ -1142,6 +1142,26 @@
     font-size: 10px; line-height: 1.55; color: var(--ink-faint);
   }
 
+  /* ---- De maat langs de assen (sessie 32, blok O) --------------------------
+     `display` in een klasse verslaat het `hidden`-attribuut — voor de ZEVENDE
+     keer in dit bestand — dus de zichtbaarheid gaat hier via body.msphere-on, net
+     als bij .msphere-time. Een tweede schakelaar in JS zou een tweede waarheid
+     zijn: de body-klasse weet toch al in welke state we zijn.
+
+     ONDER HET TIJD-EILAND (8) EN BOVEN DE SCENE. Hij draagt geen bediening en
+     vangt geen kliks, dus hij hoort onderaan de z-ladder — maar wel boven de
+     bol, want hij legt uit wat je daar ziet. */
+  #msphere-scale {
+    display: none;
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 6;
+    pointer-events: none;
+  }
+  body.msphere-on #msphere-scale { display: block; }
+
   /* ---- De legenda van de magnetosfeer (sessie 32) --------------------------
      Vier groepen van rijen: een swatch, een naam, en de reden eronder. De
      swatch is een LIJN en geen vlak, want alles wat hij uitlegt is een lijn —

@@ -152,6 +152,12 @@ export function createMagnetosphereGrid(THREE, opts) {
 
   return { group, setPlane, setFade, dispose,
            stepRe: MSPHERE_GRID_STEP_RE,
+           /* Voor de maatvoering op het tweede canvas (blok O). Hij plaatst zijn
+              getallen op PRECIES deze coördinaten, langs deze omzetting en binnen
+              dit bereik — anders staan de labels naast de lijnen die ze
+              benoemen, en dat is de enige fout die een schaal echt fataal is. */
+           toLocal: naarLokaal,
+           range: { langsVan: X_VAN, langsTot: X_TOT, dwars: DWARS },
            colors: { raster: '#' + RASTER_INK.toString(16).padStart(6, '0'),
                      as: '#' + AS_INK.toString(16).padStart(6, '0') },
            fade: () => vervaging,
