@@ -185,6 +185,14 @@
        val als bij de tijdlijn. -->
   <canvas id="msphere-scale" aria-hidden="true"></canvas>
 
+  <!-- DE TOESTELLEN (sessie 35). Een tweede canvas en niet dat van de schaal
+       hierboven, want ze verschijnen op verschillende momenten: de schaal
+       hoort bij een VLAK en bestaat alleen in Meridian en Top, de toestellen
+       staan in alle drie de standen. Eén canvas met twee tekenaars zou twee
+       clear-regimes op één buffer zijn, en dan wist de een wat de ander net
+       zette. -->
+  <canvas id="msphere-craft" aria-hidden="true"></canvas>
+
   <div class="mode-switch" id="mode-switch" role="group" aria-label="Globe view">
     <button class="mode-opt active" data-mode="realistic" aria-pressed="true">
       <span class="mode-icon">◐</span><span class="mode-text">Realistic</span>
@@ -1483,6 +1491,43 @@
       straight stream through the magnetosphere would claim the opposite of
       what happens.
       </div>
+      <div class="elayer on expandable" id="msp-goes-toggle">
+      <span class="edot"></span>GOES satellites
+      <button class="row-expand" data-note="msp-goes-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <span class="estat" id="es-msp-goes">on</span>
+      </div>
+      <div class="layer-detail" id="msp-goes-note">
+      Two weather satellites on the geostationary belt, 6.62 Earth radii out.
+      They are the <b>only place in this scene where an instrument actually
+      measures the field</b> &#8212; everything else you see is IGRF, T89 or
+      Shue saying where the field ought to be.
+      <br /><br />
+      The number beside each one is the <b>external</b> field: what the
+      magnetometer read, minus the internal field the model puts at that spot.
+      That subtraction is exact, so what is left is ring current, tail current
+      and magnetopause currents &#8212; the part that actually varies. It is the
+      same figure as the <i>GOES external</i> row in Details, read from the same
+      sample.
+      <br /><br />
+      The marker is usually <b>hollow</b>, and the label says by how much. A
+      filled dot would claim the craft sits exactly where you see it, and in a
+      cross-section it almost never does: the belt lies on Earth&#8217;s
+      equator, while both fixed views cut through planes defined by the
+      magnetic axis and the Sun line.
+      <br /><br />
+      The two views differ in <i>how far</i> off it is, not in whether. Over a
+      full day, a craft sits a median <b>4.7 Re</b> out of the Meridian plane
+      and <b>1.2 Re</b> out of the Top plane &#8212; so Top is about four times
+      closer to the truth, and the number beside the marker is what tells you
+      that.
+      <br /><br />
+      A marker marked <b>arcjet</b> changes colour and gains a ring: the
+      satellite&#8217;s own thrusters were firing, and the magnetometer was
+      partly measuring them. Those samples are flagged rather than dropped
+      &#8212; leaving one out would be a claim of its own.
+      </div>
       <div class="elayer on" id="msp-aurora-toggle"><span class="edot"></span>Aurora oval<span class="estat" id="es-msp-aurora">on</span></div>
       </div>
       </section>
@@ -1980,8 +2025,10 @@ import { createMagnetosphereGrid } from './js/layers/magnetosphere/grid-layer.js
 import { createFieldlinesLayer } from './js/layers/magnetosphere/fieldlines-layer.js';
 import { createWindLayer } from './js/layers/magnetosphere/wind-layer.js';
 import { createDipoleLayer } from './js/layers/magnetosphere/dipole-layer.js';
+import { createMagnetosphereCraft } from './js/ui/magnetosphere-craft.js';
 import { createMagnetosphereScale } from './js/ui/magnetosphere-scale.js';
-import { MSPHERE_RE, MSPHERE_DRAW_MAX } from './js/layers/magnetosphere/boundary-layer.js';
+import { MSPHERE_RE, MSPHERE_DRAW_MAX, pocNaarTerra }
+  from './js/layers/magnetosphere/boundary-layer.js';
 import { createMagnetosphereFeed, MSPHERE_HEALTH_ID } from './js/compute/magnetosphere-feed.js';
 import { createMagnetosphereTransport } from './js/ui/magnetosphere-transport.js';
 import { createMagnetosphereStrip, MSPHERE_SECTOR_TEKST } from './js/ui/magnetosphere-strip.js';
@@ -5516,6 +5563,10 @@ function animateShader() {
      werkelijk verschoven is — twee geprojecteerde ijkpunten als handtekening —
      dus buiten de state en in stilstand kost dit twee matrixvermenigvuldigingen. */
   if (msphereScale) msphereScale.tick();
+  /* En de toestellen, om dezelfde reden hier en niet in `world.onZoom`. Ze
+     hebben dezelfde handtekening-optimalisatie: buiten de state en in stilstand
+     kost dit één geprojecteerd ijkpunt. */
+  if (msphereCraft) msphereCraft.tick();
   /* De zonnewind, en dit is de ENIGE laag van deze state die per FRAME loopt.
      Alle andere hangen aan de klok en worden door `msphereState.tik()` bediend;
      deze beweegt uit zichzelf en heeft dus een echte dt nodig.
@@ -6899,6 +6950,11 @@ bindMsphereToggle('msp-dipole-toggle', 'es-msp-dipole',
    een eigen adapter van 924 KB, en syncAuroraLayer() is de enige plek die
    bepaalt of die bron bevraagd wordt. Een tweede weg ernaartoe zou precies de
    dubbele waarheid geven die daar in sessie 27 is dichtgezet. */
+/* START AAN, en dat is de spiegel van de rustreferentie hierboven: dit zijn de
+   enige twee punten in de scene waar een instrument het veld werkelijk gemeten
+   heeft. Een meting hoort niet achter een knop die je eerst moet vinden. */
+bindMsphereToggle('msp-goes-toggle', 'es-msp-goes',
+  on => msphereState && msphereState.setPart('goes', on));
 bindMsphereToggle('msp-aurora-toggle', 'es-msp-aurora', on => {
   active.aurora = on;
   syncAuroraLayer();
@@ -7256,7 +7312,7 @@ let viewStates = null, spaceState = null, planets = null;
 // De magnetosfeer. Zelfde TDZ-afspraak als de andere states.
 let msphereState = null, msphereBoundary = null, msphereTransport = null;
 let msphereGrid = null, msphereStrip = null, msphereLines = null, msphereScale = null;
-let msphereWind = null, msphereDipole = null;
+let msphereWind = null, msphereDipole = null, msphereCraft = null;
 let disks = null, lagrange = null, orbits = null, environment = null;
 /* `panels` en `navPanel` staan hier om dezelfde reden als de rij hierboven, en
    niet bij hun eigen code verderop: `setPanelOpen()` leest `panels` en die
@@ -8169,7 +8225,11 @@ function msphereLegendaBouw(host, opts) {
   sw.className = 'msp-sw is-' + opts.soort;
   const k = opts.kleur;
   if (opts.soort === 'line' || opts.soort === 'dash') sw.style.borderTopColor = k;
-  else if (opts.soort === 'dot') sw.style.color = k;
+  // De drie vormen die op `currentColor` staan: een volle stip, een holle, en
+  // een volle met een ring. Ze delen de doos in de stylesheet en verschillen
+  // alleen in hun vulling, dus ze delen hier ook de kleurweg.
+  else if (opts.soort === 'dot' || opts.soort === 'hollow' || opts.soort === 'ring')
+    sw.style.color = k;
   else if (opts.soort !== 'none') sw.style.background = k;
 
   const tekst = document.createElement('div');
@@ -8298,6 +8358,14 @@ function bouwMsphereLegenda() {
     msphereLegendaRij(host, 'line', msphereGrid.colors.as,
       'Scale grid — one line every ' + msphereGrid.stepRe + ' Re',
       'In the plane the fixed view looks at, and only there: a scale needs a flat plane, so the free 3D view has none. The heavier lines are the axes through Earth.');
+  }
+  if (msphereCraft) {
+    msphereLegendaRij(host, 'dot', msphereCraft.colors.goes, 'GOES satellites',
+      'The only place in this scene where an instrument measures the field. Two weather satellites on the geostationary belt at 6.62 Re; the number beside each is what the magnetometer read minus the internal field the model puts there, so what is left is ring, tail and magnetopause current. Same figure as the GOES external row in Details, from the same sample.');
+    msphereLegendaRij(host, 'hollow', msphereCraft.colors.goes, 'Hollow — beside the plane',
+      'In a cross-section, a hollow marker means the craft is more than half an Earth radius out of the plane you are looking at, and the label says by how much. That is nearly always the case: the belt lies on Earth’s equator, while both fixed views cut through planes set by the magnetic axis. Over a day the offset runs a median 4.7 Re in Meridian and 1.2 Re in Top — same statement, four times smaller. A filled dot would claim the craft sits where you see it.');
+    msphereLegendaRij(host, 'ring', msphereCraft.colors.arcjet, 'Arcjet minutes',
+      'The satellite’s own thrusters were firing and the magnetometer was partly measuring them. Those samples are flagged rather than dropped — leaving one out would be a claim of its own — so they get a colour and a ring instead.');
   }
   msphereLegendaRij(host, 'ramp',
     'linear-gradient(90deg, ' + PARAMS.auroraLow + ', ' + PARAMS.auroraMid + ' 55%, ' + PARAMS.auroraHigh + ')',
@@ -10648,6 +10716,29 @@ if (globalThis.TerraCore) {
     }
   });
 
+  /* De GOES-toestellen (sessie 35), op hun eigen canvas naast dat van de
+     schaal. Hij krijgt `Core` én `Data`: de plaatsbepaling is geometrie
+     (geoPoint -> toGsm) en de meting komt uit de feed die de app al binnen
+     heeft. Dat is dezelfde weg als de rij `GOES external` in de uitlezing —
+     dezelfde functie, dus per constructie hetzelfde getal.
+
+     `pocNaarTerra` gaat als functie mee in plaats van hier nog eens
+     uitgeschreven te worden. Die permutatie is een ROTATIE en geen spiegeling,
+     en dat verschil telt omdat B een pseudovector is; een tweede kopie ervan is
+     de plek waar dat ooit stil omdraait.
+
+     GEEN `TerraOverlay` MEER. De eerste versie leende diens `craft` voor de
+     tekening, maar de labels van twee toestellen vallen in een doorsnede over
+     elkaar heen — gemeten, zie de kop van de module — en dat uitwijken kon daar
+     niet in. De MATEN komen er nog wel uit, en die staan daar in één blok bij
+     elkaar. */
+  msphereCraft = createMagnetosphereCraft(THREE, {
+    canvas: document.getElementById('msphere-craft'),
+    world, boundary: msphereBoundary,
+    Core: globalThis.TerraCore, Data: globalThis.TerraData,
+    RE: MSPHERE_RE, toTerra: pocNaarTerra
+  });
+
   msphereState = createMagnetosphereState(THREE, {
     world,
     boundary: msphereBoundary,
@@ -10655,6 +10746,7 @@ if (globalThis.TerraCore) {
     dipole: msphereDipole,
     grid: msphereGrid,
     scale: msphereScale,
+    craft: msphereCraft,
     fieldlines: msphereLines,
     Core: globalThis.TerraCore,
     moment: momentNow,
@@ -11185,6 +11277,7 @@ if (IS_LOCAL) {
     zetZonGloed,
     get gradePass() { return gradePass; },
     get msphereScale() { return msphereScale; },
+    get msphereCraft() { return msphereCraft; },
     // Voor de tegenproef op de legenda-vangrail: een verzonnen lijnstaat in de
     // registry moet hem luid laten vallen, niet stil een lege regel geven.
     bouwLegenda: bouwMsphereLegenda,

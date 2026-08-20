@@ -51,7 +51,8 @@ import { MSPHERE_RE, MSPHERE_DRAW_MAX, pocNaarTerra }
 const MSPHERE_ORTHO_DIEPTE = 200000;
 
 export function createMagnetosphereState(THREE, deps) {
-  const { world, boundary, wind, dipole, grid, scale, fieldlines, layers, Core, feed, clock } = deps;
+  const { world, boundary, wind, dipole, grid, scale, craft, fieldlines,
+          layers, Core, feed, clock } = deps;
 
   const origin = new THREE.Vector3(0, 0, 0);
   const _sun = new THREE.Vector3();
@@ -683,6 +684,12 @@ export function createMagnetosphereState(THREE, deps) {
      te vergelijken, en wie er niet om vraagt heeft een tweede familie lijnen
      door zijn beeld staan. */
   let wilDipool = false;
+  /* De toestellen staan standaard AAN, anders dan de rustreferentie hierboven.
+     Dat is geen smaak: dit zijn de enige twee punten in de scene waar een
+     instrument het veld werkelijk gemeten heeft, en de uitlezing verwijst er al
+     naar met `Beyond 6.62 Re`. Een meting hoort niet achter een knop die je
+     eerst moet vinden. */
+  let wilToestellen = true;
   let huidigeView = null;
 
   function pasVoorkeurenToe() {
@@ -700,6 +707,10 @@ export function createMagnetosphereState(THREE, deps) {
        een schoolboekvorm heeft geen meting nodig, en juist daarom staat hij er
        ook als er geen zonnewind binnenkomt. */
     if (dipole) dipole.setVisible(wilDipool);
+    /* En de toestellen hangen ook aan niets uit de wind. Sterker: als de
+       windfeed hapert zijn zij het ENIGE echte getal dat er nog staat. Ze
+       hangen aan hun eigen feed, en die weigert zelf als er geen rij is. */
+    if (craft) craft.setVisible(wilToestellen);
   }
 
   /* Het raster hoort bij een VLAK, dus het bestaat alleen in de vaste standen —
@@ -712,6 +723,18 @@ export function createMagnetosphereState(THREE, deps) {
        op zijn lijnen, ze verschijnen met hem en ze verdwijnen met hem. Eén
        schrijver voor "welk vlak" dus, hier. */
     if (scale) scale.setPlane(vlak);
+  }
+
+  /* WELK VLAK DE TOESTELLEN ZIEN, EN DAT IS EEN ANDERE VRAAG DAN BIJ HET
+     RASTER. Het raster verdwijnt zodra de bezoeker hem uitzet; de toestellen
+     staan er dan nog steeds, en ze moeten nog altijd weten of ze in een
+     doorsnede getekend worden. Vandaar een eigen schrijver en niet een regel
+     erbij in `pasRasterToe`: die zou de hol/vol-uitspraak laten afhangen van
+     een knop die over een schaal gaat.
+
+     Alleen de vlakke stand telt dus, en niet `wilRaster`. */
+  function pasVlakToe() {
+    if (craft) craft.setPlane(vlakkeStand && huidigeView ? huidigeView : null);
   }
 
   /* ==========================================================
@@ -1184,6 +1207,28 @@ export function createMagnetosphereState(THREE, deps) {
     boundary.setTint(s ? s.bz : null,
                      s ? Core.Physics.entryRate(s) : null);
 
+    /* DE TOESTELLEN HOREN HIER EN NIET ONDERAAN BIJ DE WIND, en dat is een
+       inhoudelijk verschil en geen plaatsing.
+
+       Deze functie keert een paar regels verderop VROEG TERUG zodra pdyn of Bz
+       ontbreekt. De wind valt daar terecht stil: zonder grens is er niets om
+       omheen te buigen, en de afbuiging IS zijn tekening. Maar een GOES-toestel
+       vliegt en meet ook als de zonnewindfeed hapert — en juist dán zijn die
+       twee stippen het enige echte getal op het scherm. Zelfde redenering als
+       bij de zuivere dipool hierboven.
+
+       HET MOMENT KOMT UIT DE RIJ EN NIET UIT DE KLOK, zolang er een rij is.
+       De uitlezing zoekt zijn GOES-sample op `s.time` — de AANKOMSTtijd van het
+       windmonster — en dit hier moet dezelfde rij vinden, anders staat er een
+       getal bij de stip dat een minuut verschilt van het getal in het paneel.
+       Twee wegen naar hetzelfde sample is precies het soort tweede pad dat
+       elders in dit bestand telkens is dichtgezet. Zonder reeks blijft de klok
+       over, en dan is er ook niets om mee uit de pas te lopen. */
+    if (craft) {
+      craft.update(feed && feed.goes ? feed.goes() : [],
+                   s ? s.time : a.date.getTime(), a.basis, a.coeff);
+    }
+
     /* GEEN RIJ IS GEEN MOMENT. De veldlijnen hangen niet aan de zonnewind —
        IGRF en T89 rekenen zonder — maar ze hangen wél aan een TIJD, en zonder
        reeks is er geen moment om het veld op te evalueren. Verderop, na de
@@ -1352,6 +1397,13 @@ export function createMagnetosphereState(THREE, deps) {
       huidigeView = null;
       if (grid) grid.setPlane(null);
       if (scale) scale.setPlane(null);
+      /* DE TOESTELLEN GAAN WEG MET HUN GEGEVENS ERBIJ, en niet alleen met een
+         lege vlag. Hun canvas hangt NIET onder de grensvlakgroep — het is een
+         2D-laag over het hele scherm — dus `boundary.setVisible(false)`
+         hieronder neemt hem niet mee. En zouden alleen de stippen weggewist
+         worden, dan tekent de eerste tik na een terugkeer twee toestellen op
+         een frame dat inmiddels uren verder staat. */
+      if (craft) craft.clear();
       if (boundary.setOutline) boundary.setOutline(null);
       if (wind) wind.setOutline(false);
       vlakkeStand = false;
@@ -1454,6 +1506,13 @@ export function createMagnetosphereState(THREE, deps) {
      zou altijd onwaar zijn, en een tak die nooit loopt is een tak die de
      volgende lezer laat denken dat er iets gebeurt. */
   let grensWisselt = false, rasterWisselt = false;
+  /* EN EEN DERDE VLAG VOOR DE TOESTELLEN, want geen van de twee hierboven
+     dekt ze. `rasterWisselt` is onwaar zodra de bezoeker het raster uitzette —
+     dan verschijnt of verdwijnt er niets — maar de toestellen wisselen dan nog
+     steeds van hol naar vol, en dat is een zichtbare sprong. De voorwaarde is
+     de VLAKKE STAND zelf: alleen daar bestaat er een tekenvlak om naast te
+     kunnen liggen. */
+  let vlakWisselt = false;
   let gewisseld = false;
 
   const dalZicht = (e) => {
@@ -1496,6 +1555,7 @@ export function createMagnetosphereState(THREE, deps) {
 
     grensWisselt  = (naarVlak ? naarNaam : null) !== boundary.outline();
     rasterWisselt = naarRaster !== zichtbaarRaster();
+    vlakWisselt   = naarVlak !== vlakkeStand || naarView !== huidigeView;
     /* De veldlijnen wisselen alleen als hun ZADEN wisselen, en dat is niet bij
        elke standwissel zo: Meridian zaait op twee lengtegraden, de andere twee
        standen op acht. Orbit -> Top verandert er dus niets aan, en dan hoort er
@@ -1521,6 +1581,9 @@ export function createMagnetosphereState(THREE, deps) {
        GSM Z en heeft X-Y. In de vrije stand geen van beide — een raster is
        een doorsnede en een perspectiefbeeld heeft er geen. */
     pasRasterToe();
+    /* En het vlak van de toestellen, hier en niet in `pasRasterToe`: die hangt
+       aan de rasterknop en deze niet. Zie de noot bij `pasVlakToe`. */
+    pasVlakToe();
     /* Alleen de omtrek in de vlakke standen: bij een omwentelingsoppervlak dat
        je loodrecht bekijkt ÍS de doorsnede de omtrek, en het volle net maakt er
        weer een driedimensionaal ding van. Zie de noot in boundary-layer.js. */
@@ -1552,6 +1615,11 @@ export function createMagnetosphereState(THREE, deps) {
     if (grensWisselt && wind) wind.setFade(zicht);
     if (rasterWisselt && grid && grid.setFade) grid.setFade(zicht);
     if (rasterWisselt && scale) scale.setFade(zicht);
+    /* De toestellen vervagen op HUN eigen vlag, want ze wisselen op een ander
+       moment dan het raster. Zonder dit springt een stip midden in een vloeiende
+       overgang van vol naar hol — het enige harde ding in een beeld waar de
+       rest kruisvervaagt. */
+    if (vlakWisselt && craft) craft.setFade(zicht);
     if (veldWisselt && fieldlines) fieldlines.setFade(zicht);
 
     if (!gewisseld && e >= 0.5) { wisselInHetDal(); gewisseld = true; }
@@ -1573,6 +1641,7 @@ export function createMagnetosphereState(THREE, deps) {
     if (wind) wind.setFade(1);
     if (grid && grid.setFade) grid.setFade(1);
     if (scale) scale.setFade(1);
+    if (craft) craft.setFade(1);
     if (fieldlines) fieldlines.setFade(1);
     veldWisselt = false;
     // De aangekomen stand is de nieuwe waarheid voor de camerastelling.
@@ -1585,13 +1654,14 @@ export function createMagnetosphereState(THREE, deps) {
   function overgangAfbreken() {
     overgangLoopt = false;
     gewisseld = true;
-    grensWisselt = rasterWisselt = veldWisselt = false;
+    grensWisselt = rasterWisselt = veldWisselt = vlakWisselt = false;
     naarView = null; naarRaster = null; naarVlak = false;
     mengVan = mengNaar = 0;
     if (boundary.setFade) boundary.setFade(1);
     if (wind) wind.setFade(1);
     if (grid && grid.setFade) grid.setFade(1);
     if (scale) scale.setFade(1);
+    if (craft) craft.setFade(1);
     if (fieldlines) fieldlines.setFade(1);
     laatProjectieLos();
   }
@@ -1621,6 +1691,7 @@ export function createMagnetosphereState(THREE, deps) {
              else if (naam === 'bowshock') wilBoegschok = !!aan;
              else if (naam === 'wind') wilWind = !!aan;
              else if (naam === 'dipole') wilDipool = !!aan;
+             else if (naam === 'goes') wilToestellen = !!aan;
              else if (naam === 'grid') { wilRaster = !!aan; pasRasterToe(); return; }
              else if (naam === 'fieldlines') {
                wilVeldlijnen = !!aan;

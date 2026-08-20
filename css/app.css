@@ -1170,6 +1170,27 @@
   }
   body.msphere-on #msphere-scale { display: block; }
 
+  /* ---- De GOES-toestellen (sessie 35) --------------------------------------
+     Dezelfde doos en dezelfde plek in de z-ladder als de schaal hierboven, en
+     om dezelfde redenen: hij draagt geen bediening, vangt geen kliks, en legt
+     uit wat je in de scene ziet. Ook hier gaat de zichtbaarheid via
+     body.msphere-on en niet via een vlag in JS — `display` in een klasse
+     verslaat het `hidden`-attribuut, voor de ACHTSTE keer in dit bestand.
+
+     WAT HIER NIET STAAT IS EEN TRANSITIE OP `opacity`. De module schrijft die
+     inline tijdens een standwissel, en een CSS-overgang eroverheen zou de
+     kruisvervaging van de state een tweede, eigen tempo geven. */
+  #msphere-craft {
+    display: none;
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 6;
+    pointer-events: none;
+  }
+  body.msphere-on #msphere-craft { display: block; }
+
   /* ---- De legenda van de magnetosfeer (sessie 32) --------------------------
      Vier groepen van rijen: een swatch, een naam, en de reden eronder. De
      swatch is een LIJN en geen vlak, want alles wat hij uitlegt is een lijn —
@@ -1197,16 +1218,34 @@
   .msp-sw.is-ramp { height: 10px; margin-top: 3px; border-radius: 2px; }
   /* De zekerheidsklasse is een STIP en geen streep, want hij markeert geen lijn
      op het scherm maar een rij in de uitlezing. Dezelfde vorm als in de POC. */
-  .msp-sw.is-dot {
+  .msp-sw.is-dot,
+  .msp-sw.is-hollow,
+  .msp-sw.is-ring {
     flex-basis: 26px;
     height: 8px; margin-top: 4px;
     display: block;
     position: relative;
   }
-  .msp-sw.is-dot::before {
+  .msp-sw.is-dot::before,
+  .msp-sw.is-hollow::before,
+  .msp-sw.is-ring::before {
     content: ''; position: absolute; left: 9px; top: 0;
     width: 8px; height: 8px; border-radius: 50%;
     background: currentColor;
+  }
+  /* DE TWEE VARIANTEN VAN DE GOES-MARKER (sessie 35). Een legenda die de
+     KLEUR verklaart maar niet de VORM, laat het onderscheid onverklaard dat
+     hier het meeste zegt: hol betekent "dit toestel ligt naast het tekenvlak",
+     en de ring betekent "de eigen stuurmotor stond aan tijdens deze meting".
+     Ze erven de doos van .is-dot; alleen de vulling verschilt. */
+  .msp-sw.is-hollow::before {
+    background: none;
+    border: 1.5px solid currentColor;
+  }
+  .msp-sw.is-ring::after {
+    content: ''; position: absolute; left: 6px; top: -3px;
+    width: 14px; height: 14px; border-radius: 50%;
+    border: 1px solid currentColor; opacity: 0.5;
   }
   .msp-leg-text { flex: 1 1 auto; min-width: 0; }
 
