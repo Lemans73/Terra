@@ -1896,7 +1896,7 @@ import { createMagnetosphereScale } from './js/ui/magnetosphere-scale.js';
 import { MSPHERE_RE, MSPHERE_DRAW_MAX } from './js/layers/magnetosphere/boundary-layer.js';
 import { createMagnetosphereFeed, MSPHERE_HEALTH_ID } from './js/compute/magnetosphere-feed.js';
 import { createMagnetosphereTransport } from './js/ui/magnetosphere-transport.js';
-import { createMagnetosphereStrip } from './js/ui/magnetosphere-strip.js';
+import { createMagnetosphereStrip, MSPHERE_SECTOR_TEKST } from './js/ui/magnetosphere-strip.js';
 import { createEnvironmentToggle } from './js/core/globe-root.js';
 import { skyFrame } from './js/compute/frames.js';
 import { createViewStates } from './js/core/view-state.js';
@@ -7698,14 +7698,11 @@ const msphereKicker = () =>
   getComputedStyle(document.documentElement).getPropertyValue('--msphere-mp').trim() || '#6ea8ff';
 
 /* De sector komt in het Nederlands uit data.js, en dat bestand blijft
-   byte-identiek — zie SYNC.md. Terra vertaalt hem hier, net zoals de tijdlijn
-   dat met zijn lane-labels doet. Een sector die hier ontbreekt valt op als
-   Nederlands in een Engelse app, en dus niet stil. */
-const MSPHERE_SECTOR_TEKST = {
-  'naar de zon':   'toward the Sun',
-  'van de zon af': 'away from the Sun',
-  'onbeslist':     'undecided'
-};
+   byte-identiek — zie SYNC.md. De vertaaltabel staat in
+   js/ui/magnetosphere-strip.js, waar de rest van de Engelse teksten van deze
+   state ook staat: de tijdlijn heeft hem nodig voor zijn captie en deze
+   uitlezing voor zijn rij, en twee kopieën van dezelfde drie woorden lopen bij
+   de eerste wijziging uit de pas. */
 
 const mspGetal = (v, n, eenheid) =>
   Number.isFinite(v) ? v.toFixed(n) + (eenheid ? ' ' + eenheid : '') : null;
@@ -7831,10 +7828,29 @@ function msphereView() {
   };
 }
 
+/* Geeft terug OF er iets geopend is. Bij de allereerste binnenkomst is de feed
+   nog onderweg — 1,1 MB propagated solar wind — en dan is er niets te tonen. Zie
+   `msphereWachtOpData` hieronder: de wens blijft dan staan tot de eerste bouw. */
 function showMsphereConditions() {
   const v = msphereView();
-  if (v) showDetail(v);
+  if (!v) return false;
+  msphereWachtOpData = false;
+  showDetail(v);
+  return true;
 }
+
+/* DE WENS OM TE OPENEN OVERLEEFT HET WACHTEN OP DATA (sessie 33, Terry).
+
+   Sessie 32 liet het hierbij: geen data, geen venster, en de eerstvolgende poll
+   opende niets meer — met de redenering dat vanzelf openen bij AANKOMEN hoort en
+   niet bij een poll die een halve minuut later binnenvalt. Dat klopt voor een
+   poll, maar niet voor de EERSTE: die hoort nog bij dezelfde aankomst. Terry:
+   "laten we op desktop direct de magneto-readings tonen."
+
+   Dus één keer wachten, en niet langer. De vlag gaat uit zodra het venster
+   opengaat, zodra de bezoeker zélf iets anders opent, en zodra hij de state
+   verlaat — anders springt hij open op een moment dat niemand meer verwacht. */
+let msphereWachtOpData = false;
 
 /* Hangt aan dezelfde tik als de scene: elke sliderstap, elke afspeelstap en elke
    nieuwe binnenkomst van de feed komt hier langs. Alleen hertekenen als dit
@@ -7842,7 +7858,14 @@ function showMsphereConditions() {
    je net opende. `refresh` en niet `show`: het venster hoort niet opnieuw in te
    vliegen terwijl je aan de schuiver trekt. */
 function updateMsphereReadout() {
-  if (!detail || detail.kind() !== 'msphere') return;
+  if (!detail) return;
+  /* VÓÓR de guard hieronder: dit is precies het geval waarin het venster NIET
+     de condities toont, omdat het er bij aankomst nog geen kon tonen. */
+  if (msphereWachtOpData && viewStates.isActive('msphere') && detail.kind() !== 'msphere') {
+    if (showMsphereConditions()) detailForget();
+    return;
+  }
+  if (detail.kind() !== 'msphere') return;
   const v = msphereView();
   if (v) detail.refresh(v);
 }
@@ -8967,15 +8990,44 @@ detailsBtn.addEventListener('click', () => panels.toggle('details'));
 // Weg 1: het kruisje in het paneel zelf.
 document.getElementById('panel-collapse').addEventListener('click', () => panels.close('layers'));
 document.getElementById('details-collapse').addEventListener('click', () => panels.close('details'));
-// De weg van Details naar het magneetveld-detail. De readings zelf staan in het
-// venster; dit is de rij die je erheen brengt.
-document.getElementById('geomag-open')?.addEventListener('click', showGeomag);
-// En de weg naar de condities van de magnetosfeer. Alleen in die state te zien
-// (.msphere-only), want buiten de state is er geen moment waarop het geldt.
-document.getElementById('msphere-open')?.addEventListener('click', showMsphereConditions);
-// Idem voor de zonneactiviteit. Tweede ingang: bij Navigate → Sun openen de readings
-// vanzelf, zie de onChange-haak in het init-blok.
-document.getElementById('solar-open')?.addEventListener('click', showSolarActivity);
+/* ---- De drie knoppen die een leesvenster openen (sessie 33, Terry) --------
+   `Read the field`, `Read the activity` en `Read the conditions` brengen je alle
+   drie naar hetzelfde venster, met een andere soort erin. Ze horen daarom ook
+   alle drie hetzelfde te doen wanneer dat venster al open staat: SLUITEN, en dat
+   ook zeggen.
+
+   ÉÉN BOUWER EN GEEN DRIE. Drie losse listeners met elk hun eigen labellogica
+   lopen gegarandeerd uit de pas — dezelfde reden die de sluitknop van het
+   detailvenster in js/ui/detail.js zet in plaats van in dit bestand (sessie 26).
+   De knoppen VOLGEN de stand; ze houden hem niet bij.
+
+   `detail.onChange` is de enige bron. Er zijn vijf wegen waarlangs het venster
+   dichtgaat — het kruisje, een andere state, `clearView()`, een tweede klik op
+   deze knop, en een klik op een gebeurtenis op de bol — en geen enkele daarvan
+   komt hierlangs. Een knop die zijn eigen klik bijhoudt, staat na de eerste van
+   die vijf te liegen.
+
+   HET LABEL VAN "DICHT" IS VOOR ALLE DRIE HETZELFDE. "Close the readings" en
+   niet "Close the field": wat je sluit is het venster, en dat is er één. */
+function bindReadingsButton(id, kind, openen) {
+  const btn = document.getElementById(id);
+  if (!btn) return null;
+  const openLabel = btn.textContent;
+  btn.addEventListener('click', () => {
+    if (detail.kind() === kind) { hideDetail(); return; }
+    openen();
+  });
+  detail.onChange((actief) => {
+    btn.textContent = actief === kind ? 'Close the readings' : openLabel;
+  });
+  return btn;
+}
+
+/* De drie aanroepen staan NIET hier maar direct achter `createDetailPanel`, en
+   dat is geen netheid: `bindReadingsButton` meldt zich meteen aan op
+   `detail.onChange`, en `detail` wordt verderop in dit bestand met `const`
+   gedeclareerd. Hier aanroepen geeft "Cannot access 'detail' before
+   initialization" — gevangen door het boot-vangnet, maar wel een witte pagina. */
 
 // Ook de BEGINSTAND van de knoppen moet kloppen: setPanelOpen() keert vroeg terug
 // wanneer de gevraagde stand al geldt, dus bij het opstarten komt hij daar nooit langs.
@@ -9242,6 +9294,22 @@ const detail = createDetailPanel({
   // sluit de app zelf (via hideDetail), dan komt hij hier niet langs.
   onClose: hideDetail
 });
+
+// De weg van Details naar het magneetveld-detail. De readings zelf staan in het
+// venster; dit is de rij die je erheen brengt.
+bindReadingsButton('geomag-open', 'field', showGeomag);
+// En de weg naar de condities van de magnetosfeer. Alleen in die state te zien
+// (.msphere-only), want buiten de state is er geen moment waarop het geldt.
+bindReadingsButton('msphere-open', 'msphere', showMsphereConditions);
+// Idem voor de zonneactiviteit. Tweede ingang: bij Navigate → Sun openen de readings
+// vanzelf, zie de onChange-haak in het init-blok.
+bindReadingsButton('solar-open', 'solar', showSolarActivity);
+
+/* Wie zélf iets opent of sluit, heeft de aankomst ingehaald: de wachtstand van
+   de magnetosfeer vervalt dan. Zonder dit springt het conditievenster alsnog
+   open op het moment dat de feed binnenvalt — over iets heen dat de bezoeker
+   intussen zelf gekozen heeft. */
+detail.onChange(() => { msphereWachtOpData = false; });
 
 /* ---- Een paneel wijkt voor het detailvenster, en komt terug (sessie 26) ----
    Het venster deelt een schermhoek met de panelen daar. Ze passen er niet
@@ -10611,7 +10679,27 @@ viewStates.onChange((actief) => {
      `msphereView()` null en gebeurt er niets. De eerstvolgende binnenkomst van
      data laat het venster dicht — dat is bewust: vanzelf openen hoort bij
      AANKOMEN, niet bij een poll die een halve minuut later binnenvalt. */
-  if (actief === 'msphere' && !isNarrow()) showMsphereConditions();
+  /* De feed kan er nog niet zijn bij de allereerste binnenkomst; dan blijft de
+     wens staan tot de eerste bouw. Zie msphereWachtOpData. */
+  msphereWachtOpData = false;
+  if (actief === 'msphere' && !isNarrow()) {
+    if (!showMsphereConditions()) msphereWachtOpData = true;
+  }
+
+  /* EN WAT WEGGEWEKEN IS BIJ AANKOMST, KOMT NIET TERUG (sessie 33, Terry).
+
+     `detailYield()` sluit wat de hoek van het venster deelt en onthoudt het,
+     zodat het terugkomt zodra je de readings sluit. Dat klopt wanneer JIJ het
+     venster opende — je verdrong Navigate zelf, dus je krijgt hem terug. Het
+     klopt niet wanneer de AANKOMST het venster opende: dan heb je Navigate nooit
+     weggeklikt, en hem laten terugspringen bij het sluiten van de readings zet
+     een paneel terug dat je niet gevraagd hebt.
+
+     De `isNarrow()`-tak hierboven doet ditzelfde al voor een telefoon, en om een
+     andere reden: dáár is Navigate schermbreed en zie je hem als eerste in
+     plaats van de state die je net koos. Nu geldt het op elk formaat, want op
+     desktop nemen de readings zijn hoek in. */
+  detailForget();
 });
 borgTrackPresets();
 backBtn.hidden = !viewStates.activeState();

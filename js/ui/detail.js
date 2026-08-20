@@ -102,6 +102,22 @@ export function createDetailPanel(env) {
   let lastKind = null;
   let backTo = null;
 
+  /* WIE ER LUISTERT NAAR WAT DIT VENSTER DOET (sessie 33).
+
+     Aanleiding: de drie knoppen die een leesvenster openen — `Read the field`,
+     `Read the activity`, `Read the conditions` — moeten `Close the readings`
+     gaan zeggen zodra hun venster openstaat. Dat is een stand die alleen hier
+     bekend is, en er zijn VIJF wegen waarlangs hij verandert: `show`, `hide`,
+     `back`, het kruisje, en een aanroeper die `hide()` doet omdat de state
+     wisselt.
+
+     Zonder deze haak zou elke aanroeper na élke venstermutatie de knoppen
+     moeten bijwerken — en dat is precies de tweede waarheid die js/ui/panels.js
+     als les opschrijft: de knoppen volgen de stand, de stand volgt de knoppen
+     niet. `refresh()` vuurt hem OOK, want daar kan `kind` van veranderen. */
+  const luisteraars = [];
+  const meld = () => { for (const fn of luisteraars) fn(open ? lastKind : null); };
+
   /* Een waarde mag tekst zijn, een link, of een kant-en-klare Node. Meer
      vormen zijn er niet, en `innerHTML` staat er bewust NIET bij: zodra dit
      HTML uit een string accepteert, gaat er ooit iets ongeschoond doorheen
@@ -267,6 +283,7 @@ export function createDetailPanel(env) {
     }
     setTimeout(() => { if (open) gsap.set(host, { opacity: 1, y: 0, scale: 1 }); }, 700);
     if (onShow) onShow();
+    meld();
   }
 
   /* Hertekenen wat er al staat. Voor de LEVENDE soorten: het magneetveld en een
@@ -277,7 +294,9 @@ export function createDetailPanel(env) {
      te flikkeren terwijl je aan de slider trekt). */
   function refresh(view) {
     if (!open) return false;
+    const was = lastKind;
     draw(view);
+    if (lastKind !== was) meld();
     return true;
   }
 
@@ -299,6 +318,7 @@ export function createDetailPanel(env) {
       gsap.to(host, { opacity: 0, y: 10, duration: 0.22, ease: 'power2.in', overwrite: true, onComplete: settle });
     }
     setTimeout(settle, 500);   // vangnet, zie de kop
+    meld();
   }
 
   /* Eén stap terug. `backTo` gaat op null vóór de aanroep, zodat de bouwer
@@ -311,6 +331,7 @@ export function createDetailPanel(env) {
     backTo = null;
     herstel();
     syncCloseButton();
+    meld();
     return true;
   }
 
@@ -321,6 +342,9 @@ export function createDetailPanel(env) {
      in een venster dat inmiddels iets heel anders toont. */
   return {
     show, refresh, hide, back,
+    /* Meldt de HUIDIGE soort, of null als het venster dicht is. Precies wat een
+       knop moet weten om te beslissen of hij "open" of "sluit" zegt. */
+    onChange: (fn) => { luisteraars.push(fn); fn(open ? lastKind : null); return fn; },
     isOpen: () => open,
     canGoBack: () => !!backTo,
     kind: () => (open ? lastKind : null),

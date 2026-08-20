@@ -158,6 +158,29 @@ const MSPS_TEKST = {
    ze zelf weg als ze niet passen. */
 const MSPS_LABELS_VANAF = 450;
 
+/* ---------- De sector in het Engels ---------------------------------------
+
+   `data.js` bepaalt de sector en geeft hem terug als NEDERLANDSE tekst — dat
+   bestand blijft byte-identiek, dus de vertaling gebeurt hier. Voor de LANE
+   volstond `MSPS_TEKST.sector.series` (dat zijn twee vaste posities), maar de
+   HOVER niet: `Strip.runAt` geeft de run terug zoals `sectorRuns` hem maakte,
+   met zijn waarde als sleutel, en `Strip.draw` zet die waarde rechtstreeks in
+   de captie.
+
+   GEMETEN met een onderschepping op `fillText`: bij een gewone hertekening nul
+   Nederlandse strings, bij een HOVER wél — en dat is precies waarom het pas na
+   een sessie opviel. Wie hier iets toetst zonder de muis over de lane te bewegen,
+   ziet niets.
+
+   Deze tabel is ook de tabel die de uitlezing in index.html gebruikt; hij staat
+   hier omdat de rest van de Engelse teksten hier al staat. Twee kopieën van
+   dezelfde drie woorden lopen bij de eerste wijziging uit de pas. */
+export const MSPHERE_SECTOR_TEKST = {
+  'naar de zon':   'toward the Sun',
+  'van de zon af': 'away from the Sun',
+  'onbeslist':     'undecided'
+};
+
 export function createMagnetosphereStrip(deps) {
   /* `onMoment` IS DE TEGENHANGER VAN `onCursor` IN DE TRANSPORTBALK. Die balk
      was tot nu toe de enige die de cursor verzette en meldde het daarom als
@@ -383,6 +406,31 @@ export function createMagnetosphereStrip(deps) {
         }
       }
     }
+    /* De sectorruns, voor de captie bij het aanwijzen. Hun waarde ÍS de sleutel
+       waarmee `Strip.draw` de kleur opzoekt (`sectorTint[run.v]`), dus die map
+       moet mee — anders staat er straks Engels in de captie met een streepje
+       ervoor in plaats van de bandkleur.
+
+       GOOIEN BIJ EEN ONBEKENDE WAARDE. `data.js` kent er drie en `sectorRuns`
+       levert er twee; komt er ooit een vierde, dan is dat een sector die dit
+       bestand niet kent, en die hoort op te vallen in plaats van in het
+       Nederlands door te lekken. */
+    const ov = spec.overlay;
+    if (ov && ov.sectorRuns) {
+      for (const run of ov.sectorRuns) {
+        const en = MSPHERE_SECTOR_TEKST[run.v];
+        if (!en) throw new Error('unknown IMF sector state: ' + run.v);
+        run.v = en;
+      }
+      if (ov.sectorTint) {
+        const tint = {};
+        for (const [nl, kleur] of Object.entries(ov.sectorTint)) {
+          tint[MSPHERE_SECTOR_TEKST[nl] || nl] = kleur;
+        }
+        ov.sectorTint = tint;
+      }
+    }
+
     // De captie leest uit `overlay.notes`, met een eigen kopie van label en zin.
     const notes = spec.overlay && spec.overlay.notes;
     if (!notes) return;
