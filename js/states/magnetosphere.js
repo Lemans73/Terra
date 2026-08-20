@@ -51,7 +51,7 @@ import { MSPHERE_RE, MSPHERE_DRAW_MAX, pocNaarTerra }
 const MSPHERE_ORTHO_DIEPTE = 200000;
 
 export function createMagnetosphereState(THREE, deps) {
-  const { world, boundary, wind, grid, scale, fieldlines, layers, Core, feed, clock } = deps;
+  const { world, boundary, wind, dipole, grid, scale, fieldlines, layers, Core, feed, clock } = deps;
 
   const origin = new THREE.Vector3(0, 0, 0);
   const _sun = new THREE.Vector3();
@@ -658,6 +658,8 @@ export function createMagnetosphereState(THREE, deps) {
      en dat is wat het inzoomen op de aarde mogelijk maakt. */
   const _targetGsm = new THREE.Vector3();
   const _qFrame = new THREE.Quaternion();
+  const _qLokaal = new THREE.Quaternion();
+  const _dipLok = new THREE.Vector3(), _zonLok = new THREE.Vector3();
   const _qInv = new THREE.Quaternion();
   let rigGevuld = false;
   let vlakkeStand = false;
@@ -677,6 +679,10 @@ export function createMagnetosphereState(THREE, deps) {
   let wilRaster = true;
   let wilVeldlijnen = true;
   let wilWind = true;
+  /* De rustreferentie staat standaard UIT: hij is een hulpmiddel om iets mee
+     te vergelijken, en wie er niet om vraagt heeft een tweede familie lijnen
+     door zijn beeld staan. */
+  let wilDipool = false;
   let huidigeView = null;
 
   function pasVoorkeurenToe() {
@@ -690,6 +696,10 @@ export function createMagnetosphereState(THREE, deps) {
        Merk op dat dit NIET aan de knop van de boegschok hangt: die zet een
        tekening uit, niet de meting eronder. */
     if (wind) wind.setVisible(wilWind && !!(laatste && laatste.rbs !== null));
+    /* En de rustreferentie hangt aan NIETS uit de feed. Dat is geen omissie:
+       een schoolboekvorm heeft geen meting nodig, en juist daarom staat hij er
+       ook als er geen zonnewind binnenkomt. */
+    if (dipole) dipole.setVisible(wilDipool);
   }
 
   /* Het raster hoort bij een VLAK, dus het bestaat alleen in de vaste standen —
@@ -1133,6 +1143,21 @@ export function createMagnetosphereState(THREE, deps) {
   function herbouwKern() {
     const a = gsmAssen();
     boundary.orient(a.x, a.dip);
+    /* DE RUSTREFERENTIE HOORT HIER EN NIET BIJ DE METINGEN. Hij hangt alleen
+       aan de dipoolas, dus hij bouwt ook als de feed leeg is — en dat is precies
+       zijn waarde: wat er zou liggen als er niets tegenaan duwde, staat er ook
+       als we niet weten wat er duwt.
+
+       DE AS GAAT NAAR HET FRAME VAN DE GROEP en wordt daar niet nog eens
+       geroteerd. `boundary.group.quaternion` beeldt lokaal op Terra af, dus de
+       inverse brengt een Terra-vector naar lokaal. Eén rotatie in de app, en
+       deze laag erft hem als kind. */
+    if (dipole) {
+      _qLokaal.copy(boundary.group.quaternion).invert();
+      _dipLok.copy(a.dip).applyQuaternion(_qLokaal);
+      _zonLok.copy(a.x).applyQuaternion(_qLokaal);
+      dipole.update(_dipLok, _zonLok, MSPHERE_ZAAD_LATS);
+    }
     /* De groep draagt de framerotatie al; die is dus ook de rotatie waarmee de
        camerastelling terug naar de wereld gaat. Eén bron, geen tweede
        berekening die ooit uit de pas kan lopen. */
@@ -1349,6 +1374,7 @@ export function createMagnetosphereState(THREE, deps) {
          leest die, en anders blijft er per frame een bundel doorgerekend
          worden die niemand ziet. */
       if (wind) wind.setVisible(false);
+      if (dipole) dipole.setVisible(false);
       veldlijnenUit();
       if (feed) feed.setEnabled(false);
       if (clock && bewaardeKlok) { clock.herstel(bewaardeKlok); bewaardeKlok = null; }
@@ -1594,6 +1620,7 @@ export function createMagnetosphereState(THREE, deps) {
              if (naam === 'magnetopause') wilMagnetopauze = !!aan;
              else if (naam === 'bowshock') wilBoegschok = !!aan;
              else if (naam === 'wind') wilWind = !!aan;
+             else if (naam === 'dipole') wilDipool = !!aan;
              else if (naam === 'grid') { wilRaster = !!aan; pasRasterToe(); return; }
              else if (naam === 'fieldlines') {
                wilVeldlijnen = !!aan;

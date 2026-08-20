@@ -1397,6 +1397,30 @@
       otherwise. The free 3D view keeps its stars and has no grid &#8212; a scale
       needs a flat plane to mean anything.
       </div>
+      <div class="elayer expandable" id="msp-dipole-toggle">
+      <span class="edot"></span>Quiet reference
+      <button class="row-expand" data-note="msp-dipole-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <span class="estat" id="es-msp-dipole">off</span>
+      </div>
+      <div class="layer-detail" id="msp-dipole-note">
+      Where the field would lie if <b>nothing were pushing on it</b> &#8212; a
+      pure dipole, drawn from the textbook identity <b>r = L&#183;cos&#178;(latitude)</b>
+      about this moment&#8217;s magnetic axis. No solar wind, no Shue, no T89, and
+      no fitted constants: it is the zero-wind limit rather than an average of
+      quiet days.
+      <br /><br />
+      It uses the <b>same shells as the traced lines</b>, so the two families
+      share their feet on the surface and part company from there. That parting
+      is the whole point: it is the measure of how far this moment&#8217;s field
+      has been pushed out of shape. The outermost shells would reach 23 and 92
+      Earth radii undisturbed, which is why they run off the edge of the drawing.
+      <br /><br />
+      Always drawn as a flat slice through the noon&#8211;midnight plane, even
+      in the 3D view, and dashed &#8212; what comes out of a formula should not
+      look like what was traced through a measured field.
+      </div>
       <div class="elayer on expandable" id="msp-wind-toggle">
       <span class="edot"></span>Solar wind
       <button class="row-expand" data-note="msp-wind-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
@@ -1918,6 +1942,7 @@ import { createBoundaryLayer } from './js/layers/magnetosphere/boundary-layer.js
 import { createMagnetosphereGrid } from './js/layers/magnetosphere/grid-layer.js';
 import { createFieldlinesLayer } from './js/layers/magnetosphere/fieldlines-layer.js';
 import { createWindLayer } from './js/layers/magnetosphere/wind-layer.js';
+import { createDipoleLayer } from './js/layers/magnetosphere/dipole-layer.js';
 import { createMagnetosphereScale } from './js/ui/magnetosphere-scale.js';
 import { MSPHERE_RE, MSPHERE_DRAW_MAX } from './js/layers/magnetosphere/boundary-layer.js';
 import { createMagnetosphereFeed, MSPHERE_HEALTH_ID } from './js/compute/magnetosphere-feed.js';
@@ -6713,6 +6738,13 @@ bindMsphereToggle('msp-lines-toggle', 'es-msp-lines',
   on => msphereState && msphereState.setPart('fieldlines', on));
 bindMsphereToggle('msp-wind-toggle', 'es-msp-wind',
   on => msphereState && msphereState.setPart('wind', on));
+/* START OP UIT, en dat vierde argument is geen detail: `bindMsphereToggle`
+   ZET de klasse bij het aanmelden, dus zonder dit staat de knop op "on" terwijl
+   `wilDipool` in de state op false staat — en dan zet de eerste klik hem uit
+   die al uit was. De rustreferentie is een hulpmiddel om iets mee te
+   vergelijken; wie er niet om vraagt hoort hem niet te krijgen. */
+bindMsphereToggle('msp-dipole-toggle', 'es-msp-dipole',
+  on => msphereState && msphereState.setPart('dipole', on), false);
 /* De aurora loopt WEL via de bestaande poort: hij is een gewone Terra-laag met
    een eigen adapter van 924 KB, en syncAuroraLayer() is de enige plek die
    bepaalt of die bron bevraagd wordt. Een tweede weg ernaartoe zou precies de
@@ -7074,7 +7106,7 @@ let viewStates = null, spaceState = null, planets = null;
 // De magnetosfeer. Zelfde TDZ-afspraak als de andere states.
 let msphereState = null, msphereBoundary = null, msphereTransport = null;
 let msphereGrid = null, msphereStrip = null, msphereLines = null, msphereScale = null;
-let msphereWind = null;
+let msphereWind = null, msphereDipole = null;
 let disks = null, lagrange = null, orbits = null, environment = null;
 /* `panels` en `navPanel` staan hier om dezelfde reden als de rij hierboven, en
    niet bij hun eigen code verderop: `setPanelOpen()` leest `panels` en die
@@ -8042,6 +8074,10 @@ function bouwMsphereLegenda() {
   if (msphereWind) {
     msphereLegendaRij(host, 'dot', msphereWind.colors.wind, 'Solar wind',
       'Speed from the measured velocity and density from the measured count, but the path is drawn rather than solved — the deflection around the boundary is a formula, not magnetohydrodynamics. It brightens where it grazes the magnetopause, which is the same quantity that bends it.');
+  }
+  if (msphereDipole) {
+    msphereLegendaRij(host, 'dash', msphereDipole.colors.dipole, 'Quiet reference',
+      'A pure dipole — r = L·cos²(latitude) about this moment’s magnetic axis, with no wind in it at all. Same shells as the traced lines, so the two share their feet and part company from there; that parting is how far this moment has been pushed out of shape. Dashed because it comes from a formula, not from a measured field.');
   }
   if (msphereGrid) {
     msphereLegendaRij(host, 'line', msphereGrid.colors.as,
@@ -10362,6 +10398,12 @@ if (globalThis.TerraCore) {
                                         renderer: world.renderer() });
   msphereBoundary.group.add(msphereWind.group);
 
+  /* En de rustreferentie, op diezelfde plek. Hij tekent in het GSM-frame omdat
+     de dipoolas daar per definitie in het X-Z-vlak ligt — het vlak van de
+     doorsnede is dus hetzelfde vlak waarin de holte haar bekende vorm heeft. */
+  msphereDipole = createDipoleLayer(THREE, {});
+  msphereBoundary.group.add(msphereDipole.group);
+
   /* En de getallen bij dat raster, op een tweede canvas (blok O). Hij krijgt
      `TerraOverlay` mee voor zijn twee PURE helpers — `ticks` en `label`, allebei
      los getoetst in de PoC — en verder niets uit dat bestand: zijn
@@ -10395,6 +10437,7 @@ if (globalThis.TerraCore) {
     world,
     boundary: msphereBoundary,
     wind: msphereWind,
+    dipole: msphereDipole,
     grid: msphereGrid,
     scale: msphereScale,
     fieldlines: msphereLines,
@@ -10884,6 +10927,7 @@ if (IS_LOCAL) {
     get msphereGrid() { return msphereGrid; },
     get msphereLines() { return msphereLines; },
     get msphereWind() { return msphereWind; },
+    get msphereDipole() { return msphereDipole; },
     get msphereScale() { return msphereScale; },
     // Voor de tegenproef op de legenda-vangrail: een verzonnen lijnstaat in de
     // registry moet hem luid laten vallen, niet stil een lege regel geven.
