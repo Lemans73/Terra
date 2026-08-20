@@ -10014,6 +10014,18 @@ viewStates.onChange((actief) => {
   if (actief === vorigeState) return;   // alleen de camerastand veranderde
   vorigeState = actief;
   hideDetail();
+  /* OP EEN TELEFOON WIJKT NAVIGATE VOOR DE NIEUWE STATE (sessie 31, Terry).
+
+     Je kiest daar een state ín Navigate, en dat paneel is schermbreed — dus het
+     eerste wat je van je eigen keuze ziet, is het paneel waarin je hem maakte.
+     Op een breed scherm speelt dat niet: daar staat Navigate rechtsonder naast
+     de scene en blijft hij gewoon staan.
+
+     NA `hideDetail()`, want die roept `navRestore()` aan en zou Navigate anders
+     meteen terugzetten. En `navForget()` erbij: zonder dat komt hij alsnog terug
+     zodra het detailvenster de volgende keer sluit — de herinnering zou dan een
+     stand bewaren die de bezoeker nooit gevraagd heeft. */
+  if (isNarrow()) { navForget(); panels.close('nav'); }
   if (actief === 'sun') showSolarActivity();
 });
 borgTrackPresets();

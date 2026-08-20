@@ -253,8 +253,13 @@
     transition: color 0.18s, border-color 0.18s;
   }
   .notif-btn:hover { color: var(--ink); border-color: var(--ink-dim); }
+  /* LINKS VAN DE BEL EN NIET RECHTSBOVEN (sessie 31, Terry). Hij stond op
+     `right: -6px` en stak daarmee over de knop ernaast — de bel is de eerste van
+     drie in dezelfde hoek, dus rechts van hem is altijd bezet. Links is dat
+     nooit: daar loopt de masthead door tot de wordmark, en die eindigt op 375 px
+     al op 115 terwijl de knoppen op 260 beginnen. */
   .notif-badge {
-    position: absolute; top: -6px; right: -6px;
+    position: absolute; top: -6px; left: -6px;
     min-width: 16px; height: 16px;
     padding: 0 4px;
     border-radius: 8px;
@@ -263,6 +268,15 @@
     font-size: 9px; font-weight: 700;
     display: flex; align-items: center; justify-content: center;
   }
+  /* EN HIJ GING NOOIT UIT. `updateNotifBadge()` zet keurig `hidden` bij nul
+     ongelezen meldingen, maar de regel hierboven zet een expliciete
+     `display: flex` — en display in een klasse verslaat het hidden-attribuut.
+     Gevolg: er stond permanent een oranje "0" naast de bel, en niemand zag waar
+     dat vandaan kwam omdat de JS het goed deed.
+
+     Dezelfde val als bij .dock-btn, .ti-panel, .nav-panel, .view-switch,
+     .antipode-exit en .time-reset. Zesde keer in dit bestand. */
+  .notif-badge[hidden] { display: none; }
   .notif-panel {
     position: fixed;
     top: 62px; right: 24px;
