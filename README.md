@@ -6,6 +6,12 @@ Terra is an interactive Three.js/WebGL globe that plots geophysical data on Eart
 earthquakes, volcanoes, wildfires, storms and sea ice, each as its own layer
 with its own 3D indicator.
 
+There is also a view that leaves the surface behind. The magnetosphere is the
+cavity the Earth's magnetic field carves out of the solar wind, and Terra draws
+it from the wind that is arriving right now: the boundary where the two press
+against each other, the bow shock outside it, the field lines traced through
+the cavity, and the wind itself flowing around the nose.
+
 It does not only show now. A time control moves the whole scene — sunlight,
 the Moon, the Earth's axis and the events themselves — to any moment the
 sources can reach, which for earthquakes is 1900. Layers that cannot follow say
@@ -40,6 +46,7 @@ Observed — fetched from somewhere:
 | Sun activity | [NOAA SWPC](https://services.swpc.noaa.gov/) | — | sunspot regions, flares, 10.7 cm flux; present conditions only |
 | Air quality | [WAQI](https://waqi.info/) | — | needs a key, follows the camera, present only |
 | Lightning | [Blitzortung](https://www.blitzortung.org/) | — | needs a relay you run yourself, present only |
+| Solar wind | [NOAA SWPC](https://services.swpc.noaa.gov/) propagated wind, plus GOES magnetometers | 7 days | speed, density, IMF Bz, Kp; drives the whole magnetosphere view |
 
 Computed — no network, no key, and therefore no year they cannot reach:
 
@@ -49,6 +56,10 @@ Computed — no network, no key, and therefore no year they cannot reach:
 | Rotation axis | geometry | with the 23.44° obliquity |
 | Magnetic axis · pole drift 1900–2030 | [IGRF-14](https://www.ncei.noaa.gov/products/international-geomagnetic-reference-field) | a dipole fit; a model, not a measurement, and extrapolated past 2025 |
 | Polar motion | IERS/USNO via [CelesTrak](https://celestrak.org/SpaceData/) | a plot, not geometry: the pole stays inside a circle 40 m across, which at full zoom is a hundredth of a pixel |
+| Magnetopause and bow shock | Shue et al. 1998 | shape follows the measured pressure and IMF Bz of the moment; the colour follows how much of the wind is coupling in |
+| Field lines | IGRF-14 inside, T89c outside | traced from the surface and classified against the boundary above as open, closed or unresolved |
+| Quiet reference | textbook dipole | where the same shells would lie with no wind pressing on them, so the two can be compared |
+| Solar wind flow | Shue geometry plus a sheath deflection | particles arriving from the Sun and bending around the cavity, at the measured speed and density |
 
 Plus three vector overlays: tectonic plate boundaries, country borders and
 country labels.
@@ -206,7 +217,6 @@ A few flags in the same file decide what a given deployment shows:
 | `RELAY_URL` | where to find a lightning relay that is not on localhost |
 | `ANALYTICS_HOSTS` | hostnames that load Vercel Web Analytics — a list, not a boolean, so a fork does not request a script that is not there |
 | `LOCK_DETAILS` | whether a padlock expands into a panel explaining how to connect a backend |
-| `MAGNETO_VIEW` | whether the button into the tilted Earth–Sun view is shown. Off in this build: the view works but is not finished, and hiding it costs nothing — the rotation axis, magnetic axis and pole drift are ordinary layers and stay available |
 | `ASSET_BASE` | where textures and GeoJSON are loaded from; the standalone build points this at jsDelivr |
 
 ## Limitations, honestly
@@ -229,6 +239,21 @@ A few flags in the same file decide what a given deployment shows:
   Moon come from Meeus and are good to well under a kilometre; the magnetic axis
   comes from IGRF-14, which is a model, and past epoch 2025.0 it is
   extrapolation. The app marks that in the readout.
+- **The magnetosphere only covers the measured week.** It hangs on NOAA's
+  propagated solar wind, which reaches about seven days back and roughly an
+  hour forward, so inside that view the time control is bounded there instead
+  of running to 1900. The wind of last month was not measured, and neither was
+  tomorrow's.
+- **Most of the magnetosphere lies past anything that could contradict it.**
+  The only independent measurement of the field out there is at geosynchronous
+  orbit, 6.62 Earth radii up, and the readout prints how much of the drawn line
+  length sits beyond it. The shape is Shue et al. 1998 evaluated on
+  measurements, so a missing measurement means no surface at all: the app draws
+  nothing rather than filling the gap with a plausible number.
+- **The solar wind particles are a flow, not solved trajectories.** Their speed
+  scales with the measured velocity and their number with the measured density,
+  and the way they bend around the boundary is right in direction. The path
+  itself comes from a formula rather than from magnetohydrodynamics.
 - **Lightning needs a process you run yourself.** There is no hosted relay.
 - **WAQI and Blitzortung permit non-commercial use only.** Terra is therefore a
   free demonstration and will stay one. If you fork it, that constraint travels
