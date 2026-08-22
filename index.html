@@ -1144,7 +1144,17 @@
              Alleen de ACTIEVE tab toont zijn label. Vier iconen met tekst passen
              niet in de 180px die de tabrij heeft, maar vier iconen waarvan er één
              een woord draagt wel — en zo blijft zichtbaar waar je bent. -->
-        <button class="tab active" data-tab="lagen" title="Layers" aria-label="Layers">
+        <!-- TWEE TABS WAAR ER EEN WAS (sessie 38). Dit paneel droeg twee soorten
+             bediening door elkaar: FILTEREN wat je uit een bron ziet, en een tekening
+             AAN- of UITZETTEN. Filters draagt de acht datalagen met hun bevingsfilters,
+             Layers de zeventien schakelaars voor overlays, projecties, assen en
+             hemellichamen. De splitsing bestond tot 2026-08-02 al eens; toen was de
+             tabrij vol en waren het er drie. Allebei geldt niet meer. -->
+        <button class="tab active" data-tab="filters" title="Filters" aria-label="Filters">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+          <span class="tab-label">Filters</span>
+        </button>
+        <button class="tab" data-tab="layers" title="Layers" aria-label="Layers">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
           <span class="tab-label">Layers</span>
         </button>
@@ -1173,12 +1183,38 @@
 
     <div class="panel-body">
 
-    <!-- ====================== LAGEN ====================== -->
-    <div class="tabpanel show" data-panel="lagen">
+    <!-- ====================== FILTERS ====================== -->
+    <div class="tabpanel show" data-panel="filters">
 
-<section class="acc open" data-acc="layers-list">
+<!-- VIER KOPPEN OP VERSCHIJNSEL, NIET OP BRON (sessie 38, Terry).
+
+     De sectie `Data Layers` is hier opgegaan: de tab heet al Filters, dus een kop die
+     "datalagen" zegt voegt niets toe. Ervoor in de plaats vier accordeons.
+
+     GROEPEREN OP BRON LAG VOOR DE HAND EN KLOPT NIET. Nagelopen zijn het er vijf, niet
+     drie: USGS/EMSC (bevingen), NASA EONET (vier categorieen), Blitzortung (bliksem),
+     WAQI (luchtkwaliteit) en NOAA SWPC (aurora). Drie daarvan zouden een kop met een
+     enkele rij worden. De bron staat bovendien al waar hij hoort - per rij, en in het
+     verbindingspaneel.
+
+     WAAROM VULKANEN ONDER `Natural events` VALLEN en niet onder `Seismic`, hoewel ze
+     tektonisch verwant zijn: de BEDIENING verschilt en dit paneel gaat over bediening.
+     Een beving is een moment met magnitude, diepte en een venster van uur/dag/week.
+     Een vulkaan is een gebeurtenis met een duur, en zijn venster hangt in de code
+     expliciet NIET aan `timeWindow` - zie eonetAdapters() met `dagen`, `blijftOpen` en
+     `sluitAdministratief`. Onder `Seismic` zou hij onder filters staan die niet op hem
+     slaan.
+
+     GEEN TABS BINNEN FILTERS. Acht rijen rechtvaardigen geen tweede navigatielaag, en
+     het nut van dit paneel is juist in een blik zien wat aanstaat en hoeveel er
+     binnenkomt.
+
+     De open/dicht-stand wordt NIET bewaard - `js/core/prefs.js` heeft er geen sleutel
+     voor. Dit is dus een BEGINSTAND: elke herlading opent Seismic en sluit de rest.
+     Bewaren staat als voorstel in logs/PLAN-sessie-37-paneelsplitsing.md. -->
+<section class="acc open" data-acc="filters-seismic">
       <button class="acc-head" type="button" aria-expanded="true">
-      <span>Data Layers</span>
+      <span>Seismic</span>
       <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
       <div class="acc-body">
@@ -1283,6 +1319,15 @@
       <div class="depth-label"><span>shallow</span><span>deep</span></div>
       </div>
 
+      </div>
+      </section>
+
+<section class="acc" data-acc="filters-natural">
+      <button class="acc-head" type="button" aria-expanded="false">
+      <span>Natural events</span>
+      <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="acc-body">
       <div class="layer" data-layer="volcano">
       <span class="swatch sw-volcano"></span>
       <span class="name">Volcanoes</span>
@@ -1309,11 +1354,6 @@
       change in what was watched, not in what burned.
       </div>
       <p class="era-note" id="fire-era" hidden></p>
-      <div class="layer" data-layer="lightning">
-      <span class="swatch sw-lightning"></span>
-      <span class="name">Lightning</span>
-      <span class="count" id="count-lightning">—</span>
-      </div>
       <div class="layer" data-layer="storm">
       <span class="swatch sw-storm"></span>
       <span class="name">Storms</span>
@@ -1324,6 +1364,20 @@
       <span class="name">Sea ice</span>
       <span class="count" id="count-ice">—</span>
       </div>
+      </div>
+      </section>
+
+<section class="acc" data-acc="filters-atmosphere">
+      <button class="acc-head" type="button" aria-expanded="false">
+      <span>Atmosphere</span>
+      <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="acc-body">
+      <div class="layer" data-layer="lightning">
+      <span class="swatch sw-lightning"></span>
+      <span class="name">Lightning</span>
+      <span class="count" id="count-lightning">—</span>
+      </div>
       <div class="layer off" data-layer="aqi">
       <span class="swatch sw-aqi"></span>
       <span class="name">Air quality</span>
@@ -1332,6 +1386,15 @@
       </button>
       <span class="count" id="count-aqi">—</span>
       </div>
+      </div>
+      </section>
+
+<section class="acc" data-acc="filters-space">
+      <button class="acc-head" type="button" aria-expanded="false">
+      <span>Space weather</span>
+      <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="acc-body">
       <!-- De aurora staat hier en niet bij `Axes & poles`, waar hij inhoudelijk
       thuishoort: alleen een `.layer`-rij krijgt het slotje en de tijdreis-machinerie,
       en de rijen daar zijn `.elayer`. Twee rij-grammatica's in één lijstje leest als
@@ -1361,11 +1424,23 @@
       </div>
       </section>
 
-      <!-- Overlays stonden tot 2026-08-02 in een eigen Aarde-tab, met als reden dat
-           Layers LIVE gebeurtenissen met een teller toont en overlays statische
-           kaartlagen zonder teller zijn. Dat onderscheid is er nog steeds — het zit nu
-           in de SECTIE in plaats van in de tab. Een eigen tab voor drie schakelaars
-           was te veel eer, en de tabrij zat vol. -->
+    </div>
+
+    <!-- ====================== LAYERS ====================== -->
+    <!-- Overlays stonden tot 2026-08-02 in een eigen Aarde-tab, met als reden dat
+         Filters LIVE gebeurtenissen met een teller toont en overlays statische
+         kaartlagen zonder teller zijn. Dat onderscheid verhuisde toen naar de SECTIE,
+         met als argument dat een eigen tab voor drie schakelaars te veel eer was en de
+         tabrij vol zat. SESSIE 38 DRAAIT DAT TERUG, want allebei die redenen zijn
+         vervallen: Almanac en Settings zijn in sessie 25 verhuisd, en het zijn er geen
+         drie meer maar zeventien — Earth overlays 3, Sky projections 5, Axes & poles 3
+         en Sun & Moon 6.
+
+         LET OP bij het verplaatsen van secties tussen deze twee tabpanelen:
+         `msphere-layers` en `axis-layers` MOETEN in hetzelfde panel blijven. In de
+         magnetosfeer gaat de hele tabrij uit en blijven precies die twee over; belanden
+         ze uit elkaar, dan is er een onbereikbaar. -->
+    <div class="tabpanel" data-panel="layers">
 <!-- DE STATE-EIGEN SECTIE (sessie 30).
 
      Alleen zichtbaar in de magnetosfeer, en daar is hij het enige wat er staat
@@ -1741,7 +1816,7 @@
 
 <section class="acc" data-acc="cosmos-layers">
       <button class="acc-head" type="button" aria-expanded="false">
-      <span>Sun &amp; Moon layers</span>
+      <span>Sun &amp; Moon</span>
       <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
       <div class="acc-body">
@@ -6672,8 +6747,8 @@ document.getElementById('qlist-summary').addEventListener('click', () => {
   // Via de beheerder en niet rechtstreeks via setPanelOpen(): die zou het paneel
   // wel openen maar Navigate open laten staan, en dan liggen er twee over elkaar.
   panels.open('layers');
-  document.querySelector('.tab[data-tab="lagen"]')?.click();
-  const acc = document.querySelector('[data-acc="layers-list"]');
+  document.querySelector('.tab[data-tab="filters"]')?.click();
+  const acc = document.querySelector('[data-acc="filters-seismic"]');
   if (acc && !acc.classList.contains('open')) acc.querySelector('.acc-head')?.click();
   const uitklap = document.querySelector('[data-expand="quake"]');
   if (uitklap && !uitklap.classList.contains('open')) uitklap.click();
@@ -12604,7 +12679,7 @@ function verlaatSketchTab(daarna) {
   // Op de verdwenen tab blijven staan geeft een leeg paneel.
   const tab = document.querySelector('.panel .tab[data-tab="sketch"]');
   if (tab?.classList.contains('active')) {
-    document.querySelector('.panel .tab[data-tab="lagen"]')?.click();
+    document.querySelector('.panel .tab[data-tab="filters"]')?.click();
   }
   const klaar = daarna || (() => {});
   const scherm = document.getElementById('sketch-editor');
@@ -12673,6 +12748,34 @@ viewStates.onChange((actief) => {
   }
 }
 /* SKETCH:END */
+
+/* DE TABRIJ VOLGT DE WEERGAVE (sessie 38, Terry).
+
+   In de magnetosfeer gaat de hele tabrij uit en blijven precies twee secties over:
+   `Magnetosphere` en `Axes & poles`. Die zitten allebei in het tabpanel `layers`.
+   Stond je op `Filters`, dan hield dat panel zijn `.show` terwijl zijn knop weg was
+   — en dan kijk je naar acht datalagen die daar allemaal uitstaan, zonder weg terug.
+   Precies de bug die sessie 36 opende, nu voor de andere tab.
+
+   DE CSS VERBERGT, DE JS KLIKT. Beide helften zijn nodig: een verborgen tabknop
+   verzet zijn eigen `.show` niet, want bedraadTabs() is de enige schrijver ervan en
+   hangt aan een klik die niet meer kan komen.
+
+   ALLEEN BIJ EEN ECHTE STATEWISSEL, en niet bij `goToView()`: `notify()` vuurt ook
+   als je binnen de magnetosfeer van camerastand wisselt, en dan hoort er niets te
+   verspringen. Zelfde vergelijking en dezelfde reden als bij het blok hierboven.
+
+   NIETS TERUGZETTEN BIJ TERUGKEER. Terra opent op de aarde en op `Filters`; waar je
+   stond is een omstandigheid en geen keuze. Zelfde regel als bij de tekentab. */
+let vorigeStateVoorTabrij = null;
+viewStates.onChange((actief) => {
+  const was = vorigeStateVoorTabrij;
+  vorigeStateVoorTabrij = actief;
+  if (actief === was) return;
+  if (viewStates.isActive('msphere')) {
+    document.querySelector('.panel .tab[data-tab="layers"]')?.click();
+  }
+});
 
 // responsive
 window.addEventListener('resize', () => {

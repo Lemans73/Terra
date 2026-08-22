@@ -952,11 +952,27 @@
      weg zonder dat de titel verscheen, dus was de paneelkop leeg op het kruisje
      na — terwijl de regel hierboven belooft dat hij er dan staat. Die belofte
      wordt hier waargemaakt, voor alle drie de weergaven tegelijk. */
-  body.space-on #panel-tabs,
-  body.sun-view #panel-tabs { display: none; }
-  body.msphere-on .panel .panel-title,
-  body.space-on .panel .panel-title,
-  body.sun-view .panel .panel-title { display: block; }
+  /* IN SUN EN SPACE VERDWIJNT HET PANEEL HELEMAAL (sessie 38, Terry), inclusief de
+     dockknop waarmee je het weer zou openen. Daar valt niets te bedienen: in Space
+     is de aardbol zelf verborgen en in Sun staat hij op 420 eenheden met alle
+     aardgebonden versiering uit.
+
+     ALLEEN VERBERGEN EN NIETS ONTHOUDEN. `panelOpenWanted` blijft staan wat het
+     was, dus een paneel dat open stond komt bij terugkeer vanzelf terug en een
+     paneel dat dicht stond blijft dicht. Dat scheelt de bewaar-en-teruggeef-lus
+     die stateVerbergHaken voor de lagen wel nodig heeft — daar verandert de state
+     de waarde, hier alleen de zichtbaarheid.
+
+     `#panel-open` OP ZIJN ID: `.dock-btn[hidden]` zet elders een expliciete
+     display, en een klasseselector zou daarvan verliezen. */
+  body.space-on .panel,
+  body.sun-view .panel,
+  body.space-on #panel-open,
+  body.sun-view #panel-open { display: none; }
+  /* Alleen de magnetosfeer houdt het paneel en heeft dus een titel nodig waar de
+     tabrij stond. Sun en Space stonden hier tot sessie 38 ook bij; die regels zijn
+     dood sinds het paneel daar in zijn geheel weg is. */
+  body.msphere-on .panel .panel-title { display: block; }
   .panel .tabs, .detail-panel .tabs {
     flex: 1 1 auto; min-width: 0;
     display: flex; gap: 4px; margin: 0; padding: 3px;
@@ -2481,7 +2497,12 @@
      De tabrij gaat uit via zijn id en niet via `.panel .tabs`: een selector die
      de plek noemt breekt stil bij een verhuizing, en dat is in sessie 25 al een
      keer gebeurd. */
-  body.msphere-on [data-acc="layers-list"],
+  /* HET HELE FILTERS-TABPANEL, en niet zijn secties een voor een (sessie 38).
+     Sinds de splitsing draagt dat panel vier accordeons in plaats van een; ze een
+     voor een noemen zou betekenen dat een vijfde er stil doorheen glipt. De JS
+     dwingt hier bovendien de tab `Layers` af, maar CSS is de tweede verdediging:
+     dezelfde tweeledige vorm die de tekentab in sessie 36 nodig had. */
+  body.msphere-on .panel .tabpanel[data-panel="filters"],
   body.msphere-on [data-acc="earth-overlays"],
   body.msphere-on [data-acc="sky-projections"],
   body.msphere-on [data-acc="cosmos-layers"],
@@ -3207,11 +3228,10 @@
     .panel .tab[data-tab="sketch"],
     .panel .tabpanel[data-panel="sketch"],
     .sketch-editor { display: none !important; }
-    /* Met Sketch verborgen en Settings en Almanac verhuisd (sessie 25) blijft er
-       in dit paneel precies ÉÉN tab over, en een tabrij met één tab is ruis. Het
-       Details-paneel houdt zijn drie tabs; die staan hier niet tussen. */
-    .panel .tabs { display: none !important; }
-    .panel .panel-title { display: block; }
+    /* DE TABRIJ BLIJFT HIER SINDS SESSIE 38. Tot dan bleef er met de tekentab
+       verborgen precies ÉÉN tab over en was de rij ruis; sinds de splitsing zijn
+       het er twee — Filters en Layers — en dat is geen ruis maar navigatie. De
+       paneeltitel gaat juist wél weg, want de actieve tab zegt nu waar je bent. */
   }
   /* TEKENEN HOORT BIJ DE AARDE ALS KAART (sessie 36, Terry).
 
