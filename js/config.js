@@ -214,8 +214,49 @@ export const PARAMS = {
   lightningPulse: 0.75,    // puls-diepte (0 = geen puls, 1 = vol)
   lightningPulseSpeed: 12, // puls-snelheid
   // wolken — zwevende transparante schil + schaduw op het oppervlak
-  cloudAltitude: 0.02,  // hoogte van de wolkenschil (fractie van de straal)
+  /* HOOGTE VAN DE WOLKENSCHIL — straal 103,5, oftewel 223 km. Dat is onfysiek en
+     met opzet: echte wolkentoppen zitten op 12 a 18 km, wat straal 100,2 zou geven,
+     en daar mag de schil niet komen. De overlays liggen op 100,6 en de landnamen op
+     101,6; die zouden er dwars overheen tekenen.
+
+     DEZE STAPELING IS EEN LEESBAARHEIDSSTAPELING EN GEEN FYSISCHE. De hoogtes worden
+     bepaald door wie boven wie moet liggen. Wie hier iets verzet, verzet een
+     tekenvolgorde — en dat is meteen de reden dat omhoog mag: er valt geen realisme
+     te verliezen dat er is. Van 0,020 naar 0,035 verdubbelt de parallax aan de
+     limbus van 2 naar 3,5 procent, en dat is wat de diepte doet.
+
+     LET OP: de SHADER rekent wel met de echte hoogte. Zie de schemeringsdip van 3,21
+     graden in CLOUD_FRAG — die hoort bij 10 km en moet daar blijven. */
+  cloudAltitude: 0.035,
   cloudOpacity: 1.0, cloudShadow: 1.0, cloudSpeed: 0.001,
+  /* DE WOLKEN LOSSEN OP WAAR JE KIJKT (sessie 37).
+
+     Het dek dekte de indicatoren af, en dat is precies waar je ze wilt lezen. In
+     plaats van de schil hard uit te zetten lost hij op rond het punt waar je naar
+     kijkt en blijft hij aan de horizon staan — wat je ook ziet als je echt door een
+     wolkendek zakt.
+
+     DE STUURGROOTHEID IS DE AFSTAND CAMERA-TOT-FRAGMENT, en dat is de hele truc:
+     die draagt zoom én kijkhoek in één getal. Het punt recht onder de camera staat
+     altijd dichterbij dan de limbus, dus één drempelpaar levert tegelijk het gat en
+     de horizon.
+
+     DE DREMPELS SCHALEN MEE MET DE HOOGTE BOVEN DE SCHIL en zijn geen vaste
+     afstanden. Dat moet wel: sinds `zoomMinDistance` op 102 staat loopt de afstand
+     tot het dichtstbijzijnde wolkenfragment van 346 (camera op 450) naar een halve
+     eenheid. Een vast paar zou over dat bereik onbruikbaar zijn. Met een factor is
+     het effect zelfgelijkvormig — het gat houdt bij elke hoogte dezelfde hoekmaat.
+
+     DE POORT zet het geheel uit zodra je ver weg staat, want ver uitgezoomd hoort
+     het dek gewoon dicht te zijn. Boven `cloudFadeGateFar` verandert er niets,
+     onder `cloudFadeGateNear` werkt het vol.
+
+     Zak je ONDER de schil, dan valt de hoogte tegen nul en staat het dek boven je
+     hoofd weer dicht. Dat is bedoeld: van onderaf wil je het juist zien. */
+  cloudFadeNearK: 0.6,      // dichterbij dan (deze factor x hoogte) -> volledig opgelost
+  cloudFadeFarK: 2.5,       // verder dan (deze factor x hoogte) -> onaangeroerd
+  cloudFadeGateNear: 140,   // camera-afstand waaronder de fade vol werkt
+  cloudFadeGateFar: 200,    // camera-afstand waarboven er niets gebeurt
   /* aurora — de OVATION-ovaal als schil boven de wolken.
 
      KLEUR VOLGT DE RAUWE KANS, HELDERHEID DE GAMMA DAARVAN. Die twee gescheiden
@@ -239,7 +280,12 @@ export const PARAMS = {
                             nergens op slaan.
        auroraFloor 0        Geen ondergrens. Nodig is hij niet: cellen met waarde
                             nul geven alpha nul en vallen al weg op de alfatoets. */
-  auroraAltitude: 0.027,   // straal 102,7 — boven de wolken (102), fysiek ~170 km
+  /* Straal 104,5 = 287 km, en dat is de enige hoogte in de hele stapeling die WEL
+     fysiek klopt. De echte aurorazone loopt van 100 tot 400 km — in deze eenheden
+     0,0157 tot 0,063 — en 0,027 zat daar onderin. Hij mocht dus fors mee omhoog met
+     de wolken en blijft de hele weg waar. Hij MOET boven de wolkenschil (103,5)
+     blijven; die volgorde draagt de stapeling. */
+  auroraAltitude: 0.045,
   auroraGain: 2.5,         // DE knop voor felheid: alpha wordt op 1 geklemd, de kleur niet
   auroraOpacity: 1,
   auroraGamma: 2,          // helderheid = kans^(1/gamma); hoger = zwak licht eerder zichtbaar
@@ -273,6 +319,26 @@ export const PARAMS = {
   iconScalePow: 1.55,  // steilheid (>1 = agressiever; diep inzoomen krimpt sneller)
   iconScaleMin: 0.4,   // ondergrens (sterk ingezoomd)
   iconScaleMax: 1.9,   // bovengrens (ver uitgezoomd)
+  /* DE NABIJHEIDSKLEM (sessie 37) — en dit is waarom `zoomMinDistance` op 155 stond.
+
+     GEMETEN 2026-08-22. De machtscurve hierboven houdt een marker van camera-afstand
+     450 tot 168 op een hoekstraal van 0,8 à 1,0 graad: schermvast, precies zoals
+     bedoeld. Op 168 raakt hij `iconScaleMin` en bevriest de wereldgrootte, terwijl de
+     grond blijft naderen. Vanaf daar loopt de hoekstraal weg:
+
+         camera-afstand   168    155    125    110    102
+         hoekstraal       1,0°   1,1°   2,5°   7,0°   64,3°
+
+     De halve verticale fov is 25 graden, dus op 102 bedekt één vulkaan méér dan het
+     hele scherm — gezien als een vlak geel beeld. Dat is de werkelijke reden dat er
+     niet dichterbij gezoomd mocht worden; de near-plane, waar het commentaar bij
+     `zoomMinDistance` naar wees, is gemeten en in orde.
+
+     De klem hieronder begrenst de schaal evenredig met de afstand tot de glyph, wat
+     de hoekgrootte begrensd houdt. 0,0080 is zo gekozen dat hij bóven 155 NIET bijt:
+     op 155 geeft hij 0,428 tegen een curve-waarde van 0,400. Boven die afstand
+     verandert er dus niets — dat is meteen de tegenmeting bij elke wijziging hier. */
+  iconNearScalePerUnit: 0.0080,
   /* DE LABELS KRIMPEN MEE MET DE BOL (sessie 25) — schaal = clamp(fitAarde/camDist,
      min, max), met `fitAarde` de afstand waarop de hele aarde net in beeld past.
 
@@ -486,13 +552,43 @@ export const PARAMS = {
   //
   // De praktijkwaarden vóór deze grenzen bestonden liepen van ongeveer 169 tot 438.
   //
-  // NIET ZOMAAR VERRUIMEN. Behalve bruikbaarheid dekt `zoomMinDistance` ook een
-  // renderfout af: diep ingezoomd en dan pannen over het oppervlak geeft zwarte
-  // clipping. Zolang die niet apart is opgelost (vermoedelijk de near-plane van de
-  // camera in verhouding tot de bolstraal), is deze ondergrens de werkende omweg.
-  // Wie hem verlaagt, krijgt die zwarte vlakken terug.
-  zoomMinDistance: 155,
+  // NIET ZOMAAR VERRUIMEN — maar om een andere reden dan hier tot sessie 37 stond.
+  // Er stond dat deze grens een renderfout afdekte, "vermoedelijk de near-plane van
+  // de camera in verhouding tot de bolstraal". GEMETEN 2026-08-22, live in de app:
+  // `camera.near` is 0,05 en `far` 125.000, op een 24-bits dieptebuffer in WebGL2.
+  // De diepteresolutie aan het oppervlak komt daarmee op ~0,004 units (≈ 250 m).
+  // Daar is niets mis mee. Het gedocumenteerde recept klopt evenmin nog: `enablePan`
+  // staat in de aardweergave op false, dus "pannen over het oppervlak" kan er niet.
+  //
+  // DE ECHTE OORZAAK IS GEVONDEN, EN HET WAS GEEN RENDERFOUT. Op 155 raakt de
+  // icoonschaal zijn ondergrens `iconScaleMin` (gemeten: dat gebeurt op 168), en
+  // daaronder bevriest de wereldgrootte van elke marker terwijl de grond blijft
+  // naderen. Op afstand 102 heeft één vulkaan een hoekstraal van 64 graden tegen
+  // een halve fov van 25 — een vlak, effen beeld dat als "clipping" leest. Zwart of
+  // geel hangt er alleen van af welke glyph er toevallig vóór hangt.
+  //
+  // De nabijheidsklem bij `iconNearScalePerUnit` heft dat op: onder 155 blijft de
+  // hoekstraal op 1,19 graden staan in plaats van weg te lopen, en boven 155
+  // verandert er niets (gemeten, rij voor rij).
+  //
+  // Daarmee kon deze grens omlaag van 155 naar 102 — van 3504 km naar 127 km boven
+  // het oppervlak, en dwars door de wolkenschil op 103,5 heen. De vangrail eronder
+  // is `zoomFloorRadius`, die om het MIDDELPUNT meet en dus ook standhoudt als het
+  // draaipunt ooit gaat schuiven.
+  zoomMinDistance: 102,
   zoomMaxDistance: 450,
+  // ===== DE HARDE BODEM (sessie 37) =============================================
+  // Gemeten vanaf het MIDDELPUNT van de aarde, en dat onderscheid is het hele punt.
+  // `zoomMinDistance` hierboven gaat naar `OrbitControls.minDistance`, en die meet
+  // camera-tot-DRAAIPUNT. Zolang `zoomToCursor` uit staat en globe.gl het draaipunt
+  // bij elke 'change' op de oorsprong terugzet, vallen die twee samen — maar dat is
+  // een samenloop en geen garantie. Zet iemand pannen of zoom-to-cursor aan, dan
+  // schuift het draaipunt naar het oppervlak en zoom je met een keurig geldige
+  // `minDistance` alsnog de bol in.
+  //
+  // Dit is dus geen kijkwaarde maar een vangrail: onder de wolkenschil en ruim boven
+  // het oppervlak (100). Zie `houdCameraBovenDeAarde()` in index.html.
+  zoomFloorRadius: 101,
   // ===== ZON EN MAAN (sessie 14) ================================================
   // Afstanden zijn BEWUST niet realistisch. De echte maan staat op 60 aardstralen
   // (dus 6030 in deze eenheden) en de zon op 23.480 (2,3 miljoen). Op die schaal is

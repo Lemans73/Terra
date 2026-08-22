@@ -106,9 +106,11 @@ export function createAuroraLayer(THREE, opts = {}) {
   const mesh = new THREE.Mesh(new THREE.SphereGeometry(R, cfg.segments, cfg.segments >> 1), material);
   mesh.name = 'terra-aurora';
   mesh.visible = false;
-  // Expliciete renderOrder. Alle bolschillen delen hun bounding-middelpunt met
-  // de atmosfeer op straal 120, dus three kan ze niet op diepte sorteren en valt
-  // terug op objectvolgorde — dezelfde val die bij de hemelschijven beschreven staat.
+  // Expliciete renderOrder. Alle bolschillen delen hun bounding-middelpunt met de
+  // atmosfeer, dus three kan ze niet op diepte sorteren en valt terug op
+  // objectvolgorde — dezelfde val die bij de hemelschijven beschreven staat. (De
+  // 'straal 120' die hier tot sessie 37 stond klopte niet: die mesh staat op 100 met
+  // een `hollowRadius`-uniform. Het gedeelde middelpunt is het punt, niet de straal.)
   mesh.renderOrder = cfg.renderOrder;
 
   applyParams(cfg.params);

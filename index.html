@@ -3921,7 +3921,12 @@ const world = Globe()
   // verschil tussen 1 en 2 niet te zien; de rebuild wordt er wel merkbaar goedkoper van.
   .labelResolution(1)
   .atmosphereColor('#5b8fd4')
-  .atmosphereAltitude(0.2)
+  // 0,25 en niet 0,2 (sessie 37): een royalere gloed nu de schillen verder uit elkaar
+  // staan. LET OP bij het napluizen van oude noten — dit is GEEN schil op straal 120.
+  // Gemeten: three-globe zet er een SphereGeometry van straal 100 neer, BackSide, met
+  // een `hollowRadius`-uniform; de 120 die her en der in commentaar staat beschreef
+  // de visuele uitstraling en niet de mesh.
+  .atmosphereAltitude(0.25)
   // ---- Alle indicatoren als 3D-objecten in de customLayer ----
   // Aardbevingen: gloeiende magnitude-staaf + shockwave-shader-ring.
   // EONET-lagen: eigen geanimeerd glyph. Interactie via eigen raycaster.
@@ -4296,6 +4301,12 @@ function buildRealisticMaterial() {
         waterRipple:    { value: 0.45 }, // amplitude van de procedurele water-rimpel
         cloudDrift:    { value: 0 },     // horizontale wolken-offset (drift)
         cloudShadow:   { value: PARAMS.cloudShadow }, // sterkte wolk-schaduw op oppervlak
+        // De fade op wolken EN wolkenschaduw. Hier is de bron; de wolkenschil pakt
+        // dezelfde referenties over, zodat de tik ze op één plek bijwerkt en schil en
+        // schaduw per constructie nooit uit elkaar kunnen lopen.
+        cloudFadeNear: { value: 0 },
+        cloudFadeFar:  { value: 1 },
+        cloudFadeGate: { value: 0 },
         time:          { value: 0 },
         sunPosition:   { value: new T.Vector2() },
         globeRotation: { value: new T.Vector2() },
@@ -4350,10 +4361,19 @@ function setupCloudSphere() {
       sunDistanceKm:  shaderMaterial.uniforms.sunDistanceKm,
       moonDistanceKm: shaderMaterial.uniforms.moonDistanceKm,
       eclipseEnabled: shaderMaterial.uniforms.eclipseEnabled,
-      cloudOpacity:  { value: PARAMS.cloudOpacity }
+      cloudOpacity:  { value: PARAMS.cloudOpacity },
+      // Gedeelde referenties, net als cloudsTexture hierboven: de tik schrijft ze op
+      // het aarde-materiaal en de schil loopt vanzelf mee.
+      cloudFadeNear: shaderMaterial.uniforms.cloudFadeNear,
+      cloudFadeFar:  shaderMaterial.uniforms.cloudFadeFar,
+      cloudFadeGate: shaderMaterial.uniforms.cloudFadeGate
     },
     vertexShader: CLOUD_VERT, fragmentShader: CLOUD_FRAG,
-    transparent: true, depthWrite: false, side: THREE.FrontSide
+    // DoubleSide en niet FrontSide (sessie 37): de zoomgrens ligt sinds deze sessie
+    // ONDER de schil, dus je kunt eronder uitkomen. Met FrontSide werden de
+    // achterkanten weggeknipt en verdween het dek dan in zijn geheel. De onderzijde
+    // krijgt zijn eigen kleur in CLOUD_FRAG via `gl_FrontFacing`.
+    transparent: true, depthWrite: false, side: THREE.DoubleSide
   });
   cloudMesh = new THREE.Mesh(new THREE.SphereGeometry(R, 64, 48), mat);
   /* DE ZICHTBAARHEID METEEN, EN DAT IS DE KERN VAN EEN BUG UIT SESSIE 35.
@@ -5743,14 +5763,37 @@ function animateShader() {
   const _horizon = 100 / _camLen; // globe-straal = 100; dot > horizon = voorzijde
   // schermvaste icoonschaal (app-breed): grootte ∝ camera-afstand → ~constante
   // schermgrootte ongeacht zoom. Geklemd tegen extreme groottes.
-  const _iconScale = Math.min(PARAMS.iconScaleMax, Math.max(PARAMS.iconScaleMin,
+  let _iconScale = Math.min(PARAMS.iconScaleMax, Math.max(PARAMS.iconScaleMin,
     Math.pow(_camLen / PARAMS.iconScaleRef, PARAMS.iconScalePow)));
+  /* DE NABIJHEIDSKLEM. `iconScaleMin` bevriest de wereldgrootte vanaf camera-afstand
+     168, en daaronder groeit de hoekgrootte van een marker ongeremd — op 102 bedekt
+     één glyph het hele scherm. Zie de lange noot bij `iconNearScalePerUnit`.
+     Evenredig met de afstand tot de glyphschil, want dát is wat de hoekgrootte
+     bepaalt; `_camLen` meet tot het middelpunt en die twee lopen vlak boven het
+     oppervlak twee ordegroottes uiteen. Bijt niet boven afstand 155. */
+  const _hoogteBovenGlyphs = Math.max(0.001, _camLen - 101.5);
+  _iconScale = Math.min(_iconScale, PARAMS.iconNearScalePerUnit * _hoogteBovenGlyphs);
   // zoom-LOD-fractie: 0..1 deel per laag dat zichtbaar is (meer bij inzoomen).
   const _zf = Math.min(1, Math.max(0, (PARAMS.lodCamFar - _camLen) / Math.max(1, PARAMS.lodCamFar - PARAMS.lodCamNear)));
   const _lodFrac = PARAMS.lodFracOut + (1 - PARAMS.lodFracOut) * _zf;
   if (shaderMaterial && waveAnimate) shaderMaterial.uniforms.time.value = gt;
   if (shaderMaterial && shaderMaterial.uniforms.cloudDrift) {
     shaderMaterial.uniforms.cloudDrift.value = (gt * PARAMS.cloudSpeed) % 1.0; // wolken driften
+  }
+  /* DE DREMPELS VAN DE WOLKEN-FADE, één keer per frame. De redenering staat bij
+     `cloudFadeNearK` in js/config.js; hier alleen de omrekening. De hoogte boven de
+     schil is de maat, niet de afstand tot het middelpunt — daarmee is het effect
+     zelfgelijkvormig van 450 tot aan het dek. Onder de schil valt de hoogte tegen
+     nul en staat het dek weer dicht, wat van onderaf ook hoort. */
+  if (shaderMaterial && shaderMaterial.uniforms.cloudFadeNear) {
+    const _schilStraal = 100 * (1 + PARAMS.cloudAltitude);
+    const _hoogte = Math.max(0.001, _camLen - _schilStraal);
+    const _u = shaderMaterial.uniforms;
+    _u.cloudFadeNear.value = PARAMS.cloudFadeNearK * _hoogte;
+    _u.cloudFadeFar.value  = PARAMS.cloudFadeFarK  * _hoogte;
+    _u.cloudFadeGate.value = Math.min(1, Math.max(0,
+      (PARAMS.cloudFadeGateFar - _camLen)
+      / Math.max(1, PARAMS.cloudFadeGateFar - PARAMS.cloudFadeGateNear)));
   }
 
   // indicatoren animeren; verwijderde objecten (uit scene) opruimen
@@ -8108,6 +8151,35 @@ function ensureTargetLock() {
   t.__terraLocked = true;
 }
 ensureTargetLock();
+
+/* DE HARDE BODEM OM HET AARDMIDDELPUNT (sessie 37, Terry).
+
+   `OrbitControls.minDistance` bewaakt de afstand camera-tot-DRAAIPUNT. In de
+   aardweergave valt dat vandaag samen met de afstand tot het middelpunt, want
+   `zoomToCursor` staat uit en globe.gl zet het draaipunt bij elke 'change' terug
+   op de oorsprong (zie het slot hierboven). Dat is een samenloop en geen belofte:
+   gaat pannen of zoom-to-cursor ooit aan, dan schuift het draaipunt naar het
+   oppervlak en zoom je met een geldige `minDistance` dwars de bol in.
+
+   Vandaar een tweede grens die WEL om het middelpunt meet, en die daarmee doet wat
+   `minDistance` alleen bij toeval doet.
+
+   AAN 'change' EN NIET AAN DE TIK. OrbitControls vuurt dat event vanuit `update()`,
+   dus vóór de render van hetzelfde frame. In `animateShader()` — een eigen
+   rAF-lus — zou een doorbraak één frame lang zichtbaar zijn.
+
+   ALLEEN IN DE AARDWEERGAVE. In Space is de bol verborgen en mag je tot halverwege
+   Mercurius' baan komen (zie js/states/space.js), in Sun staat hij op 420, en in de
+   magnetosfeer sta je op tientallen aardstralen. Een bodem om de oorsprong slaat
+   daar nergens op — en tijdens een vlucht evenmin, want die stuurt de camera zelf. */
+function houdCameraBovenDeAarde() {
+  if (inZonAanzicht() || inSpaceAanzicht() || inMagnetosfeer() || sunFlight.actief) return;
+  const cam = world.camera();
+  const r = cam.position.length();
+  if (!(r > 0) || r >= PARAMS.zoomFloorRadius) return;
+  cam.position.multiplyScalar(PARAMS.zoomFloorRadius / r);
+}
+world.controls().addEventListener('change', houdCameraBovenDeAarde);
 
 /* HET SNELHEIDSSLOT — dezelfde vorm als het slot hierboven, en om een verwante
    reden: globe.gl schrijft óók hier iets terug dat voor de aardweergave klopt

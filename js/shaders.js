@@ -40,6 +40,7 @@ export const dayNightShader = {
     varying vec3 vWorldNormal;
     varying vec2 vUv;
     varying vec3 vViewDir;
+    varying float vCamDist;
     void main() {
       vNormal = normalize(normalMatrix * normal);
       // De normaal in ECHTE WERELDRUIMTE, zonder de camera erin. Nodig voor de
@@ -56,6 +57,8 @@ export const dayNightShader = {
       vUv = uv;
       vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
       vViewDir = normalize(-mvPosition.xyz);
+      // Zelfde grootheid als in CLOUD_VERT, voor de fade op de wolkenSCHADUW.
+      vCamDist = length(mvPosition.xyz);
       gl_Position = projectionMatrix * mvPosition;
     }
   `,
@@ -74,6 +77,15 @@ export const dayNightShader = {
     uniform float nightBrightness;
     uniform float cloudDrift;
     uniform float cloudShadow;
+    /* DEZELFDE DRIE ALS IN CLOUD_FRAG, en dat is geen dubbeling maar een
+       voorwaarde. Lost de schil dichtbij op terwijl de SCHADUW blijft staan, dan
+       hou je donkere vegen over zonder wolk erboven — precies waar het beeld
+       leesbaar moest worden. Schil en schaduw horen dus dezelfde fade te krijgen.
+       Het oppervlak ligt een paar eenheden onder de schil, dus één drempelpaar
+       volstaat voor allebei. */
+    uniform float cloudFadeNear;
+    uniform float cloudFadeFar;
+    uniform float cloudFadeGate;
     uniform float normalStrength;
     uniform float reliefStrength;
     uniform float glintStrength;
@@ -97,6 +109,7 @@ export const dayNightShader = {
     varying vec3 vWorldNormal;
     varying vec2 vUv;
     varying vec3 vViewDir;
+    varying float vCamDist;
 
     float toRad(in float a) { return a * PI / 180.0; }
 
@@ -287,6 +300,8 @@ export const dayNightShader = {
       // (alleen dagzijde). De heldere wolken zelf zitten op de aparte schil-mesh.
       if (hasClouds > 0.5) {
         float cloud = texture2D(cloudsTexture, vec2(vUv.x + cloudDrift, vUv.y)).r;
+        // De schaduw dooft mee met de schil; zie de noot bij cloudFadeNear.
+        cloud *= mix(1.0, smoothstep(cloudFadeNear, cloudFadeFar, vCamDist), cloudFadeGate);
         surface *= (1.0 - cloudShadow * cloud * dayMix);
       }
 
@@ -311,12 +326,17 @@ export const CLOUD_VERT = `
   varying vec3 vNormal;
   varying vec3 vWorldNormal;
   varying vec2 vUv;
+  varying float vCamDist;
   void main() {
     vNormal = normalize(normalMatrix * normal);
     // Wereldruimte-normaal voor de eclipsschaduw; zie de noot in dayNightShader.
     vWorldNormal = normalize(mat3(modelMatrix) * normal);
     vUv = uv;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    vec4 mv = modelViewMatrix * vec4(position, 1.0);
+    // De view-matrix is star (alleen draaien en verschuiven), dus de lengte in
+    // view-ruimte IS de afstand camera-tot-fragment in wereld-eenheden.
+    vCamDist = length(mv.xyz);
+    gl_Position = projectionMatrix * mv;
   }
 `;
 export const CLOUD_FRAG = `
@@ -334,9 +354,17 @@ export const CLOUD_FRAG = `
   uniform float sunDistanceKm;
   uniform float moonDistanceKm;
   uniform float eclipseEnabled;
+  /* DE OPLOSSING PER FRAGMENT (sessie 37). Drempels in wereld-eenheden, elk frame
+     door de tik meegeschaald met de hoogte van de camera boven de schil, plus een
+     poort die het effect uitzet zodra je ver weg staat. De redenering staat bij
+     cloudFadeNearK in js/config.js. */
+  uniform float cloudFadeNear;
+  uniform float cloudFadeFar;
+  uniform float cloudFadeGate;
   varying vec3 vNormal;
   varying vec3 vWorldNormal;
   varying vec2 vUv;
+  varying float vCamDist;
   float toRad(in float a) { return a * PI / 180.0; }
   vec3 Polar2Cartesian(in vec2 c) {
     float theta = toRad(90.0 - c.x);
@@ -361,8 +389,15 @@ export const CLOUD_FRAG = `
     float dayF = smoothstep(-0.3618, -0.0704, intensity);
 
     // Zonsverduistering, identiek aan dayNightShader: wereldruimte, afstand tot de
-    // schaduwas. De wolkenschil ligt 0,5 eenheden boven het oppervlak, wat op deze
-    // schaal ruim binnen de umbra valt — de aardstraal van 6371 volstaat dus.
+    // schaduwas.
+    //
+    // DE 6371 IS DE ECHTE AARDSTRAAL EN BLIJFT DAT, ook al ligt de schil zelf op
+    // 3,5 eenheden (223 km) boven het oppervlak. Dat is geen slordigheid maar het
+    // beginsel van deze laag: de MEETKUNDE toont een overdreven hoogte omdat de
+    // tekenvolgorde dat vraagt, de SHADER rekent met de echte. De umbra is maar
+    // 0 tot 100 km breed, dus de schilstraal hierin schuiven zou de verduistering
+    // meetbaar verkeerd plaatsen. Zelfde reden dat de schemeringsdip hierboven op
+    // 3,21 graden staat (= 10 km) en niet op de 10,6 die bij 223 km hoort.
     if (eclipseEnabled > 0.5) {
       vec3 M = normalize(Polar2Cartesian(moonPosition)) * moonDistanceKm;
       vec3 S = normalize(Polar2Cartesian(sunPosition)) * sunDistanceKm;
@@ -381,8 +416,23 @@ export const CLOUD_FRAG = `
 
     float cloud = texture2D(cloudsTexture, vec2(vUv.x + cloudDrift, vUv.y)).r;
     float alpha = cloud * cloudOpacity * (0.2 + 0.8 * dayF); // 's nachts bijna transparant
+    // Dichtbij oplossen, veraf onaangeroerd. De limbus staat verder weg dan het punt
+    // recht onder de camera, dus dit ene getal geeft tegelijk het gat boven je hoofd
+    // en het dek dat aan de horizon blijft staan.
+    alpha *= mix(1.0, smoothstep(cloudFadeNear, cloudFadeFar, vCamDist), cloudFadeGate);
     if (alpha < 0.01) discard;
-    vec3 col = mix(vec3(0.05, 0.06, 0.09), vec3(1.0), dayF); // donker 's nachts, wit overdag
+    /* DE ONDERZIJDE (sessie 37). Sinds de zoomgrens onder de schil ligt, kun je
+       onder het dek uitkomen en kijk je tegen de achterkant aan. Met FrontSide
+       was daar niets te zien: de achterkanten werden weggeknipt en het dek
+       verdween in zijn geheel, ook aan de horizon. Vandaar DoubleSide op de
+       mesh, en hier het onderscheid.
+
+       De onderkant van een wolkendek vangt geen direct zonlicht maar strooilicht
+       van onderaf: grijzer, vlakker en donkerder dan de bovenkant. Vandaar een
+       eigen menging in plaats van dezelfde witte. */
+    vec3 col = gl_FrontFacing
+      ? mix(vec3(0.05, 0.06, 0.09), vec3(1.0), dayF)   // bovenkant: donker 's nachts, wit overdag
+      : mix(vec3(0.04, 0.045, 0.06), vec3(0.55, 0.56, 0.60), dayF); // onderkant: grijs strooilicht
     gl_FragColor = vec4(col, alpha);
   }
 `;

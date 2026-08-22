@@ -40,10 +40,13 @@
    `depthTest` blijft AAN: de bol is ondoorzichtig en hoort de achterste
    helft van beide banden weg te klippen.
 
-   `renderOrder` is hier VERPLICHT en niet netjes: globe.gl's
-   atmosfeer-gloed staat op straal 120 — midden in de radiale spanwijdte
-   van deze banden — en heeft hetzelfde bounding-middelpunt, dus three
-   kan de drie niet op diepte sorteren en valt terug op objectvolgorde.
+   `renderOrder` is hier VERPLICHT en niet netjes: globe.gl's atmosfeer-gloed
+   deelt zijn bounding-middelpunt met deze banden, dus three kan de drie niet op
+   diepte sorteren en valt terug op objectvolgorde. (Tot sessie 37 stond hier dat
+   die gloed 'op straal 120' zou liggen. Gemeten: de mesh is een SphereGeometry van
+   straal 100 met BackSide en een `hollowRadius`-uniform; 120 was de visuele
+   uitstraling, niet de meetkunde. Aan de conclusie verandert dat niets — het
+   gedeelde middelpunt is wat de sortering onmogelijk maakt.)
 
    ------------------------------------------------------------
    DE OPBOUW: EEN KEER BOUWEN, PER TIK ALLEEN DRAAIEN.
