@@ -571,6 +571,15 @@ export const PARAMS = {
   // hoekstraal op 1,19 graden staan in plaats van weg te lopen, en boven 155
   // verandert er niets (gemeten, rij voor rij).
   //
+  // EN ER WAS WEL DEGELIJK EEN TWEEDE, ECHTE RENDERFOUT — alleen niet de near-plane.
+  // De fresnel in `dayNightShader` deed `pow(1.0 - dot(n, v), 2.5)`. Recht op het
+  // oppervlak kijken geeft dot = 1, door afronding soms nét meer, en dan is de basis
+  // negatief: in GLSL ongedefinieerd, dus NaN, die bloom over het halve beeld
+  // uitsmeert en de grade-pass zwart maakt. GEMETEN op straal 105: 85,1 % zwart, met
+  // de basis geklemd 0 %, teruggedraaid weer 85,1 %. Ver weg raakte dit hooguit een
+  // handvol pixels; pas van dichtbij wordt het gebied waar dot tegen 1 aan ligt groot
+  // genoeg om op te vallen. DAT was het flikkerende zwarte vlak. Zie js/shaders.js.
+  //
   // Daarmee kon deze grens omlaag van 155 naar 102 — van 3504 km naar 127 km boven
   // het oppervlak, en dwars door de wolkenschil op 103,5 heen. De vangrail eronder
   // is `zoomFloorRadius`, die om het MIDDELPUNT meet en dus ook standhoudt als het

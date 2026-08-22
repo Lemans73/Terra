@@ -306,7 +306,24 @@ export const dayNightShader = {
       }
 
       // fresnel-atmosfeer aan de rand, getint naar zon-positie
-      float fresnel = pow(1.0 - max(dot(baseNormal, normalize(vViewDir)), 0.0), 2.5);
+      //
+      // DE BUITENSTE max() IS GEEN NETHEID MAAR EEN VANGRAIL. Kijk je recht op het
+      // oppervlak, dan is dot(normaal, kijkrichting) gelijk aan 1 — en door
+      // afronding soms een haartje MEER. Dan wordt de basis negatief, en pow() met
+      // een niet-gehele exponent is voor een negatieve basis in GLSL ONGEDEFINIEERD.
+      // Het resultaat is NaN. Het HDR-doel van de composer bewaart die, bloom smeert
+      // hem over vijf blur-niveaus uit, en de grade-pass maakt er zwart van.
+      //
+      // GEMETEN sessie 37, camera op straal 105: 85,1 % van het beeld zwart; met de
+      // klem 0 %; teruggedraaid weer 85,1 %. Het werd pas zichtbaar toen de zoomgrens
+      // van 155 naar 102 ging: hoe dichter de camera bij het oppervlak staat, hoe
+      // groter het schermgebied waar dat inproduct tegen 1 aan ligt. Ver weg raakte
+      // het hooguit een handvol pixels, en bloom smeerde die onzichtbaar uit.
+      //
+      // Dit is exact dezelfde fout die globe.gl's atmosfeer heeft (exponent 3,5) —
+      // zie de lange noot bij atmosphereOff in index.html. Wie hier een pow()
+      // toevoegt: klem de basis.
+      float fresnel = pow(max(1.0 - max(dot(baseNormal, normalize(vViewDir)), 0.0), 0.0), 2.5);
       float twilight = smoothstep(-0.4, 0.2, baseIntensity) * (1.0 - smoothstep(0.2, 0.6, baseIntensity));
       vec3 atmColor = mix(atmosphereDayColor, atmosphereTwilightColor, twilight);
       surface += atmColor * fresnel * (0.3 + 0.7 * dayMix);
@@ -458,7 +475,11 @@ export const FOG_FRAG = `
   varying vec3 vNormal;
   varying vec3 vViewDir;
   void main() {
-    float f = pow(1.0 - max(dot(normalize(vNormal), normalize(vViewDir)), 0.0), fogPower);
+    // Basis geklemd, om exact dezelfde reden als bij de fresnel in dayNightShader:
+    // het inproduct kan net boven 1 uitkomen en pow() met een negatieve basis is in
+    // GLSL ongedefinieerd. Deze schil staat standaard uit, maar hij is een werkende
+    // optie en zou bij diep inzoomen dezelfde zwarte vlakken geven.
+    float f = pow(max(1.0 - max(dot(normalize(vNormal), normalize(vViewDir)), 0.0), 0.0), fogPower);
     float a = clamp(f * fogStrength, 0.0, 1.0);
     if (a < 0.002) discard;
     gl_FragColor = vec4(fogColor, a);
