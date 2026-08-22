@@ -4010,7 +4010,7 @@ const world = Globe()
   .customThreeObjectUpdate((obj, d) => {
     // Deskundig: ÁLLE indicatoren op één basis-hoogte, net boven de land-polygons,
     // zodat ze nooit door de kaart worden afgedekt. Realistisch blijft ongewijzigd.
-    const alt = globeMode === 'expert' ? PARAMS.expertIndicatorAlt
+    const alt = globeMode === 'expert' ? expertIndicatorAltitude()
       : d.layer === 'quake' ? 0.002
       : d.layer === 'lightning' ? PARAMS.cloudAltitude // bliksem zit ín de wolkenschil
       : 0.006; // staaf-basis vlak op het oppervlak
@@ -5847,6 +5847,9 @@ function zetZonGloed(cam) {
    aanroepen overleven; `null` betekent "eerste frame", en die krijgt dt = 0
    in plaats van de tijd sinds het opstarten. */
 let _windVorig = null;
+// Laatste camera-afstand waarop de indicatorhoogte in de schematische weergave is
+// bijgewerkt; zie de noot in animateShader().
+let _glyphAltCamLen = -1;
 
 function animateShader() {
   const gt = performance.now() / 1000;
@@ -5900,6 +5903,22 @@ function animateShader() {
       / Math.max(1, PARAMS.cloudFadeGateFar - PARAMS.cloudFadeGateNear)));
   }
 
+  /* DE INDICATOREN VOLGEN HUN NIEUWE HOOGTE (sessie 38, schematisch).
+
+     `expertIndicatorAltitude()` hangt aan de camera-afstand, maar de plek waar hij
+     gelezen wordt — customThreeObjectUpdate — draait alleen als de DATA verandert.
+     Zonder deze lus zou een indicator zijn oude hoogte houden tot de volgende poll,
+     en dan alsnog verspringen.
+
+     ALLEEN BIJ EEN MERKBARE ZOOMWIJZIGING, en alleen in de schematische weergave. De
+     drempel van een kwart eenheid komt neer op een hoogteverschil van 0,003 eenheden
+     — ruim onder wat te zien is — en houdt de kosten op nul zodra de camera stilstaat.
+     Draaien verandert `_camLen` niet, dus slepen kost hier ook niets. */
+  let _glyphAlt = null;
+  if (globeMode === 'expert' && Math.abs(_camLen - _glyphAltCamLen) > 0.25) {
+    _glyphAltCamLen = _camLen;
+    _glyphAlt = expertIndicatorAltitude();
+  }
   // indicatoren animeren; verwijderde objecten (uit scene) opruimen
   for (let i = glyphList.length - 1; i >= 0; i--) {
     const g = glyphList[i];
@@ -5924,6 +5943,11 @@ function animateShader() {
       _lodMul = 1 + t * (PARAMS.lodScaleMin - 1);
     }
     g.scale.setScalar(_iconScale * _appear * _layerMul * _lodMul);
+    if (_glyphAlt != null) {
+      const _d = g.userData.d;
+      const _c = world.getCoords(_d.lat, _d.lng, _glyphAlt);
+      g.position.set(_c.x, _c.y, _c.z);
+    }
     // Verbergen gebeurt alleen nog bij focus-hover: dat is een expliciete keuze van de
     // bezoeker om één beving te isoleren, geen dichtheidsregeling.
     g.visible = !focusedQuake || g.userData.d.layer !== 'quake' || g.userData.d === focusedQuake;
@@ -6322,8 +6346,14 @@ function labelZoomState() {
 function labelTipAltitude() {
   const camLen = world.camera().position.length() || 1;
   const noemer = Math.max(1, PARAMS.labelLiftFrom - GLOBE_R);
-  return Math.max(0.004, Math.min(PARAMS.labelAltitude,
+  /* BOVEN OP DE VOET EN NIET ABSOLUUT. Dit gaf tot deze correctie een absolute
+     hoogte, en die kan LAGER uitvallen dan de voet van de lijn: diep ingezoomd in de
+     schematische weergave staat de voet op de indicator (0,013) terwijl de tip tegen
+     zijn ondergrens van 0,004 aanloopt. Het label hing dan onder zijn eigen
+     epicentrum. Als opslag bovenop de voet kan dat per constructie niet. */
+  const lift = Math.max(0.004, Math.min(PARAMS.labelAltitude,
     PARAMS.labelAltitude * (camLen - GLOBE_R) / noemer));
+  return labelBaseAltitude() + lift;
 }
 
 // Het kijkvenster in CSS-pixels, waarin de labels als DOM-elementen liggen.
@@ -6338,7 +6368,25 @@ function labelTipAltitude() {
    Dezelfde getallen als in customThreeObjectUpdate, waar de indicator zijn hoogte
    krijgt. Verandert die daar, dan hoort hij hier mee. */
 function labelBaseAltitude() {
-  return globeMode === 'expert' ? PARAMS.expertIndicatorAlt : 0.002;
+  return globeMode === 'expert' ? expertIndicatorAltitude() : 0.002;
+}
+
+/* DE HOOGTE VAN DE INDICATOREN IN DE SCHEMATISCHE WEERGAVE (sessie 38, Terry).
+
+   Zie de lange noot bij `expertIndicatorAltMin` in js/config.js: een vaste marge boven
+   de landvlakken kan niet allebei. Ver weg is 0,3 eenheden nodig tegen z-fighting;
+   dichtbij maakt diezelfde 0,3 dat de indicator los van de kaart lijkt te zweven en
+   bij het draaien wegschuift.
+
+   BOVEN `zoomMinDistance` KOMT ER ONVERANDERD 0,013 UIT. Dat is met opzet de grens van
+   de realistische weergave en niet die van de schematische: alles wat vóór deze sessie
+   bereikbaar was, hoort er precies zo uit te blijven zien. */
+function expertIndicatorAltitude() {
+  const camLen = world.camera().position.length() || 1;
+  const t = Math.min(1, Math.max(0,
+    (camLen - GLOBE_R) / Math.max(1, PARAMS.zoomMinDistance - GLOBE_R)));
+  return PARAMS.expertIndicatorAltMin
+       + (PARAMS.expertIndicatorAlt - PARAMS.expertIndicatorAltMin) * t;
 }
 
 function labelViewport() {

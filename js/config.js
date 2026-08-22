@@ -770,6 +770,26 @@ export const PARAMS = {
   // polygons (0.01) zodat symbolen nooit door de kaart worden afgedekt. De
   // aardbeving-staaf rijst vanaf deze hoogte verder de atmosfeer in.
   expertIndicatorAlt: 0.013,
+  /* DE MARGE BOVEN HET LAND SCHAALT MEE MET DE ZOOM (sessie 38, Terry).
+
+     De 0,013 hierboven is gedimensioneerd op VER UITGEZOOMD: de landvlakken liggen op
+     0,010 en de dieptebuffer heeft daar een resolutie van ~0,15 eenheden, dus die
+     marge van 0,3 eenheden is nodig om z-fighting te voorkomen.
+
+     Diep ingezoomd wordt diezelfde marge juist het probleem. Op camera-afstand 102
+     staat een indicator 0,7 eenheden van je af terwijl hij 0,3 boven het land zweeft:
+     een parallaxverhouding van 0,43. Kantel je het beeld, dan schuift de indicator
+     zichtbaar over de kaart weg — hij lijkt niet meer vast te zitten. Terwijl de
+     dieptebuffer daar een resolutie van 0,0000012 eenheden heeft en dus met een
+     fractie van die marge toe kan.
+
+     Vandaar een ondergrens die vlak boven de landvlakken ligt, met een lineaire
+     overgang ernaartoe. Boven `zoomMinDistance` komt er onveranderd 0,013 uit — dat
+     is meteen de scherpste toets bij een wijziging hier.
+
+     LET OP: 0,010 is de `polygonAltitude` van de landvlakken in index.html. Verandert
+     die, dan hoort deze mee. */
+  expertIndicatorAltMin: 0.0104,
   // aardbeving (deskundig): ring + staaf samen.
   //   kleur (ring+staaf) = magnitude · ring-straal = magnitude · staaf-hoogte = diepte
   expertQuakeRingBase: 1.5,    // ring-straal basis (units)
