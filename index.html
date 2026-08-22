@@ -5787,7 +5787,16 @@ function animateShader() {
      nul en staat het dek weer dicht, wat van onderaf ook hoort. */
   if (shaderMaterial && shaderMaterial.uniforms.cloudFadeNear) {
     const _schilStraal = 100 * (1 + PARAMS.cloudAltitude);
-    const _hoogte = Math.max(0.001, _camLen - _schilStraal);
+    /* DE AFSTAND TOT DE SCHIL, ABSOLUUT GENOMEN — en dat is een correctie op sessie
+       37 zelf. Hier stond `Math.max(0.001, _camLen - _schilStraal)`, wat onder de
+       schil naar nul klapte. Dan werden near en far allebei ongeveer nul, viel elk
+       fragment boven `far` en kwam de smoothstep op 1 uit: het dek werd juist
+       VOLLEDIG ONDOORZICHTIG zodra je erdoorheen zakte. Terry zag de wolken bij het
+       inzoomen verdwijnen en dieper weer terugkomen.
+       Met de absolute waarde is het gedrag symmetrisch: recht boven je hoofd blijft
+       het dek weg, en wat er overblijft is de scherprand aan de zijkanten — de
+       vignette die er van onderaf hoort te zijn. */
+    const _hoogte = Math.max(0.05, Math.abs(_camLen - _schilStraal));
     const _u = shaderMaterial.uniforms;
     _u.cloudFadeNear.value = PARAMS.cloudFadeNearK * _hoogte;
     _u.cloudFadeFar.value  = PARAMS.cloudFadeFarK  * _hoogte;
@@ -6158,7 +6167,7 @@ function positionHoverLabel(lblScale, verborgen, camDir, threshold) {
     // NIET nearSide(): die rekent op straal 100 en dit label hangt op labelAltitude.
     // Zie de noot bij `threshold` in positionLabels().
     if (_hoverDir.set(epi.x, epi.y, epi.z).normalize().dot(camDir) > threshold) {
-      tip = world.getScreenCoords(q.lat, q.lng, PARAMS.labelAltitude);
+      tip = world.getScreenCoords(q.lat, q.lng, labelTipAltitude());
       base = world.getScreenCoords(q.lat, q.lng, 0.0);
       zicht = true;
     }
@@ -6206,6 +6215,25 @@ function labelZoomState() {
   return { schaal, verborgen: camLen >= uit, frac: 1 - t };
 }
 
+/* DE HOOGTE VAN HET LABELPUNT, schermvast in plaats van wereldvast.
+   Zie de lange noot bij `labelLiftFrom` in js/config.js: boven die ijkafstand komt
+   hier onveranderd `PARAMS.labelAltitude` uit, eronder loopt de hoogte evenredig mee
+   met de afstand van de camera tot het oppervlak. De ondergrens houdt het label
+   boven de kaartlagen als je er bovenop staat. */
+function labelTipAltitude() {
+  const camLen = world.camera().position.length() || 1;
+  const noemer = Math.max(1, PARAMS.labelLiftFrom - GLOBE_R);
+  return Math.max(0.004, Math.min(PARAMS.labelAltitude,
+    PARAMS.labelAltitude * (camLen - GLOBE_R) / noemer));
+}
+
+// Het kijkvenster in CSS-pixels, waarin de labels als DOM-elementen liggen.
+function labelViewport() {
+  const w2 = (typeof world.width === 'function' && world.width()) || window.innerWidth || 1;
+  const h2 = (typeof world.height === 'function' && world.height()) || window.innerHeight || 1;
+  return { w: w2, h: h2, m: PARAMS.labelViewMargin };
+}
+
 function positionLabels() {
   const zoom = labelZoomState();
   const camPos = world.camera().position;
@@ -6218,7 +6246,10 @@ function positionLabels() {
      constante 45,2 graden, en precies zoveel te vroeg verdwenen de labels aan de
      rand. Zelfde correctie als bij de as-labels (positionAxisLabels), en de formule
      staat nu één keer in js/core/label-sprite.js in plaats van drie keer. */
-  const threshold = limbThreshold(GLOBE_R, GLOBE_R * (1 + PARAMS.labelAltitude), camPos.length());
+  // De tiphoogte is sinds sessie 37 niet meer constant, dus deze correctie ook niet:
+  // een lager labelpunt steekt minder ver over de horizon heen.
+  const _tipAlt = labelTipAltitude();
+  const threshold = limbThreshold(GLOBE_R, GLOBE_R * (1 + _tipAlt), camPos.length());
   // Het hover-label hangt niet aan labelQuakes en moet ook werken wanneer het
   // plafond op 0 staat of er nog geen data is — dus vóór de vroege return.
   // Het volgt dezelfde zoomregel: één label dat blijft hangen terwijl de rest weg
@@ -6241,6 +6272,7 @@ function positionLabels() {
   // alleen wat in beeld komt, en is het aantal constant terwijl je draait.
   // `camDir` en `threshold` staan bovenaan, want het hover-label heeft ze ook nodig.
   const items = [];
+  const vp = labelViewport();
   let getoond = 0;
   for (let idx = 0; idx < labelQuakes.length; idx++) {
     const q = labelQuakes[idx];
@@ -6251,14 +6283,31 @@ function positionLabels() {
     // nog iets te kunnen lezen. De INDICATOREN op de bol blijven in beide gevallen
     // gewoon staan; alleen de tekst gaat weg.
     const near = labelsOn && !zoom.verborgen && q.__dir && q.__dir.dot(camDir) > threshold;
-    const visible = near && getoond < K;
-    if (visible) getoond++;
+    /* EN DAARNA: STAAT HET EPICENTRUM OOK ECHT IN BEELD? (sessie 37, Terry)
+
+       `near` is een BOL-toets — ligt dit punt op de helft die naar ons toe staat.
+       Ver uitgezoomd valt die helft ongeveer samen met het scherm, en dan klopt het
+       budget. Ingezoomd is diezelfde helft vele malen groter dan het beeld, en ging
+       het plafond op aan bevingen die je niet ziet: met het maximum op 6 kreeg je er
+       twee op je scherm en verdwenen de andere vier over de rand — mét hun
+       stippellijn, die dan dwars door het beeld liep.
+
+       De toets staat VOOR de budgetteller en niet erna, om dezelfde reden als de
+       near-side-toets zelf: wat je niet ziet, hoort geen plek te bezetten. */
+    let visible = false, tip = null, base = null;
+    if (near) {
+      base = world.getScreenCoords(q.lat, q.lng, 0.0);
+      const inBeeld = base.x >= -vp.m && base.x <= vp.w + vp.m
+                   && base.y >= -vp.m && base.y <= vp.h + vp.m;
+      if (inBeeld && getoond < K) {
+        visible = true; getoond++;
+        tip = world.getScreenCoords(q.lat, q.lng, _tipAlt);
+      }
+    }
     el.style.display = visible ? 'block' : 'none';
     if (line) line.style.display = visible ? 'block' : 'none';
     if (dot) dot.style.display = visible ? 'block' : 'none';
     if (!visible) continue;
-    const tip = world.getScreenCoords(q.lat, q.lng, PARAMS.labelAltitude);
-    const base = world.getScreenCoords(q.lat, q.lng, 0.0);
     items.push({ el, line, dot, x: tip.x, y: tip.y, ty: tip.y, base });
   }
   // pass 2: stapelen — nabije aardbeving-labels worden verticaal uit elkaar geduwd,
@@ -6287,9 +6336,15 @@ function positionLabels() {
         }
       }
     }
-    // Boven de grens niet verder omhoog duwen maar weglaten: doorstapelen liet de
-    // kolom bij een dicht cluster het scherm uit groeien.
-    if (items[i].diepte >= PARAMS.labelStackMax) {
+    /* Boven de grens niet verder omhoog duwen maar weglaten: doorstapelen liet de
+       kolom bij een dicht cluster het scherm uit groeien.
+
+       SINDS SESSIE 37 IS ER EEN TWEEDE REDEN OM TE WIJKEN: de kolom kan ook boven de
+       BOVENRAND uitsteken zonder dat hij diep is, namelijk als het epicentrum zelf al
+       hoog in beeld staat. `labelStackMax` telt buren, niet pixels, en zag dat niet.
+       Een label dat half boven het scherm hangt is even onleesbaar als een te diepe
+       kolom. */
+    if (items[i].diepte >= PARAMS.labelStackMax || items[i].ty < vp.m) {
       items[i].weg = true;
       items[i].el.style.display = 'none';
       if (items[i].line) items[i].line.style.display = 'none';

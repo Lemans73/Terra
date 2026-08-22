@@ -251,8 +251,10 @@ export const PARAMS = {
      het dek gewoon dicht te zijn. Boven `cloudFadeGateFar` verandert er niets,
      onder `cloudFadeGateNear` werkt het vol.
 
-     Zak je ONDER de schil, dan valt de hoogte tegen nul en staat het dek boven je
-     hoofd weer dicht. Dat is bedoeld: van onderaf wil je het juist zien. */
+     DE MAAT IS DE ABSOLUTE AFSTAND TOT DE SCHIL, dus hij werkt aan beide kanten. Een
+     eerdere versie liet de hoogte onder de schil naar nul vallen, en dan werd het dek
+     juist volledig ondoorzichtig zodra je erdoorheen zakte. Van onderaf hoort er
+     alleen een subtiele rand over te blijven, geen dicht plafond. */
   cloudFadeNearK: 0.6,      // dichterbij dan (deze factor x hoogte) -> volledig opgelost
   cloudFadeFarK: 2.5,       // verder dan (deze factor x hoogte) -> onaangeroerd
   cloudFadeGateNear: 140,   // camera-afstand waaronder de fade vol werkt
@@ -580,11 +582,26 @@ export const PARAMS = {
   // handvol pixels; pas van dichtbij wordt het gebied waar dot tegen 1 aan ligt groot
   // genoeg om op te vallen. DAT was het flikkerende zwarte vlak. Zie js/shaders.js.
   //
-  // Daarmee kon deze grens omlaag van 155 naar 102 — van 3504 km naar 127 km boven
-  // het oppervlak, en dwars door de wolkenschil op 103,5 heen. De vangrail eronder
-  // is `zoomFloorRadius`, die om het MIDDELPUNT meet en dus ook standhoudt als het
-  // draaipunt ooit gaat schuiven.
-  zoomMinDistance: 102,
+  // Daarmee kon deze grens omlaag van 155 naar 120: van 3504 km naar 1274 km boven het
+  // oppervlak.
+  //
+  // WAAROM 120 EN NIET LAGER (Terry, sessie 37). Technisch kan de camera tot vlak
+  // boven de grond; wat het tegenhoudt is de TEXTUUR. Eén wereldtextuur van 8k geeft
+  // op deze hoogte al zichtbare vergroting, en daaronder wordt het pap. 120 is de
+  // stand waar het beeld nog draagt — nagemeten aan een opname van Terry.
+  //
+  // GEVOLG: je gaat NIET door de wolkenschil (103,5). De fade doet vanaf afstand 200
+  // al zijn werk, dus de leesbaarheid — het eigenlijke doel — is er gewoon. Wat er
+  // klaar blijft liggen voor als de textuur wél meekan: de schil is DoubleSide en
+  // CLOUD_FRAG heeft al een onderzijde. Zodra de grens onder 103,5 zakt werkt dat.
+  //
+  // De echte oplossing is tegel-gebaseerde beelden per zoomniveau in plaats van één
+  // wereldtextuur. Dat is een eigen onderwerp en staat gepland.
+  //
+  // De vangrail hieronder is `zoomFloorRadius`, die om het MIDDELPUNT meet en dus ook
+  // standhoudt als het draaipunt ooit gaat schuiven. Die blijft bewust op 101 staan:
+  // hij bewaakt de aardbol, niet de beeldkwaliteit.
+  zoomMinDistance: 120,
   zoomMaxDistance: 450,
   // ===== DE HARDE BODEM (sessie 37) =============================================
   // Gemeten vanaf het MIDDELPUNT van de aarde, en dat onderscheid is het hele punt.
@@ -660,6 +677,34 @@ export const PARAMS = {
   // 860). Wie er boven uitkomt wordt verborgen, niet verder omhoog geduwd.
   labelStackMax: 6,
   labelAltitude: 0.42, // hoogte (fractie straal) van het labelpunt — hoger = vrij van de indicatoren
+  /* DE LABELHOOGTE SCHAALT MEE MET DE ZOOM (sessie 37, Terry).
+
+     `labelAltitude` was een vaste hoogte: straal 142, ver boven het epicentrum. Dat
+     werkte zolang de camera nooit dichterbij dan 155 kwam. Sinds de zoomgrens omlaag
+     ging niet meer — op straal 105 ligt dat labelpunt 37 eenheden ACHTER de camera,
+     en dan schiet de stippellijn van het epicentrum naar het label dwars over het
+     scherm. Terry zag een waaier van kruisende lijnen.
+
+     De hoogte hoort schermvast te zijn en niet wereldvast. De schermafstand tussen
+     epicentrum en label is bij benadering hoogte/(camera-afstand tot het oppervlak);
+     die constant houden betekent dus dat de hoogte EVENREDIG met die afstand
+     meeloopt. Vandaar een ijkafstand in plaats van een tweede losse factor:
+
+       hoogte = labelAltitude x (camLen - 100) / (labelLiftFrom - 100),  geklemd op
+                labelAltitude
+
+     BOVEN `labelLiftFrom` VERANDERT ER NIETS. Dat is met opzet 280 en niet lager: het
+     gangbare kijkbereik ligt daarboven, en daar hoort dit werk onzichtbaar te zijn.
+     Dat is meteen de scherpste toets bij een wijziging hier — meet op 280, 350 en 450
+     en de schermposities moeten gelijk blijven aan de vorige versie. */
+  labelLiftFrom: 280,
+  /* Labels tellen alleen mee als hun EPICENTRUM in beeld staat, niet als het aan de
+     naar-ons-gekeerde kant van de bol ligt. Ver uitgezoomd valt dat samen; ingezoomd
+     is de halve bol vele malen groter dan het scherm, en dan ging het plafond op aan
+     bevingen die je helemaal niet ziet. Zet je het maximum op 6, dan hoor je er zes
+     te zien op de plek waar je kijkt. Marge in pixels, zodat een label dat half over
+     de rand valt nog meetelt. */
+  labelViewMargin: 80,
   // deskundig (schematische) modus — vlakke kaart-kleuren
   expertOcean: '#0e1b2a',   // effen oceaan-bol
   expertLand:  '#26323d',   // vlak land-vlak
