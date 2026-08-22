@@ -265,6 +265,18 @@ export const dayNightShader = {
       // uit (reliefStrength) → echte schaduw/highlight op hellingen i.p.v. een
       // wegvallende multiplier. Emboss faseert weg over de terminator.
       float macro = clamp(0.55 + 0.75 * max(baseIntensity, 0.0), 0.0, 1.4);
+      /* EN OOK DEZE MOET MEE ALS DE CYCLUS UIT STAAT (sessie 37, Terry).
+
+         dayMix hierboven regelt de MENGING van dag- en nachttextuur; macro regelt de
+         BELICHTING van de dagtextuur zelf. Die tweede liep buiten dayMix om, en dus
+         bleef er met de cyclus uit nog een schaduw staan: 0,55 op de nachthelft tegen
+         1,3 op het subsolaire punt, een factor 2,4. Dat is de donkere band rond de
+         terminator die Terry zag toen de nachthelft al weg was.
+
+         Vlak op 1,0 en niet op het maximum: de bol houdt dan de helderheid van een
+         normale dagzijde in plaats van overal uit te slaan. De emboss van het relief
+         blijft er los overheen liggen, dus de bol verliest zijn vorm niet. */
+      macro = mix(1.0, macro, dayNightCycle);
       float emboss = (bumpIntensity - baseIntensity) * reliefStrength;
       float relief = clamp(macro + emboss * dayMix, 0.2, 1.7);
       vec3 dayLayer = dayColor.rgb * relief * dayEnabled;
