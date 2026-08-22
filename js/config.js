@@ -373,26 +373,23 @@ export const PARAMS = {
   // labelCountCeiling.
   labelCountMax: 12,   // aantal beving-labels diep ingezoomd (meer detail)
   labelCountCeiling: 40, // bovengrens van de slider — zie de meting hieronder
-  // De pool die rebuildLabels() opbouwt, als veelvoud van het plafond. Groter dan het
-  // plafond omdat de selectie pas per frame gebeurt: welke bevingen naar ons toe
-  // gekeerd zijn hangt van de camera af, dus er moeten genoeg kandidaten klaarstaan
-  // om er ook na het draaien nog `K` over te houden.
-  //
-  // Waarom de factor zo hoog is — gemeten met 339 EMSC-events.
-  // Aantal near-side labels per poolgrootte, per camerastand:
-  //                    pool 54   pool 108   pool 216
-  //   Afrika               6        12         23
-  //   Egeische Zee         7        14         23
-  //   Japan               25        49         90
-  //   Chili               25        50         90
-  // De reden voor het verschil: EMSC is Euro-Med-gericht, dus zodra je van Europa
-  // wegdraait ligt het gros van de sterkste events achter de bol. Bij het plafond van
-  // 12 komt de pool op 144 en haalt elke stand het ruim; de tabel staat erbij omdat
-  // een hoger plafond de pool meeschaalt en de krapste stand (Afrika, Egeische Zee)
-  // dan de maat is. Met USGS erbij is de spreiding gelijkmatiger en is dit ruimer dan
-  // nodig — wat niets kost, want een verborgen label is één dot-product per frame.
-  labelPoolFactor: 12,
-  labelPoolMax: 220,   // dak op de pool — elk element is een div plus twee SVG-nodes
+  /* DE POOL IS ALLES WAT DOOR DE FILTERS KOMT, en dat is een correctie uit sessie 37.
+
+     Tot dan was de pool `labelBudget x labelPoolFactor` — met het maximum op 6 dus de
+     72 ZWAARSTE bevingen ter wereld. GEMETEN: van 288 bevingen zat de zwakste in die
+     pool op M3,8. Alles daaronder kon per definitie nooit een label krijgen, waar je
+     ook keek. Boven Europa is dat funest: EMSC levert daar veel M2 tot M3,5, die
+     vielen allemaal buiten de pool, en dan zag je NUL labels terwijl er tientallen
+     bevingen in beeld stonden.
+
+     Dat was een verborgen magnitude-drempel bovenop de filters, en die hoort er niet
+     te zijn: het paneel bepaalt welke bevingen meedoen, niet de labellaag.
+
+     Nu is elke gefilterde beving kandidaat en kiest positionLabels() daaruit de
+     zwaarste die in beeld staan. Het dak hieronder is een DOM-grens en geen
+     redactionele keuze — elk element is een div plus twee SVG-nodes. Boven dat dak
+     wint magnitude alsnog, maar bij zo'n dichte set heeft elke weergave kandidaten. */
+  labelPoolMax: 500,   // dak op de pool — elk element is een div plus twee SVG-nodes
   // De stapellus in positionLabels() is O(n²) in het aantal ZICHTBARE labels en
   // draait elk frame; 40 is de grens waar dat nog ruim binnen de begroting valt.
   labelCountDebounce: 120, // ms — slepen mag de DOM niet per stap laten herbouwen
@@ -693,11 +690,21 @@ export const PARAMS = {
        hoogte = labelAltitude x (camLen - 100) / (labelLiftFrom - 100),  geklemd op
                 labelAltitude
 
-     BOVEN `labelLiftFrom` VERANDERT ER NIETS. Dat is met opzet 280 en niet lager: het
-     gangbare kijkbereik ligt daarboven, en daar hoort dit werk onzichtbaar te zijn.
-     Dat is meteen de scherpste toets bij een wijziging hier — meet op 280, 350 en 450
-     en de schermposities moeten gelijk blijven aan de vorige versie. */
-  labelLiftFrom: 280,
+     DE IJKAFSTAND IS GELIJK AAN `zoomMaxDistance`, en dat is geen toeval: daarmee is
+     de schermafstand op ELKE stand precies die van volledig uitgezoomd. Eén regel
+     over het hele bereik, in plaats van een plafond dat halverwege gaat bijten.
+
+     GEMETEN waarom dat uitmaakt. Het labelpunt hangt boven het epicentrum, en op een
+     bol schuift een hoger punt bij het projecteren radiaal naar buiten. Hoe hoger het
+     label, hoe eerder het over de beeldrand valt — en dan is het label weg terwijl de
+     beving in beeld staat. Boven Europa op afstand 155, met het maximum op 6:
+
+         ijkafstand 280 -> 5 labels     ijkafstand 360 -> 6
+         ijkafstand 320 -> 6            ijkafstand 450 -> 6
+
+     Een andere waarde hier is dus niet alleen smaak: hij bepaalt hoeveel labels er
+     nog passen. Toets bij een wijziging altijd bovenstaande vier standen na. */
+  labelLiftFrom: 450,
   /* Labels tellen alleen mee als hun EPICENTRUM in beeld staat, niet als het aan de
      naar-ons-gekeerde kant van de bol ligt. Ver uitgezoomd valt dat samen; ingezoomd
      is de halve bol vele malen groter dan het scherm, en dan ging het plafond op aan

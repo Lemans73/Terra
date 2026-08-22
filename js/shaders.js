@@ -73,7 +73,11 @@ export const dayNightShader = {
     uniform float hasSpecular;
     uniform float hasNormal;
     uniform float dayEnabled;
-    uniform float nightEnabled;
+    /* DE DAG/NACHT-CYCLUS ALS GEHEEL (sessie 37, Terry). Dit heette nightEnabled en
+       zette alleen de nachtTEXTUUR uit — de stadslichten verdwenen en de nachtzijde
+       werd nog zwarter. Dat had weinig nut. Nu is 1 de normale cyclus en 0 een aarde
+       die overal in daglicht staat, zodat je de hele bol tegelijk kunt lezen. */
+    uniform float dayNightCycle;
     uniform float nightBrightness;
     uniform float cloudDrift;
     uniform float cloudShadow;
@@ -246,6 +250,10 @@ export const dayNightShader = {
       // Op de vier schemeringslijnen die js/sunmoon-layer.js tekent geeft dit nu
       // 1,000 / 0,734 / 0,251 / 0,000 op 0, -6, -12 en -18 graden zonhoogte.
       float dayMix = smoothstep(-0.309, -0.0145, baseIntensity);
+      // Staat de cyclus uit, dan is het overal dag. Dit gebeurt VOOR de eclips
+      // hieronder, met opzet: een zonsverduistering is een gebeurtenis en geen
+      // dagelijkse omwenteling, dus die hoort ook zonder cyclus zichtbaar te blijven.
+      dayMix = mix(1.0, dayMix, dayNightCycle);
       // De verduistering neemt zonlicht weg, dus hij werkt op dezelfde dayMix die
       // dag en nacht mengt. Gevolg: onder de umbra verschijnen de stadslichten van
       // de nachttextuur — precies wat er in het echt gebeurt wanneer het overdag
@@ -262,7 +270,9 @@ export const dayNightShader = {
       vec3 dayLayer = dayColor.rgb * relief * dayEnabled;
       // nachtzijde: stadslichten + instelbare ambient zodat het oppervlak zichtbaar blijft
       vec3 nightAmbient = dayColor.rgb * nightBrightness; // gedimd dag-oppervlak als "maanlicht"
-      vec3 nightLayer = (nightColor.rgb + nightAmbient) * nightEnabled;
+      // Geen schakelaar meer op deze laag: met de cyclus uit is dayMix 1 en telt hij
+      // toch niet mee, en met de cyclus aan hoort hij er gewoon te zijn.
+      vec3 nightLayer = nightColor.rgb + nightAmbient;
       vec3 surface = mix(nightLayer, dayLayer, dayMix);
 
       // ---- gerimpelde waterreflectie met procedurele ruis (zonneglinster) ----
@@ -378,6 +388,8 @@ export const CLOUD_FRAG = `
   uniform float cloudFadeNear;
   uniform float cloudFadeFar;
   uniform float cloudFadeGate;
+  // Zie dayNightShader: 0 = geen nachthelft, dus ook de wolken staan overal in de zon.
+  uniform float dayNightCycle;
   varying vec3 vNormal;
   varying vec3 vWorldNormal;
   varying vec2 vUv;
@@ -404,6 +416,7 @@ export const CLOUD_FRAG = `
     // Hiervóór stond hier smoothstep(-0.25, 0.3), wat wolken al vanaf zonhoogte
     // +17,46 liet verduisteren — ruim vóór het oppervlak in plaats van erna.
     float dayF = smoothstep(-0.3618, -0.0704, intensity);
+    dayF = mix(1.0, dayF, dayNightCycle);
 
     // Zonsverduistering, identiek aan dayNightShader: wereldruimte, afstand tot de
     // schaduwas.

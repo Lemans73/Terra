@@ -525,7 +525,7 @@
         </button>
         <div class="acc-body">
           <div class="earth-layers" id="earth-layers">
-            <div class="elayer" data-tex="night"><span class="edot"></span>Night lights<span class="estat" id="es-night">&#8212;</span></div>
+            <div class="elayer" data-tex="night"><span class="edot"></span>Day/night cycle<span class="estat" id="es-night">&#8212;</span></div>
             <div class="elayer" data-tex="clouds"><span class="edot"></span>Clouds<span class="estat" id="es-clouds">&#8212;</span></div>
             <div class="elayer" data-tex="specular"><span class="edot"></span>Water reflection<span class="estat" id="es-specular">&#8212;</span></div>
             <div class="elayer" data-tex="normal"><span class="edot"></span>Relief (normal map)<span class="estat" id="es-normal">&#8212;</span></div>
@@ -4212,7 +4212,11 @@ function applyLayerToggles() {
   // day/night kunnen we niet "uitzetten" zonder zwart; we mengen ze i.p.v. weglaten.
   // dayBlend 0 = alleen nacht, 1 = alleen dag, anders normale terminator-mix.
   u.dayEnabled.value   = earthLayerEnabled.day   ? 1 : 0;
-  u.nightEnabled.value = earthLayerEnabled.night ? 1 : 0;
+  // DE SCHAKELAAR STUURT NU DE HELE DAG/NACHT-CYCLUS en niet meer alleen de
+  // nachttextuur. Aan = normale terminator, uit = de hele bol in daglicht. De
+  // sleutel `tex.night` en het data-attribuut blijven bewust ongewijzigd: de
+  // voorkeuren binden daarop, en hernoemen zou elke bewaarde stand weggooien.
+  u.dayNightCycle.value = earthLayerEnabled.night ? 1 : 0;
 }
 
 // werk de Earth-lagen indicatie bij (welke texturen actief en aan zijn)
@@ -4287,7 +4291,7 @@ function buildRealisticMaterial() {
         hasSpecular: { value: specTex ? 1 : 0 },
         hasNormal:   { value: normalTex ? 1 : 0 },
         dayEnabled:   { value: 1 },
-        nightEnabled: { value: 1 },
+        dayNightCycle: { value: 1 },
         /* UIT HET REGISTER EN NIET UIT EEN LITERAL (sessie 35). Dit materiaal
            wordt in een `.then()` gebouwd, ná het laden van vijf texturen, en dus
            ruim ná het blok dat de bewaarde voorkeuren toepast. Een vaste 0,12
@@ -4366,7 +4370,8 @@ function setupCloudSphere() {
       // het aarde-materiaal en de schil loopt vanzelf mee.
       cloudFadeNear: shaderMaterial.uniforms.cloudFadeNear,
       cloudFadeFar:  shaderMaterial.uniforms.cloudFadeFar,
-      cloudFadeGate: shaderMaterial.uniforms.cloudFadeGate
+      cloudFadeGate: shaderMaterial.uniforms.cloudFadeGate,
+      dayNightCycle: shaderMaterial.uniforms.dayNightCycle
     },
     vertexShader: CLOUD_VERT, fragmentShader: CLOUD_FRAG,
     // DoubleSide en niet FrontSide (sessie 37): de zoomgrens ligt sinds deze sessie
@@ -6071,7 +6076,11 @@ function rebuildLabels(quakes) {
   // `K` die zichtbaar zijn. Vóór sessie 16 was deze lijst de eindselectie, waardoor
   // labels aan de achterkant van de bol wél van het plafond afgingen maar nooit te
   // zien waren — bij een halve draai bleven er soms een handvol over.
-  const pool = Math.min(PARAMS.labelPoolMax, Math.round(labelBudget * PARAMS.labelPoolFactor));
+  // ELKE GEFILTERDE BEVING IS KANDIDAAT (sessie 37, Terry). Dit was
+  // `labelBudget x labelPoolFactor`, wat neerkwam op een verborgen magnitude-drempel
+  // bovenop de filters — zie de lange noot bij `labelPoolMax` in js/config.js. Het
+  // paneel bepaalt wie meedoet; deze laag kiest daaruit alleen wie er in beeld past.
+  const pool = Math.min(PARAMS.labelPoolMax, quakes.length);
   labelQuakes = quakes.slice().sort((a, b) => (b.value || 0) - (a.value || 0)).slice(0, pool);
   for (const q of labelQuakes) {
     const el = document.createElement('div');
@@ -6297,11 +6306,17 @@ function positionLabels() {
     let visible = false, tip = null, base = null;
     if (near) {
       base = world.getScreenCoords(q.lat, q.lng, 0.0);
-      const inBeeld = base.x >= -vp.m && base.x <= vp.w + vp.m
-                   && base.y >= -vp.m && base.y <= vp.h + vp.m;
-      if (inBeeld && getoond < K) {
-        visible = true; getoond++;
+      /* ALLEBEI de punten moeten in beeld liggen, en dat is geen overdaad. Het
+         labelpunt hangt bóven het epicentrum, en op een bol schuift een hoger punt
+         bij het projecteren RADIAAL NAAR BUITEN. Bij een beving aan de rand van het
+         beeld ligt de basis dus nog net binnen terwijl de tip er honderden pixels
+         naast valt — met de stippellijn er als een spaak achteraan. Gemeten op
+         afstand 155 boven Europa: van vijf getoonde labels lagen er vier zo. */
+      const binnen = (pt) => pt.x >= -vp.m && pt.x <= vp.w + vp.m
+                          && pt.y >= -vp.m && pt.y <= vp.h + vp.m;
+      if (binnen(base)) {
         tip = world.getScreenCoords(q.lat, q.lng, _tipAlt);
+        if (binnen(tip) && getoond < K) { visible = true; getoond++; }
       }
     }
     el.style.display = visible ? 'block' : 'none';
