@@ -599,6 +599,16 @@ export const PARAMS = {
   // standhoudt als het draaipunt ooit gaat schuiven. Die blijft bewust op 101 staan:
   // hij bewaakt de aardbol, niet de beeldkwaliteit.
   zoomMinDistance: 120,
+  /* DE SCHEMATISCHE WEERGAVE MAG VERDER (sessie 38, Terry). De grens hierboven is
+     gezet op de TEXTUUR, en die bestaat in de schematische weergave niet: daar is de
+     bol een effen vlak met vectorpolygonen erop, en die blijven scherp op elke schaal.
+     Wat er in het echt speelt is het omgekeerde — bij een dicht cluster als de Flores
+     Zee vallen zes bevingen op elkaar tot een blob, en juist daar wil je erin kunnen.
+
+     De harde bodem `zoomFloorRadius` geldt onverkort; deze waarde hoort daarboven te
+     blijven. Zodra realistisch dieper kan (tegel-gebaseerde beelden per zoomniveau)
+     mogen de twee weer samenvallen. */
+  zoomMinDistanceExpert: 102,
   zoomMaxDistance: 450,
   // ===== DE HARDE BODEM (sessie 37) =============================================
   // Gemeten vanaf het MIDDELPUNT van de aarde, en dat onderscheid is het hele punt.
