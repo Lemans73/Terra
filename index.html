@@ -3491,8 +3491,19 @@ function overlayStroke(p) {
   return p.casing ? w + PARAMS.overlayCasingExtra : w;
 }
 
+/* De kaartlijnen zakken bij het inzoomen mee naar het oppervlak; zie de noot bij
+   `overlayAltitudeExpertMin` in js/config.js. Alleen in de schematische weergave: daar
+   zijn geen casings die onder het land zouden duiken, en daar ligt de zoomgrens laag
+   genoeg om het verschil te zien. 100 is de bolstraal, zoals overal in dit bestand. */
+function overlayAltitudeExpertNu() {
+  const camLen = world.camera().position.length() || 1;
+  const t = Math.min(1, Math.max(0, (camLen - 100) / Math.max(1, PARAMS.zoomMinDistance - 100)));
+  return PARAMS.overlayAltitudeExpertMin
+       + (PARAMS.overlayAltitudeExpert - PARAMS.overlayAltitudeExpertMin) * t;
+}
+
 function overlayAlt(p) {
-  const base = globeMode === 'expert' ? PARAMS.overlayAltitudeExpert : PARAMS.overlayAltitude;
+  const base = globeMode === 'expert' ? overlayAltitudeExpertNu() : PARAMS.overlayAltitude;
   return p.casing ? base - PARAMS.overlayCasingDrop : base;
 }
 
@@ -5850,6 +5861,8 @@ let _windVorig = null;
 // Laatste camera-afstand waarop de indicatorhoogte in de schematische weergave is
 // bijgewerkt; zie de noot in animateShader().
 let _glyphAltCamLen = -1;
+// Idem voor de kaartlijnen, plus de smoor-timer: hun hoogte vraagt een rebuild.
+let _overlayAltCamLen = -1, _overlayAltTimer = null;
 
 function animateShader() {
   const gt = performance.now() / 1000;
@@ -5918,6 +5931,19 @@ function animateShader() {
   if (globeMode === 'expert' && Math.abs(_camLen - _glyphAltCamLen) > 0.25) {
     _glyphAltCamLen = _camLen;
     _glyphAlt = expertIndicatorAltitude();
+  }
+  /* DE KAARTLIJNEN VOLGEN DEZELFDE HOOGTE, MAAR NIET PER FRAME. Hun hoogte zit in de
+     GEOMETRIE van het pad, dus meeschalen vraagt een rebuild — en die mag niet aan elke
+     zoomstap hangen (zie de noot bij renderOverlays over objectidentiteit).
+
+     Vandaar gesmoord tot de zoom tot rust is. Tijdens het zoomen kijkt niemand naar
+     parallax; zodra je stilstaat en gaat DRAAIEN telt het, en draaien verandert
+     `_camLen` niet — dus na deze ene rebuild klopt de hoogte precies wanneer het
+     uitmaakt. */
+  if (globeMode === 'expert' && Math.abs(_camLen - _overlayAltCamLen) > 0.5) {
+    _overlayAltCamLen = _camLen;
+    clearTimeout(_overlayAltTimer);
+    _overlayAltTimer = setTimeout(() => { renderOverlays(true); }, 180);
   }
   // indicatoren animeren; verwijderde objecten (uit scene) opruimen
   for (let i = glyphList.length - 1; i >= 0; i--) {

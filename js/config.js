@@ -414,6 +414,20 @@ export const PARAMS = {
   // Deskundig tekent land-polygons op 0.01 (zie modes/expert.js). Blijven de overlays
   // daaronder, dan bedekt het land ze en zie je alleen de grenzen in de oceaan.
   overlayAltitudeExpert: 0.013,
+  /* OOK DE OVERLAYS ZAKKEN MEE BIJ HET INZOOMEN (sessie 38, Terry). Zelfde reden en
+     zelfde vorm als `expertIndicatorAltMin`: 0,3 eenheden boven de landvlakken is
+     nodig tegen z-fighting ver uitgezoomd, en is dichtbij precies wat de grenzen en
+     plaatranden van de kaart los laat komen. Terry zag ze meebewegen bij het draaien.
+
+     0,0102 ligt 0,02 eenheden boven de landvlakken (0,010) en 0,02 ONDER de ondergrens
+     van de indicatoren (0,0104) — die volgorde hoort zo, anders snijden de kaartlijnen
+     door de symbolen heen.
+
+     DIT KAN ALLEEN OMDAT DE SCHEMATISCHE WEERGAVE GEEN CASINGS HEEFT. In de
+     realistische modus krijgt elke lijn een donkere casing 0,0008 lager; die zou hier
+     onder het land duiken en weggeclipt worden. Zie `if (!expert)` in renderOverlays.
+     De realistische modus blijft daarom ongemoeid op `overlayAltitude`. */
+  overlayAltitudeExpertMin: 0.0102,
 
   // Op de dagzijde verdwijnt een dunne gekleurde lijn in de felle textuur. Daarom
   // krijgt elke lijn in de realistische modus een donkere "casing" eronder: dezelfde
