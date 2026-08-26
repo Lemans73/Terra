@@ -348,10 +348,31 @@ export function createQuakeIndicator(THREE, opts = {}) {
   /* Drie regels, en dat is het hele punt van deze laag. Alles wat per event
      verschilt zit in de shader; hier gaat alleen wat voor het hele veld
      tegelijk geldt naar de GPU. */
-  function update(camDist, timeSec) {
+  function update(camDist, timeSec, lift) {
     ringUniforms.uCamDist.value = camDist;
     shockUniforms.uCamDist.value = camDist;
     shockUniforms.uTime.value = timeSec;
+    /* DE HOOGTE KOMT VAN BUITEN, want hij hangt aan de WEERGAVE en die kent
+       deze laag niet. Realistisch liggen de kaartlijnen op 0,006 en volstaat
+       een vaste 0,8; schematisch lopen ze tot 0,013 en ligt diezelfde 0,8 er
+       juist ONDER.
+
+       WAT ER KNIPT ZIJN DE LIJNEN, NIET DE LANDVLAKKEN. Die laatste liggen
+       schematisch op 0,01 en zouden een ring op 0,8 moeten wegknippen, maar
+       het materiaal hieronder draagt polygonOffset en dat duwt de ring in de
+       dieptebuffer naar voren. Gemeten met de lift van -0,5 tot 2,5: het
+       aantal ringpixels blijft constant. Tegen LIJNEN helpt polygonOffset
+       niet — die zijn geen polygonen — en daar is de hoogte dus wel de enige
+       weg. Zie quakeRingLiftNu() in index.html voor de meetreeks.
+
+       Zelfde patroon als labelBaseAltitude() en overlayAlt() in index.html:
+       de weergave bepaalt de hoogte, de laag voert hem uit. */
+    if (lift != null) {
+      ringUniforms.uLift.value = lift;
+      // De shockwave blijft eronder, zodat de puls onder zijn eigen indicator
+      // door loopt in plaats van eroverheen.
+      shockUniforms.uLift.value = Math.max(0, lift - (P.quakeRingLift - P.quakeShockLift));
+    }
   }
 
   // ---- de schakelaar -----------------------------------------------------

@@ -239,6 +239,11 @@ export const PARAMS = {
      — de meting is daar vlak — en kost alleen parallax ten opzichte van de
      kaart. Op straal 100,8 blijft de ring ruim onder de wolkenschil (103,5). */
   quakeRingLift: 0.8,        // hoogte boven het oppervlak (eenheden)
+  /* DE MARGE BOVEN DE KAARTLAGEN IN DE SCHEMATISCHE WEERGAVE. Daar ligt alles
+     hoger — landvlakken op 0,01, lijnen tot 0,013 — en volgt de indicator die
+     hoogte in plaats van een vast getal. Zie quakeRingLiftNu() in index.html.
+     0,2 eenheid, dezelfde marge die de realistische weergave heeft. */
+  quakeRingLiftMargin: 0.2,
   /* HET AANTAL RINGEN LEEST ALS EEN SCHAALVERDELING, niet als sier: zwaarder is
      meer ringen. De LIJNDIKTE loopt bij Terry de andere kant op dan bij Grok —
      zwaarder is dikker, want een zware beving hoort méér op het netvlies te

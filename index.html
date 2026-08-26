@@ -4192,7 +4192,9 @@ if (IS_LOCAL) {
     .then(m => {
       tuning = m.createTuningPanel({
         PARAMS, bloomPass, gradePass,
-        getEarthMaterial: () => shaderMaterial
+        getEarthMaterial: () => shaderMaterial,
+        // Ook een getter: de v2-laag wordt lazy in animateShader gebouwd.
+        getQuakeIndicator: () => quakeIndicator
       });
     })
     .catch(() => { /* hoort er niet te zijn buiten de ontwikkelmachine */ });
@@ -4826,6 +4828,43 @@ function setupQuakeIndicator() {
   // dan nooit meer. Dezelfde val als bij de aurora-schil.
   if (quakeVeld) quakeIndicator.uploadEvents(quakeVeld.list, quakeVeld.now, quakeVeld.span);
   return quakeIndicator;
+}
+
+/* WAAR DE v2-INDICATOR HANGT, PER WEERGAVE (sessie 40).
+
+   Realistisch  de kaartlijnen liggen op `overlayAltitude` 0,006 en de
+                landvlakken op 0,002. `quakeRingLift` 0,8 ligt daar ruim boven;
+                gemeten loopt het aantal weggeknipte ringpixels van 3656 naar
+                999 en is de curve boven 0,61 vlak.
+
+   Schematisch  hier ligt ALLES hoger: de landvlakken op 0,01 (zie
+                syncLandPolygons) en de lijnen op 0,0102 tot 0,013. Diezelfde
+                0,8 ligt daar juist ONDER. Gemeten boven Midden-Amerika op
+                afstand 130, ringpixels die een kaartlijn afsnoept:
+
+                    lift        0,8    1,0    1,3    2,0
+                    aangetast  1469    419    377    382
+                    van        2,43%  0,70%  0,63%  0,64%
+
+                DE LANDVLAKKEN DOEN HIER NIETS, en dat is het verrassende deel.
+                Ze liggen op 0,01 en zouden een ring op 0,8 moeten wegknippen,
+                maar de ring draagt `polygonOffset` en dat duwt hem in de
+                dieptebuffer naar voren. GEMETEN met de lift van -0,5 tot 2,5:
+                het aantal ringpixels blijft constant op 3.290. Een halve
+                eenheid ónder het oppervlak is de ring nog steeds heel.
+
+                Waar polygonOffset NIET tegen helpt zijn LIJNEN — die zijn geen
+                polygonen. Vandaar dat de kaartlijnen wel knippen en de
+                landvlakken niet, in beide weergaven.
+
+                Dus mee met de indicatoren die er al staan, plus dezelfde marge
+                van 0,2 eenheid die de realistische weergave ook heeft. */
+function quakeRingLiftNu() {
+  if (globeMode === 'expert') {
+    return Math.max(expertIndicatorAltitude(), overlayAltitudeExpertNu()) * GLOBE_R
+         + PARAMS.quakeRingLiftMargin;
+  }
+  return PARAMS.quakeRingLift;
 }
 
 function setQuakeIndicatorMode(next) {
@@ -6107,7 +6146,7 @@ function animateShader() {
      REDUCED_MOTION — bevriezen en niet verbergen, want elke beving draagt zijn
      eigen fase in aSeed en het beeld blijft daardoor gevarieerd. */
   const _qi = setupQuakeIndicator();
-  if (_qi) _qi.update(_camLen, REDUCED_MOTION ? 0 : gt);
+  if (_qi) _qi.update(_camLen, REDUCED_MOTION ? 0 : gt, quakeRingLiftNu());
   // Eén keer per frame gelezen; de lus hieronder gebruikt hem per glyph.
   const _v1Quakes = quakeMode !== 'v2';
 
@@ -6573,7 +6612,7 @@ function labelBaseAltitude() {
      Met quakeRingLift 0 scheelt dit 0,2 eenheid op straal 100 en dus minder dan
      een pixel. Dat is met opzet: deze regel mag nu al mee zonder dat er iets aan
      het beeld verandert. */
-  if (quakeMode === 'v2') return PARAMS.quakeRingLift / GLOBE_R;
+  if (quakeMode === 'v2') return quakeRingLiftNu() / GLOBE_R;
   return 0.002;
 }
 
