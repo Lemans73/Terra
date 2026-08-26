@@ -442,6 +442,30 @@ export const PARAMS = {
   // oceaan van de gewone dagtextuur valt er niets te verbergen — daar mag hij vol.
   glintStrength: 0.7,
   glintStrengthOcean: 0.3,
+  /* HET RELIËF VAN DE DAGZIJDE (sessie 40). Deze drie stonden als vaste getallen
+     in de uniform-opbouw van het materiaal en waren daarmee alleen te wijzigen
+     door de code te herschrijven. Ze staan hier met exact dezelfde waarden — dit
+     is een verhuizing en geen bijstelling.
+
+     WAAROM ZE ERTOE DOEN. In js/shaders.js staat:
+
+         float emboss = (bumpIntensity - baseIntensity) * reliefStrength;
+         float relief = clamp(macro + emboss * dayMix, 0.2, 1.7);
+         vec3 dayLayer = dayColor.rgb * relief * dayEnabled;
+
+     `relief` heeft een ONDERGRENS VAN 0,2 — de dagtextuur wordt daar tot een
+     vijfde gedimd. `emboss` is het verschil tussen de bobbelnormaal en de
+     bolnormaal, maal `reliefStrength`. Hoort de normal-map niet meer bij de
+     dagtextuur — bijvoorbeeld na het wisselen van een van de twee — dan wordt
+     dat verschil op reliëfrijk gebied fors negatief en duikt `relief` naar die
+     bodem. Het gevolg is een gebied dat ook op klaarlichte dag bijna zwart is.
+
+     Met `reliefStrength` op 0 valt de emboss helemaal weg en blijft alleen
+     `macro` over. Gaat een donker gebied daarmee terug naar normaal, dan ligt
+     het aan de normal-map en niet aan de dagtextuur. */
+  normalStrength: 2.5,   // overdrijving van de normal-map-helling
+  reliefStrength: 4.0,   // emboss-uitvergroting → hardere reliëflijnen
+  waterRipple: 0.45,     // amplitude van de procedurele water-rimpel
   // schermvaste icoongrootte (app-breed, beide modi): iconen schalen mee met de
   // camera-afstand. Power-curve (pow>1) = agressievere zoom-respons, vooral diep
   // ingezoomd kleiner. camDist-bereik in de praktijk ≈ 169 (diep in) → 438 (uit).

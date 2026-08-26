@@ -4392,10 +4392,15 @@ function buildRealisticMaterial() {
            gekozen: de schuif zei 20 %, de scene toonde 12. Zelfde patroon als
            `glintStrength` twee regels lager, dat `oceanFloorOn` al zo leest. */
         nightBrightness: { value: Prefs.get('pref.nightGlow') / 100 },
-        normalStrength: { value: 2.5 },  // overdrijving van de normal-map-helling
-        reliefStrength: { value: 4.0 },  // emboss-uitvergroting → hardere reliëflijnen
+        /* UIT PARAMS EN NIET UIT EEN LITERAL (sessie 40), om dezelfde reden als
+           `nightBrightness` hierboven: dit materiaal wordt in een `.then()`
+           gebouwd, dus een vast getal hier overschrijft stil wat er elders is
+           gezet. Zie de noot bij `reliefStrength` in js/config.js voor wat
+           deze drie doen. */
+        normalStrength: { value: PARAMS.normalStrength },
+        reliefStrength: { value: PARAMS.reliefStrength },
         glintStrength:  { value: glintFor(oceanFloorOn) }, // sterkte zonneglinster
-        waterRipple:    { value: 0.45 }, // amplitude van de procedurele water-rimpel
+        waterRipple:    { value: PARAMS.waterRipple },
         cloudDrift:    { value: 0 },     // horizontale wolken-offset (drift)
         cloudShadow:   { value: PARAMS.cloudShadow }, // sterkte wolk-schaduw op oppervlak
         // De fade op wolken EN wolkenschaduw. Hier is de bron; de wolkenschil pakt
