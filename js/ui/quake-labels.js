@@ -405,10 +405,15 @@ export function createQuakeLabels(THREE, opts = {}) {
        BINNEN dat label uit. */
     const rest = zichtbaar.slice(0, Math.max(0, budgetNu));
 
-    /* DE CLUSTERAFSTAND KRIMPT MET DE ZOOM. Diep ingezoomd is er ruimte genoeg
-       en hoort elke beving zijn eigen label te hebben; `t` is dezelfde
-       zoomfactor die hierboven de drempel en het budget stuurt. */
-    const clusterPx = P.quakeLabelClusterPx * (1 - t);
+    /* DE CLUSTERAFSTAND KRIMPT MET DE ZOOM, maar niet meer naar nul. Diep
+       ingezoomd is er meestal ruimte genoeg en hoort elke beving zijn eigen
+       label te hebben — behalve bij een zwerm, en juist daar zoom je in. De
+       ondergrens houdt de lijst daar bij elkaar. `t` is dezelfde zoomfactor die
+       hierboven de drempel en het budget stuurt: 0 ver weg, 1 volledig
+       ingezoomd. Zie de noot bij quakeLabelClusterPxNear in js/config.js. */
+    const clusterVer = P.quakeLabelClusterPx;
+    const clusterNabij = Math.min(P.quakeLabelClusterPxNear, clusterVer);
+    const clusterPx = clusterNabij + (clusterVer - clusterNabij) * (1 - t);
     const groepen = [];
     if (P.quakeLabelCluster && clusterPx > 1) {
       const gedaan = new Set();

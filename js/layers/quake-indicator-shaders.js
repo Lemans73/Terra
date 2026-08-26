@@ -286,7 +286,13 @@ bool achterDeHorizon(vec3 wereldPunt) {
   return dot(normalize(wereldPunt), normalize(cameraPosition)) < grens;
 }
 
+uniform float uRingOn;
+
 void main() {
+  // De hele laag uit, zonder de mesh te hoeven weghalen. De draw call blijft dus
+  // staan; dit is een schuif om te KIJKEN wat er zonder ringen overblijft, geen
+  // manier om er iets mee te besparen.
+  if (uRingOn < 0.5) discard;
   vec2 p = vUv * 2.0 - 1.0;
   float r = length(p);
   if (r > 1.0) discard;

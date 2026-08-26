@@ -263,6 +263,11 @@ export const PARAMS = {
   quakeRingFill: 0,          // vulling binnen de buitenste ring
   quakeRingCore: 3,          // helderheid van de kern
   quakeRingOpacity: 1,
+  /* DE RING ZELF AAN OF UIT (sessie 40, Terry). Een vraag die het proberen waard
+     is: bij een dichte zwerm dragen de concentrische ringen vooral drukte, en
+     misschien volstaat de labelstip — die is met quakeLabelDotSize te vergroten.
+     Uit laat de shockwave en de labels staan, dus je ziet meteen wat er overblijft. */
+  quakeRingOn: true,
   /* VOLUME EN GLANS STAAN OP NUL, en dat is een uitkomst en geen vergetelheid
      (Terry, sessie 39). Ze geven de lijn een halfronde dwarsdoorsnede met een
      lichtval — mooi op een dikke lijn, maar deze set draait juist op een dunne,
@@ -417,6 +422,18 @@ export const PARAMS = {
      nul en clustert er niets meer. */
   quakeLabelCluster: true,
   quakeLabelClusterPx: 96,
+  /* DE ONDERGRENS VAN DIE AFSTAND, bij volle zoom (sessie 40, Terry).
+
+     De regel hierboven laat de clusterafstand met de zoom naar NUL krimpen: diep
+     ingezoomd is er ruimte genoeg en hoort elke beving zijn eigen label te
+     hebben. Dat klopt overal — behalve precies waar je het meest inzoomt, want
+     dat doe je juist bij een zwerm. Daar viel de clustering weg en kreeg je
+     twintig losse labels over elkaar in plaats van één lijst.
+
+     Op 0 is het gedrag exact wat het was. Hoger houdt de lijst ook bij maximale
+     zoom bij elkaar; de lijst zelf staat op tijd gesorteerd met de meest recente
+     bovenaan, en dát is bij een zwerm wat je wilt weten. */
+  quakeLabelClusterPxNear: 0,
   quakeLabelClusterMax: 10,
 
   /* BUITEN DE BOLRAND. Van het middelpunt AF wijzen is niet hetzelfde als

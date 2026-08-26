@@ -143,7 +143,8 @@ export function createQuakeIndicator(THREE, opts = {}) {
     uRingEdge:  { value: P.quakeRingEdge },
     uRingVolume:{ value: P.quakeRingVolume },
     uRingShine: { value: P.quakeRingShine },
-    uOpacity:   { value: P.quakeRingOpacity }
+    uOpacity:   { value: P.quakeRingOpacity },
+    uRingOn:    { value: P.quakeRingOn ? 1 : 0 }
   });
 
   const shockUniforms = Object.assign(sharedUniforms(), {
@@ -507,6 +508,7 @@ export function createQuakeIndicator(THREE, opts = {}) {
       uni.uStackSpread.value = P.quakeStackSpread;
     }
     ringUniforms.uFitRings.value = P.quakeRingFitToScreen ? 1 : 0;
+    ringUniforms.uRingOn.value = P.quakeRingOn ? 1 : 0;
   }
 
   return {
