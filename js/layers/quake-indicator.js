@@ -38,14 +38,20 @@ import {
   QUAKE_SHOCK_VERT, QUAKE_SHOCK_FRAG
 } from './quake-indicator-shaders.js';
 
-const GLOBE_R = 100;
-
 /* De drie standen van de schakelaar. `both` is een MEETSTAND en geen
    eindstand: hij bestaat om de schermafstand tussen v1 en v2 te kunnen
    meten (de toets uit het integratiecontract bij stap A). */
 export const QUAKE_MODES = ['v1', 'v2', 'both'];
 
 export function createQuakeIndicator(THREE, opts = {}) {
+  /* DE STRAAL STAAT HIER EN NIET IN DE MODULE-SCOPE, en dat is geen stijlkeuze.
+     tools/build-standalone.mjs giet alle modules in ÉÉN script voor de
+     standalone, en index.html declareert zijn eigen GLOBE_R. Twee const-en met
+     dezelfde naam in dezelfde scope is een SyntaxError — in de browser valt dat
+     nooit op, want daar heeft elke module zijn eigen scope. De build ving het.
+
+     Als optie meegeven mag; de app draait op 100 en dat is three-globe.  */
+  const GLOBE_R = opts.globeRadius || 100;
   const P = opts.params;
   const depthRGB = opts.depthRGB;
   const getCoords = opts.getCoords;
