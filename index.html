@@ -481,6 +481,12 @@
       <input type="range" id="label-count-slider" class="range" min="0" max="40" step="1" value="12" />
       </div>
       </div>
+      <!-- WELKE AARDBEVING-INDICATOR (sessie 40). Drie standen en geen aan/uit,
+           dus deze rij staat BEWUST NIET in PREFS_RIJEN: die tabel kent alleen
+           de aan/uit-grammatica en zou 'v1' als truthy lezen en de rij aanzetten.
+           Zijn beginstand wordt hieronder apart gezet, bij de klik-handler.
+           TIJDELIJK: hij verdwijnt zodra de v1-tak uit de repo gaat. -->
+      <div class="elayer" id="quake-indicator-row"><span class="edot"></span>Quake indicator<span class="estat" id="es-quake-indicator">v1</span></div>
       <div class="elayer" id="rotate-toggle"><span class="edot"></span>Auto-rotate<span class="estat" id="es-rotate">on</span></div>
       <div class="elayer" id="utc-toggle" data-utc><span class="edot"></span>Show times in UTC<span class="estat" id="es-utc">off</span></div>
 
@@ -2167,7 +2173,8 @@ import { MSPHERE_RE, MSPHERE_DRAW_MAX, pocNaarTerra }
 import { createMagnetosphereFeed, MSPHERE_HEALTH_ID } from './js/compute/magnetosphere-feed.js';
 import { createMagnetosphereTransport } from './js/ui/magnetosphere-transport.js';
 import { createMagnetosphereStrip, MSPHERE_SECTOR_TEKST } from './js/ui/magnetosphere-strip.js';
-import { createEnvironmentToggle } from './js/core/globe-root.js';
+import { createEnvironmentToggle, findGlobeRoot } from './js/core/globe-root.js';
+import { createQuakeIndicator, QUAKE_MODES } from './js/layers/quake-indicator.js';
 import { skyFrame } from './js/compute/frames.js';
 import { createViewStates } from './js/core/view-state.js';
 import { createNavPanel } from './js/ui/nav.js';
@@ -4697,6 +4704,76 @@ function setupAuroraShell() {
   if (auroraState.coordinates) applyAuroraState();
 }
 
+/* ============================================================
+   DE AARDBEVING-INDICATOR v2 (sessie 40)
+   ------------------------------------------------------------
+   Twee instanced lagen NAAST globe.gl's eigen scene, uit de
+   workbench. Zie js/layers/quake-indicator.js voor het waarom en
+   logs/PLAN-integratie-indicator.md voor het contract.
+
+   DRIE STANDEN, en `both` is een MEETSTAND. Hij bestaat om de
+   schermafstand tussen de oude en de nieuwe indicator te kunnen
+   meten — de dwingende toets bij stap A van het contract, want
+   daar kan de hele omrekening scheef staan.
+
+   DE V1-TAK BLIJFT STAAN. buildQuakeObject() wordt niet
+   aangeraakt; in stand 'v2' gaan zijn meshes op `visible = false`
+   in animateShader(). Dat scheelt een rebuild bij het omschakelen
+   én laat renderer.info.render.calls het verschil zien.
+   ============================================================ */
+
+let quakeIndicator = null;
+let quakeMode = (() => {
+  const bewaard = Prefs.get('pref.quakeIndicator');
+  return QUAKE_MODES.includes(bewaard) ? bewaard : 'v1';
+})();
+
+/* Wat render() als laatste aan de laag gaf. Staat BOVEN setupQuakeIndicator(),
+   die hem leest: de laag ontstaat pas zodra globe.gl klaar is, en dat kan ná de
+   eerste data zijn. Een `let` eronder zou in de temporal dead zone zitten —
+   dezelfde val als bij setLayerLocked() in sessie 11 en timeOffsetMs in sessie 14. */
+let quakeVeld = null;
+
+/* LAZY, en per frame opnieuw geprobeerd tot het lukt. findGlobeRoot() zoekt het
+   directe scene-kind dat globe.gl's hele boom draagt, en die boom is er pas als
+   three-globe zijn init heeft gedaan. Zelfde patroon als setupAuroraShell().
+
+   DE STAND GAAT MEE BIJ DE BOUW en wordt niet erna gezet: Terra bouwt lagen in
+   async callbacks die elke eerder gezette waarde stil overschrijven. */
+function setupQuakeIndicator() {
+  if (quakeIndicator) return quakeIndicator;
+  const root = findGlobeRoot(world);
+  if (!root) return null;
+  quakeIndicator = createQuakeIndicator(THREE, {
+    params: PARAMS,
+    depthRGB,
+    // De omrekening van lat/lon blijft van world.getCoords en komt niet uit de
+    // workbench. Zo kan de conventie per constructie niet uiteenlopen.
+    getCoords: (lat, lng, alt) => world.getCoords(lat, lng, alt),
+    mode: quakeMode
+  });
+  /* KIND VAN DE GLOBE-WORTEL en niet van world.scene(). Dan pakt de
+     omgevingsschakelaar (js/core/globe-root.js) hem vanzelf mee bij het
+     binnengaan van de ruimte- en magnetosfeer-weergave, zonder dat daar iets
+     over deze laag hoeft te weten. */
+  root.add(quakeIndicator.group);
+  // Er kan al data zijn opgehaald voordat de wortel bestond; render() vult hem
+  // dan nooit meer. Dezelfde val als bij de aurora-schil.
+  if (quakeVeld) quakeIndicator.uploadEvents(quakeVeld.list, quakeVeld.now, quakeVeld.span);
+  return quakeIndicator;
+}
+
+function setQuakeIndicatorMode(next) {
+  if (!QUAKE_MODES.includes(next)) return;
+  quakeMode = next;
+  Prefs.set('pref.quakeIndicator', next);
+  if (quakeIndicator) quakeIndicator.setMode(next);
+  const rij = document.getElementById('quake-indicator-row');
+  const stat = document.getElementById('es-quake-indicator');
+  if (rij) rij.classList.toggle('on', next !== 'v1');
+  if (stat) stat.textContent = next;
+}
+
 /* DE ZOOMGRENS HANGT AAN DE WEERGAVE (sessie 38, Terry). Zie de noot bij
    `zoomMinDistanceExpert` in js/config.js: de grens van 120 is er voor de textuur, en
    die is er in de schematische weergave niet.
@@ -5004,6 +5081,17 @@ function render() {
     for (let i = 0; i < arr.length; i++) arr[i].__lodRank = i / n;
   }
   world.customLayerData(shown);
+  /* DE v2-INDICATOR EET UIT DEZELFDE VERZAMELING als de markers, de labels, de
+     tellers en de lijst — `quakes`. Ze kunnen daarmee per constructie niet
+     uiteenlopen.
+
+     EN HET MOMENT GAAT MEE, niet Date.now(). De shockwave meet de leeftijd in
+     uren; met de wandklok zou bij een reis naar 1985 elke beving miljoenen uren
+     oud zijn en stond die laag permanent uit — een laag die stil niets doet.
+     `now` en `windowMs` staan bovenaan deze functie en zijn precies wat de
+     filters hierboven ook gebruiken. */
+  quakeVeld = { list: quakes, now, span: windowMs };
+  if (quakeIndicator) quakeIndicator.uploadEvents(quakes, now, windowMs);
   hovered = null;            // object-refs verouderen als de customLayer herbouwt
   rebuildLabels(quakes);     // leader-line labels voor de zwaarste bevingen
   renderQuakeList(quakes);   // en dezelfde verzameling als lijst
@@ -5945,6 +6033,19 @@ function animateShader() {
     clearTimeout(_overlayAltTimer);
     _overlayAltTimer = setTimeout(() => { renderOverlays(true); }, 180);
   }
+  /* DE INDICATOR v2. Drie regels per frame voor het hele veld — de plaatsing,
+     de maat en de puls zitten in de shader. Dat is precies waar de P1 uit
+     sessie 37 naartoe werkte: geen lus meer over alle events om de schaal bij
+     te werken.
+
+     `gt` is dezelfde klok als de rest van deze functie, en staat stil bij
+     REDUCED_MOTION — bevriezen en niet verbergen, want elke beving draagt zijn
+     eigen fase in aSeed en het beeld blijft daardoor gevarieerd. */
+  const _qi = setupQuakeIndicator();
+  if (_qi) _qi.update(_camLen, REDUCED_MOTION ? 0 : gt);
+  // Eén keer per frame gelezen; de lus hieronder gebruikt hem per glyph.
+  const _v1Quakes = quakeMode !== 'v2';
+
   // indicatoren animeren; verwijderde objecten (uit scene) opruimen
   for (let i = glyphList.length - 1; i >= 0; i--) {
     const g = glyphList[i];
@@ -5974,9 +6075,13 @@ function animateShader() {
       const _c = world.getCoords(_d.lat, _d.lng, _glyphAlt);
       g.position.set(_c.x, _c.y, _c.z);
     }
-    // Verbergen gebeurt alleen nog bij focus-hover: dat is een expliciete keuze van de
-    // bezoeker om één beving te isoleren, geen dichtheidsregeling.
-    g.visible = !focusedQuake || g.userData.d.layer !== 'quake' || g.userData.d === focusedQuake;
+    /* Verbergen gebeurt bij focus-hover — een expliciete keuze van de bezoeker om
+       één beving te isoleren, geen dichtheidsregeling — en sinds sessie 40 ook
+       wanneer de v2-indicator het overneemt. Die tweede term raakt ALLEEN de
+       bevingen: vulkanen, bliksem en de rest lopen onveranderd door de v1-tak. */
+    const _isQuake = g.userData.d.layer === 'quake';
+    g.visible = (_v1Quakes || !_isQuake)
+             && (!focusedQuake || !_isQuake || g.userData.d === focusedQuake);
     if (parts.shock) parts.shock.uniforms.time.value = gt;
     if (parts.spin) parts.spin.rotation.z = gt * parts.spinSpeed + phase;
     if (parts.volGlow) {
@@ -6394,7 +6499,17 @@ function labelTipAltitude() {
    Dezelfde getallen als in customThreeObjectUpdate, waar de indicator zijn hoogte
    krijgt. Verandert die daar, dan hoort hij hier mee. */
 function labelBaseAltitude() {
-  return globeMode === 'expert' ? expertIndicatorAltitude() : 0.002;
+  if (globeMode === 'expert') return expertIndicatorAltitude();
+  /* IN STAND v2 LIGT DE INDICATOR OP ZIJN EIGEN HOOGTE. Met het stapelen uit is
+     die voor elk event gelijk, dus één getal volstaat; gaat de stapeling ooit
+     aan, dan hoort hier ringAltitude(i, camLen) te komen — dezelfde formule die
+     de shader gebruikt. Zie de noot bij stackedNormalJS().
+
+     Met quakeRingLift 0 scheelt dit 0,2 eenheid op straal 100 en dus minder dan
+     een pixel. Dat is met opzet: deze regel mag nu al mee zonder dat er iets aan
+     het beeld verandert. */
+  if (quakeMode === 'v2') return PARAMS.quakeRingLift / GLOBE_R;
+  return 0.002;
 }
 
 /* DE HOOGTE VAN DE INDICATOREN IN DE SCHEMATISCHE WEERGAVE (sessie 38, Terry).
@@ -6563,6 +6678,19 @@ if (labelToggleEl) {
     Prefs.set('pref.quakeLabels', labelsOn);
     labelToggleEl.classList.toggle('on', labelsOn);
     document.getElementById('es-label').textContent = labelsOn ? 'on' : 'off';
+  });
+}
+
+/* De indicator-schakelaar loopt door de drie standen: v1 → v2 → both → v1.
+   Geen aan/uit, dus geen PREFS_RIJEN — zie de noot bij de markup. De beginstand
+   wordt hier gezet en niet in de markup, want die is sinds sessie 35 geen bron
+   van een beginstand meer. */
+const quakeIndicatorRow = document.getElementById('quake-indicator-row');
+if (quakeIndicatorRow) {
+  setQuakeIndicatorMode(quakeMode);   // markup op de bewaarde stand
+  quakeIndicatorRow.addEventListener('click', () => {
+    const i = QUAKE_MODES.indexOf(quakeMode);
+    setQuakeIndicatorMode(QUAKE_MODES[(i + 1) % QUAKE_MODES.length]);
   });
 }
 
@@ -12527,6 +12655,104 @@ if (IS_LOCAL) {
     solar: () => solarState,
     world: () => world,
     glyphs: () => glyphList,
+    quakeIndicator: () => quakeIndicator,
+
+    /* DE RENDERLUS MET DE HAND STAPPEN. Nodig omdat een verborgen tabblad geen
+       requestAnimationFrame krijgt — gemeten: nul frames van veertig aangevraagd
+       — en de meetomgeving van deze machine er zo een is. Zonder deze haak
+       bestaat de v2-laag daar nooit, want hij wordt lazy in animateShader
+       gebouwd, en dan valt er niets te toetsen.
+
+       ZET EERST EEN MAAT met forceerMaat(): op 0 bij 0 is de camera-aspect NaN
+       en tekent er niets. */
+    stap(n = 1) {
+      for (let i = 0; i < n; i++) animateShader();
+      return { gestapt: n, camLen: +world.camera().position.length().toFixed(2) };
+    },
+    forceerMaat(w = 1200, h = 800) {
+      const div = document.getElementById('globe');
+      div.style.width = w + 'px'; div.style.height = h + 'px';
+      world.width(w).height(h);
+      world.camera().aspect = w / h;
+      world.camera().updateProjectionMatrix();
+      const c = world.renderer().domElement;
+      return { gevraagd: [w, h], canvas: [c.clientWidth, c.clientHeight, c.width, c.height] };
+    },
+    quakeMode: () => quakeMode,
+    setQuakeMode: (m) => setQuakeIndicatorMode(m),
+
+    /* DE PLAATSINGSTOETS uit het integratiecontract (stap A): valt de v2-ring op
+       dezelfde plek als de v1-indicator?
+
+       DE NORMAAL WORDT UIT DE BUFFER GELEZEN en niet nagerekend. Zou hij hier
+       opnieuw uit getCoords komen, dan meet dit alleen of twee identieke
+       aanroepen hetzelfde antwoord geven — een controle die per constructie
+       slaagt en dus niets toetst. Nu loopt de hele keten mee: wat er werkelijk
+       in het attribuut staat, de projectie van de shader, én group.matrixWorld,
+       want dat is precies waar de modelMatrix-correctie voor is.
+
+       DE TEGENMETING zit erin: geef `{ flip: 'x' | 'y' | 'z' }` mee en de
+       normalen worden in de buffer gespiegeld. De afstanden horen dan honderden
+       pixels te worden. Slaat dat niet uit, dan meet deze opstelling niets. */
+    meetIndicatorPlaatsing(opts = {}) {
+      const qi = quakeIndicator;
+      if (!qi) return { fout: 'de v2-laag bestaat nog niet' };
+      const geo = qi.ringMesh.geometry;
+      const attr = geo.getAttribute('aNormal');
+      if (!attr || !geo.instanceCount) return { fout: 'geen data in de v2-laag' };
+
+      const cam = world.camera();
+      const el = world.renderer().domElement;
+      const W = el.clientWidth, H = el.clientHeight;
+      if (!W || !H) return { fout: 'canvas is 0 bij 0 — het venster moet zichtbaar zijn' };
+
+      // De v1-glyphs op hun beving-object, zodat de twee kanten aan elkaar te
+      // knopen zijn zonder op magnitude of tekst te matchen (dat gaf in sessie 39
+      // sprongen van 800 px die niet bestonden).
+      const v1 = new Map();
+      for (const g of glyphList) {
+        if (g.userData && g.userData.d && g.userData.d.layer === 'quake') v1.set(g.userData.d, g);
+      }
+
+      qi.group.updateWorldMatrix(true, false);
+      const M = qi.group.matrixWorld;
+      const lijst = qi.events;
+      const flip = opts.flip;
+      const teken = { x: flip === 'x' ? -1 : 1, y: flip === 'y' ? -1 : 1, z: flip === 'z' ? -1 : 1 };
+      const lift = PARAMS.quakeRingLift;
+      const v = new THREE.Vector3();
+      const horizon = 100 / Math.max(cam.position.length(), 100.001);
+      const camDir = new THREE.Vector3().copy(cam.position).normalize();
+
+      const afstanden = [];
+      let gemeten = 0, overgeslagen = 0;
+      for (let i = 0; i < lijst.length; i++) {
+        const g = v1.get(lijst[i]);
+        if (!g) { overgeslagen++; continue; }
+        v.set(attr.array[i * 3] * teken.x, attr.array[i * 3 + 1] * teken.y, attr.array[i * 3 + 2] * teken.z);
+        if (v.dot(camDir) < horizon) continue;          // achter de horizon
+        v.multiplyScalar(100 + lift).applyMatrix4(M).project(cam);
+        const ax = (v.x + 1) / 2 * W, ay = (1 - (v.y + 1) / 2) * H;
+        const p = g.getWorldPosition(new THREE.Vector3()).project(cam);
+        const bx = (p.x + 1) / 2 * W, by = (1 - (p.y + 1) / 2) * H;
+        afstanden.push(Math.hypot(ax - bx, ay - by));
+        gemeten++;
+      }
+      if (!gemeten) return { fout: 'geen enkel event aan de voorkant van de bol' };
+      afstanden.sort((a, b) => a - b);
+      const p = (f) => afstanden[Math.min(afstanden.length - 1, Math.floor(afstanden.length * f))];
+      return {
+        flip: flip || 'geen (echte meting)',
+        gemeten, overgeslagen,
+        mediaan: +p(0.5).toFixed(3),
+        p95: +p(0.95).toFixed(3),
+        max: +afstanden[afstanden.length - 1].toFixed(3),
+        // De transform waar de hele modelMatrix-vraag om draait.
+        matrixWorldIsIdentiteit: M.elements.every((e, k) =>
+          Math.abs(e - (k % 5 === 0 ? 1 : 0)) < 1e-9),
+        matrixWorld: [...M.elements].map(e => +e.toFixed(6))
+      };
+    },
     quakeStats() {
       const q = store.filter(d => d.layer === 'quake');
       const by = (s) => q.filter(d => d.src === s);
