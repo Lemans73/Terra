@@ -339,6 +339,118 @@ export const PARAMS = {
      bepalen hoe een magnitude op 0..1 wordt afgebeeld en daarmee op straal,
      ringtal en lijndikte. Zou de indicator meeschalen met het filter, dan
      veranderde elke beving van maat zodra je de ondergrens verschoof. */
+
+  /* ===== DE LABELLAAG v2 =====================================================
+     Overgezet uit de workbench (sessie 38-39), waar de plaatsing in twee ronden
+     is afgesteld. Terry's stand, één op één.
+
+     WAAROM DE PREFIX `quakeLabel`. Er staan hierboven al een `labelPoolMax`,
+     `labelCountMax`, `labelStackGapY` en `labelViewMargin` — van de oude laag en
+     van de landnamen. Zolang die namen bestaan moeten ze uit elkaar te houden
+     zijn; `quakeLabelBudget` zegt bovendien meteen welke laag hij stuurt.
+
+     HET BUDGET KOMT NIET HIERVANDAAN maar uit `pref.labelCount`, de schuif in
+     Settings. Deze waarde is alleen de terugval. */
+  quakeLabelBudget: 20,        // hoeveel labels er ver weg staan
+  quakeLabelMinMag: 2.5,       // ondergrens ver weg
+  quakeLabelZoomFar: 200,      // vanaf deze afstand geldt de "ver weg"-stand
+  quakeLabelZoomNear: 120,     // en hier de ingezoomde
+  quakeLabelZoomMinMag: 2,     // ondergrens ingezoomd
+  quakeLabelZoomBudget: 20,    // budget ingezoomd
+
+  /* WAT ER IN EEN UITGEKLAPT LABEL STAAT. Het overzicht draagt alleen de
+     magnitude — meer hoeft niet om te zien waar iets gebeurde en hoe zwaar, en
+     het blok wordt er drie keer kleiner van. Dat scheelt de ontwijking werk en
+     houdt het label dicht bij zijn eigen indicator. */
+  quakeLabelDepth: true,
+  quakeLabelPlace: true,
+  quakeLabelTime: true,
+  quakeLabelCoords: false,     // plaatsnaam vervangen door lat/lon
+
+  /* DE OFFSET IS EEN SOM VAN DRIE TERMEN en niet langer een maximum met een
+     verborgen factor erin. Alleen zo betekent `quakeLabelOffset: 0` ook echt
+     nul, en valt het label desgewenst over zijn eigen indicator.
+       offset      een vast aantal pixels
+       ringClear   een deel van de RINGSTRAAL, dus groter bij een zware beving
+       axisOffset  een deel van de geprojecteerde radiale as: kort waar je
+                   bovenop kijkt, lang aan de bolrand */
+  quakeLabelOffset: 0,
+  quakeLabelRingClear: 0.4,
+  quakeLabelAxisOffset: 0.4,
+  /* De offset slaat op de RAND van het label, niet op zijn midden. Bij offset
+     nul staat de magnitude dan precies op de indicator in plaats van er een
+     halve labelbreedte naast. */
+  quakeLabelOffsetToEdge: true,
+
+  /* DE RICHTING IS CONTINU. Hier stonden acht vaste plekken met een eigen
+     uitlijning per stuk; die zijn vervangen door één eenheidsvector plus de
+     afstand tot de labelrand langs die vector. Het aanhechtpunt glijdt daardoor
+     over de rand mee in plaats van van hoek naar hoek te springen.
+     GEMETEN over 200 frames bij 0,35 graden per frame: de p99-sprong ging van
+     120,33 px naar 14,06, en het aantal frames boven 20 px van 17 naar NUL.
+
+     `upright` volgt de geprojecteerde radiale as — waar een staaf heen zou
+     wijzen. Staat uit (Terry): kijk je recht op een beving, dan projecteert die
+     as tot bijna niets en valt het label over zijn eigen indicator.
+     `outward` wijst van het schermmiddelpunt van de bol af. */
+  quakeLabelUpright: false,
+  quakeLabelOutward: true,
+  quakeLabelUprightMinPx: 6,   // korter dan dit is de asrichting ruis
+
+  /* ONTWIJKEN. Eerst langs de eigen as op oplopende afstand (`avoidRings`
+     stappen), en past het daar niet, dan waaiert het label uit over een continu
+     hoekbereik — dichtstbij eerst, om en om links en rechts. Die uitweg is er
+     omdat "soms een rare richting" beter is dan "soms geen label".
+     `dropBlocked` uit betekent: liever een label dat overlapt dan geen label. */
+  quakeLabelAvoid: true,
+  quakeLabelAvoidRings: 6,
+  quakeLabelFanDeg: 0,         // 0 = niet uitwaaieren, alleen langs de as
+  quakeLabelFanStep: 10,
+  quakeLabelDropBlocked: false,
+  quakeLabelPad: 4,            // marge rond een labelblok bij het ontwijken
+
+  /* CLUSTEREN. Bij een zwerm hoort niet elk label bij één stip maar de LIJST
+     bij de GROEP — dan bestaat de vraag welk label bij welke indicator hoort
+     helemaal niet meer. Greedy vanaf de zwaarste; die wordt het anker.
+     DE AFSTAND KRIMPT MET DE ZOOM: diep ingezoomd is er ruimte genoeg en hoort
+     elke beving zijn eigen label te hebben, dus bij volle zoom valt hij naar
+     nul en clustert er niets meer. */
+  quakeLabelCluster: true,
+  quakeLabelClusterPx: 96,
+  quakeLabelClusterMax: 10,
+
+  /* BUITEN DE BOLRAND. Van het middelpunt AF wijzen is niet hetzelfde als
+     buiten de bol staan: een label bij een indicator midden op de aardbol wijst
+     keurig naar buiten en ligt nog altijd over het land. `outsideMax` begrenst
+     hoeveel er bij mag, want voor een beving midden op de bol zou de
+     leader-line anders zo lang worden als de halve planeet. `outsideKern` is de
+     fractie van de bolstraal waarbinnen een label met rust wordt gelaten. */
+  quakeLabelOutside: true,
+  quakeLabelOutsideFrom: 200,  // alleen vanaf deze camera-afstand
+  quakeLabelOutsidePad: 30,
+  quakeLabelOutsideMax: 40,
+  quakeLabelOutsideKern: 0.8,
+
+  // De leader-line en zijn stip. Getekend in SVG, niet als gedraaide div —
+  // scherper bij een hoge pixelratio, en Terra heeft die laag al.
+  quakeLabelLineWidth: 2,
+  quakeLabelLineOpacity: 0.85,
+  quakeLabelDotSize: 6,
+
+  /* NAGLIJDEN. Ook met een continue as springt een label nog als de ontwijking
+     van ring wisselt of als een cluster van samenstelling verandert.
+     Exponentieel naar het doel glijden maakt van elke sprong een korte
+     beweging. Staat op 0 (Terry). Valt onder prefers-reduced-motion: dit is
+     beweging die niets vertelt. */
+  quakeLabelEaseMs: 0,
+
+  // Toegankelijkheid: een omlijning maakt de tekst leesbaar op elke ondergrond,
+  // wit negeert de dieptekleur voor wie het contrast nodig heeft.
+  quakeLabelOutline: 2,
+  quakeLabelWhite: false,
+  // Trefstraal bij het aanwijzen van een indicator, in pixels.
+  quakeLabelPickRadius: 20,
+
   quakeMagMin: 2.5,
   quakeMagMax: 9.5,
 

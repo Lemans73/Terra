@@ -2175,6 +2175,7 @@ import { createMagnetosphereTransport } from './js/ui/magnetosphere-transport.js
 import { createMagnetosphereStrip, MSPHERE_SECTOR_TEKST } from './js/ui/magnetosphere-strip.js';
 import { createEnvironmentToggle, findGlobeRoot } from './js/core/globe-root.js';
 import { createQuakeIndicator, QUAKE_MODES } from './js/layers/quake-indicator.js';
+import { createQuakeLabels } from './js/ui/quake-labels.js';
 import { skyFrame } from './js/compute/frames.js';
 import { createViewStates } from './js/core/view-state.js';
 import { createNavPanel } from './js/ui/nav.js';
@@ -3377,12 +3378,12 @@ const MOMENT_LAYERS = new Set(['quake', 'storm']);
 let glyphList = [];
 let hovered = null;        // het 3D-object onder de muis (raycaster-highlight)
 let labelsOn = Prefs.get('pref.quakeLabels');   // leader-line labels voor de zwaarste bevingen
-let labelQuakes = [];      // de top-N bevingen die momenteel een label hebben
-// Plafond voor het aantal beving-labels (Settings → Preferences). Deze declaratie
-// hoort hier te blijven, bij de rest van de scene-state: rebuildLabels() wordt al
-// tijdens de scene-opbouw bereikt, dus een `let` verderop zit in de temporal dead
-// zone en breekt de module — zelfde klasse als setLayerLocked (sessie 11) en
-// timeOffsetMs (sessie 14).
+/* Plafond voor het aantal beving-labels (Settings → Preferences). Deze
+   declaratie hoort hier te blijven, bij de rest van de scene-state: de
+   labellaag LEEST hem via een haak en die haak wordt tijdens de scene-opbouw al
+   aangemaakt, dus een `let` verderop zit in de temporal dead zone en breekt de
+   module — zelfde klasse als setLayerLocked (sessie 11) en timeOffsetMs
+   (sessie 14). Hetzelfde geldt voor `labelsOn` hierboven. */
 let labelBudget = PARAMS.labelCountMax;
 
 // toast-meldingen voor nieuwe real-time entries
@@ -5197,7 +5198,11 @@ function render() {
   quakeVeld = { list: quakes, now, span: windowMs };
   if (quakeIndicator) quakeIndicator.uploadEvents(quakes, now, windowMs);
   hovered = null;            // object-refs verouderen als de customLayer herbouwt
-  rebuildLabels(quakes);     // leader-line labels voor de zwaarste bevingen
+  /* DEZELFDE VERZAMELING als de markers, de indicatoren, de tellers en de
+     lijst. Ze kunnen daarmee per constructie niet uiteenlopen — en de volgorde
+     telt: de labellaag gebruikt de INDEX om de gestapelde plek uit de
+     instance-attributen te lezen, en uploadEvents vult die in dezelfde volgorde. */
+  quakeLabels.setEvents(quakes);
   renderQuakeList(quakes);   // en dezelfde verzameling als lijst
   updateCounts(shown);
   // Hoort hier en niet in pull(): die lus kent bewust geen enkele laag bij naam, en de
@@ -5478,7 +5483,7 @@ function werkSlotUitlegBij(rij, layer) {
 //
 // DE AANROEP STAAT HIER NIET. Hij is op 2026-08-01 verplaatst naar het init-blok
 // onderaan dit script, en dat moet zo blijven. setLayerLocked() roept render() aan,
-// render() roept rebuildLabels() aan, en die leest `labelLayer` — een const die pas
+// render() vult de labellaag, en die leest `labelLayer` — een const die pas
 // ~400 regels verderop wordt aangemaakt. Op deze plek is dat een temporal dead zone
 // en gooit de hele module een ReferenceError.
 //
@@ -6278,7 +6283,7 @@ function animateShader() {
   }
   zetZonGloed(_cam);
   updateHover();      // raycaster-highlight bijwerken
-  positionLabels();   // leader-line labels herpositioneren
+  quakeLabels.update(nowMs);   // de beving-labels plaatsen
   requestAnimationFrame(animateShader);
 }
 requestAnimationFrame(animateShader);
@@ -6311,7 +6316,7 @@ function nearSide(v3) {
 
 // raycast op schermpositie → het indicator-object (group met userData.d), of null
 const _wp = new THREE.Vector3();
-// Hergebruikt in positionLabels() voor de near-side-toets van de hele labelpool; een
+// Hergebruikt voor de near-side-toets bij het aanwijzen van een glyph; een
 // verse Vector3 per frame zou daar een allocatie per label betekenen.
 const _camDir = new THREE.Vector3();
 // Idem voor het hover-label, dat als enige zijn richting per frame opnieuw uit een
@@ -6355,7 +6360,13 @@ function updateHover() {
   // (zie de per-frame lus), wat klopt bij hover op een vast label maar hinderlijk is
   // wanneer je met de muis over de bol beweegt.
   const hd = o && o.userData ? o.userData.d : null;
-  setHoverQuake(hd && hd.layer === 'quake' ? hd : null);
+  /* AANWIJZEN GAAT NU LANGS DE LABELLAAG. Die klapt de regel van dit event uit
+     — de accordeon — in plaats van een tweede, los hover-label te tonen. Wat
+     blijft is `focusedQuake`: de v1-tak isoleert daarmee één beving, en die
+     tak staat er nog. */
+  const _hq = hd && hd.layer === 'quake' ? hd : null;
+  quakeLabels.setHovered(_hq ? _hq.id : null);
+  focusedQuake = _hq;
   globeEl.style.cursor = o ? 'pointer' : '';
   if (o) {
     const spr = new THREE.Sprite(new THREE.SpriteMaterial({
@@ -6391,230 +6402,50 @@ labelSvg.id = 'label-lines';
 labelLayer.appendChild(labelSvg);
 document.body.appendChild(labelLayer);
 
-// hover op een label → toon alleen die beving (verberg de andere staven)
-//
-// Hier stond een aanroep van `eachQuake()`, een functie die niet bestaat. Elke
-// hover over een label gooide daardoor een ReferenceError. Dat viel nooit op omdat
-// de highlight tóch werkte: `focusedQuake` wordt hierboven al gezet, en de
-// per-frame lus leest die waarde zelf (zoek op `focusedQuake` in de animatiestap).
-// De aanroep was dus niet alleen kapot maar ook overbodig — en hij verborg
-// bovendien élke glyph, niet alleen de bevingen.
-// Gevonden op 2026-08-01 door de nieuwe error-listener, die precies hiervoor is.
+/* ---- De beving-labels (sessie 40) -----------------------------------------
+
+   De plaatsingswiskunde uit de workbench, in js/ui/quake-labels.js. Vervangt de
+   oude `rebuildLabels` + `positionLabels` en het hover-label; wat daarvan
+   overblijft is de laag waar hij in hangt, en die is gedeeld met de
+   zonnegebieden en de aslabels.
+
+   ALLE HAKEN ZIJN FUNCTIES en geen waarden. `world.camera()` wisselt van
+   object bij een view-state, de indicatorlaag wordt lazy gebouwd, en
+   `momentNow` moet het GEKOZEN moment lezen en niet het moment van nu. Een
+   doorgegeven waarde zou van alle drie een momentopname zijn — dezelfde val als
+   bij de `window.__test`-haak van sessie 14. */
+const quakeLabels = createQuakeLabels(THREE, {
+  params: PARAMS,
+  depthRGB,
+  getCoords: (lat, lng, alt) => world.getCoords(lat, lng, alt),
+  getCamera: () => world.camera(),
+  getViewport: () => ({
+    w: (typeof world.width === 'function' && world.width()) || window.innerWidth || 1,
+    h: (typeof world.height === 'function' && world.height()) || window.innerHeight || 1
+  }),
+  getIndicator: () => quakeIndicator,
+  getEnabled: () => labelsOn,
+  getBudget: () => labelBudget,
+  momentNow,
+  onSelect: (q) => showDetail(q),
+  host: labelLayer,
+  svg: labelSvg
+});
+
+/* AANWIJZEN ISOLEERT ÉÉN BEVING in de v1-tak: de per-frame lus leest deze
+   waarde en verbergt de andere quake-glyphs. Wordt gezet door updateHover(),
+   naast de labellaag die er zijn accordeon op opent.
+
+   DOET NIETS IN STAND v2 — daar staan de v1-glyphs toch al verborgen en tekent
+   één instanced laag alle bevingen samen. Hij blijft staan zolang die tak er is. */
 let focusedQuake = null;
-function focusQuake(d) {
-  focusedQuake = d;
-}
 
-// De opmaak van één beving-label. Gedeeld door de vaste labels en het hover-label,
-// zodat die twee niet uit elkaar kunnen lopen.
-function quakeLabelHTML(q) {
-  const place = (q.label || '').split(',')[0].replace(/^\d+\s*km\s+[\w-]+\s+of\s+/i, '');
-  return '<b>M ' + (q.value != null ? q.value.toFixed(1) : '?') + '</b>' +
-         '<span>' + place + (q.depth != null ? ' · ' + Math.round(q.depth) + ' km' : '') + '</span>';
-}
 
-function rebuildLabels(quakes) {
-  // `:not(.qhover)` — het hover-label is één blijvend element dat buiten deze
-  // opbouw valt; zonder die uitzondering ruimt elke rebuild het op en werkt hover
-  // alleen tot de eerstvolgende poll.
-  Array.from(labelLayer.querySelectorAll('.qlabel:not(.qhover)')).forEach(e => e.remove());
-  Array.from(labelSvg.querySelectorAll(':not(.qhover)')).forEach(e => e.remove());
-  // Gesorteerd op magnitude → sterkste eerst.
-  // Een POOL, geen eindselectie: welke bevingen naar ons toe gekeerd zijn hangt van de
-  // camera af en verandert dus per frame. positionLabels() kiest hieruit de sterkste
-  // `K` die zichtbaar zijn. Vóór sessie 16 was deze lijst de eindselectie, waardoor
-  // labels aan de achterkant van de bol wél van het plafond afgingen maar nooit te
-  // zien waren — bij een halve draai bleven er soms een handvol over.
-  // ELKE GEFILTERDE BEVING IS KANDIDAAT (sessie 37, Terry). Dit was
-  // `labelBudget x labelPoolFactor`, wat neerkwam op een verborgen magnitude-drempel
-  // bovenop de filters — zie de lange noot bij `labelPoolMax` in js/config.js. Het
-  // paneel bepaalt wie meedoet; deze laag kiest daaruit alleen wie er in beeld past.
-  const pool = Math.min(PARAMS.labelPoolMax, quakes.length);
-  labelQuakes = quakes.slice().sort((a, b) => (b.value || 0) - (a.value || 0)).slice(0, pool);
-  for (const q of labelQuakes) {
-    const el = document.createElement('div');
-    el.className = 'qlabel';
-    el.innerHTML = quakeLabelHTML(q);
-    labelLayer.appendChild(el);
-    q.__label = el;
-    el.addEventListener('mouseenter', () => focusQuake(q));
-    el.addEventListener('mouseleave', () => focusQuake(null));
-    el.addEventListener('click', () => showDetail(q));
-    // leader-line: van het label naar het epicentrum op de bol
-    const line = document.createElementNS(SVG_NS, 'line');
-    line.setAttribute('class', 'qline');
-    const dot = document.createElementNS(SVG_NS, 'circle');
-    dot.setAttribute('class', 'qdot');
-    dot.setAttribute('r', '2.5');
-    labelSvg.appendChild(line);
-    labelSvg.appendChild(dot);
-    q.__line = line; q.__dot = dot;
-    // Eenheidsvector naar het epicentrum, één keer berekend. De near-side-test draait
-    // nu voor de hele pool per frame in plaats van voor de eerste K; met een
-    // getCoords() per label per frame zou dat merkbaar worden, met een dot-product niet.
-    const e0 = world.getCoords(q.lat, q.lng, 0.0);
-    q.__dir = new THREE.Vector3(e0.x, e0.y, e0.z).normalize();
-  }
-}
 
-// ---- Hover-label ----
-// Elke beving heeft een indicator, maar alleen de zwaarste K krijgen een vast label.
-// Dit is één blijvend element dat de beving onder de muis toont, zodat je van elke
-// indicator magnitude, plaats en diepte kunt aflezen zonder het detailscherm te
-// openen. Klikken doet dat alsnog — net als een klik op de indicator zelf, die al
-// via de pointerup-handler op showDetail() uitkomt.
-let hoverLabelEl = null, hoverLabelLine = null, hoverLabelDot = null;
-let hoverQuake = null;
-// Zonder dit verdwijnt het label zodra de muis van de indicator naar het label
-// beweegt, en is het dus nooit te klikken: de raycaster ziet dan geen glyph meer.
-let hoverLabelSticky = false;
-
-function ensureHoverLabel() {
-  if (hoverLabelEl) return;
-  hoverLabelEl = document.createElement('div');
-  hoverLabelEl.className = 'qlabel qhover';
-  hoverLabelEl.style.display = 'none';
-  hoverLabelEl.addEventListener('mouseenter', () => { hoverLabelSticky = true; });
-  hoverLabelEl.addEventListener('mouseleave', () => { hoverLabelSticky = false; });
-  hoverLabelEl.addEventListener('click', () => { if (hoverQuake) showDetail(hoverQuake); });
-  labelLayer.appendChild(hoverLabelEl);
-  hoverLabelLine = document.createElementNS(SVG_NS, 'line');
-  hoverLabelLine.setAttribute('class', 'qline qhover');
-  hoverLabelDot = document.createElementNS(SVG_NS, 'circle');
-  hoverLabelDot.setAttribute('class', 'qdot qhover');
-  hoverLabelDot.setAttribute('r', '2.5');
-  labelSvg.appendChild(hoverLabelLine);
-  labelSvg.appendChild(hoverLabelDot);
-}
-
-let hoverClearTimer = null;
-function setHoverQuake(d) {
-  clearTimeout(hoverClearTimer);
-  if (!d) {
-    // Muis op het label zelf: laat staan, anders is het niet aan te klikken.
-    if (hoverLabelSticky) return;
-    // En anders met uitstel wissen — zie labelHoverGrace in config.js.
-    hoverClearTimer = setTimeout(() => {
-      if (!hoverLabelSticky) hoverQuake = null;
-    }, PARAMS.labelHoverGrace);
-    return;
-  }
-  if (d === hoverQuake) return;
-  hoverQuake = d;
-  ensureHoverLabel();
-  hoverLabelEl.innerHTML = quakeLabelHTML(d);
-}
-
-/* `camDir` en `threshold` komen van de aanroeper en worden hier niet zelf berekend.
-   Twee redenen: het zijn per frame constanten die positionLabels() toch al heeft,
-   en dit label MOET dezelfde grens aanhouden als de vaste labels — één dat blijft
-   hangen terwijl de rest al weg is, leest als een storing. Vier losse parameters
-   en geen object: dit draait in de renderlus, en een objectliteral is daar een
-   allocatie per frame. */
-function positionHoverLabel(lblScale, verborgen, camDir, threshold) {
-  if (!hoverLabelEl) return;
-  const q = hoverQuake;
-  // Heeft deze beving al een eigen zichtbaar label, dan zou dit een tweede kopie
-  // op dezelfde plek zijn.
-  const eigen = q && q.__label && q.__label.style.display !== 'none';
-  let zicht = false, tip = null, base = null;
-  // `verborgen` komt uit labelZoomState(): voorbij die afstand valt er niets meer te
-  // lezen, en dan hoort ook dit label weg te blijven.
-  if (q && !eigen && !verborgen) {
-    const epi = world.getCoords(q.lat, q.lng, 0.0);
-    // NIET nearSide(): die rekent op straal 100 en dit label hangt op labelAltitude.
-    // Zie de noot bij `threshold` in positionLabels().
-    if (_hoverDir.set(epi.x, epi.y, epi.z).normalize().dot(camDir) > threshold) {
-      tip = world.getScreenCoords(q.lat, q.lng, labelTipAltitude());
-      base = world.getScreenCoords(q.lat, q.lng, labelBaseAltitude());
-      zicht = true;
-    }
-  }
-  hoverLabelEl.style.display = zicht ? 'block' : 'none';
-  hoverLabelLine.style.display = zicht ? 'block' : 'none';
-  hoverLabelDot.style.display = zicht ? 'block' : 'none';
-  if (!zicht) return;
-  hoverLabelEl.style.transformOrigin = '50% 100%';
-  hoverLabelEl.style.transform = 'translate(' + tip.x + 'px, ' + tip.y + 'px) translate(-50%, -100%) scale(' + lblScale + ')';
-  hoverLabelLine.setAttribute('x1', tip.x); hoverLabelLine.setAttribute('y1', tip.y);
-  hoverLabelLine.setAttribute('x2', base.x); hoverLabelLine.setAttribute('y2', base.y);
-  hoverLabelDot.setAttribute('cx', base.x); hoverLabelDot.setAttribute('cy', base.y);
-}
-
-/* ---- Hoe de zoomstand de labels stuurt (sessie 25) ------------------------
-   ÉÉN BRON VOOR DRIE DINGEN — de schaal, het aantal, en of ze er überhaupt zijn.
-   De schaal stond tot deze sessie op twee plekken uitgeschreven (hier en in het
-   hover-label), en die twee liepen bij elke aanpassing het risico uiteen te gaan.
-   Zelfde reden waarom `quakeLabelHTML()` gedeeld is.
-
-   HET IJKPUNT IS `fitAarde`: de camera-afstand waarop de hele aarde nét in beeld
-   past. Dichterbij dan dat kijk je naar een PLEK en mogen de labels vol formaat
-   hebben; verder weg kijk je naar de PLANEET, en dan hoort een label mee te krimpen
-   in plaats van de bol te bedekken die het aanwijst.
-
-   Drie zones:
-     camLen <= fitAarde          vol formaat (de klem op labelScaleMax)
-     fitAarde .. 1,7 x fitAarde  krimpen tot de bodem van 0,80
-     >= 1,7 x fitAarde           weg — op desktop ~403, net vóór de zon op 420
-
-   `fitDistance()` staat verderop maar is een functiedeclaratie en dus gehesen; hij
-   leest `camera.aspect`, zodat portret en landschap allebei hun eigen ijkpunt
-   krijgen. GLOBE_R is 100, dezelfde straal die de horizontoets hieronder gebruikt. */
+/* De bolstraal, zoals overal in dit bestand. Hij stond eerst onderaan een lange
+   noot over de zoomstand van de labels; die laag is vervangen door
+   js/ui/quake-labels.js en de noot is met hem meegegaan. */
 const GLOBE_R = 100;
-function labelZoomState() {
-  const camLen = world.camera().position.length() || 1;
-  const past = fitDistance(GLOBE_R);
-  const uit = past * PARAMS.labelHideFactor;
-  const schaal = Math.min(PARAMS.labelScaleMax,
-                          Math.max(PARAMS.labelScaleMin, past / camLen));
-  // 0 = ingezoomd, 1 = op de uitgang. Stuurt het AANTAL: vol budget van dichtbij,
-  // terug naar labelCountMin op het moment dat ze verdwijnen.
-  const t = Math.min(1, Math.max(0, (camLen - past) / Math.max(1, uit - past)));
-  return { schaal, verborgen: camLen >= uit, frac: 1 - t };
-}
-
-/* DE HOOGTE VAN HET LABELPUNT, schermvast in plaats van wereldvast.
-   Zie de lange noot bij `labelLiftFrom` in js/config.js: boven die ijkafstand komt
-   hier onveranderd `PARAMS.labelAltitude` uit, eronder loopt de hoogte evenredig mee
-   met de afstand van de camera tot het oppervlak. De ondergrens houdt het label
-   boven de kaartlagen als je er bovenop staat. */
-function labelTipAltitude() {
-  const camLen = world.camera().position.length() || 1;
-  const noemer = Math.max(1, PARAMS.labelLiftFrom - GLOBE_R);
-  /* BOVEN OP DE VOET EN NIET ABSOLUUT. Dit gaf tot deze correctie een absolute
-     hoogte, en die kan LAGER uitvallen dan de voet van de lijn: diep ingezoomd in de
-     schematische weergave staat de voet op de indicator (0,013) terwijl de tip tegen
-     zijn ondergrens van 0,004 aanloopt. Het label hing dan onder zijn eigen
-     epicentrum. Als opslag bovenop de voet kan dat per constructie niet. */
-  const lift = Math.max(0.004, Math.min(PARAMS.labelAltitude,
-    PARAMS.labelAltitude * (camLen - GLOBE_R) / noemer));
-  return labelBaseAltitude() + lift;
-}
-
-// Het kijkvenster in CSS-pixels, waarin de labels als DOM-elementen liggen.
-/* DE VOET VAN DE STIPPELLIJN HOORT OP DE INDICATOR (sessie 38, Terry).
-
-   De stip aan het einde van de lijn stond op hoogte 0 — het oppervlak — terwijl de
-   indicator zelf hoger begint. In de realistische weergave scheelt dat 0,002 (0,2
-   eenheden) en zie je het niet. In de schematische staan ALLE indicatoren op
-   `expertIndicatorAlt` = 0,013, oftewel 1,3 eenheden, en ingezoomd hangt de stip dan
-   zichtbaar ONDER de ring waar hij bij hoort.
-
-   Dezelfde getallen als in customThreeObjectUpdate, waar de indicator zijn hoogte
-   krijgt. Verandert die daar, dan hoort hij hier mee. */
-function labelBaseAltitude() {
-  if (globeMode === 'expert') return expertIndicatorAltitude();
-  /* IN STAND v2 LIGT DE INDICATOR OP ZIJN EIGEN HOOGTE. Met het stapelen uit is
-     die voor elk event gelijk, dus één getal volstaat; gaat de stapeling ooit
-     aan, dan hoort hier ringAltitude(i, camLen) te komen — dezelfde formule die
-     de shader gebruikt. Zie de noot bij stackedNormalJS().
-
-     Met quakeRingLift 0 scheelt dit 0,2 eenheid op straal 100 en dus minder dan
-     een pixel. Dat is met opzet: deze regel mag nu al mee zonder dat er iets aan
-     het beeld verandert. */
-  if (quakeMode === 'v2') return quakeRingLiftNu() / GLOBE_R;
-  return 0.002;
-}
 
 /* DE HOOGTE VAN DE INDICATOREN IN DE SCHEMATISCHE WEERGAVE (sessie 38, Terry).
 
@@ -6634,145 +6465,7 @@ function expertIndicatorAltitude() {
        + (PARAMS.expertIndicatorAlt - PARAMS.expertIndicatorAltMin) * t;
 }
 
-function labelViewport() {
-  const w2 = (typeof world.width === 'function' && world.width()) || window.innerWidth || 1;
-  const h2 = (typeof world.height === 'function' && world.height()) || window.innerHeight || 1;
-  return { w: w2, h: h2, m: PARAMS.labelViewMargin };
-}
 
-function positionLabels() {
-  const zoom = labelZoomState();
-  const camPos = world.camera().position;
-  const camDir = _camDir.copy(camPos).normalize();
-  /* DE HORIZON LIGT VERDER DAN DE LIMBUS, want dit label hangt niet op de bol.
-     Hier stond `100 / |cam|` — de toets van nearSide(), en die geldt voor een punt
-     ÓP het oppervlak. Het labelpunt zit op `labelAltitude` 0,42, dus op straal 142,
-     en steekt daarmee over de horizon heen: het blijft zichtbaar tot de SOM van de
-     twee raakhoeken, acos(R/tipR) + acos(R/|cam|). De eerste term is hier een
-     constante 45,2 graden, en precies zoveel te vroeg verdwenen de labels aan de
-     rand. Zelfde correctie als bij de as-labels (positionAxisLabels), en de formule
-     staat nu één keer in js/core/label-sprite.js in plaats van drie keer. */
-  // De tiphoogte is sinds sessie 37 niet meer constant, dus deze correctie ook niet:
-  // een lager labelpunt steekt minder ver over de horizon heen.
-  const _tipAlt = labelTipAltitude();
-  const threshold = limbThreshold(GLOBE_R, GLOBE_R * (1 + _tipAlt), camPos.length());
-  // Het hover-label hangt niet aan labelQuakes en moet ook werken wanneer het
-  // plafond op 0 staat of er nog geen data is — dus vóór de vroege return.
-  // Het volgt dezelfde zoomregel: één label dat blijft hangen terwijl de rest weg
-  // is, leest als een bug.
-  positionHoverLabel(zoom.schaal, zoom.verborgen, camDir, threshold);
-  if (!labelQuakes.length) return;
-  const lblScale = zoom.schaal;
-  const frac = zoom.frac;
-  // De curve interpoleert naar `labelBudget`, niet naar PARAMS.labelCountMax: anders
-  // bouwt rebuildLabels() er wel meer, maar toont deze lus er nooit meer dan 12 en
-  // doet de slider boven die waarde niets. De vorm van de curve blijft ongewijzigd.
-  // `lo` vangt het randgeval labelBudget < labelCountMin af — zonder die klem komt K
-  // boven het aantal bestaande labels uit; onschadelijk, maar verwarrend bij het meten.
-  const lo = Math.min(PARAMS.labelCountMin, labelBudget);
-  const K = Math.round(lo + (labelBudget - lo) * frac);
-  // pass 1: bepaal zichtbare labels + schermposities (tip = labelpunt, base = epicentrum)
-  // VOLGORDE: eerst near-side, DAN pas het budget. Andersom (`idx < K && nearSide`)
-  // gingen labels aan de achterkant van de bol wél van het plafond af terwijl je ze
-  // nooit zag — bij een ongunstige stand bleven er van 25 een handvol over. Nu telt
-  // alleen wat in beeld komt, en is het aantal constant terwijl je draait.
-  // `camDir` en `threshold` staan bovenaan, want het hover-label heeft ze ook nodig.
-  const items = [];
-  const vp = labelViewport();
-  let getoond = 0;
-  for (let idx = 0; idx < labelQuakes.length; idx++) {
-    const q = labelQuakes[idx];
-    const el = q.__label, line = q.__line, dot = q.__dot;
-    if (!el) continue;
-    // `!zoom.verborgen` staat naast `labelsOn` en niet ervoor: het zijn twee losse
-    // redenen om niets te tonen — de schakelaar in Settings, en te ver uitgezoomd om
-    // nog iets te kunnen lezen. De INDICATOREN op de bol blijven in beide gevallen
-    // gewoon staan; alleen de tekst gaat weg.
-    const near = labelsOn && !zoom.verborgen && q.__dir && q.__dir.dot(camDir) > threshold;
-    /* EN DAARNA: STAAT HET EPICENTRUM OOK ECHT IN BEELD? (sessie 37, Terry)
-
-       `near` is een BOL-toets — ligt dit punt op de helft die naar ons toe staat.
-       Ver uitgezoomd valt die helft ongeveer samen met het scherm, en dan klopt het
-       budget. Ingezoomd is diezelfde helft vele malen groter dan het beeld, en ging
-       het plafond op aan bevingen die je niet ziet: met het maximum op 6 kreeg je er
-       twee op je scherm en verdwenen de andere vier over de rand — mét hun
-       stippellijn, die dan dwars door het beeld liep.
-
-       De toets staat VOOR de budgetteller en niet erna, om dezelfde reden als de
-       near-side-toets zelf: wat je niet ziet, hoort geen plek te bezetten. */
-    let visible = false, tip = null, base = null;
-    if (near) {
-      base = world.getScreenCoords(q.lat, q.lng, labelBaseAltitude());
-      /* ALLEBEI de punten moeten in beeld liggen, en dat is geen overdaad. Het
-         labelpunt hangt bóven het epicentrum, en op een bol schuift een hoger punt
-         bij het projecteren RADIAAL NAAR BUITEN. Bij een beving aan de rand van het
-         beeld ligt de basis dus nog net binnen terwijl de tip er honderden pixels
-         naast valt — met de stippellijn er als een spaak achteraan. Gemeten op
-         afstand 155 boven Europa: van vijf getoonde labels lagen er vier zo. */
-      const binnen = (pt) => pt.x >= -vp.m && pt.x <= vp.w + vp.m
-                          && pt.y >= -vp.m && pt.y <= vp.h + vp.m;
-      if (binnen(base)) {
-        tip = world.getScreenCoords(q.lat, q.lng, _tipAlt);
-        if (binnen(tip) && getoond < K) { visible = true; getoond++; }
-      }
-    }
-    el.style.display = visible ? 'block' : 'none';
-    if (line) line.style.display = visible ? 'block' : 'none';
-    if (dot) dot.style.display = visible ? 'block' : 'none';
-    if (!visible) continue;
-    items.push({ el, line, dot, x: tip.x, y: tip.y, ty: tip.y, base });
-  }
-  // pass 2: stapelen — nabije aardbeving-labels worden verticaal uit elkaar geduwd,
-  // OMHOOG (weg van de indicatoren op de kaart); elk houdt zijn dotted leader-line.
-  // DE TUSSENRUIMTE SCHAALT MEE (sessie 25). Deze lus rekent in schermpixels, maar
-  // het label wordt met `scale(lblScale)` getekend. Met een vaste 30 px zou een
-  // gekrompen label ineens in een veel te ruime kolom staan — en zou een groter
-  // label juist overlappen. De gap hoort bij de HOOGTE van het label, dus schaalt hij
-  // mee met precies dezelfde factor.
-  const gapY = PARAMS.labelStackGapY * lblScale, gapX = PARAMS.labelStackGapX * lblScale;
-  items.sort((a, b) => b.y - a.y); // onderste eerst → kolom groeit naar boven
-  for (let i = 0; i < items.length; i++) {
-    items[i].diepte = 0;
-    let changed = true, guard = 0;
-    while (changed && guard++ < items.length + 2) {
-      changed = false;
-      for (let j = 0; j < i; j++) {
-        if (items[j].weg) continue;   // een verborgen label bezet geen plek in de kolom
-        if (Math.abs(items[i].x - items[j].x) < gapX && Math.abs(items[i].ty - items[j].ty) < gapY) {
-          items[i].ty = items[j].ty - gapY; // push omhoog
-          // Diepte = hoeveel labels er in deze kolom ONDER dit label staan. Via het
-          // maximum over alle botsingen, want een kolom kan uit meerdere botsende
-          // paren zijn opgebouwd en de hoogste bepaalt hoe ver we van de grond zijn.
-          items[i].diepte = Math.max(items[i].diepte, (items[j].diepte || 0) + 1);
-          changed = true;
-        }
-      }
-    }
-    /* Boven de grens niet verder omhoog duwen maar weglaten: doorstapelen liet de
-       kolom bij een dicht cluster het scherm uit groeien.
-
-       SINDS SESSIE 37 IS ER EEN TWEEDE REDEN OM TE WIJKEN: de kolom kan ook boven de
-       BOVENRAND uitsteken zonder dat hij diep is, namelijk als het epicentrum zelf al
-       hoog in beeld staat. `labelStackMax` telt buren, niet pixels, en zag dat niet.
-       Een label dat half boven het scherm hangt is even onleesbaar als een te diepe
-       kolom. */
-    if (items[i].diepte >= PARAMS.labelStackMax || items[i].ty < vp.m) {
-      items[i].weg = true;
-      items[i].el.style.display = 'none';
-      if (items[i].line) items[i].line.style.display = 'none';
-      if (items[i].dot) items[i].dot.style.display = 'none';
-    }
-  }
-  // pass 3: plaats labels (op de gestapelde y) + dotted leader-line naar het epicentrum
-  for (const it of items) {
-    if (it.weg) continue;
-    it.el.style.transformOrigin = '50% 100%';
-    it.el.style.transform = 'translate(' + it.x + 'px, ' + it.ty + 'px) translate(-50%, -100%) scale(' + lblScale + ')';
-    it.line.setAttribute('x1', it.x); it.line.setAttribute('y1', it.ty);
-    it.line.setAttribute('x2', it.base.x); it.line.setAttribute('y2', it.base.y);
-    it.dot.setAttribute('cx', it.base.x); it.dot.setAttribute('cy', it.base.y);
-  }
-}
 
 // labels aan/uit
 const labelToggleEl = document.getElementById('label-toggle');
@@ -6816,7 +6509,7 @@ if (labelCountEl) {
     const n = Number(labelCountEl.value);
     if (labelCountVal) labelCountVal.textContent = String(n);
     Prefs.set('pref.labelCount', n);
-    // Gesmoord: render() bouwt via rebuildLabels() alle label-elementen opnieuw, en
+    // Gesmoord: render() bouwt de hele labelverzameling opnieuw op, en
     // dat mag niet per sleepstap gebeuren. Zelfde patroon en dezelfde reden als
     // countryLabelRankDebounce (sessie 9) en buildTrack (sessie 14).
     clearTimeout(labelCountTimer);
@@ -11606,7 +11299,7 @@ function dismissBoot() {
 }
 
 // Bliksem op slot als er geen relay is. Zie de uitleg bij setLayerLocked() waarom dit
-// hier staat en niet daar: de aanroep raakt via render() → rebuildLabels() de const
+// hier staat en niet daar: de aanroep raakt via render() de const
 // `labelLayer`, en die bestaat pas na dit punt. Alles wat setLayerLocked() nodig heeft,
 // is hier geïnitialiseerd.
 if (!RELAY_BASE) setLayerLocked('lightning', true, 'source');
@@ -12617,8 +12310,7 @@ if (IS_LOCAL) {
     // zodra `document.hidden` waar is. Zonder deze twee is hun zoomgedrag van
     // buitenaf niet vast te stellen: de labels staan dan wel in de DOM, maar op de
     // stand van het laatste frame dat ooit liep.
-    labelZoomState, positionLabels,
-    get labelQuakes() { return labelQuakes; },
+    quakeLabels,
     get detail() { return detail; },
     get panels() { return panels; },
     showDetail, hideDetail, showGeomag, showSolarActivity,
@@ -12759,6 +12451,9 @@ if (IS_LOCAL) {
     solar: () => solarState,
     world: () => world,
     glyphs: () => glyphList,
+    // PARAMS zelf, zodat een meting een parameter kan verzetten zonder het
+    // tuning-paneel nodig te hebben (dat zit niet in de repo).
+    PARAMS,
     quakeIndicator: () => quakeIndicator,
 
     /* DE RENDERLUS MET DE HAND STAPPEN. Nodig omdat een verborgen tabblad geen

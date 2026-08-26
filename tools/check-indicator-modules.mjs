@@ -36,7 +36,8 @@ import { fileURLToPath } from 'node:url';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const MODULES = [
   'js/layers/quake-indicator-shaders.js',
-  'js/layers/quake-indicator.js'
+  'js/layers/quake-indicator.js',
+  'js/ui/quake-labels.js'
 ];
 
 // --- de drie controles -----------------------------------------------------
