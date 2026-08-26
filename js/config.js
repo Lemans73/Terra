@@ -211,7 +211,34 @@ export const PARAMS = {
   quakeRingRadiusLo: 2.8,    // wereldstraal bij quakeMagMin (bol = 100)
   quakeRingRadiusHi: 15,     // wereldstraal bij quakeMagMax
   quakeRingRadiusPow: 0.95,  // kromming van de magnitude→straal-afbeelding
-  quakeRingLift: 0,          // hoogte boven het oppervlak (eenheden)
+  /* BOVEN DE KAARTLIJNEN, en dat is een reparatie (sessie 40, Terry).
+
+     Deze stond op 0 — de ring lag exact op het oppervlak, wat mooi samengaat
+     met de wolkenschil erboven. Maar `overlayAltitude` zet de plaatgrenzen en
+     de landgrenzen op 0,006, dus op straal 100,6, en die lijnen liggen daarmee
+     VOOR de ring. Ze tekenden er dwars overheen.
+
+     De lijnen zelf omlaag halen kan niet: ze staan hoog omdat ze anders op
+     bolle stukken door het oppervlak zakken, en hun casing ligt al 0,0008 lager
+     (zie overlayCasingDrop). Dus gaat de indicator eroverheen in plaats van de
+     kaart eronderdoor.
+
+     GEMETEN op camera-afstand 200, met de aarde aan zodat de achterkant
+     meetelt zoals hij hoort — het aantal ringpixels dat een kaartlijn afsnoept:
+
+         lift        0     0,4   0,61   0,7    0,8    1,2    2,0
+         aangetast  3656   1790   991   1001    999   1000    997  pixels
+         van        0,54%  0,26% 0,15%  0,15%  0,15%  0,15%  0,15%
+
+     De knik ligt op 0,61 — precies waar de lijnen liggen — en daarboven is de
+     curve vlak. Wat er dan nog overblijft is niet meer de dieptetoets maar de
+     antialiasing op de lijnrand, en dat is met geen enkele hoogte weg te nemen.
+
+     0,8 en niet 0,61: een fractie marge, want bij een scheve blik op de limb
+     wordt het hoogteverschil in schermpixels vrijwel nul. Hoger heeft geen zin
+     — de meting is daar vlak — en kost alleen parallax ten opzichte van de
+     kaart. Op straal 100,8 blijft de ring ruim onder de wolkenschil (103,5). */
+  quakeRingLift: 0.8,        // hoogte boven het oppervlak (eenheden)
   /* HET AANTAL RINGEN LEEST ALS EEN SCHAALVERDELING, niet als sier: zwaarder is
      meer ringen. De LIJNDIKTE loopt bij Terry de andere kant op dan bij Grok —
      zwaarder is dikker, want een zware beving hoort méér op het netvlies te
@@ -251,7 +278,11 @@ export const PARAMS = {
   quakeShockRadiusLo: 2.8,
   quakeShockRadiusHi: 20,
   quakeShockRadiusPow: 2,
-  quakeShockLift: 0.2,
+  /* MEE OMHOOG met de ring: boven de kaartlijnen (0,6) maar onder de ring
+     (0,8), zodat de puls onder zijn eigen indicator door loopt in plaats van
+     eroverheen. Precies 0,6 zou gelijk liggen met de lijnen en dan beslist
+     de tekenvolgorde het — daarom 0,7. Zie de noot bij quakeRingLift. */
+  quakeShockLift: 0.7,
   quakeShockWaves: 2,        // aantal golven tegelijk onderweg (max 4, zie shader)
   quakeShockSpeed: 0.24,
   quakeShockThickness: 0.04,
