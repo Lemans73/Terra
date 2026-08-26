@@ -185,6 +185,19 @@ export const PREFS_DEFAULTS = {
   'pref.labelCount': 12,
   'pref.nightGlow':  12,
 
+  /* ---- Welke aardbeving-indicator ---- (sessie 40)
+     Drie standen, en `both` is er om te METEN en niet om te kijken:
+
+       'v1'    de bestaande drie meshes per beving (gloed, kern, shockwave)
+       'v2'    de instanced ring- en shockwave-lagen uit de workbench
+       'both'  allebei tegelijk — zo is de schermafstand tussen de twee
+               indicatoren te meten, de toets uit het integratiecontract
+
+     BEGINT OP 'v1', en dat is de afspraak uit dat contract: de oude indicator
+     blijft staan zolang de nieuwe niet bewezen is. Terugkeren is daarmee een
+     schakelaar en geen revert. */
+  'pref.quakeIndicator': 'v1',
+
   /* ---- De aardbevingen: de bron en het magnitudevenster ----
      `quake.source` is de adapter-id ('emsc' of 'usgs'). ALLEEN DE KNOP schrijft
      hem: de dekkingstoets in index.html wisselt ook van bron zodra de gekozen

@@ -175,6 +175,135 @@ export const PARAMS = {
   shockEdge: 0.02,      // randscherpte (lager = hardere overgang)
   shockThickness: 0.04, // randdikte (breedte van de ringband)
   shockOpacity: 1.0, shockSpeed: 0.1,
+
+  /* ===== DE AARDBEVING-INDICATOR v2 ==========================================
+     Overgezet uit logs/indicator-workbench.html (sessie 38-39), waar deze set
+     in zeven ronden met de schuiven is afgesteld. Terry's stand, één op één.
+
+     WAAROM DE PREFIX `quake`. Er staan hierboven al een `shockLift`, een
+     `shockEdge`, een `shockThickness`, een `shockOpacity` en een `shockSpeed`:
+     die van de v1-indicator. Zolang beide generaties naast elkaar draaien
+     moeten die uit elkaar te houden zijn — en na het opruimen van v1 is een
+     hernoeming een aparte, zichtbare stap in plaats van een stille botsing.
+
+     DE SCHAAL STAAT LOS VAN `iconScale*` HIERONDER, en dat is een besluit
+     (Terry, sessie 40). Die stuurt via animateShader() élke glyph in de app:
+     vulkanen, bliksem, bosbranden, zee-ijs. De ring is afgesteld op heel
+     andere getallen — ref 120 tegen 280, ondergrens 0,18 tegen 0,4 — omdat hij
+     gebouwd is op verder kunnen inzoomen dan `zoomMinDistance` nu toestaat.
+     Die twee sets bij elkaar vegen zou een app-brede uiterlijkwijziging zijn.
+     ========================================================================== */
+
+  // ---- de ring ----
+  /* DE MATEN, en waarom het niet Groks maten zijn. Zijn indicator is over de
+     hele lijn twee tot vijf keer kleiner dan wat Terra gewend is — omgerekend
+     naar straal 100 en gemeten tegen de v1-shockwave hierboven:
+
+         magnitude        4,5    5,5    6,5    7,4    8,0    9,0
+         v1-shockwave     8,4   10,5   12,6   14,5   15,8   17,9  eenheden
+         Grok ring        1,6    3,4    5,2    6,9    7,9    8,3  eenheden
+
+     Dat is de tweede helft van de verklaring waarom zijn ringen op de bol als
+     stippen lezen; de eerste helft staat bij het ringtal in de fragment-shader.
+     Maar v1's schaal overnemen kan ook niet: van M4,5 naar M9,0 groeit die maar
+     met een factor 2,1, en dan valt er aan de grootte geen magnitude meer af te
+     lezen. Deze set neemt het bereik van Grok en de orde van grootte van v1. */
+  quakeRingRadiusLo: 2.8,    // wereldstraal bij quakeMagMin (bol = 100)
+  quakeRingRadiusHi: 15,     // wereldstraal bij quakeMagMax
+  quakeRingRadiusPow: 0.95,  // kromming van de magnitude→straal-afbeelding
+  quakeRingLift: 0,          // hoogte boven het oppervlak (eenheden)
+  /* HET AANTAL RINGEN LEEST ALS EEN SCHAALVERDELING, niet als sier: zwaarder is
+     meer ringen. De LIJNDIKTE loopt bij Terry de andere kant op dan bij Grok —
+     zwaarder is dikker, want een zware beving hoort méér op het netvlies te
+     drukken. Hier staan lo en hi gelijk (0,05) omdat dikkere lijnen op grotere
+     afstand de ringen lieten dichtslibben; de dunne lijn is de oplossing voor
+     precies dat. Lijndikte naar zoomniveau is een idee voor later. */
+  quakeRingCountLo: 2,       // aantal concentrische ringen bij quakeMagMin
+  quakeRingCountHi: 8,       // idem bij quakeMagMax
+  quakeRingLineLo: 0.05,     // lijndikte bij quakeMagMin (fractie van de schijfstraal)
+  quakeRingLineHi: 0.05,     // idem bij quakeMagMax
+  quakeRingFalloff: 0,       // hoeveel elke volgende ring naar buiten toe vervaagt
+  quakeRingEdge: 1,          // deel van de lijndikte dat zacht is; 1 = volledig zacht
+  /* DE ONDERGRENS IN SCHERMPIXELS IS GEEN VERFIJNING MAAR EEN REPARATIE.
+     Gemeten 2026-08-23: met de dikte als vaste fractie van de schijfstraal is
+     één ringlijn over het hele gangbare zoombereik 0,21 tot 0,29 PIXEL dik.
+     Zo'n lijn bestaat niet als lijn — de antialiasing smeert hem uit tot een
+     grijze veeg waarvan de helderheid afhangt van waar de pixelgrid toevallig
+     valt. De volledige meettabel staat in de fragment-shader. */
+  quakeRingLineMinPx: 3.6,   // ondergrens van de lijndikte, in SCHERMPIXELS
+  quakeRingFitToScreen: true,// ringtal begrenzen op wat er leesbaar in past
+  quakeRingGapMinPx: 5,      // minimale hart-op-hart-afstand tussen twee ringen, px
+  quakeRingFill: 0,          // vulling binnen de buitenste ring
+  quakeRingCore: 3,          // helderheid van de kern
+  quakeRingOpacity: 1,
+  /* VOLUME EN GLANS STAAN OP NUL, en dat is een uitkomst en geen vergetelheid
+     (Terry, sessie 39). Ze geven de lijn een halfronde dwarsdoorsnede met een
+     lichtval — mooi op een dikke lijn, maar deze set draait juist op een dunne,
+     en daar viel het verkeerd uit. Op 0 tekent de shader pixel voor pixel wat
+     hij zonder deze twee tekende; dat volgt uit de constructie, want mix(1, x, 0)
+     is exact 1. De code blijft staan voor als de lijndikte ooit meebeweegt. */
+  quakeRingVolume: 0,
+  quakeRingShine: 0,
+
+  // ---- de shockwave ----
+  // Een eigen laag en niet een term in de ringshader: los te schakelen, eigen
+  // (veel ruimere) maat, en de ringshader blijft leesbaar.
+  quakeShockRadiusLo: 2.8,
+  quakeShockRadiusHi: 20,
+  quakeShockRadiusPow: 2,
+  quakeShockLift: 0.2,
+  quakeShockWaves: 2,        // aantal golven tegelijk onderweg (max 4, zie shader)
+  quakeShockSpeed: 0.24,
+  quakeShockThickness: 0.04,
+  quakeShockEdge: 0.005,
+  /* DE LEEFTIJD-ENVELOPE, IN UREN. Vers pulseert vol, daarna dooft het uit;
+     voorbij AgeHi wordt er niets meer getekend. Zonder die grens pulseert de
+     hele wereld altijd en betekent een puls niets meer.
+     De leeftijd wordt gemeten vanaf het GEKOZEN moment (momentNow), niet vanaf
+     de wandklok — anders staat deze laag op de tijdschuif permanent uit. */
+  quakeShockAgeLo: 4,        // tot hier vol (uren)
+  quakeShockAgeHi: 72,       // hier is er niets meer over (uren)
+  quakeShockOpacity: 1,
+
+  // ---- stapelen ----
+  /* STAAT UIT IN DE EERSTE RONDE (Terry, sessie 40). De code verhuist mee — hij
+     zit ín de vertex-shader en is er niet uit te knippen — maar het gedrag nog
+     niet: met het stapelen aan loopt de eerste toets (valt de ring op dezelfde
+     plek als de v1-indicator?) er dwars doorheen. In de workbench schoven 257
+     van de 450 events gemiddeld 43 px, tot 141 px aan toe.
+     Terry's stand voor als de schuif omgaat: near 200, far 250, lift 2,2,
+     spread 1. Verschuiven mag — anders is een kluwen niet te ontwarren — maar
+     HERSCHIKKEN niet: de tangentiële richting blijft, alleen de afstand groeit. */
+  quakeStackOn: false,
+  quakeStackNear: 200,       // camera-afstand waarop het stapelen begint
+  quakeStackFar: 250,        // en waarop het volledig is
+  quakeStackLift: 2.2,       // hoogtewinst per verdieping (maal de icoonschaal)
+  quakeStackSpread: 1,       // hoe ver verdiepingen opzij worden gezet
+  quakeStackOverlap: 1,      // hoe strikt twee ringen elkaar moeten raken om te stapelen
+  quakeStackMaxLayers: 10,
+
+  // ---- de schaal, alleen voor deze laag ----
+  // Zelfde vorm als iconScale* hieronder, andere getallen. Zie de kop van dit blok.
+  quakeIconScaleRef: 120,      // camera-afstand waarbij de schaal 1 is
+  quakeIconScalePow: 1.5,      // steilheid
+  quakeIconScaleMin: 0.18,     // ondergrens (sterk ingezoomd)
+  quakeIconScaleMax: 1.4,      // bovengrens (ver uitgezoomd)
+  /* DE NABIJHEIDSKLEM. Zonder deze groeit de hoekgrootte onder de ondergrens
+     ongeremd; met een vloer op 100 — de bolstraal zelf — is de hoekstraal exact
+     constant, en dat is gemeten en niet afgeleid. Terra's gedeelde variant meet
+     tot 101,5 (de glyphschil); deze laag ligt op het oppervlak. */
+  quakeIconNearPerUnit: 0.01227,
+  quakeIconNearFloor: 100,
+
+  // ---- het magnitude-bereik van de AFBEELDING ----
+  /* NIET HET FILTER. `magMin`/`magMax` in index.html bepalen welke bevingen je
+     te zien krijgt en staan onder de bediening van de bezoeker; deze twee
+     bepalen hoe een magnitude op 0..1 wordt afgebeeld en daarmee op straal,
+     ringtal en lijndikte. Zou de indicator meeschalen met het filter, dan
+     veranderde elke beving van maat zodra je de ondergrens verschoof. */
+  quakeMagMin: 2.5,
+  quakeMagMax: 9.5,
+
   // vulkanen — additieve pyramide-piek + warme voet-gloed
   volcanoHeight: 3.0, volcanoRadius: 1.5, volcanoGlow: 5, volcanoOpacity: 1.0,
   // bosbranden — zachte rode gloed (sprite)
