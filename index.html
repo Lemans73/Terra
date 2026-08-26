@@ -4134,9 +4134,69 @@ const gradePass = new ShaderPass({
 });
 world.postProcessingComposer().addPass(gradePass);
 
-// De tijdelijke lil-gui tuning-GUI is op 2026-07-30 definitief verwijderd. Hij heeft
-// zijn werk gedaan: de uitgevonden waarden staan nu vast in PARAMS (js/config.js).
-// Bijstellen doe je daar. Dit scheelt ook de hele lil-gui-import.
+/* ---- Het tuning-paneel (sessie 40) ----------------------------------------
+
+   De lil-gui is op 2026-07-30 verwijderd met de noot dat hij zijn werk had
+   gedaan: de gevonden waarden stonden in PARAMS en daar stel je ze bij. Dat
+   klopte, tot er een laag bij kwam waarvan het uiterlijk van een WISSELWERKING
+   afhangt. De bloom-pass loopt dicht opeengepakte indicatoren aan elkaar tot
+   één witte vlek, en hoevéél dat is hangt af van de dichtheid van het veld op
+   dat moment. Zoiets valt niet vooruit te rekenen; je moet eraan kunnen draaien
+   terwijl je kijkt.
+
+   DRIE DINGEN HOUDEN HET BUITEN DE REPO EN DE BUILD, en ze grijpen in elkaar:
+
+     1  `js/ui/tuning-panel.js` staat in .gitignore.
+     2  Deze import is DYNAMISCH, en dat is geen stijlkeuze.
+        tools/build-standalone.mjs leidt af welke modules hij insluit uit regels
+        die met `import ... from` BEGINNEN (zie IMPORT_RE daar). Een
+        `import(...)` als expressie matcht die regex niet en valt er dus vanzelf
+        buiten — er is geen uitzondering in de build nodig.
+     3  De `.catch()` is stil en noodzakelijk. Wie de repo kloont heeft het
+        bestand niet, en dan hoort er niets te gebeuren in plaats van een
+        onafgevangen afwijzing bij elke start.
+
+   WAT ER WÉL BLIJFT STAAN IS EEN 404 IN HET NETWERKTABBLAD, en dat is niet weg
+   te werken: je kunt niet weten of een bestand bestaat zonder het op te vragen.
+   Een HEAD-verzoek vooraf zou dezelfde 404 geven plus een extra ronde. De
+   JS-console blijft schoon — GEMETEN met het bestand weggehaald: de app start
+   normaal, 417 bevingen, geen enkele scriptfout.
+
+   IN DE STANDALONE draait deze tak niet: die opent via file://, en `IS_LOCAL`
+   toetst `!IS_FILE`. De regel staat er wel in — de build strookt alleen de
+   MODULE eruit, niet de aanroep — en dat is onschadelijk. Serveer je terra.html
+   toevallig naast een echte tuning-panel.js op localhost, dan laadt hij en heb
+   je je schuiven; dat is geen faalgeval maar een meevaller.
+
+   HET MATERIAAL GAAT ALS GETTER MEE en niet als waarde, en de reden is de
+   VOLGORDE. `shaderMaterial` wordt in een `.then()` gebouwd ná het laden van
+   vijf texturen; op het moment dat dit paneel opent bestaat hij nog niet. Een
+   waarde die hier wordt vastgelegd is dus `null`, en dan doen de schuiven stil
+   niets. Dezelfde val als bij de `window.__test`-haak van sessie 14.
+
+   GEMETEN (sessie 40): het materiaal wordt daarna NIET meer vervangen — een
+   kwaliteitswissel verruilt alleen de texturen erin, en een rondje schematisch
+   en terug hergebruikt het bestaande materiaal ("bouw eenmalig, daarna
+   hergebruiken"). De getter beschermt hier dus tegen de volgorde en niet tegen
+   vervanging. Hij blijft staan omdat die belofte wél in de code staat en een
+   volgende wijziging hem waar kan maken.
+
+   EN ELKE SCHUIF SCHRIJFT NAAR PARAMS. Dat is wat de bewaarde stand bij het
+   opstarten alsnog laat landen: de materiaalopbouw leest PARAMS, dus een waarde
+   die vóór de bouw is gezet komt er vanzelf in terecht. Getoetst met een
+   afwijkende stand in localStorage: relief 7,25 stond na het herladen in het
+   uniform. */
+let tuning = null;
+if (IS_LOCAL) {
+  import('./js/ui/tuning-panel.js')
+    .then(m => {
+      tuning = m.createTuningPanel({
+        PARAMS, bloomPass, gradePass,
+        getEarthMaterial: () => shaderMaterial
+      });
+    })
+    .catch(() => { /* hoort er niet te zijn buiten de ontwikkelmachine */ });
+}
 
 // THREE is direct geïmporteerd en wordt met globe.gl gedeeld via de import map
 // (globe.gl is geladen met ?external=three) → gegarandeerd dezelfde instance.

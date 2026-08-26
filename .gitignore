@@ -45,3 +45,18 @@ terra-standalone.html
 
 # Werknotitie, geen onderdeel van het project
 docs/README-screenshot.txt
+
+# Het tuning-paneel (sessie 40). Een ontwikkelinstrument: het staat achter
+# IS_LOCAL, wordt met een DYNAMISCHE import() geladen en hoort niet in de repo
+# of in de standalone.
+#
+# Die dynamische vorm is niet toevallig. tools/build-standalone.mjs leidt af
+# welke modules hij insluit uit regels die met `import ... from` BEGINNEN; een
+# `await import(...)` matcht die regex niet en valt er dus vanzelf buiten. Er is
+# daarom geen uitzondering in de build nodig — hij volgt uit de vorm.
+#
+# De aanroep in index.html heeft een stille .catch(): wie de repo kloont heeft
+# dit bestand niet, en dan gebeurt er niets. Er blijft wel een 404 in het
+# netwerktabblad staan — je kunt niet weten of een bestand bestaat zonder het op
+# te vragen — maar de JS-console blijft schoon.
+js/ui/tuning-panel.js
