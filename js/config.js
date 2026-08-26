@@ -280,9 +280,25 @@ export const PARAMS = {
   // ---- de shockwave ----
   // Een eigen laag en niet een term in de ringshader: los te schakelen, eigen
   // (veel ruimere) maat, en de ringshader blijft leesbaar.
-  quakeShockRadiusLo: 2.8,
-  quakeShockRadiusHi: 20,
-  quakeShockRadiusPow: 2,
+  /* DE MAAT VAN DE PULS, ALS FACTOR VAN DE RING (sessie 40, Terry).
+
+     Hier stonden een eigen lo, hi en pow. Die zijn weg, en dat is een reparatie:
+     twee losse maten lopen uiteen zodra er aan één van beide wordt gedraaid. Dat
+     gebeurde ook — de ring ging naar 10..30 met pow 0,95, de shockwave bleef op
+     2,8..20 met pow 2, en toen viel de puls bij ELKE magnitude binnen zijn eigen
+     indicator:
+
+         magnitude    2,5    4,5    6,5    9,5
+         ring        10,0   16,1   21,8   30,0  eenheden
+         shockwave    2,8    4,2    8,4   20,0
+         verhouding  0,28   0,26   0,39   0,67
+
+     Met de ringen aan was hij daardoor onzichtbaar; pas met de ringen uit viel
+     op dat er iets stond. Nu is er één maat en één factor.
+
+     BOVEN 1, want een golf dijt VOORBIJ zijn bron uit. Op 1,0 valt de puls
+     precies samen met de buitenste ring, daaronder verdwijnt hij er weer in. */
+  quakeShockScale: 1.6,
   /* MEE OMHOOG met de ring: boven de kaartlijnen (0,6) maar onder de ring
      (0,8), zodat de puls onder zijn eigen indicator door loopt in plaats van
      eroverheen. Precies 0,6 zou gelijk liggen met de lijnen en dan beslist

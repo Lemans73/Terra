@@ -150,9 +150,13 @@ export function createQuakeIndicator(THREE, opts = {}) {
   const shockUniforms = Object.assign(sharedUniforms(), {
     uTime:      { value: 0 },
     uLift:      { value: P.quakeShockLift },
-    uRadLo:     { value: P.quakeShockRadiusLo },
-    uRadHi:     { value: P.quakeShockRadiusHi },
-    uRadPow:    { value: P.quakeShockRadiusPow },
+    /* DE RINGMAAT, niet een eigen. Zie de lange noot in QUAKE_SHOCK_VERT: twee
+       losse maten liepen uiteen zodra er aan één werd gedraaid, en dan valt de
+       puls binnen zijn eigen indicator. */
+    uRadLo:     { value: P.quakeRingRadiusLo },
+    uRadHi:     { value: P.quakeRingRadiusHi },
+    uRadPow:    { value: P.quakeRingRadiusPow },
+    uShockScale:{ value: P.quakeShockScale },
     uAgeLo:     { value: P.quakeShockAgeLo },
     uAgeHi:     { value: P.quakeShockAgeHi },
     uWaves:     { value: P.quakeShockWaves },
@@ -485,10 +489,12 @@ export function createQuakeIndicator(THREE, opts = {}) {
         uRingVolume: 'quakeRingVolume', uRingShine: 'quakeRingShine', uOpacity: 'quakeRingOpacity'
       }],
       [shockUniforms, {
-        uLift: 'quakeShockLift', uRadLo: 'quakeShockRadiusLo', uRadHi: 'quakeShockRadiusHi',
-        uRadPow: 'quakeShockRadiusPow', uAgeLo: 'quakeShockAgeLo', uAgeHi: 'quakeShockAgeHi',
+        uLift: 'quakeShockLift', uAgeLo: 'quakeShockAgeLo', uAgeHi: 'quakeShockAgeHi',
         uWaves: 'quakeShockWaves', uSpeed: 'quakeShockSpeed', uThickness: 'quakeShockThickness',
-        uEdge: 'quakeShockEdge', uOpacity: 'quakeShockOpacity'
+        uEdge: 'quakeShockEdge', uOpacity: 'quakeShockOpacity',
+      // De maat volgt de RING, plus de eigen factor.
+      uRadLo: 'quakeRingRadiusLo', uRadHi: 'quakeRingRadiusHi',
+      uRadPow: 'quakeRingRadiusPow', uShockScale: 'quakeShockScale'
       }]
     ];
     for (const [uni, map] of pairs) {

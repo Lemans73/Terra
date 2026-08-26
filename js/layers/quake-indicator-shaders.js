@@ -466,7 +466,27 @@ attribute float aSeed;
 
 uniform float uCamDist;
 uniform float uLift;              // uRadius komt uit het stapelblok
+/* DEZELFDE DRIE ALS DE RING, en dat is een reparatie (sessie 40).
+
+   De shockwave had zijn eigen lo/hi/pow. Klinkt goed — het contract noemt zelfs
+   "zijn eigen, veel ruimere maat" — maar het betekent dat de twee uiteen kunnen
+   lopen zodra er aan één van beide wordt gedraaid. En dat gebeurde: de ring ging
+   naar 10..30 met pow 0,95, de shockwave bleef op 2,8..20 met pow 2. GEMETEN:
+
+       magnitude    2,5    4,5    6,5    9,5
+       ring        10,0   16,1   21,8   30,0  eenheden
+       shockwave    2,8    4,2    8,4   20,0
+       verhouding  0,28   0,26   0,39   0,67
+
+   De puls viel dus bij ELKE magnitude binnen zijn eigen indicator, en met de
+   ringen aan zag je hem daardoor nooit. Dat de verhouding ook nog per magnitude
+   verschilt maakt het onherstelbaar met één schuif.
+
+   Nu is er één maat: de shockwave IS de ringstraal, maal uShockScale. Een golf
+   die voorbij de indicator uitdijt hoort een factor boven 1 te hebben. Wie de
+   ring verandert krijgt de puls per constructie mee. */
 uniform float uRadLo, uRadHi, uRadPow;
+uniform float uShockScale;
 uniform float uAgeLo, uAgeHi;
 
 varying vec2  vUv;
@@ -494,7 +514,7 @@ void main() {
   vec3 ty = normalize(cross(n, tx));
 
   float mf = clamp(aMagFrac, 0.0, 1.0);
-  float worldR = mix(uRadLo, uRadHi, pow(max(mf, 0.0), max(uRadPow, 0.01)));
+  float worldR = mix(uRadLo, uRadHi, pow(max(mf, 0.0), max(uRadPow, 0.01))) * uShockScale;
   float s = worldR * iconScale(uCamDist) * uSizeBoost;
 
   // Op de bol projecteren, net als de ring — anders steekt de schijf bij de
