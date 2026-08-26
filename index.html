@@ -516,6 +516,26 @@
       </div>
       </section>
 
+      <!-- ---------- TOEGANKELIJKHEID (sessie 40) ----------
+           Een eigen sectie en niet drie losse rijen onder Preferences: deze drie
+           gaan over of de app LEESBAAR en RUSTIG is, niet over wat er te zien is.
+           Wie ze nodig heeft, zoekt ze onder die naam.
+
+           `Reduce motion` begint op de systeemvoorkeur (prefers-reduced-motion) en
+           de mediaquery blijft luisteren, maar een keuze hier wint daarvan — zie
+           de noot bij `motionReduced` in het script. -->
+      <section class="acc" data-acc="settings-a11y">
+      <button class="acc-head" type="button" aria-expanded="false">
+      <span>Accessibility</span>
+      <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="acc-body">
+      <div class="elayer" id="motion-toggle"><span class="edot"></span>Reduce motion<span class="estat" id="es-motion">off</span></div>
+      <div class="elayer" id="labeloutline-toggle"><span class="edot"></span>Outline quake labels<span class="estat" id="es-labeloutline">on</span></div>
+      <div class="elayer" id="labelwhite-toggle"><span class="edot"></span>High-contrast labels<span class="estat" id="es-labelwhite">off</span></div>
+      </div>
+      </section>
+
       <!-- ---------- AARDE-TEXTUREN ----------
            Earth layers en Texture quality zijn hier samengevoegd: het zijn allebei
            instellingen over hoe de aarde WORDT GETEKEND, niet over wat je erop ziet.
@@ -2210,6 +2230,21 @@ import { buildExpertGlyph } from './js/symbols-expert.js';
 // de gebeurtenis zelf.
 const REDUCED_MOTION = window.matchMedia
   ? window.matchMedia('(prefers-reduced-motion: reduce)').matches : false;
+
+/* DE EFFECTIEVE STAND, en die is iets anders dan de systeemvoorkeur hierboven.
+
+   `REDUCED_MOTION` is wat het BESTURINGSSYSTEEM zegt en verandert niet meer na
+   het laden. `motionReduced` is wat er GELDT: hij begint op de systeemvoorkeur
+   (zie `pref.reducedMotion` in js/core/prefs.js, waar dat de fabrieksstand is)
+   en de bezoeker kan hem in Settings omzetten.
+
+   WAAROM ALLEBEI. De opstartbeslissingen — de intro-animatie, de bouw van het
+   detailpaneel — draaien vóórdat er iemand iets heeft kunnen kiezen; die lezen
+   de systeemvoorkeur. Alles wat daarna nog beweegt leest deze.
+
+   Toegewezen met een `let` en niet als const: hij wordt vanuit de schakelaar
+   gezet. Zie ook de noot bij `autoRotateWanted`, die dezelfde vorm heeft. */
+let motionReduced = REDUCED_MOTION;
 
 // COLORS, SOURCE_URLS, DETAIL_LINK_LABELS, AQI_BANDS, aqiBand/aqiHex
 // → verplaatst naar ./js/config.js (Stap 0).
@@ -6151,7 +6186,7 @@ function animateShader() {
      REDUCED_MOTION — bevriezen en niet verbergen, want elke beving draagt zijn
      eigen fase in aSeed en het beeld blijft daardoor gevarieerd. */
   const _qi = setupQuakeIndicator();
-  if (_qi) _qi.update(_camLen, REDUCED_MOTION ? 0 : gt, quakeRingLiftNu());
+  if (_qi) _qi.update(_camLen, motionReduced ? 0 : gt, quakeRingLiftNu());
   // Eén keer per frame gelezen; de lus hieronder gebruikt hem per glyph.
   const _v1Quakes = quakeMode !== 'v2';
 
@@ -6414,6 +6449,21 @@ document.body.appendChild(labelLayer);
    `momentNow` moet het GEKOZEN moment lezen en niet het moment van nu. Een
    doorgegeven waarde zou van alle drie een momentopname zijn — dezelfde val als
    bij de `window.__test`-haak van sessie 14. */
+/* DE TOEGANKELIJKHEIDSKEUZES LANDEN IN PARAMS voordat de laag wordt gebouwd.
+   Niet erna: die module leest `P` elke frame, dus later zetten zou ook werken —
+   maar dan tekent de laag één frame lang de fabrieksstand, en dat is precies de
+   flikkering waar het register voor bestaat.
+
+   DE DIKTE UIT CONFIG WORDT APART BEWAARD. Uitzetten is hem op 0 zetten, en dan
+   is de ingestelde waarde weg; weer aanzetten zou op 0 uitkomen en de schakelaar
+   zou stil niets doen. Zo is er één plek waar "hoe dik" staat en één waar "of". */
+const LABEL_OUTLINE_PX = PARAMS.quakeLabelOutline;
+function pasLabelToegankelijkheid() {
+  PARAMS.quakeLabelOutline = Prefs.get('pref.labelOutline') ? LABEL_OUTLINE_PX : 0;
+  PARAMS.quakeLabelWhite = !!Prefs.get('pref.labelWhite');
+}
+pasLabelToegankelijkheid();
+
 const quakeLabels = createQuakeLabels(THREE, {
   params: PARAMS,
   depthRGB,
@@ -6466,6 +6516,58 @@ function expertIndicatorAltitude() {
 }
 
 
+
+/* ---- De toegankelijkheidsschakelaars (sessie 40) --------------------------
+
+   Drie rijen met dezelfde grammatica als de rest van Preferences: klik wisselt,
+   de klasse `on` draagt de opmaak, en het woordje ernaast zegt de stand. Ze
+   staan niet in PREFS_RIJEN omdat die tabel bij het opstarten draait en deze
+   drie ook iets moeten DOEN — de klasse zetten is daar maar de helft van.
+
+   `Reduce motion` raakt alles wat na het opstarten nog beweegt: de klok van de
+   indicatorlaag, de camera-vluchten en het scrollen. Wat er vóór de eerste
+   interactie gebeurt (de intro, de bouw van het detailpaneel) leest de
+   systeemvoorkeur en staat dus los. */
+const A11Y_RIJEN = [
+  { id: 'motion-toggle', stat: 'es-motion', sleutel: 'pref.reducedMotion',
+    doe: (v, doorKlik) => {
+      motionReduced = v;
+      /* Auto-rotate is beweging; hem aan laten staan terwijl de bezoeker om rust
+         vraagt zou de schakelaar tegenspreken. Andersom NIET automatisch weer
+         aan: dat is een eigen keuze met een eigen voorkeur.
+
+         ALLEEN BIJ EEN KLIK. Bij het opstarten regelt `autoRotateWanted` dit al
+         (die leest REDUCED_MOTION), en hier nog eens schrijven zou de bewaarde
+         autorotate-voorkeur overschrijven met een omstandigheid. */
+      if (v && doorKlik) setAutoRotate(false);
+    } },
+  { id: 'labeloutline-toggle', stat: 'es-labeloutline', sleutel: 'pref.labelOutline',
+    doe: pasLabelToegankelijkheid },
+  { id: 'labelwhite-toggle', stat: 'es-labelwhite', sleutel: 'pref.labelWhite',
+    doe: pasLabelToegankelijkheid }
+];
+for (const rij of A11Y_RIJEN) {
+  const el = document.getElementById(rij.id);
+  if (!el) continue;
+  const toon = (v) => {
+    el.classList.toggle('on', !!v);
+    const s = document.getElementById(rij.stat);
+    if (s) s.textContent = v ? 'on' : 'off';
+  };
+  const start = Prefs.get(rij.sleutel);
+  toon(start);
+  /* EN METEEN TOEPASSEN, niet alleen bij een klik. `motionReduced` begint op de
+     SYSTEEMvoorkeur; een bewaarde keuze die daarvan afwijkt zou anders pas gelden
+     nadat de bezoeker de schakelaar nog eens had omgezet. Dezelfde val als bij
+     nightBrightness in sessie 35: de rij zei het goede en de scene deed het oude. */
+  rij.doe(start);
+  el.addEventListener('click', () => {
+    const v = !Prefs.get(rij.sleutel);
+    Prefs.set(rij.sleutel, v);
+    toon(v);
+    rij.doe(v, true);
+  });
+}
 
 // labels aan/uit
 const labelToggleEl = document.getElementById('label-toggle');
@@ -6555,7 +6657,7 @@ function flyTo(d) {
   pauseAutoRotate();
   // Bij minder-beweging direct naar de bestemming springen in plaats van eroverheen
   // te vliegen. Het doel is hetzelfde, de weg ernaartoe is wat misselijk kan maken.
-  world.pointOfView({ lat: d.lat, lng: d.lng, altitude: 0.7 }, REDUCED_MOTION ? 0 : 1200);
+  world.pointOfView({ lat: d.lat, lng: d.lng, altitude: 0.7 }, motionReduced ? 0 : 1200);
 }
 
 // ---- Labels bij de actieve gebieden op de zon ----------------
@@ -6781,7 +6883,7 @@ document.getElementById('qlist-summary').addEventListener('click', () => {
   const uitklap = document.querySelector('[data-expand="quake"]');
   if (uitklap && !uitklap.classList.contains('open')) uitklap.click();
   document.querySelector('.layer-detail[data-detail="quake"]')
-    ?.scrollIntoView({ behavior: REDUCED_MOTION ? 'auto' : 'smooth', block: 'nearest' });
+    ?.scrollIntoView({ behavior: motionReduced ? 'auto' : 'smooth', block: 'nearest' });
 });
 
 /* Alleen nog tonen en verbergen (sessie 25). Wat hier stond en weg is: de
@@ -8183,7 +8285,7 @@ function flyCamera(cam, ctl, pos, target, limits) {
   sunFlight.naarDoel.copy(target);
   sunFlight.min = limits.min;
   sunFlight.max = limits.max;
-  sunFlight.duur = REDUCED_MOTION ? 0 : 1100;
+  sunFlight.duur = motionReduced ? 0 : 1100;
   sunFlight.t0 = performance.now();
   sunFlight.actief = true;
   ctl.minDistance = 0.01;

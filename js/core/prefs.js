@@ -198,6 +198,21 @@ export const PREFS_DEFAULTS = {
      schakelaar en geen revert. */
   'pref.quakeIndicator': 'v1',
 
+  /* ---- Toegankelijkheid ---- (sessie 40)
+
+     `pref.reducedMotion` is de enige met een BEREKENDE fabrieksstand: hij begint
+     op wat het systeem zegt (prefers-reduced-motion) en niet op een vast getal.
+     Dat kan hier, want dit register wordt bij het laden opgebouwd en de
+     mediaquery is dan al te lezen.
+
+     ALLEEN AFWIJKINGEN WORDEN BEWAARD, en dat werkt hier precies goed: wie de
+     schakelaar nooit aanraakt volgt het systeem, ook als die voorkeur later
+     verandert. Wie hem wél omzet, wint daarvan. */
+  'pref.reducedMotion': (typeof window !== 'undefined' && window.matchMedia)
+    ? window.matchMedia('(prefers-reduced-motion: reduce)').matches : false,
+  'pref.labelOutline': true,
+  'pref.labelWhite': false,
+
   /* ---- De aardbevingen: de bron en het magnitudevenster ----
      `quake.source` is de adapter-id ('emsc' of 'usgs'). ALLEEN DE KNOP schrijft
      hem: de dekkingstoets in index.html wisselt ook van bron zodra de gekozen
