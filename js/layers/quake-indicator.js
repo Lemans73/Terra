@@ -107,6 +107,10 @@ export function createQuakeIndicator(THREE, opts = {}) {
   const sharedUniforms = () => ({
     uCamDist:     { value: 260 },
     uRadius:      { value: GLOBE_R },
+    // De straal waartegen de fragment-shader zijn horizon uitrekent. Los van
+    // uRadius omdat die in de VERTEX-shader zit; een uniform is per programma
+    // en de twee blokken staan elk in hun eigen helft.
+    uHorizonRadius: { value: GLOBE_R },
     uScaleRef:    { value: P.quakeIconScaleRef },
     uScalePow:    { value: P.quakeIconScalePow },
     uScaleMin:    { value: P.quakeIconScaleMin },
@@ -169,12 +173,23 @@ export function createQuakeIndicator(THREE, opts = {}) {
     fragmentShader: QUAKE_RING_FRAG,
     transparent: true,
     depthWrite: false,
-    depthTest: true,
+    /* DEPTHTEST UIT, en dat is de kern van de parallax-reparatie (sessie 40).
+
+       Deze laag lag op straal 100,8 om boven de kaartlijnen uit te komen, en
+       daar betaalde hij parallax voor: bij een scheve blik schuift een zwevende
+       indicator weg van de plek die hij aanwijst. GEMETEN op 15 graden uit het
+       beeldmidden — 0,49 px op camera-afstand 450, maar 30,8 px op 120 en 222 px
+       op 105. Precies wat er bij diep inzoomen te zien was.
+
+       Op straal 100 is die verschuiving per constructie nul, maar dan vecht de
+       laag met de bol en de kaart. Dus geen dieptetoets, en de tekenvolgorde uit
+       renderOrder. Wat de dieptebuffer nog wél deed — de ACHTERKANT van de bol
+       verbergen — is naar de fragment-shader verhuisd; zie achterDeHorizon()
+       daar. polygonOffset is daarmee overbodig: er is geen dieptetoets meer om
+       tegen te duwen. */
+    depthTest: false,
     blending: THREE.AdditiveBlending,
     side: THREE.DoubleSide,
-    polygonOffset: true,
-    polygonOffsetFactor: -4,
-    polygonOffsetUnits: -8,
     toneMapped: false,
     defines: {}
   });
@@ -185,12 +200,9 @@ export function createQuakeIndicator(THREE, opts = {}) {
     fragmentShader: QUAKE_SHOCK_FRAG,
     transparent: true,
     depthWrite: false,
-    depthTest: true,
+    depthTest: false,   // zelfde reden als bij de ring hierboven
     blending: THREE.AdditiveBlending,
     side: THREE.DoubleSide,
-    polygonOffset: true,
-    polygonOffsetFactor: -3,
-    polygonOffsetUnits: -6,
     toneMapped: false
   });
 

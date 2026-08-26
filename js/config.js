@@ -159,7 +159,7 @@ export const EXPERT_LAYER_SCALE = {
 // gedeelde objectreferentie → GUI-mutaties werken ongewijzigd.
 export const PARAMS = {
   // bloom (post-processing)
-  bloomStrength: 0.1, bloomRadius: 0.3, bloomThreshold: 0.75,
+  bloomStrength: 0.01, bloomRadius: 0.385, bloomThreshold: 0.79,
   // kleurgrading + chromatische aberratie
   gradeContrast: 1.06, gradeSaturation: 1.12, gradeAberration: 0.005, gradeTemp: 0.5,
   // mist — fresnel-waas die naar de randen toe het kaartje vertroebelt
@@ -208,42 +208,37 @@ export const PARAMS = {
      Maar v1's schaal overnemen kan ook niet: van M4,5 naar M9,0 groeit die maar
      met een factor 2,1, en dan valt er aan de grootte geen magnitude meer af te
      lezen. Deze set neemt het bereik van Grok en de orde van grootte van v1. */
-  quakeRingRadiusLo: 2.8,    // wereldstraal bij quakeMagMin (bol = 100)
-  quakeRingRadiusHi: 15,     // wereldstraal bij quakeMagMax
+  quakeRingRadiusLo: 3.5,    // wereldstraal bij quakeMagMin (bol = 100)
+  quakeRingRadiusHi: 30,     // wereldstraal bij quakeMagMax
   quakeRingRadiusPow: 0.95,  // kromming van de magnitude→straal-afbeelding
-  /* BOVEN DE KAARTLIJNEN, en dat is een reparatie (sessie 40, Terry).
+  /* OP HET OPPERVLAK, EN DAT IS EEN OMKERING (sessie 40, Terry).
 
-     Deze stond op 0 — de ring lag exact op het oppervlak, wat mooi samengaat
-     met de wolkenschil erboven. Maar `overlayAltitude` zet de plaatgrenzen en
-     de landgrenzen op 0,006, dus op straal 100,6, en die lijnen liggen daarmee
-     VOOR de ring. Ze tekenden er dwars overheen.
+     Deze stond eerst op 0, ging naar 0,8 om boven de kaartlijnen uit te komen,
+     en staat nu weer op 0. Wat er veranderde is niet de wens maar de MANIER: de
+     laag tekent sinds deze ronde met depthTest UIT en verbergt zijn achterkant
+     met een horizontoets in de fragment-shader. Daarmee is er niets meer om
+     boven uit te komen, en telt alleen nog wat de hoogte KOST.
 
-     De lijnen zelf omlaag halen kan niet: ze staan hoog omdat ze anders op
-     bolle stukken door het oppervlak zakken, en hun casing ligt al 0,0008 lager
-     (zie overlayCasingDrop). Dus gaat de indicator eroverheen in plaats van de
-     kaart eronderdoor.
+     En dat is parallax. Een indicator die boven de grond zweeft schuift bij een
+     scheve blik weg van de plek die hij aanwijst. GEMETEN, verschuiving ten
+     opzichte van het oppervlak op 15 graden uit het beeldmidden:
 
-     GEMETEN op camera-afstand 200, met de aarde aan zodat de achterkant
-     meetelt zoals hij hoort — het aantal ringpixels dat een kaartlijn afsnoept:
+         camera      450    260    200    150    120    105
+         lift 0,8   0,49   1,33   2,56   7,25   30,8    222  px
+         lift 1,5   0,92   2,50   4,83  13,77   59,5    457  px
 
-         lift        0     0,4   0,61   0,7    0,8    1,2    2,0
-         aangetast  3656   1790   991   1001    999   1000    997  pixels
-         van        0,54%  0,26% 0,15%  0,15%  0,15%  0,15%  0,15%
+     Op 450 is dat onzichtbaar, op 105 staat de ring een kwart scherm naast zijn
+     eigen beving. Dat is wat er bij diep inzoomen misging.
 
-     De knik ligt op 0,61 — precies waar de lijnen liggen — en daarboven is de
-     curve vlak. Wat er dan nog overblijft is niet meer de dieptetoets maar de
-     antialiasing op de lijnrand, en dat is met geen enkele hoogte weg te nemen.
-
-     0,8 en niet 0,61: een fractie marge, want bij een scheve blik op de limb
-     wordt het hoogteverschil in schermpixels vrijwel nul. Hoger heeft geen zin
-     — de meting is daar vlak — en kost alleen parallax ten opzichte van de
-     kaart. Op straal 100,8 blijft de ring ruim onder de wolkenschil (103,5). */
-  quakeRingLift: 0.8,        // hoogte boven het oppervlak (eenheden)
+     Op 0 is de verschuiving per constructie nul. De schuif blijft staan voor het
+     geval een laag er ooit weer boven moet; zie quakeRingLiftNu() in index.html,
+     die hem in de schematische weergave nog kan optillen. */
+  quakeRingLift: 0,
   /* DE MARGE BOVEN DE KAARTLAGEN IN DE SCHEMATISCHE WEERGAVE. Daar ligt alles
      hoger — landvlakken op 0,01, lijnen tot 0,013 — en volgt de indicator die
      hoogte in plaats van een vast getal. Zie quakeRingLiftNu() in index.html.
      0,2 eenheid, dezelfde marge die de realistische weergave heeft. */
-  quakeRingLiftMargin: 0.2,
+  quakeRingLiftMargin: 0,
   /* HET AANTAL RINGEN LEEST ALS EEN SCHAALVERDELING, niet als sier: zwaarder is
      meer ringen. De LIJNDIKTE loopt bij Terry de andere kant op dan bij Grok —
      zwaarder is dikker, want een zware beving hoort méér op het netvlies te
@@ -287,7 +282,7 @@ export const PARAMS = {
      (0,8), zodat de puls onder zijn eigen indicator door loopt in plaats van
      eroverheen. Precies 0,6 zou gelijk liggen met de lijnen en dan beslist
      de tekenvolgorde het — daarom 0,7. Zie de noot bij quakeRingLift. */
-  quakeShockLift: 0.7,
+  quakeShockLift: 0,
   quakeShockWaves: 2,        // aantal golven tegelijk onderweg (max 4, zie shader)
   quakeShockSpeed: 0.24,
   quakeShockThickness: 0.04,
@@ -302,33 +297,40 @@ export const PARAMS = {
   quakeShockOpacity: 1,
 
   // ---- stapelen ----
-  /* STAAT UIT IN DE EERSTE RONDE (Terry, sessie 40). De code verhuist mee — hij
-     zit ín de vertex-shader en is er niet uit te knippen — maar het gedrag nog
-     niet: met het stapelen aan loopt de eerste toets (valt de ring op dezelfde
-     plek als de v1-indicator?) er dwars doorheen. In de workbench schoven 257
-     van de 450 events gemiddeld 43 px, tot 141 px aan toe.
-     Terry's stand voor als de schuif omgaat: near 200, far 250, lift 2,2,
-     spread 1. Verschuiven mag — anders is een kluwen niet te ontwarren — maar
-     HERSCHIKKEN niet: de tangentiële richting blijft, alleen de afstand groeit. */
-  quakeStackOn: false,
-  quakeStackNear: 200,       // camera-afstand waarop het stapelen begint
-  quakeStackFar: 250,        // en waarop het volledig is
-  quakeStackLift: 2.2,       // hoogtewinst per verdieping (maal de icoonschaal)
-  quakeStackSpread: 1,       // hoe ver verdiepingen opzij worden gezet
+  /* STAAT AAN sinds Terry's ronde met de schuiven (sessie 40). Hij begon uit,
+     zodat de eerste toets — valt de ring op dezelfde plek als de v1-indicator? —
+     niet door de stapelverschuiving heen liep.
+
+     Verschuiven mag, want anders is een kluwen niet te ontwarren. HERSCHIKKEN
+     niet: de tangentiële richting van een event ten opzichte van zijn basis
+     blijft precies wat hij is, en alleen de AFSTAND wordt opgerekt. Zie de lange
+     noot in QUAKE_STACK_GLSL over waarom een zonnebloempatroon daar niet mag.
+
+     LET OP — DE LABELS REKENEN HIER NOG NIET MEE. positionLabels() gebruikt de
+     ONgestapelde plek, dus zolang deze schuif aan staat wijzen de leader-lines
+     naast hun eigen indicator. In de workbench was dat gemeten op 257 van de 450
+     events, gemiddeld 43 px en tot 141 px aan toe. De JS-spiegel die dit oplost
+     ligt klaar (stackedNormalJS in js/layers/quake-indicator.js); hij wordt
+     aangesloten bij de labellaag, stap D van het integratiecontract. */
+  quakeStackOn: true,
+  quakeStackNear: 100,       // camera-afstand waarop het stapelen begint
+  quakeStackFar: 450,        // en waarop het volledig is
+  quakeStackLift: 2.9,       // hoogtewinst per verdieping (maal de icoonschaal)
+  quakeStackSpread: 5,       // hoe ver verdiepingen opzij worden gezet
   quakeStackOverlap: 1,      // hoe strikt twee ringen elkaar moeten raken om te stapelen
   quakeStackMaxLayers: 10,
 
   // ---- de schaal, alleen voor deze laag ----
   // Zelfde vorm als iconScale* hieronder, andere getallen. Zie de kop van dit blok.
-  quakeIconScaleRef: 120,      // camera-afstand waarbij de schaal 1 is
-  quakeIconScalePow: 1.5,      // steilheid
+  quakeIconScaleRef: 131,      // camera-afstand waarbij de schaal 1 is
+  quakeIconScalePow: 0.5,      // steilheid
   quakeIconScaleMin: 0.18,     // ondergrens (sterk ingezoomd)
-  quakeIconScaleMax: 1.4,      // bovengrens (ver uitgezoomd)
+  quakeIconScaleMax: 1.69,      // bovengrens (ver uitgezoomd)
   /* DE NABIJHEIDSKLEM. Zonder deze groeit de hoekgrootte onder de ondergrens
      ongeremd; met een vloer op 100 — de bolstraal zelf — is de hoekstraal exact
      constant, en dat is gemeten en niet afgeleid. Terra's gedeelde variant meet
      tot 101,5 (de glyphschil); deze laag ligt op het oppervlak. */
-  quakeIconNearPerUnit: 0.01227,
+  quakeIconNearPerUnit: 0.0062,
   quakeIconNearFloor: 100,
 
   // ---- het magnitude-bereik van de AFBEELDING ----
@@ -499,9 +501,9 @@ export const PARAMS = {
      Met `reliefStrength` op 0 valt de emboss helemaal weg en blijft alleen
      `macro` over. Gaat een donker gebied daarmee terug naar normaal, dan ligt
      het aan de normal-map en niet aan de dagtextuur. */
-  normalStrength: 2.5,   // overdrijving van de normal-map-helling
+  normalStrength: 4.95,   // overdrijving van de normal-map-helling
   reliefStrength: 4.0,   // emboss-uitvergroting → hardere reliëflijnen
-  waterRipple: 0.45,     // amplitude van de procedurele water-rimpel
+  waterRipple: 0.5,     // amplitude van de procedurele water-rimpel
   // schermvaste icoongrootte (app-breed, beide modi): iconen schalen mee met de
   // camera-afstand. Power-curve (pow>1) = agressievere zoom-respons, vooral diep
   // ingezoomd kleiner. camDist-bereik in de praktijk ≈ 169 (diep in) → 438 (uit).

@@ -257,10 +257,40 @@ varying float vSeed;
 varying vec3  vWorld;
 varying vec3  vN;
 
+/* ---- De horizon, in de fragment-shader ------------------------------------
+   Deze lagen tekenen met depthTest UIT. Dat is nodig omdat ze op straal 100
+   liggen — exact op het oppervlak — en daar zou de dieptebuffer ze laten
+   vechten met de aardbol, de kaartlijnen en de landvlakken.
+
+   WAAROM ZE OP HET OPPERVLAK MOETEN LIGGEN: parallax. Een indicator die boven
+   de grond zweeft schuift bij een scheve blik weg van de plek die hij aanwijst,
+   en dat loopt hard op bij het inzoomen. GEMETEN, verschuiving bij lift 0,8 op
+   15 graden uit het beeldmidden:
+
+       camera    450    260    200    150    120    105
+       verschil  0,49   1,33   2,56   7,25   30,8   222   pixels
+
+   Op straal 100 is dat per constructie nul.
+
+   Maar met de dieptetoets uit verdwijnt ook wat de aardbol deed: de ACHTERKANT
+   verbergen. Dat doet dit blok. Per FRAGMENT en niet per instance, want een
+   grote schijf bij de limb ligt deels voor en deels achter de horizon; een
+   toets per event zou hem in één keer laten verspringen. */
+uniform float uHorizonRadius;
+
+bool achterDeHorizon(vec3 wereldPunt) {
+  float camLen = length(cameraPosition);
+  // De raakcirkel gezien vanaf de camera. Op camLen <= R is er geen horizon
+  // meer — dan zit je op of in het oppervlak en tekenen we alles.
+  float grens = uHorizonRadius / max(camLen, uHorizonRadius + 0.001);
+  return dot(normalize(wereldPunt), normalize(cameraPosition)) < grens;
+}
+
 void main() {
   vec2 p = vUv * 2.0 - 1.0;
   float r = length(p);
   if (r > 1.0) discard;
+  if (achterDeHorizon(vWorld)) discard;
 
   float mf = clamp(vMagFrac, 0.0, 1.0);
 
@@ -437,6 +467,7 @@ varying vec2  vUv;
 varying vec3  vColor;
 varying float vSeed;
 varying float vFresh;
+varying vec3  vWorld;
 
 void main() {
   vUv = uv;
@@ -465,6 +496,9 @@ void main() {
   // quake-indicator.js.
   vec3 planar = n * uRadius + tx * position.x * s + ty * position.y * s;
   vec3 local = normalize(planar) * (uRadius + lift);
+  // Door modelMatrix, want de horizontoets in de fragment-shader vergelijkt met
+  // cameraPosition en dat is wereldruimte. Zie de kop van dit bestand.
+  vWorld = (modelMatrix * vec4(local, 1.0)).xyz;
 
   gl_Position = projectionMatrix * modelViewMatrix * vec4(local, 1.0);
 }
@@ -480,9 +514,40 @@ varying vec2  vUv;
 varying vec3  vColor;
 varying float vSeed;
 varying float vFresh;
+varying vec3  vWorld;
+
+/* ---- De horizon, in de fragment-shader ------------------------------------
+   Deze lagen tekenen met depthTest UIT. Dat is nodig omdat ze op straal 100
+   liggen — exact op het oppervlak — en daar zou de dieptebuffer ze laten
+   vechten met de aardbol, de kaartlijnen en de landvlakken.
+
+   WAAROM ZE OP HET OPPERVLAK MOETEN LIGGEN: parallax. Een indicator die boven
+   de grond zweeft schuift bij een scheve blik weg van de plek die hij aanwijst,
+   en dat loopt hard op bij het inzoomen. GEMETEN, verschuiving bij lift 0,8 op
+   15 graden uit het beeldmidden:
+
+       camera    450    260    200    150    120    105
+       verschil  0,49   1,33   2,56   7,25   30,8   222   pixels
+
+   Op straal 100 is dat per constructie nul.
+
+   Maar met de dieptetoets uit verdwijnt ook wat de aardbol deed: de ACHTERKANT
+   verbergen. Dat doet dit blok. Per FRAGMENT en niet per instance, want een
+   grote schijf bij de limb ligt deels voor en deels achter de horizon; een
+   toets per event zou hem in één keer laten verspringen. */
+uniform float uHorizonRadius;
+
+bool achterDeHorizon(vec3 wereldPunt) {
+  float camLen = length(cameraPosition);
+  // De raakcirkel gezien vanaf de camera. Op camLen <= R is er geen horizon
+  // meer — dan zit je op of in het oppervlak en tekenen we alles.
+  float grens = uHorizonRadius / max(camLen, uHorizonRadius + 0.001);
+  return dot(normalize(wereldPunt), normalize(cameraPosition)) < grens;
+}
 
 void main() {
   if (vFresh <= 0.002) discard;
+  if (achterDeHorizon(vWorld)) discard;
 
   float d = length(vUv * 2.0 - 1.0);      // 0 = hart, 1 = rand
   if (d > 1.0) discard;
