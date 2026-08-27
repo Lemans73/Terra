@@ -159,7 +159,7 @@ export const EXPERT_LAYER_SCALE = {
 // gedeelde objectreferentie → GUI-mutaties werken ongewijzigd.
 export const PARAMS = {
   // bloom (post-processing)
-  bloomStrength: 0, bloomRadius: 0, bloomThreshold: 0,
+  bloomStrength: 0.1, bloomRadius: 2, bloomThreshold: 1,
   // kleurgrading + chromatische aberratie
   gradeContrast: 1.06, gradeSaturation: 1.5, gradeAberration: 0.005, gradeTemp: 0.5,
   // mist — fresnel-waas die naar de randen toe het kaartje vertroebelt

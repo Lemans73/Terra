@@ -38,11 +38,6 @@ import {
   QUAKE_SHOCK_VERT, QUAKE_SHOCK_FRAG
 } from './quake-indicator-shaders.js';
 
-/* De drie standen van de schakelaar. `both` is een MEETSTAND en geen
-   eindstand: hij bestaat om de schermafstand tussen v1 en v2 te kunnen
-   meten (de toets uit het integratiecontract bij stap A). */
-export const QUAKE_MODES = ['v1', 'v2', 'both'];
-
 export function createQuakeIndicator(THREE, opts = {}) {
   /* DE STRAAL STAAT HIER EN NIET IN DE MODULE-SCOPE, en dat is geen stijlkeuze.
      tools/build-standalone.mjs giet alle modules in ÉÉN script voor de
@@ -59,15 +54,8 @@ export function createQuakeIndicator(THREE, opts = {}) {
     throw new Error('createQuakeIndicator: params, depthRGB en getCoords zijn verplicht');
   }
 
-  /* DE STAND KOMT BIJ DE BOUW BINNEN EN WORDT NIET ERNA GEZET. Terra bouwt
-     lagen in async callbacks die elke eerder gezette waarde stil
-     overschrijven; een voorkeur die er achteraf overheen gaat, verdwijnt
-     daar zonder een spoor achter te laten. */
-  let mode = QUAKE_MODES.includes(opts.mode) ? opts.mode : 'v1';
-
   const group = new THREE.Group();
   group.name = 'quake-indicator-v2';
-  group.visible = mode !== 'v1';
 
   // ---- geometrie ---------------------------------------------------------
 
@@ -392,15 +380,6 @@ export function createQuakeIndicator(THREE, opts = {}) {
     }
   }
 
-  // ---- de schakelaar -----------------------------------------------------
-
-  function setMode(next) {
-    if (!QUAKE_MODES.includes(next)) return mode;
-    mode = next;
-    group.visible = mode !== 'v1';
-    return mode;
-  }
-
   // ---- de wiskunde die JS moet spiegelen ---------------------------------
 
   /* Wie in JavaScript met de ONgestapelde plek rekent, mikt stelselmatig mis:
@@ -519,8 +498,7 @@ export function createQuakeIndicator(THREE, opts = {}) {
 
   return {
     group, ringMesh, shockMesh, ringMat, shockMat,
-    uploadEvents, update, setMode, syncParams, dispose,
-    get mode() { return mode; },
+    uploadEvents, update, syncParams, dispose,
     get count() { return ringGeo.instanceCount; },
     // Meethaken en gedeelde wiskunde — de labels en het aanwijzen lopen
     // hierlangs, zodat ze niet met een eigen formule naast de shader komen.

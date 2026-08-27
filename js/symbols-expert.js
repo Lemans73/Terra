@@ -77,27 +77,12 @@ export function buildExpertGlyph(d, { THREE: T, depthHex }) {
   let noAnim = false;
   const L = d.layer;
 
-  if (L === 'quake') {
-    // Seismische conventie (deskundig): ring + staaf samen.
-    //   kleur (ring+staaf) = magnitude · ring-straal = magnitude · staaf-hoogte = diepte
-    // Zo lees je de KRACHT in één oogopslag (kleur + ringgrootte) en de DIEPTE aan de
-    // staafhoogte (sqrt-schaal → ook ondiepe bevingen krijgen onderling onderscheid).
-    const mag = d.value || 1.5;
-    const col = magHex(mag);
-    // ring: magnitude-"footprint" op het oppervlak
-    const rOuter = PARAMS.expertQuakeRingBase + mag * PARAMS.expertQuakeRingPerMag;
-    const rInner = Math.max(0.3, rOuter - PARAMS.expertQuakeRingBand);
-    addShape(T, inner, ringGeo(T, rInner, rOuter, 48), col, { r: rOuter });
-    // staaf: hoogte ∝ diepte (radiaal naar buiten vanaf het epicentrum)
-    const depth = (d.depth == null || isNaN(d.depth)) ? 0 : Math.max(0, d.depth);
-    const h = PARAMS.expertQuakeBarBase + Math.sqrt(Math.min(depth, 700) / 700) * PARAMS.expertQuakeBarDepth;
-    const rad = PARAMS.expertQuakeRadius;
-    const bar = new T.Mesh(new T.CylinderGeometry(rad, rad, h, 12), basicMat(T, col));
-    bar.geometry.rotateX(Math.PI / 2);   // as +Y → +Z (radiaal naar buiten)
-    bar.geometry.translate(0, 0, h / 2); // basis op het oppervlak
-    inner.add(bar);
-    addShape(T, inner, discGeo(T, rad * 1.3, 16), col, { r: rad * 1.3 }); // epicentrum-stip
-  } else if (L === 'volcano') {
+  /* GEEN BEVINGSTAK MEER (sessie 41). De schematische weergave tekende elke
+     beving dubbel: gemeten stonden er 5 expert-glyphs EN 5 v2-ringen op
+     dezelfde plek. De v2-laag hangt onder de globe-wortel en gaat dus mee naar
+     deze weergave; het schematische bevingssymbool was daarmee overbodig
+     geworden. De code staat in `_v1-referentie/expert-quake-glyph.js`. */
+  if (L === 'volcano') {
     addShape(T, inner, triGeo(T, 2.8), COLORS.volcano, { r: 2.8 });   // ▲ geologisch symbool
   } else if (L === 'aqi') {
     addShape(T, inner, squareGeo(T, 2.2), aqiHex(d.value), { r: 2.2 }); // ■ EPA-bandkleur

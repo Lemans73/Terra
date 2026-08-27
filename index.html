@@ -481,12 +481,6 @@
       <input type="range" id="label-count-slider" class="range" min="0" max="40" step="1" value="12" />
       </div>
       </div>
-      <!-- WELKE AARDBEVING-INDICATOR (sessie 40). Drie standen en geen aan/uit,
-           dus deze rij staat BEWUST NIET in PREFS_RIJEN: die tabel kent alleen
-           de aan/uit-grammatica en zou 'v1' als truthy lezen en de rij aanzetten.
-           Zijn beginstand wordt hieronder apart gezet, bij de klik-handler.
-           TIJDELIJK: hij verdwijnt zodra de v1-tak uit de repo gaat. -->
-      <div class="elayer" id="quake-indicator-row"><span class="edot"></span>Quake indicator<span class="estat" id="es-quake-indicator">v1</span></div>
       <div class="elayer" id="rotate-toggle"><span class="edot"></span>Auto-rotate<span class="estat" id="es-rotate">on</span></div>
       <!-- DE GLOED (sessie 41, Terry). Staat hier en niet bij Earth textures: de
            bloom-pass ligt over het HELE beeld, niet over de aardbol. Hij hoort
@@ -2211,7 +2205,7 @@ import { createMagnetosphereFeed, MSPHERE_HEALTH_ID } from './js/compute/magneto
 import { createMagnetosphereTransport } from './js/ui/magnetosphere-transport.js';
 import { createMagnetosphereStrip, MSPHERE_SECTOR_TEKST } from './js/ui/magnetosphere-strip.js';
 import { createEnvironmentToggle, findGlobeRoot } from './js/core/globe-root.js';
-import { createQuakeIndicator, QUAKE_MODES } from './js/layers/quake-indicator.js';
+import { createQuakeIndicator } from './js/layers/quake-indicator.js';
 import { createQuakeLabels } from './js/ui/quake-labels.js';
 import { skyFrame } from './js/compute/frames.js';
 import { createViewStates } from './js/core/view-state.js';
@@ -2299,38 +2293,13 @@ function depthRgba(depth, a) {
   return 'rgba(' + r + ',' + g + ',' + b + ',' + a.toFixed(3) + ')';
 }
 
-// --- bouwstenen voor de aardbeving-staaf ---
-
-// Shockwave-ring: zachte radiale gloed die naar buiten uitdijt en vervaagt
-// (ShaderMaterial). Meerdere ringen tegelijk → dikke, levende band.
-// Shockwave-shader (SHOCK_VERT/SHOCK_FRAG) → ./js/shaders.js (Stap 0).
-// Shockwave-straal volgt de magnitude binnen [shockMinR, shockMaxR], lineair
-// over het magnitude-bereik [shockMagLo, shockMagHi]. Zo krijgen lichtere
-// bevingen een kleinere omtrek dan zware.
-function buildShockwave(depth, mag, seed) {
-  const f = Math.max(0, Math.min(1, (mag - PARAMS.shockMagLo) / Math.max(0.1, PARAMS.shockMagHi - PARAMS.shockMagLo)));
-  const maxR = PARAMS.shockMinR + f * (PARAMS.shockMaxR - PARAMS.shockMinR);
-  const [r,g,b] = depthRGB(depth);
-  const mat = new THREE.ShaderMaterial({
-    uniforms: {
-      time:    { value: 0 },
-      color:   { value: new THREE.Color(r/255, g/255, b/255) },
-      speed:   { value: PARAMS.shockSpeed },
-      seed:    { value: ((seed % 1) + 1) % 1 },
-      opacity:   { value: PARAMS.shockOpacity },
-      edge:      { value: PARAMS.shockEdge },
-      thickness: { value: PARAMS.shockThickness }
-    },
-    vertexShader: SHOCK_VERT, fragmentShader: SHOCK_FRAG,
-    transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide
-  });
-  const mesh = new THREE.Mesh(new THREE.CircleGeometry(maxR, 48), mat);
-  mesh.position.z = PARAMS.shockLift;
-  return { mesh, mat };
-}
 
 // Zachte radiale gloed-textuur (wit, kleurbaar via SpriteMaterial.color) voor
-// subtiele gloed-markers zoals de bosbranden.
+// subtiele gloed-markers: vulkanen, bosbranden, bliksem en de AQI-stippen.
+/* STOND TOT SESSIE 41 TUSSEN DE v1-BEVINGSCODE IN. Bij het weghalen daarvan
+   ging hij mee, en dat brak vier lagen tegelijk met één `glowTex is not
+   defined` — de customLayer bouwde toen geen enkel object meer. Hij hoort niet
+   bij de bevingen en staat nu op zichzelf. */
 function makeGlowTexture() {
   const c = document.createElement('canvas'); c.width = c.height = 64;
   const ctx = c.getContext('2d');
@@ -2343,45 +2312,6 @@ function makeGlowTexture() {
   return new THREE.CanvasTexture(c);
 }
 const glowTex = makeGlowTexture();
-
-// Aardbeving-indicator: hoge gloeiende magnitude-staaf (hoogte ∝ magnitude²,
-// sterk contrast tussen klein en groot), kleur ∝ diepte met verticale gradiënt
-// + stromende energie-textuur, en een shockwave-ring voor de zwaardere bevingen.
-function buildQuakeObject(d) {
-  const T = THREE;
-  const mag = d.value || 1.5;
-  const col = depthHex(d.depth);
-  const h = PARAMS.beamBase + mag * mag * PARAMS.beamMultiplier; // basislengte + magnitude²-toeslag
-  const rCore = Math.max(0.4, mag * PARAMS.beamRadius);
-  const group = new T.Group();
-
-  // brede gloed-kolom (additief, transparant) — eenvoudige rechte cilinder
-  const glow = new T.Mesh(
-    new T.CylinderGeometry(rCore * 2.0, rCore * 2.0, h, 16, 1, true),
-    new T.MeshBasicMaterial({ color: col, transparent: true, opacity: PARAMS.glowOpacity, blending: T.AdditiveBlending, depthWrite: false })
-  );
-  glow.geometry.rotateX(Math.PI / 2); glow.geometry.translate(0, 0, h / 2);
-  group.add(glow);
-
-  // heldere kern-kolom — solide diepte-kleur
-  const core = new T.Mesh(
-    new T.CylinderGeometry(rCore, rCore, h, 16),
-    new T.MeshBasicMaterial({ color: col, transparent: true, opacity: PARAMS.coreOpacity, blending: T.AdditiveBlending, depthWrite: false })
-  );
-  core.geometry.rotateX(Math.PI / 2); core.geometry.translate(0, 0, h / 2);
-  group.add(core);
-
-  // shockwave-ring voor elke beving (grootte ∝ magnitude)
-  const sw = buildShockwave(d.depth, mag, (d.lat + d.lng) * 0.01);
-  sw.mesh.userData.noPick = true; // de grote ring-schijf niet klikbaar maken
-  group.add(sw.mesh);
-
-  const parts = { beamGlow: glow, core, shock: sw.mat, shockMesh: sw.mesh };
-  group.userData = { parts, phase: d.lat * 0.7 + d.lng * 1.3, d };
-  glyphList.push(group);
-  animateIn(group);
-  return group;
-}
 
 // GSAP: marker soepel in beeld schalen bij verschijnen (nieuwe events poppen in)
 function animateIn(group) {
@@ -2406,7 +2336,6 @@ function buildGlyphObject(d) {
     if (!r.parts.noAnim) animateIn(r.group);
     return r.group;
   }
-  if (d.layer === 'quake') return buildQuakeObject(d);
   const T = THREE;
   const color = COLORS[d.layer];
   const group = new T.Group();
@@ -4835,22 +4764,23 @@ function setupAuroraShell() {
    workbench. Zie js/layers/quake-indicator.js voor het waarom en
    logs/PLAN-integratie-indicator.md voor het contract.
 
-   DRIE STANDEN, en `both` is een MEETSTAND. Hij bestaat om de
-   schermafstand tussen de oude en de nieuwe indicator te kunnen
-   meten — de dwingende toets bij stap A van het contract, want
-   daar kan de hele omrekening scheef staan.
+   SINDS SESSIE 41 DE ENIGE. De v1-tak (buildQuakeObject, de
+   shockwave-cilinders, het schematische bevingssymbool en de
+   driestandenschakelaar) is verwijderd; contract-stap B daarmee
+   afgerond. De code staat als referentie in `_v1-referentie/`,
+   buiten de repo.
 
-   DE V1-TAK BLIJFT STAAN. buildQuakeObject() wordt niet
-   aangeraakt; in stand 'v2' gaan zijn meshes op `visible = false`
-   in animateShader(). Dat scheelt een rebuild bij het omschakelen
-   én laat renderer.info.render.calls het verschil zien.
+   DAT WAS NIET ALLEEN SMAAK. v1 ruimde zijn objecten niet op bij
+   een filterwissel: met de teller op 5 (M5+) stonden er 353
+   zichtbare bevingsobjecten in de scene en bleven de draw calls
+   op 650 staan, ongeacht het filter. v2 volgt het filter exact —
+   dezelfde reeks gaf 353 → 5 instances.
+
+   DE CUSTOMLAYER ZELF BLIJFT. Die bedient ook vulkanen, stormen,
+   bosbranden en bliksem; alleen de bevingstak is eruit gehaald.
    ============================================================ */
 
 let quakeIndicator = null;
-let quakeMode = (() => {
-  const bewaard = Prefs.get('pref.quakeIndicator');
-  return QUAKE_MODES.includes(bewaard) ? bewaard : 'v1';
-})();
 
 /* Wat render() als laatste aan de laag gaf. Staat BOVEN setupQuakeIndicator(),
    die hem leest: de laag ontstaat pas zodra globe.gl klaar is, en dat kan ná de
@@ -4873,8 +4803,7 @@ function setupQuakeIndicator() {
     depthRGB,
     // De omrekening van lat/lon blijft van world.getCoords en komt niet uit de
     // workbench. Zo kan de conventie per constructie niet uiteenlopen.
-    getCoords: (lat, lng, alt) => world.getCoords(lat, lng, alt),
-    mode: quakeMode
+    getCoords: (lat, lng, alt) => world.getCoords(lat, lng, alt)
   });
   /* KIND VAN DE GLOBE-WORTEL en niet van world.scene(). Dan pakt de
      omgevingsschakelaar (js/core/globe-root.js) hem vanzelf mee bij het
@@ -4922,17 +4851,6 @@ function quakeRingLiftNu() {
          + PARAMS.quakeRingLiftMargin;
   }
   return PARAMS.quakeRingLift;
-}
-
-function setQuakeIndicatorMode(next) {
-  if (!QUAKE_MODES.includes(next)) return;
-  quakeMode = next;
-  Prefs.set('pref.quakeIndicator', next);
-  if (quakeIndicator) quakeIndicator.setMode(next);
-  const rij = document.getElementById('quake-indicator-row');
-  const stat = document.getElementById('es-quake-indicator');
-  if (rij) rij.classList.toggle('on', next !== 'v1');
-  if (stat) stat.textContent = next;
 }
 
 /* DE ZOOMGRENS HANGT AAN DE WEERGAVE (sessie 38, Terry). Zie de noot bij
@@ -5242,10 +5160,17 @@ function render() {
     const n = Math.max(1, arr.length);
     for (let i = 0; i < arr.length; i++) arr[i].__lodRank = i / n;
   }
-  world.customLayerData(shown);
-  /* DE v2-INDICATOR EET UIT DEZELFDE VERZAMELING als de markers, de labels, de
-     tellers en de lijst — `quakes`. Ze kunnen daarmee per constructie niet
-     uiteenlopen.
+  /* DE CUSTOMLAYER KRIJGT `others` EN NIET `shown` (sessie 41). De bevingen
+     gaan sinds de v1-sloop volledig door de v2-laag; zou `shown` hier blijven
+     staan, dan bouwt globe.gl voor élke beving alsnog een object — het valt dan
+     door naar de generieke tak en levert een LEGE groep op. Gemeten: 353 lege
+     bevingsobjecten en de draw calls van 573 naar 990.
+
+     `shown` blijft wél bestaan voor de LOD-rang hierboven en voor
+     `updateCounts()` hieronder: die twee gaan over álle lagen samen. */
+  world.customLayerData(others);
+  /* DE v2-INDICATOR EET UIT DEZELFDE VERZAMELING als de labels, de tellers en
+     de lijst — `quakes`. Ze kunnen daarmee per constructie niet uiteenlopen.
 
      EN HET MOMENT GAAT MEE, niet Date.now(). De shockwave meet de leeftijd in
      uren; met de wandklok zou bij een reis naar 1985 elke beving miljoenen uren
@@ -6209,8 +6134,6 @@ function animateShader() {
      eigen fase in aSeed en het beeld blijft daardoor gevarieerd. */
   const _qi = setupQuakeIndicator();
   if (_qi) _qi.update(_camLen, motionReduced ? 0 : gt, quakeRingLiftNu());
-  // Eén keer per frame gelezen; de lus hieronder gebruikt hem per glyph.
-  const _v1Quakes = quakeMode !== 'v2';
 
   // indicatoren animeren; verwijderde objecten (uit scene) opruimen
   for (let i = glyphList.length - 1; i >= 0; i--) {
@@ -6241,14 +6164,12 @@ function animateShader() {
       const _c = world.getCoords(_d.lat, _d.lng, _glyphAlt);
       g.position.set(_c.x, _c.y, _c.z);
     }
-    /* Verbergen gebeurt bij focus-hover — een expliciete keuze van de bezoeker om
-       één beving te isoleren, geen dichtheidsregeling — en sinds sessie 40 ook
-       wanneer de v2-indicator het overneemt. Die tweede term raakt ALLEEN de
-       bevingen: vulkanen, bliksem en de rest lopen onveranderd door de v1-tak. */
+    /* Verbergen gebeurt bij focus-hover: een expliciete keuze van de bezoeker om
+       één beving te isoleren, geen dichtheidsregeling. Sinds sessie 41 tekent
+       deze lus GEEN bevingen meer — die gaan door de v2-laag — maar de term
+       blijft staan voor de andere lagen, die wél via focus kunnen verdwijnen. */
     const _isQuake = g.userData.d.layer === 'quake';
-    g.visible = (_v1Quakes || !_isQuake)
-             && (!focusedQuake || !_isQuake || g.userData.d === focusedQuake);
-    if (parts.shock) parts.shock.uniforms.time.value = gt;
+    g.visible = !focusedQuake || !_isQuake || g.userData.d === focusedQuake;
     if (parts.spin) parts.spin.rotation.z = gt * parts.spinSpeed + phase;
     if (parts.volGlow) {
       // trage, zachte puls van de vulkaan-voetgloed
@@ -6613,19 +6534,6 @@ if (labelToggleEl) {
     Prefs.set('pref.quakeLabels', labelsOn);
     labelToggleEl.classList.toggle('on', labelsOn);
     document.getElementById('es-label').textContent = labelsOn ? 'on' : 'off';
-  });
-}
-
-/* De indicator-schakelaar loopt door de drie standen: v1 → v2 → both → v1.
-   Geen aan/uit, dus geen PREFS_RIJEN — zie de noot bij de markup. De beginstand
-   wordt hier gezet en niet in de markup, want die is sinds sessie 35 geen bron
-   van een beginstand meer. */
-const quakeIndicatorRow = document.getElementById('quake-indicator-row');
-if (quakeIndicatorRow) {
-  setQuakeIndicatorMode(quakeMode);   // markup op de bewaarde stand
-  quakeIndicatorRow.addEventListener('click', () => {
-    const i = QUAKE_MODES.indexOf(quakeMode);
-    setQuakeIndicatorMode(QUAKE_MODES[(i + 1) % QUAKE_MODES.length]);
   });
 }
 
@@ -12615,8 +12523,6 @@ if (IS_LOCAL) {
       const c = world.renderer().domElement;
       return { gevraagd: [w, h], canvas: [c.clientWidth, c.clientHeight, c.width, c.height] };
     },
-    quakeMode: () => quakeMode,
-    setQuakeMode: (m) => setQuakeIndicatorMode(m),
 
     /* DE PLAATSINGSTOETS uit het integratiecontract (stap A): valt de v2-ring op
        dezelfde plek als de v1-indicator?
