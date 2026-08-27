@@ -92,6 +92,24 @@ export const dayNightShader = {
     uniform float cloudFadeGate;
     uniform float normalStrength;
     uniform float reliefStrength;
+    /* DE HELDERHEID VAN DE DAGKAART (sessie 41, Terry).
+
+       Niet elke dagtextuur is even helder, en dat is geen kleinigheid: gemeten
+       over de hele kaart heeft Blue Marble een gemiddelde luminantie van 63,7
+       tegen 99,4 voor de oude daymap, met 19 % bijna-zwarte pixels waar de oude
+       er 0 had — vooral op de zuidelijke oceanen. De bol werd daar zichtbaar
+       donkerder van terwijl er aan de belichting niets mankeerde.
+
+       GEEN BACKTICKS IN DIT COMMENTAAR. Deze shader staat in een JS template
+       literal, dus een backtick sluit de string en de hele module valt om met
+       een SyntaxError die naar GLSL wijst. Dat is hier één keer gebeurd.
+
+       dayGain is een VERMENIGVULDIGING en dayLift een OPTELLING, en dat
+       verschil is het punt: vermenigvuldigen laat echt zwart zwart en haalt de
+       middentonen omhoog, optellen tilt ook de bodem op en maakt de nacht
+       grijzer. */
+    uniform float dayGain;
+    uniform float dayLift;
     uniform float glintStrength;
     uniform float waterRipple;
     uniform float time;
@@ -279,7 +297,7 @@ export const dayNightShader = {
       macro = mix(1.0, macro, dayNightCycle);
       float emboss = (bumpIntensity - baseIntensity) * reliefStrength;
       float relief = clamp(macro + emboss * dayMix, 0.2, 1.7);
-      vec3 dayLayer = dayColor.rgb * relief * dayEnabled;
+      vec3 dayLayer = (dayColor.rgb * dayGain + dayLift) * relief * dayEnabled;
       // nachtzijde: stadslichten + instelbare ambient zodat het oppervlak zichtbaar blijft
       vec3 nightAmbient = dayColor.rgb * nightBrightness; // gedimd dag-oppervlak als "maanlicht"
       // Geen schakelaar meer op deze laag: met de cyclus uit is dayMix 1 en telt hij

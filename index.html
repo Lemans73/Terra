@@ -4383,6 +4383,12 @@ function buildRealisticMaterial() {
            deze drie doen. */
         normalStrength: { value: PARAMS.normalStrength },
         reliefStrength: { value: PARAMS.reliefStrength },
+        /* De helderheid van de dagkaart, uit PARAMS om dezelfde reden als de
+           regels erboven: dit materiaal wordt in een `.then()` gebouwd. Zie de
+           noot bij `dayGain` in js/shaders.js voor waarom dit een
+           vermenigvuldiging is en `dayLift` een optelling. */
+        dayGain:        { value: PARAMS.dayGain },
+        dayLift:        { value: PARAMS.dayLift },
         glintStrength:  { value: PARAMS.glintStrength }, // sterkte zonneglinster
         waterRipple:    { value: PARAMS.waterRipple },
         cloudDrift:    { value: 0 },     // horizontale wolken-offset (drift)
