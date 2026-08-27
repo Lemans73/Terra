@@ -659,6 +659,16 @@ export const PARAMS = {
      Met `reliefStrength` op 0 valt de emboss helemaal weg en blijft alleen
      `macro` over. Gaat een donker gebied daarmee terug naar normaal, dan ligt
      het aan de normal-map en niet aan de dagtextuur. */
+  /* DE HELDERHEID VAN DE DAGKAART (sessie 41, Terry). Zie de lange noot bij
+     `dayGain` in js/shaders.js: Blue Marble is aantoonbaar donkerder dan de
+     kaart die Terra daarvoor gebruikte — gemiddelde luminantie 63,7 tegen 99,4,
+     en 19 % bijna-zwarte pixels tegen 0 %.
+
+     BEGINT ALLEBEI OP NEUTRAAL (1 en 0), zodat deze twee niets veranderen tot
+     iemand ze verzet. De schuiven staan in het tuning-paneel onder Earth
+     lighting. */
+  dayGain: 1.0,          // vermenigvuldiging: tilt de middentonen, laat zwart zwart
+  dayLift: 0.0,          // optelling: tilt ook de bodem op, maakt de nacht grijzer
   normalStrength: 4.9,   // overdrijving van de normal-map-helling
   reliefStrength: 6.2,   // emboss-uitvergroting → hardere reliëflijnen
   waterRipple: 0.5,     // amplitude van de procedurele water-rimpel
@@ -1209,28 +1219,44 @@ export const TEXTURE_SETS = {
      schakelaar die liegt. Zie ook `glintStrength` — die had een tweede waarde
      voor precies deze situatie en heeft er nu nog maar één nodig.
 
-     RELIËF BESTAAT ALLEEN IN 4096 EN 8192. De 2K-set krijgt de 4096-versie:
-     dat is de grootste post in die set (2,8 MB van de 4,6), en het is een
-     bewuste keuze van Terry om daar niet op in te leveren. */
+     DE NORMAL MAP IS NIET VERVANGEN, en dat is een MEETUITKOMST (sessie 41).
+     `terra-relief-*.webp` heeft even in dit slot gestaan, en dat brak de
+     belichting over de hele bol:
+
+       bestand                    blauw-gemiddelde   fractie Z negatief
+       2k_earth_normal_map.png    255                 0 %
+       terra-relief-4096.webp     110,8              58,2 %
+
+     De shader leest dit slot als een tangent-space normal map
+     (`rgb * 2.0 - 1.0`), dus het blauwe kanaal is de Z-component van de
+     normaal — die hoort naar BUITEN te wijzen. Bij 58 % van het oppervlak wees
+     hij naar binnen. Gemeten helderheid van de dagzijde over 725.075 bolpixels:
+     10,86 met het reliëf tegen 18,75 met de normal map, en 19,38 met helemaal
+     geen normal map. Zichtbaar sloeg de dag/nacht-menging per pixel om — een
+     geblokt oranje-zwart patroon over Noord-Afrika.
+
+     Het reliëfbestand is geen normal map maar een reliëfweergave. Wie het
+     alsnog wil gebruiken, moet de shader de helling zélf laten uitrekenen uit
+     de luminantie; in dit slot kan het niet. */
   '2k': {
     label: 'Standard (2K)',
-    // Nagemeten op 2026-08-27, som van de vijf bestanden die een wissel ophaalt
-    // plus de sterrenhemel: 540 + 197 + 966 + 2.809 + 134 KB.
-    bytes: 4_646_000,
+    // Nagemeten op 2026-08-27, som van de vijf bestanden die een wissel ophaalt:
+    // 540 + 197 + 966 + 466 + 134 KB.
+    bytes: 2_303_000,
     day:      asset('assets/earth/terra-bluemarble-2048.webp'),
     night:    asset('assets/earth/terra-blackmarble-2048.webp'),
     clouds:   asset('assets/earth/2k_earth_clouds.jpg'),
-    normal:   asset('assets/earth/terra-relief-4096.webp'),
+    normal:   asset('assets/earth/2k_earth_normal_map.png'),
     specular: asset('assets/earth/2k_earth_specular_map.png'),
     stars:    asset('assets/stars/2k_stars_milky_way.jpg')
   },
   '8k': {
     label: 'High resolution (8K)',
-    bytes: 32_852_000,
+    bytes: 29_671_000,
     day:      asset('assets/earth/terra-bluemarble-8192.webp'),
     night:    asset('assets/earth/terra-blackmarble-8192.webp'),
     clouds:   asset('assets/earth/8k_earth_clouds.jpg'),
-    normal:   asset('assets/earth/terra-relief-8192.webp'),
+    normal:   asset('assets/earth/8k_earth_normal_map.png'),
     specular: asset('assets/earth/8k_earth_specular_map.png'),
     stars:    asset('assets/stars/8k_stars_milky_way.jpg')
   }

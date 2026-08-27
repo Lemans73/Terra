@@ -60,4 +60,10 @@ docs/README-screenshot.txt
 # netwerktabblad staan — je kunt niet weten of een bestand bestaat zonder het op
 # te vragen — maar de JS-console blijft schoon.
 js/ui/tuning-panel.js
-_v1-referentie/
+
+# ---- Referentiemateriaal: wél op schijf, niet in de repo en niet in de build.
+# Code en texturen die vervangen zijn maar waarvan we willen kunnen terugkijken
+# waar ze vandaan kwamen. Elk bestand draagt zijn herkomst in een kopregel of in
+# HERKOMST.md ernaast; zonder die herkomst is bewaarde rommel over drie sessies
+# alsnog dood gewicht.
+_referentie/
