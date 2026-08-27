@@ -1762,7 +1762,12 @@
     height: 6px;
     border-radius: 3px;
     margin: 2px 0 5px;
-    background: linear-gradient(90deg, #ffe85a, #ff782d, #ff325a, #a546eb, #5f5ffa, #4bcdff);
+    /* GEEN KLEUREN MEER HIER (sessie 41). Deze reeks stond de DEPTH_STOPS uit
+       index.html na te schrijven, en dat is een tweede bron van waarheid: bij de
+       nieuwe diepteschaal zei de legenda nog de oude kleuren terwijl de ringen
+       de nieuwe droegen. Het script vult hem nu uit DEPTH_STOPS zelf.
+       De waarde hieronder is alleen wat er staat vóór dat script draait. */
+    background: linear-gradient(90deg, #fff5be, #3e1d5e);
   }
   .depth-label {
     display: flex;

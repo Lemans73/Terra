@@ -114,7 +114,20 @@ export function createQuakeLabels(THREE, opts = {}) {
 #quake-labels .ql-box .rij:hover, #quake-labels .ql-box.actief { filter: brightness(1.35); }
 #quake-labels .ql-box .rij.op { text-shadow: 0 1px 10px rgba(0,0,0,0.95), 0 0 14px currentColor; }
 #quake-labels .ql-box.actief { text-shadow: 0 1px 10px rgba(0,0,0,0.95), 0 0 14px currentColor; }
-#quake-labels .ql-box.actief .loc, #quake-labels .ql-box.actief .tim { color: var(--ink, #e8eef7); }
+/* DE DIEPTEREGEL GAAT MEE NAAR WIT BIJ HOVER (sessie 41, Terry). De regel .dep
+   had geen eigen kleur en erfde die van de regel erboven: de DIEPTEKLEUR. Op een
+   uitgeklapt label las "Depth: 565 KM" daardoor in dezelfde paarse tint als de
+   ring, terwijl de plaatsnaam en de tijd ernaast al wit werden. Juist bij de
+   diepste bevingen, waar die kleur het donkerst is, was die regel het slechtst
+   leesbaar. Nu volgt hij .loc en .tim.
+
+   GEEN BACKTICKS IN DIT BLOK. Dit commentaar staat IN de CSS-template-literal
+   hierboven, en een backtick sluit die string. Bij een even aantal parseert het
+   bestand nog gewoon door — het wordt dan een property-access plus een tagged
+   template — en dan is er geen syntaxfout, alleen een halve stylesheet en een
+   app die verderop omvalt met "Cannot access X before initialization". */
+#quake-labels .ql-box.actief .loc, #quake-labels .ql-box.actief .tim,
+#quake-labels .ql-box.actief .dep { color: var(--ink, #e8eef7); }
 #quake-labels .ql-box.omlijnd { -webkit-text-stroke: var(--ql-stroke) #000; paint-order: stroke fill; }
 #quake-labels .ql-box.wit, #quake-labels .ql-box.wit .rij { color: #fff !important; }
 `;

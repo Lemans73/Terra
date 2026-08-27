@@ -2225,19 +2225,98 @@ let motionReduced = REDUCED_MOTION;
 
 // ---- Per-dataset visuele identiteit ---------------------------
 
-// Aardbeving-diepte → kleurramp (ondiep = heet, diep = koel), zoals seismische
-// dashboards. Staven én shockwave-ringen delen deze schaal. Diepte in km.
-const DEPTH_STOPS = [
-  [0,   [255, 232, 90]],   // ondiep: heet geel
-  [35,  [255, 120, 45]],   // oranje
-  [70,  [255, 50, 90]],    // rood-magenta
-  [150, [165, 70, 235]],   // paars
-  [300, [95, 95, 250]],    // blauw-paars
-  [700, [75, 205, 255]]    // diep: ijsblauw
+/* Aardbeving-diepte → kleurramp. Ringen, shockwave, labels, de schematische
+   symbolen en de legenda delen deze schaal. Diepte in km.
+
+   DE LUMINANTIE DAALT MONOTOON, en dat is de hele reden dat deze reeks er zo
+   uitziet (sessie 41). De vorige liep geel → oranje → rood-magenta → paars →
+   blauw-paars → ijsblauw, en die had twee problemen die pas zichtbaar werden
+   toen de labels hun pilvorm verloren en direct op de satellietkaart kwamen:
+
+     km     oude kleur      luminantie      nieuwe kleur     luminantie
+       0    255,232,90         0,797        255,245,190         0,903
+      35    255,120,45         0,349        253,196,90          0,611
+      70    255,50,90          0,243        241,124,72          0,336
+     150    165,70,235         0,184        204,68,94           0,178
+     300    95,95,250          0,175        139,45,120          0,087
+     700    75,205,255         0,524        62,29,94            0,027
+
+   Eén: 150 en 300 km scheelden 0,009 in luminantie. In grijswaarden en voor een
+   kleurenblinde lezer waren dat dezelfde diepte. De kleinste stap is nu 0,060.
+
+   Twee: de reeks liep niet van licht naar donker maar dook in het midden en
+   kwam er aan het eind weer uit — ondiep (0,80) en het diepste (0,52) waren
+   allebei licht. Er viel dus geen richting aan af te lezen zonder de kleuren te
+   kennen. Nu daalt hij van 0,903 naar 0,027, zodat "ondiep is licht, diep is
+   donker" ook zonder kleur klopt.
+
+   WAT DIT NIET OPLOST: leesbaarheid van gekleurde labeltekst. Nagerekend haalt
+   GEEN kleur de WCAG-drempel van 3,0 op alle achtergronden — wit scoort 1,17 op
+   sneeuw en 1,79 op woestijn, slechter dan magenta. De achtergrond loopt van
+   luminantie 0,02 tot 0,80 en één voorgrondkleur kan niet met beide
+   contrasteren. Dat doet de OUTLINE, en de labeltekst is sinds deze sessie
+   standaard wit. Kleur zit in het symbool, contrast in de tekst. */
+/* DE KLEUREN STAAN HIER, DE GRENZEN IN PARAMS (sessie 41). Die twee veranderen
+   om verschillende redenen: de kleuren zijn een ontwerpkeuze die vastligt zodra
+   de luminantie klopt, de grenzen hangen aan hoe de bevingen werkelijk verdeeld
+   liggen en daar wordt aan gedraaid.
+
+   WAAROM DE GRENZEN VERSCHOVEN ZIJN. Gemeten over 436 bevingen met diepte lag
+   77,3 % in 0-35 km — de eerste band, goed voor 5 % van de kleurenschaal —
+   terwijl 300-700 km met 0,5 % van de bevingen 57,1 % van de schaal kreeg. Meer
+   dan de helft van het kleurbereik ging naar een half procent van de data, en
+   bijna alles op de bol was daardoor dezelfde bleekgele tint.
+
+   Met 0/10/25/50/100/300 loopt het aandeel per band van 7,1 tot 35,6 % in
+   plaats van 0,5 tot 77,3 %. Alles voorbij de laatste grens krijgt de diepste
+   kleur, en dat klopt ook geologisch: voorbij 300 km is "diep" één categorie.
+
+   LET OP BIJ HET BIJSTELLEN: die 436 zijn één momentopname, bij één tijdvenster
+   en één magnitudedrempel. Bij een ander venster schuift de verdeling. IJk de
+   grenzen dus niet uitsluitend op wat er vandaag binnenkomt. */
+/* DE BODEM LIGT OP LUMINANTIE 0,20, EN DAT IS EEN ONDERGRENS EN GEEN SMAAK
+   (sessie 41, tweede ronde).
+
+   De vorige reeks liep door tot 0,027 en dat las niet meer op de donkere kaart:
+   tegen de nachtelijke oceaan (rgb 10,16,34, luminantie 0,006) haalden de twee
+   diepste kleuren een contrast van 2,47 en 1,39, waar 3,0 het minimum is voor
+   grote tekst. Precies de twee die als onleesbaar opvielen. Terugrekenen geeft
+   de grens: bij die achtergrond moet de voorgrond minstens 0,117 luminantie
+   hebben, en met marge is dat 0,20.
+
+   DE STAPPEN ZIJN PERCEPTUEEL GELIJK, niet gelijk in luminantie. De doelen
+   liggen op L* 96, 87, 78, 69, 60 en 52 — gelijke stappen zoals het oog ze
+   ziet. In luminantie levert dat 0,203 / 0,164 / 0,142 / 0,112 / 0,079: aflopend,
+   want gelijke L*-stappen zijn onderaan kleiner in Y. De kleinste stap is 0,079,
+   ruim boven de 0,009 waar deze schaal mee begon.
+
+   Gemeten tegen de donkere kaart haalt de zwakste kleur nu 4,53.
+
+   WAAROM ER GEEN STOP IS GESCHRAPT. De vraag was of de diepste stap eruit kon,
+   omdat juist die onleesbaar was. Dat lost het probleem op door informatie weg
+   te gooien: zes dieptebanden worden er vijf. De bodem optillen houdt alle zes
+   en haalt dezelfde winst — de diepste kleur is nu leesbaar in plaats van weg. */
+const DEPTH_KLEUREN = [
+  [254, 244, 203],  // ondiep: bleek warm geel   L* 96
+  [252, 212, 144],  // licht amber               L* 87
+  [247, 178, 137],  // zalm                      L* 78
+  [236, 141, 154],  // roze                      L* 69
+  [212, 108, 181],  // magenta                   L* 60
+  [173, 88, 202]    // diep: paars               L* 52
 ];
+function depthStops() {
+  return [
+    [0,                  DEPTH_KLEUREN[0]],
+    [PARAMS.depthStop1,  DEPTH_KLEUREN[1]],
+    [PARAMS.depthStop2,  DEPTH_KLEUREN[2]],
+    [PARAMS.depthStop3,  DEPTH_KLEUREN[3]],
+    [PARAMS.depthStop4,  DEPTH_KLEUREN[4]],
+    [PARAMS.depthStop5,  DEPTH_KLEUREN[5]]
+  ];
+}
 function depthRGB(depth) {
   const z = (depth == null || isNaN(depth)) ? 0 : Math.max(0, depth);
-  const s = DEPTH_STOPS;
+  const s = depthStops();
   if (z <= s[0][0]) return s[0][1];
   for (let i = 1; i < s.length; i++) {
     if (z <= s[i][0]) {
@@ -2254,6 +2333,44 @@ function depthHex(depth) {
 function depthRgba(depth, a) {
   const [r,g,b] = depthRGB(depth);
   return 'rgba(' + r + ',' + g + ',' + b + ',' + a.toFixed(3) + ')';
+}
+
+/* NA EEN WIJZIGING AAN DE DIEPTEGRENZEN (sessie 41).
+
+   De dieptekleur zit niet in een uniform maar in het `aColor`-ATTRIBUUT van de
+   indicator: depthRGB draait in JS en de uitkomst gaat per event naar de GPU.
+   Een grens verzetten verandert dus niets tot die buffer opnieuw gevuld wordt —
+   en render() draait op data-updates, niet per frame, dus dat gebeurt uit
+   zichzelf pas bij de volgende poll. Gemeten zonder deze functie: de stops naar
+   de oude spreiding zetten liet de gemiddelde ringkleur exact op 227,158,107
+   staan.
+
+   Staat BOVEN vulDiepteLegenda() maar roept hem aan; beide worden pas
+   uitgevoerd als er iets aan de grenzen verandert. */
+function hertekenDiepte() {
+  vulDiepteLegenda();
+  if (quakeIndicator && quakeVeld) {
+    quakeIndicator.uploadEvents(quakeVeld.list, quakeVeld.now, quakeVeld.span);
+  }
+}
+
+/* DE LEGENDA-BALK UIT DEZELFDE STOPS (sessie 41). Hij stond als losse
+   hex-reeks in css/app.css, en dat is een tweede bron van waarheid: bij een
+   nieuwe diepteschaal zei de balk de oude kleuren terwijl de ringen de nieuwe
+   droegen. Precies het soort stille afwijking dat dit project overal dichtzet.
+
+   DE STOPS KRIJGEN HUN EIGEN PLEK IN DE BALK, naar diepte en niet op gelijke
+   afstand. Anders liegt de balk over de spreiding: 0-70 km beslaat een tiende
+   van het bereik en zou als de halve balk getekend worden, terwijl juist daar
+   de meeste bevingen zitten. */
+function vulDiepteLegenda() {
+  const el = document.querySelector('.depth-scale');
+  if (!el) return;
+  const stops = depthStops();
+  const max = stops[stops.length - 1][0] || 1;
+  const delen = stops.map(([km, rgb]) =>
+    'rgb(' + rgb.join(',') + ') ' + (100 * km / max).toFixed(1) + '%');
+  el.style.background = 'linear-gradient(90deg, ' + delen.join(', ') + ')';
 }
 
 
@@ -4117,7 +4234,14 @@ if (IS_LOCAL) {
         PARAMS, bloomPass, gradePass,
         getEarthMaterial: () => shaderMaterial,
         // Ook een getter: de v2-laag wordt lazy in animateShader gebouwd.
-        getQuakeIndicator: () => quakeIndicator
+        getQuakeIndicator: () => quakeIndicator,
+        /* DE DIEPTEGRENZEN VRAGEN OM MEER DAN EEN UNIFORM (sessie 41). De
+           kleuren zitten niet in een uniform maar in het `aColor`-ATTRIBUUT:
+           depthRGB draait in JS en de uitkomst gaat per event naar de GPU. Een
+           schuif verzetten verandert dus niets tot die buffer opnieuw gevuld
+           wordt. Deze haak doet dat, plus de legendabalk die uit dezelfde stops
+           komt. */
+        hertekenDiepte
       });
     })
     .catch(() => { /* hoort er niet te zijn buiten de ontwikkelmachine */ });
@@ -5675,6 +5799,7 @@ texqBtns.forEach(b => b.addEventListener('click', () => setTextureQuality(b.data
    markup, dan zou het getal daar opnieuw kunnen gaan afwijken. */
 if (texqNote) texqNote.textContent = TEXQ_NOTE_IDLE;
 updateTexqUI();
+vulDiepteLegenda();
 
 // ---- Eigen texturen: kiezen, toepassen en weer weghalen --------------------
 // Zie de noot bij `customTex` bovenaan voor het waarom van alleen dag/nacht en
@@ -12386,6 +12511,10 @@ if (IS_LOCAL) {
     // tuning-paneel nodig te hebben (dat zit niet in de repo).
     PARAMS,
     quakeIndicator: () => quakeIndicator,
+    /* Dezelfde haak die het tuning-paneel gebruikt, en niet een kopie ervan.
+       Een meting die zijn eigen herteken-weg neemt, toetst die van het paneel
+       niet — en dat is precies de weg die stuk kan gaan. */
+    hertekenDiepte,
 
     /* DE RENDERLUS MET DE HAND STAPPEN. Nodig omdat een verborgen tabblad geen
        requestAnimationFrame krijgt — gemeten: nul frames van veertig aangevraagd

@@ -404,7 +404,7 @@ export const PARAMS = {
        axisOffset  een deel van de geprojecteerde radiale as: kort waar je
                    bovenop kijkt, lang aan de bolrand */
   quakeLabelOffset: 0,
-  quakeLabelRingClear: 0,
+  quakeLabelRingClear: 0.26,
   quakeLabelAxisOffset: 0.02,
   /* De offset slaat op de RAND van het label, niet op zijn midden. Bij offset
      nul staat de magnitude dan precies op de indicator in plaats van er een
@@ -457,7 +457,7 @@ export const PARAMS = {
      Op 0 is het gedrag exact wat het was. Hoger houdt de lijst ook bij maximale
      zoom bij elkaar; de lijst zelf staat op tijd gesorteerd met de meest recente
      bovenaan, en dát is bij een zwerm wat je wilt weten. */
-  quakeLabelClusterPxNear: 110,
+  quakeLabelClusterPxNear: 0,
   quakeLabelClusterMax: 12,
 
   /* BUITEN DE BOLRAND. Van het middelpunt AF wijzen is niet hetzelfde als
@@ -686,6 +686,16 @@ export const PARAMS = {
      ALLE VIER BEGINNEN NEUTRAAL, dus ze veranderen niets tot ze verzet worden —
      gamma 1,0 is geen curve, knie 1,0 is het oude hard afkappen, en 0,55/0,75
      zijn de getallen die er altijd al stonden. */
+  /* DE DIEPTEGRENZEN VAN DE KLEURSCHAAL (sessie 41). De kleuren staan in
+     index.html bij `DEPTH_KLEUREN`; hier staan alleen de grenzen, want die
+     hangen aan hoe de bevingen verdeeld liggen en daar wordt aan gedraaid.
+     Zie de noot bij `depthStops()` voor de gemeten verdeling. Elke grens moet
+     groter zijn dan de vorige — depthRGB gaat er van uit dat ze oplopen. */
+  depthStop1: 10,        // km
+  depthStop2: 40,
+  depthStop3: 160,
+  depthStop4: 320,
+  depthStop5: 620,       // en alles dieper krijgt deze kleur
   dayGamma: 1.85,         // >1 tilt de donkere delen op en laat 1,0 op 1,0 staan
   dayKnee: 0.85,          // <1 buigt de top zacht om in plaats van hard af te kappen
   macroAmbient: 0.55,    // wat het oppervlak zonder directe zon nog draagt
