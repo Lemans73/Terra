@@ -159,9 +159,9 @@ export const EXPERT_LAYER_SCALE = {
 // gedeelde objectreferentie → GUI-mutaties werken ongewijzigd.
 export const PARAMS = {
   // bloom (post-processing)
-  bloomStrength: 0.01, bloomRadius: 0.385, bloomThreshold: 0.79,
+  bloomStrength: 0, bloomRadius: 0, bloomThreshold: 0,
   // kleurgrading + chromatische aberratie
-  gradeContrast: 1.06, gradeSaturation: 1.12, gradeAberration: 0.005, gradeTemp: 0.5,
+  gradeContrast: 1.06, gradeSaturation: 1.5, gradeAberration: 0.005, gradeTemp: 0.5,
   // mist — fresnel-waas die naar de randen toe het kaartje vertroebelt
   fogStrength: 1.0, fogPower: 3.0, fogColor: '#b6c4d6',
   // staven — simpele cilinder die vanaf het oppervlak de ruimte in rijst (hoogte ∝ magnitude²)
@@ -208,8 +208,8 @@ export const PARAMS = {
      Maar v1's schaal overnemen kan ook niet: van M4,5 naar M9,0 groeit die maar
      met een factor 2,1, en dan valt er aan de grootte geen magnitude meer af te
      lezen. Deze set neemt het bereik van Grok en de orde van grootte van v1. */
-  quakeRingRadiusLo: 3.5,    // wereldstraal bij quakeMagMin (bol = 100)
-  quakeRingRadiusHi: 30,     // wereldstraal bij quakeMagMax
+  quakeRingRadiusLo: 1,    // wereldstraal bij quakeMagMin (bol = 100)
+  quakeRingRadiusHi: 12,     // wereldstraal bij quakeMagMax
   quakeRingRadiusPow: 0.95,  // kromming van de magnitude→straal-afbeelding
   /* OP HET OPPERVLAK, EN DAT IS EEN OMKERING (sessie 40, Terry).
 
@@ -298,23 +298,23 @@ export const PARAMS = {
 
      BOVEN 1, want een golf dijt VOORBIJ zijn bron uit. Op 1,0 valt de puls
      precies samen met de buitenste ring, daaronder verdwijnt hij er weer in. */
-  quakeShockScale: 1.6,
+  quakeShockScale: 0.25,
   /* MEE OMHOOG met de ring: boven de kaartlijnen (0,6) maar onder de ring
      (0,8), zodat de puls onder zijn eigen indicator door loopt in plaats van
      eroverheen. Precies 0,6 zou gelijk liggen met de lijnen en dan beslist
      de tekenvolgorde het — daarom 0,7. Zie de noot bij quakeRingLift. */
   quakeShockLift: 0,
   quakeShockWaves: 2,        // aantal golven tegelijk onderweg (max 4, zie shader)
-  quakeShockSpeed: 0.24,
-  quakeShockThickness: 0.04,
-  quakeShockEdge: 0.005,
+  quakeShockSpeed: 0.1,
+  quakeShockThickness: 0.055,
+  quakeShockEdge: 0.001,
   /* DE LEEFTIJD-ENVELOPE, IN UREN. Vers pulseert vol, daarna dooft het uit;
      voorbij AgeHi wordt er niets meer getekend. Zonder die grens pulseert de
      hele wereld altijd en betekent een puls niets meer.
      De leeftijd wordt gemeten vanaf het GEKOZEN moment (momentNow), niet vanaf
      de wandklok — anders staat deze laag op de tijdschuif permanent uit. */
-  quakeShockAgeLo: 4,        // tot hier vol (uren)
-  quakeShockAgeHi: 72,       // hier is er niets meer over (uren)
+  quakeShockAgeLo: 0,        // tot hier vol (uren)
+  quakeShockAgeHi: 4,       // hier is er niets meer over (uren)
   quakeShockOpacity: 1,
 
   // ---- stapelen ----
@@ -334,25 +334,25 @@ export const PARAMS = {
      ligt klaar (stackedNormalJS in js/layers/quake-indicator.js); hij wordt
      aangesloten bij de labellaag, stap D van het integratiecontract. */
   quakeStackOn: true,
-  quakeStackNear: 100,       // camera-afstand waarop het stapelen begint
-  quakeStackFar: 450,        // en waarop het volledig is
-  quakeStackLift: 2.9,       // hoogtewinst per verdieping (maal de icoonschaal)
-  quakeStackSpread: 5,       // hoe ver verdiepingen opzij worden gezet
+  quakeStackNear: 150,       // camera-afstand waarop het stapelen begint
+  quakeStackFar: 350,        // en waarop het volledig is
+  quakeStackLift: 1.5,       // hoogtewinst per verdieping (maal de icoonschaal)
+  quakeStackSpread: 1,       // hoe ver verdiepingen opzij worden gezet
   quakeStackOverlap: 1,      // hoe strikt twee ringen elkaar moeten raken om te stapelen
   quakeStackMaxLayers: 10,
 
   // ---- de schaal, alleen voor deze laag ----
   // Zelfde vorm als iconScale* hieronder, andere getallen. Zie de kop van dit blok.
-  quakeIconScaleRef: 131,      // camera-afstand waarbij de schaal 1 is
+  quakeIconScaleRef: 60,      // camera-afstand waarbij de schaal 1 is
   quakeIconScalePow: 0.5,      // steilheid
   quakeIconScaleMin: 0.18,     // ondergrens (sterk ingezoomd)
-  quakeIconScaleMax: 1.69,      // bovengrens (ver uitgezoomd)
+  quakeIconScaleMax: 3,      // bovengrens (ver uitgezoomd)
   /* DE NABIJHEIDSKLEM. Zonder deze groeit de hoekgrootte onder de ondergrens
      ongeremd; met een vloer op 100 — de bolstraal zelf — is de hoekstraal exact
      constant, en dat is gemeten en niet afgeleid. Terra's gedeelde variant meet
      tot 101,5 (de glyphschil); deze laag ligt op het oppervlak. */
-  quakeIconNearPerUnit: 0.0062,
-  quakeIconNearFloor: 100,
+  quakeIconNearPerUnit: 0.0138,
+  quakeIconNearFloor: 101,
 
   // ---- het magnitude-bereik van de AFBEELDING ----
   /* NIET HET FILTER. `magMin`/`magMax` in index.html bepalen welke bevingen je
@@ -396,8 +396,8 @@ export const PARAMS = {
        axisOffset  een deel van de geprojecteerde radiale as: kort waar je
                    bovenop kijkt, lang aan de bolrand */
   quakeLabelOffset: 0,
-  quakeLabelRingClear: 0.4,
-  quakeLabelAxisOffset: 0.4,
+  quakeLabelRingClear: 0,
+  quakeLabelAxisOffset: 0.02,
   /* De offset slaat op de RAND van het label, niet op zijn midden. Bij offset
      nul staat de magnitude dan precies op de indicator in plaats van er een
      halve labelbreedte naast. */
@@ -424,11 +424,11 @@ export const PARAMS = {
      omdat "soms een rare richting" beter is dan "soms geen label".
      `dropBlocked` uit betekent: liever een label dat overlapt dan geen label. */
   quakeLabelAvoid: true,
-  quakeLabelAvoidRings: 6,
+  quakeLabelAvoidRings: 2,
   quakeLabelFanDeg: 0,         // 0 = niet uitwaaieren, alleen langs de as
   quakeLabelFanStep: 10,
   quakeLabelDropBlocked: false,
-  quakeLabelPad: 4,            // marge rond een labelblok bij het ontwijken
+  quakeLabelPad: 24,            // marge rond een labelblok bij het ontwijken
 
   /* CLUSTEREN. Bij een zwerm hoort niet elk label bij één stip maar de LIJST
      bij de GROEP — dan bestaat de vraag welk label bij welke indicator hoort
@@ -437,7 +437,7 @@ export const PARAMS = {
      elke beving zijn eigen label te hebben, dus bij volle zoom valt hij naar
      nul en clustert er niets meer. */
   quakeLabelCluster: true,
-  quakeLabelClusterPx: 96,
+  quakeLabelClusterPx: 124,
   /* DE ONDERGRENS VAN DIE AFSTAND, bij volle zoom (sessie 40, Terry).
 
      De regel hierboven laat de clusterafstand met de zoom naar NUL krimpen: diep
@@ -449,8 +449,8 @@ export const PARAMS = {
      Op 0 is het gedrag exact wat het was. Hoger houdt de lijst ook bij maximale
      zoom bij elkaar; de lijst zelf staat op tijd gesorteerd met de meest recente
      bovenaan, en dát is bij een zwerm wat je wilt weten. */
-  quakeLabelClusterPxNear: 0,
-  quakeLabelClusterMax: 10,
+  quakeLabelClusterPxNear: 110,
+  quakeLabelClusterMax: 12,
 
   /* BUITEN DE BOLRAND. Van het middelpunt AF wijzen is niet hetzelfde als
      buiten de bol staan: een label bij een indicator midden op de aardbol wijst
@@ -467,7 +467,7 @@ export const PARAMS = {
   // De leader-line en zijn stip. Getekend in SVG, niet als gedraaide div —
   // scherper bij een hoge pixelratio, en Terra heeft die laag al.
   quakeLabelLineWidth: 2,
-  quakeLabelLineOpacity: 0.85,
+  quakeLabelLineOpacity: 1,
   quakeLabelDotSize: 6,
 
   /* NAGLIJDEN. Ook met een continue as springt een label nog als de ontwijking
@@ -646,8 +646,8 @@ export const PARAMS = {
      Met `reliefStrength` op 0 valt de emboss helemaal weg en blijft alleen
      `macro` over. Gaat een donker gebied daarmee terug naar normaal, dan ligt
      het aan de normal-map en niet aan de dagtextuur. */
-  normalStrength: 4.95,   // overdrijving van de normal-map-helling
-  reliefStrength: 4.0,   // emboss-uitvergroting → hardere reliëflijnen
+  normalStrength: 4.9,   // overdrijving van de normal-map-helling
+  reliefStrength: 6.2,   // emboss-uitvergroting → hardere reliëflijnen
   waterRipple: 0.5,     // amplitude van de procedurele water-rimpel
   // schermvaste icoongrootte (app-breed, beide modi): iconen schalen mee met de
   // camera-afstand. Power-curve (pow>1) = agressievere zoom-respons, vooral diep
