@@ -71,7 +71,6 @@ const PREFS_VERSIE = 1;
    waarde-omzetting staat erbij, want ze stonden als '1'/'0'. */
 const PREFS_OUD = {
   'terra-tex-quality': { naar: 'pref.texQuality', lees: (v) => v },
-  'terra-ocean-floor': { naar: 'tex.ocean',       lees: (v) => v === '1' },
   'terra-utc':         { naar: 'pref.utc',        lees: (v) => v === '1' }
 };
 
@@ -125,7 +124,6 @@ export const PREFS_DEFAULTS = {
   'tex.clouds':   true,
   'tex.specular': true,
   'tex.normal':   true,
-  'tex.ocean':    true,
   'tex.wave':     true,
   'tex.wire':     false,
   'pref.texQuality': '2k',

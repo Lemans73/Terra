@@ -617,14 +617,19 @@ export const PARAMS = {
   sketchAltitude: 0.012,
   sketchOpacity: 1.0,
   /* SKETCH:END */
-  // Zonneglinster op het water. De tweede waarde geldt zodra de oceaanbodem aan
-  // staat, en dat is geen smaakkwestie maar een meting: bij 0,7 legt de brede
-  // `sheen` (macht 14) een lichtwaas over de halve dagzijde, en daar verdwijnt het
-  // hele bodemreliëf onder. Bij 0,7 was er van de Mid-Atlantische Rug niets te
-  // zien; bij 0,3 tekent hij zich af terwijl de fonkeling blijft. Op de vlakke
-  // oceaan van de gewone dagtextuur valt er niets te verbergen — daar mag hij vol.
-  glintStrength: 0.7,
-  glintStrengthOcean: 0.3,
+  /* Zonneglinster op het water. ÉÉN WAARDE SINDS SESSIE 41, en die staat op de
+     zachte stand.
+
+     Er stonden er twee: 0,7 voor de vlakke dagtextuur en 0,3 zodra de
+     oceaanbodem aanstond. Dat was geen smaakkwestie maar een meting — bij 0,7
+     legt de brede `sheen` (macht 14) een lichtwaas over de halve dagzijde, en
+     daar verdween het hele bodemreliëf onder: van de Mid-Atlantische Rug was
+     niets te zien, bij 0,3 tekent hij zich af terwijl de fonkeling blijft.
+
+     De nieuwe dagtexturen hebben ALTIJD bathymetrie. Er is dus geen vlakke
+     oceaan meer om 0,7 op los te laten, en die waarde laten staan zou precies
+     het reliëf wegsmeren waar de nieuwe kaarten voor zijn. */
+  glintStrength: 0.3,
   /* HET RELIËF VAN DE DAGZIJDE (sessie 40). Deze drie stonden als vaste getallen
      in de uniform-opbouw van het materiaal en waren daarmee alleen te wijzigen
      door de code te herschrijven. Ze staan hier met exact dezelfde waarden — dit
@@ -1186,28 +1191,38 @@ export function asset(path) {
 // maken van de asset en niet in de shader — het masker verandert immers nooit.
 // Zie logs/bathy/build-bathy-daymap.py (wordt niet meegeleverd).
 export const TEXTURE_SETS = {
+  /* DE SETS ZIJN IN SESSIE 41 VERVANGEN (Terry). Blue Marble voor de dag,
+     Black Marble voor de nacht, en een eigen reliëfkaart in plaats van de
+     normal map. Alles in WebP.
+
+     `bathyDay` BESTAAT NIET MEER, en dat is geen bezuiniging maar een gevolg:
+     de nieuwe dagtextuur HEEFT bathymetrie. Er valt dus niets meer te kiezen,
+     en een keuze tussen "met" en "zonder" die allebei "met" opleveren is een
+     schakelaar die liegt. Zie ook `glintStrength` — die had een tweede waarde
+     voor precies deze situatie en heeft er nu nog maar één nodig.
+
+     RELIËF BESTAAT ALLEEN IN 4096 EN 8192. De 2K-set krijgt de 4096-versie:
+     dat is de grootste post in die set (2,8 MB van de 4,6), en het is een
+     bewuste keuze van Terry om daar niet op in te leveren. */
   '2k': {
     label: 'Standard (2K)',
-    // Nagemeten op 2026-08-05: som van de zes bestanden die een wissel ophaalt
-    // (day, night, clouds, normal, specular, sterrenhemel). Stond op 2.476.000 en
-    // 29.675.000, allebei te laag — de 8K-set is sindsdien 31,2 MB.
-    bytes: 2_536_000,
-    day:      asset('assets/earth/2k_earth_daymap.jpg'),
-    bathyDay: asset('assets/earth/2k_earth_daymap_bathy.jpg'),
-    night:    asset('assets/earth/2k_earth_nightmap.jpg'),
+    // Nagemeten op 2026-08-27, som van de vijf bestanden die een wissel ophaalt
+    // plus de sterrenhemel: 540 + 197 + 966 + 2.809 + 134 KB.
+    bytes: 4_646_000,
+    day:      asset('assets/earth/terra-bluemarble-2048.webp'),
+    night:    asset('assets/earth/terra-blackmarble-2048.webp'),
     clouds:   asset('assets/earth/2k_earth_clouds.jpg'),
-    normal:   asset('assets/earth/2k_earth_normal_map.png'),
+    normal:   asset('assets/earth/terra-relief-4096.webp'),
     specular: asset('assets/earth/2k_earth_specular_map.png'),
     stars:    asset('assets/stars/2k_stars_milky_way.jpg')
   },
   '8k': {
     label: 'High resolution (8K)',
-    bytes: 31_151_000,
-    day:      asset('assets/earth/8k_earth_daymap.jpg'),
-    bathyDay: asset('assets/earth/8k_earth_daymap_bathy.jpg'),
-    night:    asset('assets/earth/8k_earth_nightmap.jpg'),
+    bytes: 32_852_000,
+    day:      asset('assets/earth/terra-bluemarble-8192.webp'),
+    night:    asset('assets/earth/terra-blackmarble-8192.webp'),
     clouds:   asset('assets/earth/8k_earth_clouds.jpg'),
-    normal:   asset('assets/earth/8k_earth_normal_map.png'),
+    normal:   asset('assets/earth/terra-relief-8192.webp'),
     specular: asset('assets/earth/8k_earth_specular_map.png'),
     stars:    asset('assets/stars/8k_stars_milky_way.jpg')
   }

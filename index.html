@@ -566,26 +566,6 @@
             <div class="elayer" data-tex="clouds"><span class="edot"></span>Clouds<span class="estat" id="es-clouds">&#8212;</span></div>
             <div class="elayer" data-tex="specular"><span class="edot"></span>Water reflection<span class="estat" id="es-specular">&#8212;</span></div>
             <div class="elayer" data-tex="normal"><span class="edot"></span>Relief (normal map)<span class="estat" id="es-normal">&#8212;</span></div>
-            <!-- De oceaanbodem is geen extra laag maar een VARIANT van de
-                 dagtextuur: hij vervangt hem en kost dus niets extra aan
-                 downloads of textuureenheden. Vandaar dat hij hier staat en niet
-                 bij de kwaliteitskeuze eronder — je kiest wát er op de bol ligt,
-                 niet hoe scherp. -->
-            <div class="elayer expandable" id="ocean-toggle">
-              <span class="edot"></span>Ocean floor
-              <button class="row-expand" data-note="ocean-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-              </button>
-              <span class="estat" id="es-ocean">on</span>
-            </div>
-            <div class="layer-detail" id="ocean-note">
-              The ocean in the standard texture is one flat colour &#8212; the Mariana
-              Trench and the North Sea are literally the same blue. This swaps it for
-              NASA's Blue Marble bathymetry, so ridges, trenches and shelves become
-              visible. The land is unchanged. It replaces the day map rather than
-              adding a layer, so it costs one download the first time you switch
-              it on &#8212; about 0.4 MB at 2K, about 4.9 MB at 8K.
-            </div>
             <div class="elayer" id="wave-toggle"><span class="edot"></span>Wave animation<span class="estat" id="es-wave">on</span></div>
             <div class="elayer" id="wire-toggle"><span class="edot"></span>Earth wireframe<span class="estat" id="es-wire">off</span></div>
             <div class="night-slider">
@@ -599,14 +579,14 @@
             <div class="texq" id="texq">
               <button class="texq-opt" data-q="2k">
                 <span class="texq-name">Standard</span>
-                <span class="texq-meta">2K &#183; ~2.5 MB</span>
+                <span class="texq-meta" data-texq-size="2k">2K</span>
               </button>
               <button class="texq-opt" data-q="8k">
                 <span class="texq-name">High resolution</span>
-                <span class="texq-meta">8K &#183; ~31 MB</span>
+                <span class="texq-meta" data-texq-size="8k">8K</span>
               </button>
             </div>
-            <div class="texq-note" id="texq-note">8K is sharper up close, but downloads about 29 MB extra.</div>
+            <div class="texq-note" id="texq-note">8K is sharper up close, but downloads more.</div>
 
             <!-- EIGEN TEXTUREN. Staat hier en niet bij de tekenlaag, om twee redenen:
                  dit gaat over de aarde en niet over annoteren, en alles in díé tab
@@ -3829,7 +3809,7 @@ const prefsToepassers = [];
 const PREFS_RIJEN = {
   'sound-toggle': 'pref.sound', 'label-toggle': 'pref.quakeLabels',
   'rotate-toggle': 'pref.autoRotate',
-  'ocean-toggle': 'tex.ocean', 'wave-toggle': 'tex.wave', 'wire-toggle': 'tex.wire',
+  'wave-toggle': 'tex.wave', 'wire-toggle': 'tex.wire',
   'polarmotion-toggle': 'axes.polarmotion', 'eclipse-toggle': 'sunmoon.eclipse',
   'sunspots-toggle': 'sunmoon.sunspots', 'lagrange-toggle': 'space.lagrange',
   'msp-mp-toggle': 'msp.magnetopause', 'msp-bs-toggle': 'msp.bowshock',
@@ -3904,26 +3884,6 @@ let texQuality = (() => {
   return TEXTURE_SETS[bewaard] ? bewaard : DEFAULT_QUALITY;
 })();
 
-// ---- Oceaanbodem ----------------------------------------------------------
-// Een VARIANT van de dagtextuur, geen extra laag: `bathyDay` vervangt `day`, dus
-// er komt geen textuureenheid en geen download bij. In dat bestand zit Terra's
-// eigen land met NASA's zeebodem eronder vandaan, één keer samengevoegd langs de
-// specular map. Zie logs/bathy/build-bathy-daymap.py.
-//
-// Deze declaratie staat BOVENAAN bij de scene-state, niet bij de schakelaar
-// verderop. `dayUrlFor()` wordt al tijdens het opbouwen van het materiaal gelezen
-// en een `let` verderop zou dus in de temporal dead zone zitten — dezelfde val als
-// bij setLayerLocked() in sessie 11 en bij timeOffsetMs in sessie 14.
-// AAN bij een eerste bezoek. De zeebodem is het verschil tussen een oceaan die
-// iets vertelt en een vlak blauw vlak — gemeten was 87,4% van al het diepe water
-// in de gewone dagtextuur exact dezelfde pixel — en niemand gaat daarvoor eerst
-// een instelling zoeken. Het kost ook niets: de variant vervángt de dagtextuur en
-// is op 2K zelfs kleiner (384 KB tegen 452 KB).
-//
-// `null` en `'0'` zijn hier bewust niet hetzelfde. Nooit iets gekozen betekent de
-// standaard; expliciet uitgezet blijft uit, ook na een herbezoek.
-let oceanFloorOn = Prefs.get('tex.ocean');
-
 // ---- Eigen texturen -------------------------------------------------------
 //
 // Alleen de DAG- en NACHTkaart zijn te vervangen. De normal map en de specular
@@ -3941,13 +3901,13 @@ let oceanFloorOn = Prefs.get('tex.ocean');
 // die opslag vaak afgeschermd. Eén sessie is eerlijker dan iets dat soms werkt.
 const customTex = { day: null, night: null };   // { url, naam, bytes } of null
 
-// Eén plek die bepaalt welke dagtextuur geldt. Volgorde: eigen kaart wint van de
-// oceaanbodem, die wint van de gewone dagtextuur. Valt terug op `day` wanneer een
-// set geen bathy-variant heeft, zodat een onvolledige set nooit een zwarte bol geeft.
-function dayUrlFor(quality, bathy = oceanFloorOn) {
+/* Eén plek die bepaalt welke dagtextuur geldt: een eigen kaart wint van die van
+   de set. Tot sessie 41 stond er een derde mogelijkheid tussen — de
+   `bathyDay`-variant achter de schakelaar `Ocean floor`. Die is vervallen omdat
+   de nieuwe dagtexturen altijd bathymetrie hebben; er viel niets meer te kiezen. */
+function dayUrlFor(quality) {
   if (customTex.day) return customTex.day.url;
-  const A = assetsFor(quality);
-  return (bathy && A.bathyDay) ? A.bathyDay : A.day;
+  return assetsFor(quality).day;
 }
 
 // Idem voor de nachtzijde. Bestond nog niet omdat er tot nu toe niets te kiezen
@@ -3955,13 +3915,6 @@ function dayUrlFor(quality, bathy = oceanFloorOn) {
 function nightUrlFor(quality) {
   if (customTex.night) return customTex.night.url;
   return assetsFor(quality).night;
-}
-
-// De glinster moet zachter zodra er iets onder het water te zien is — zie de noot
-// bij glintStrengthOcean in js/config.js. Één functie, zodat de opbouw van het
-// materiaal en de schakelaar niet uit elkaar kunnen lopen.
-function glintFor(bathy) {
-  return bathy ? PARAMS.glintStrengthOcean : PARAMS.glintStrength;
 }
 
 // Hulpobjecten voor de radiale oriëntatie van de indicatoren — zie de lange noot
@@ -4298,7 +4251,7 @@ let laatsteBrandNoot = '';
 // Toont de app tijden in UTC of in de zone van het apparaat? Staat hier om dezelfde
 // TDZ-reden: fmtTime/fmtStamp lezen hem, en die draaien al bij de eerste klok-tick.
 // `null` betekent nooit iets gekozen en dus de standaard (lokaal, het oude gedrag);
-// '0' is een expliciete keuze en blijft uit. Zelfde onderscheid als terra-ocean-floor.
+// '0' is een expliciete keuze en blijft uit.
 let useUTC = Prefs.get('pref.utc');
 // De enige twee plekken waar de app een tijdstip naar tekst brengt. Voorheen stonden
 // er zes losse toLocale*-aanroepen verspreid door het bestand, elk met hun eigen
@@ -4437,8 +4390,7 @@ function buildRealisticMaterial() {
            wordt in een `.then()` gebouwd, ná het laden van vijf texturen, en dus
            ruim ná het blok dat de bewaarde voorkeuren toepast. Een vaste 0,12
            hier overschreef daarom stilletjes de stand die de bezoeker had
-           gekozen: de schuif zei 20 %, de scene toonde 12. Zelfde patroon als
-           `glintStrength` twee regels lager, dat `oceanFloorOn` al zo leest. */
+           gekozen: de schuif zei 20 %, de scene toonde 12. */
         nightBrightness: { value: Prefs.get('pref.nightGlow') / 100 },
         /* UIT PARAMS EN NIET UIT EEN LITERAL (sessie 40), om dezelfde reden als
            `nightBrightness` hierboven: dit materiaal wordt in een `.then()`
@@ -4447,7 +4399,7 @@ function buildRealisticMaterial() {
            deze drie doen. */
         normalStrength: { value: PARAMS.normalStrength },
         reliefStrength: { value: PARAMS.reliefStrength },
-        glintStrength:  { value: glintFor(oceanFloorOn) }, // sterkte zonneglinster
+        glintStrength:  { value: PARAMS.glintStrength }, // sterkte zonneglinster
         waterRipple:    { value: PARAMS.waterRipple },
         cloudDrift:    { value: 0 },     // horizontale wolken-offset (drift)
         cloudShadow:   { value: PARAMS.cloudShadow }, // sterkte wolk-schaduw op oppervlak
@@ -5649,10 +5601,23 @@ document.querySelectorAll('.elayer').forEach(el => {
 // (zie buildCloudShell) en synct daardoor vanzelf mee.
 const texqNote = document.getElementById('texq-note');
 const texqBtns = [...document.querySelectorAll('.texq-opt')];
-const TEXQ_NOTE_IDLE = '8K is sharper up close, but downloads about 29 MB extra.';
+/* DE GROOTTES KOMEN UIT `textureSetSize()` EN NIET UIT DE MARKUP (sessie 41).
+   Ze stonden er als "~2.5 MB" en "~31 MB" bij, en die getallen liepen achter
+   zodra een set veranderde — precies wat er deze sessie gebeurde: de 2K-set
+   ging naar 4,6 MB en de markup bleef 2,5 zeggen. Een cijfer dat over iemands
+   eigen download gaat, hoort niet op twee plekken te staan. */
+function texqMB(q) {
+  return textureSetSize(q).replace(/([\d.]+) MB/, (_, n) => Math.round(Number(n)) + ' MB');
+}
+const TEXQ_NOTE_IDLE = '8K is sharper up close, but downloads about '
+  + texqMB('8k') + ' in total.';
 
 function updateTexqUI() {
   texqBtns.forEach(b => b.classList.toggle('active', b.dataset.q === texQuality));
+  document.querySelectorAll('[data-texq-size]').forEach(el => {
+    const q = el.dataset.texqSize;
+    el.textContent = q.toUpperCase() + ' \u00b7 ~' + texqMB(q);
+  });
 }
 
 let texqBusy = false;
@@ -5712,63 +5677,10 @@ async function setTextureQuality(q) {
 }
 
 texqBtns.forEach(b => b.addEventListener('click', () => setTextureQuality(b.dataset.q)));
+/* En de noot ook bij het opstarten uit dezelfde bron. Stond hij alleen in de
+   markup, dan zou het getal daar opnieuw kunnen gaan afwijken. */
+if (texqNote) texqNote.textContent = TEXQ_NOTE_IDLE;
 updateTexqUI();
-
-// ---- Oceaanbodem aan/uit --------------------------------------------------
-// Wisselt alleen de dagtextuur om; night, clouds, specular en normal blijven
-// staan. Dat is precies waarom dit een variant is en geen laag: de rest van de
-// shader merkt er niets van, inclusief de zonneglinster. Die is optellend
-// (`surface += glintColor * glint * water`), dus hij komt bovenóp de zeebodem in
-// plaats van hem te vervangen — het specular-masker is ongewijzigd.
-const oceanToggleEl = document.getElementById('ocean-toggle');
-const oceanStatEl = document.getElementById('es-ocean');
-let oceanBusy = false;
-
-function updateOceanUI() {
-  oceanToggleEl?.classList.toggle('on', oceanFloorOn);
-  if (oceanStatEl) oceanStatEl.textContent = oceanBusy ? '…' : (oceanFloorOn ? 'on' : 'off');
-}
-
-async function setOceanFloor(on) {
-  if (oceanBusy || on === oceanFloorOn) return;
-  const T = findThree();
-  if (!T || !shaderMaterial) return;
-  const url = dayUrlFor(texQuality, on);
-  // Heeft deze set geen bathy-variant, dan valt dayUrlFor() terug op `day` en
-  // zou de schakelaar zichzelf aanzetten zonder dat er iets verandert.
-  if (on && url === assetsFor(texQuality).day) return;
-
-  oceanBusy = true;
-  updateOceanUI();
-  const loader = new T.TextureLoader();
-  loader.setCrossOrigin('anonymous');   // zie de toelichting bij de andere loaders
-  try {
-    const tex = await loader.loadAsync(url);
-    tex.colorSpace = T.SRGBColorSpace;  // kleurtextuur, geen datamap
-    const u = shaderMaterial.uniforms;
-    const oud = u.dayTexture.value;
-    u.dayTexture.value = tex;
-    // De dagtextuur hangt op twee plekken: hier, en als terugval-waarde voor
-    // ontbrekende maps in buildRealisticMaterial(). Alleen weggooien als hij
-    // nergens anders meer aan hangt, anders verdwijnt met hem ook de wolken- of
-    // normal-slot-inhoud van een set die die maps mist.
-    const nogInGebruik = [u.cloudsTexture, u.specularTexture, u.normalTexture]
-      .some(s => s.value === oud);
-    if (oud && oud !== tex && !nogInGebruik && oud.dispose) oud.dispose();
-
-    oceanFloorOn = on;
-    u.glintStrength.value = glintFor(on);
-    Prefs.set('tex.ocean', on);
-  } catch {
-    // Mislukt laden verandert niets — de vorige textuur blijft gewoon staan.
-  } finally {
-    oceanBusy = false;
-    updateOceanUI();
-  }
-}
-
-oceanToggleEl?.addEventListener('click', () => setOceanFloor(!oceanFloorOn));
-updateOceanUI();
 
 // ---- Eigen texturen: kiezen, toepassen en weer weghalen --------------------
 // Zie de noot bij `customTex` bovenaan voor het waarom van alleen dag/nacht en
@@ -5799,17 +5711,6 @@ function updateCtexUI() {
   const iets = !!(customTex.day || customTex.night);
   if (ctexResetBtn) ctexResetBtn.hidden = !iets;
   document.querySelectorAll('.ctex-pick').forEach(b => b.disabled = ctexBusy);
-
-  // De oceaanbodem gaat over ÓNZE dagtextuur. Ligt er een eigen kaart overheen,
-  // dan doet die schakelaar niets zichtbaars meer — dus zetten we hem op slot in
-  // plaats van hem stilletjes te laten falen. `oceanFloorOn` blijft ondertussen
-  // gewoon staan, zodat de stand terugkomt zodra de eigen kaart weg is.
-  if (oceanToggleEl) {
-    const overruled = !!customTex.day;
-    oceanToggleEl.classList.toggle('disabled', overruled);
-    oceanToggleEl.title = overruled ? 'A custom day map is active' : '';
-    if (oceanStatEl && !oceanBusy) oceanStatEl.textContent = overruled ? 'n/a' : (oceanFloorOn ? 'on' : 'off');
-  }
 }
 
 function ctexMelding(tekst) {
