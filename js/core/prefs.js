@@ -196,7 +196,15 @@ export const PREFS_DEFAULTS = {
   'pref.reducedMotion': (typeof window !== 'undefined' && window.matchMedia)
     ? window.matchMedia('(prefers-reduced-motion: reduce)').matches : false,
   'pref.labelOutline': true,
-  'pref.labelWhite': false,
+  /* HOOG CONTRAST BEGINT AAN (sessie 41, Terry). Hij stond op false omdat de
+     dieptekleur in de labeltekst herhaalt wat de ring al zegt, en dat leek
+     gratis informatie. Op de nieuwe satellietkaart is het dat niet: de rode,
+     roze en paarse tinten uit de diepteschaal vallen weg tegen bruine woestijn
+     en groen land, terwijl de ring diezelfde kleur nog steeds draagt.
+
+     Kleur zit dus in het SYMBOOL en leesbaarheid in de TEKST. Wie de gekleurde
+     tekst terugwil, zet deze rij uit — de informatie was er niet minder om. */
+  'pref.labelWhite': true,
 
   /* ---- De aardbevingen: de bron en het magnitudevenster ----
      `quake.source` is de adapter-id ('emsc' of 'usgs'). ALLEEN DE KNOP schrijft

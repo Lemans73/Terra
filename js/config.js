@@ -166,10 +166,10 @@ export const PARAMS = {
      pixels: met de drie getallen op 0 verandert het uitzetten van de pass geen
      énkele pixel — de gloed die je dan nog ziet komt ergens anders vandaan.
      Deze schakelaar zet `bloomPass.enabled`, en dat is echt uit. */
-  bloomEnabled: false,
-  bloomStrength: 0.1, bloomRadius: 2, bloomThreshold: 1,
+  bloomEnabled: true,
+  bloomStrength: 0.1, bloomRadius: 1, bloomThreshold: 1.25,
   // kleurgrading + chromatische aberratie
-  gradeContrast: 1.06, gradeSaturation: 1.11, gradeAberration: 0.001, gradeTemp: 2,
+  gradeContrast: 1.06, gradeSaturation: 1.11, gradeAberration: 0.001, gradeTemp: 0,
   // mist — fresnel-waas die naar de randen toe het kaartje vertroebelt
   fogStrength: 1.0, fogPower: 3.0, fogColor: '#b6c4d6',
   // staven — simpele cilinder die vanaf het oppervlak de ruimte in rijst (hoogte ∝ magnitude²)
@@ -345,7 +345,7 @@ export const PARAMS = {
   quakeStackNear: 150,       // camera-afstand waarop het stapelen begint
   quakeStackFar: 350,        // en waarop het volledig is
   quakeStackLift: 1.5,       // hoogtewinst per verdieping (maal de icoonschaal)
-  quakeStackSpread: 1,       // hoe ver verdiepingen opzij worden gezet
+  quakeStackSpread: 2,       // hoe ver verdiepingen opzij worden gezet
   quakeStackOverlap: 1,      // hoe strikt twee ringen elkaar moeten raken om te stapelen
   quakeStackMaxLayers: 10,
 
@@ -667,8 +667,8 @@ export const PARAMS = {
      BEGINT ALLEBEI OP NEUTRAAL (1 en 0), zodat deze twee niets veranderen tot
      iemand ze verzet. De schuiven staan in het tuning-paneel onder Earth
      lighting. */
-  dayGain: 2.5,          // vermenigvuldiging: tilt ALLES, ook wat al bijna 1 is
-  dayLift: 0.05,         // optelling: tilt ook de bodem op, maakt de nacht grijzer
+  dayGain: 1,          // vermenigvuldiging: tilt ALLES, ook wat al bijna 1 is
+  dayLift: 0,         // optelling: tilt ook de bodem op, maakt de nacht grijzer
   /* GAMMA, SCHOUDER EN DE ZONSTERKTE (sessie 41, Terry). Zie de nagerekende
      tabellen bij `dayGamma` en `zachteSchouder` in js/shaders.js.
 
@@ -686,13 +686,13 @@ export const PARAMS = {
      ALLE VIER BEGINNEN NEUTRAAL, dus ze veranderen niets tot ze verzet worden —
      gamma 1,0 is geen curve, knie 1,0 is het oude hard afkappen, en 0,55/0,75
      zijn de getallen die er altijd al stonden. */
-  dayGamma: 1.0,         // >1 tilt de donkere delen op en laat 1,0 op 1,0 staan
-  dayKnee: 1.0,          // <1 buigt de top zacht om in plaats van hard af te kappen
+  dayGamma: 1.85,         // >1 tilt de donkere delen op en laat 1,0 op 1,0 staan
+  dayKnee: 0.85,          // <1 buigt de top zacht om in plaats van hard af te kappen
   macroAmbient: 0.55,    // wat het oppervlak zonder directe zon nog draagt
-  macroSun: 0.75,        // hoeveel de zonnestand daar bovenop legt
+  macroSun: 0.85,        // hoeveel de zonnestand daar bovenop legt
   normalStrength: 3.6,   // overdrijving van de normal-map-helling
   reliefStrength: 2.4,   // emboss-uitvergroting → hardere reliëflijnen
-  waterRipple: 0.5,     // amplitude van de procedurele water-rimpel
+  waterRipple: 0.51,     // amplitude van de procedurele water-rimpel
   // schermvaste icoongrootte (app-breed, beide modi): iconen schalen mee met de
   // camera-afstand. Power-curve (pow>1) = agressievere zoom-respons, vooral diep
   // ingezoomd kleiner. camDist-bereik in de praktijk ≈ 169 (diep in) → 438 (uit).
