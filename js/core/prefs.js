@@ -198,17 +198,6 @@ export const PREFS_DEFAULTS = {
   'pref.labelOutline': true,
   'pref.labelWhite': false,
 
-  /* ---- De gloed (sessie 41, Terry) ----
-
-     De UnrealBloomPass staat er sinds het begin en was tot nu toe alleen via de
-     drie `bloom*`-getallen in js/config.js te temperen. Op nul gezet blijft de
-     pass toch draaien, en dat is precies de vraag die deze schakelaar
-     beantwoordt: is wat je ziet nog gloed, of iets anders?
-
-     BEGINT AAN, want dat is hoe Terra er tot nu toe uitzag. Uit is een keuze en
-     geen nieuwe standaard. */
-  'pref.bloom': true,
-
   /* ---- De aardbevingen: de bron en het magnitudevenster ----
      `quake.source` is de adapter-id ('emsc' of 'usgs'). ALLEEN DE KNOP schrijft
      hem: de dekkingstoets in index.html wisselt ook van bron zodra de gekozen

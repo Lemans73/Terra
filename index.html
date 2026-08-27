@@ -482,23 +482,6 @@
       </div>
       </div>
       <div class="elayer" id="rotate-toggle"><span class="edot"></span>Auto-rotate<span class="estat" id="es-rotate">on</span></div>
-      <!-- DE GLOED (sessie 41, Terry). Staat hier en niet bij Earth textures: de
-           bloom-pass ligt over het HELE beeld, niet over de aardbol. Hij hoort
-           net als de indicator-rij bij de rijen die ook iets moeten DOEN, dus
-           niet in PREFS_RIJEN maar in SCHAKELRIJEN. -->
-      <div class="elayer expandable" id="bloom-toggle">
-      <span class="edot"></span>Glow
-      <button class="row-expand" data-note="bloom-note" title="What is this?" aria-label="What is this?" aria-expanded="false">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-      </button>
-      <span class="estat" id="es-bloom">on</span>
-      </div>
-      <div class="layer-detail" id="bloom-note">
-      Bright things &#8212; city lights, the sun, the quake indicators &#8212; bleed a
-      little light into the pixels around them. It is what makes the night side
-      look lit rather than painted, but it also merges neighbouring points into
-      one blob. Switching it off costs nothing and makes dense areas readable.
-      </div>
       <div class="elayer" id="utc-toggle" data-utc><span class="edot"></span>Show times in UTC<span class="estat" id="es-utc">off</span></div>
 
       <!-- DE WEG TERUG (sessie 35). Zonder deze knop is een bewaarde voorkeur
@@ -4001,10 +3984,11 @@ const bloomPass = new UnrealBloomPass(
   new THREE.Vector2(window.innerWidth, window.innerHeight),
   PARAMS.bloomStrength, PARAMS.bloomRadius, PARAMS.bloomThreshold
 );
-/* DE VOORKEUR GAAT MEE BIJ DE BOUW en wordt niet erna gezet. De rij in
-   Preferences past hem straks ook toe, maar dan zijn er al frames getekend —
-   en wie de gloed uitzette hoort hem niet één keer te zien opflitsen. */
-bloomPass.enabled = !!Prefs.get('pref.bloom');
+/* DE STAND GAAT MEE BIJ DE BOUW. Hij komt uit PARAMS en niet uit een voorkeur:
+   de gloed is een ONTWERPINSTELLING die met de drie getallen ernaast in
+   js/config.js hoort, en wordt bediend vanuit het tuning-paneel. Er stond in
+   sessie 41 kort een rij voor in Settings; die is er op verzoek weer uit. */
+bloomPass.enabled = !!PARAMS.bloomEnabled;
 world.postProcessingComposer().addPass(bloomPass);
 
 // ---- Kleurgrading + chromatische aberratie (laatste pass, naar het scherm) ----
@@ -4873,7 +4857,7 @@ function applyGlobeMode() {
 // (post-proc terug aan, atmosfeer/sterren terug, polygons/graticule weg).
 function leaveExpertIfNeeded() {
   exitExpertMode({ world, bloomPass, gradePass, starsUrl: assetsFor(texQuality).stars,
-                   bloomAan: !!Prefs.get('pref.bloom') });
+                   bloomAan: !!PARAMS.bloomEnabled });
 }
 
 // Als de realistische shader niet te bouwen is, val terug op de deskundig-modus
@@ -6392,17 +6376,7 @@ const SCHAKELRIJEN = [
   { id: 'labeloutline-toggle', stat: 'es-labeloutline', sleutel: 'pref.labelOutline',
     doe: pasLabelToegankelijkheid },
   { id: 'labelwhite-toggle', stat: 'es-labelwhite', sleutel: 'pref.labelWhite',
-    doe: pasLabelToegankelijkheid },
-  /* DE GLOED (sessie 41, Terry). `bloomPass.enabled` en niet de drie getallen op
-     nul: een pass met sterkte 0 draait nog steeds — hij leest het beeld, blurt
-     het in vijf stappen en telt nul op. Dat is wat de vraag opriep of er "toch
-     nog bloom" was. Uit is hier dus echt uit.
-
-     DE EXPERT-WEERGAVE ZET HEM AL UIT (js/modes/expert.js) en bij het verlaten
-     weer aan. Die mag de voorkeur niet overschrijven, dus daar leest hij
-     voortaan `bloomAan()` in plaats van een vaste `true`. */
-  { id: 'bloom-toggle', stat: 'es-bloom', sleutel: 'pref.bloom',
-    doe: (v) => { if (bloomPass) bloomPass.enabled = !!v && globeMode !== 'expert'; } }
+    doe: pasLabelToegankelijkheid }
 ];
 for (const rij of SCHAKELRIJEN) {
   const el = document.getElementById(rij.id);

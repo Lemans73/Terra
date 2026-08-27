@@ -158,7 +158,15 @@ export const EXPERT_LAYER_SCALE = {
 // Worden live aangestuurd door de tijdelijke tuning-GUI. PARAMS blijft een
 // gedeelde objectreferentie → GUI-mutaties werken ongewijzigd.
 export const PARAMS = {
-  // bloom (post-processing)
+  /* bloom (post-processing)
+
+     `bloomEnabled` STAAT NAAST DE DRIE GETALLEN EN NIET IN PLAATS ERVAN. Een
+     pass met sterkte 0 draait namelijk gewoon door: hij leest het beeld, blurt
+     het in vijf stappen en telt nul op. Gemeten in sessie 41 op 4.032.000
+     pixels: met de drie getallen op 0 verandert het uitzetten van de pass geen
+     énkele pixel — de gloed die je dan nog ziet komt ergens anders vandaan.
+     Deze schakelaar zet `bloomPass.enabled`, en dat is echt uit. */
+  bloomEnabled: true,
   bloomStrength: 0.1, bloomRadius: 2, bloomThreshold: 1,
   // kleurgrading + chromatische aberratie
   gradeContrast: 1.06, gradeSaturation: 1.5, gradeAberration: 0.005, gradeTemp: 0.5,
