@@ -48,8 +48,16 @@ export function enterExpertMode({ world, THREE, bloomPass, gradePass, PARAMS }) 
 
 // Schakel terug naar realistisch: maak alle expert-wijzigingen ongedaan.
 // Het globe-materiaal zelf wordt door de realistische tak weer op de shader gezet.
-export function exitExpertMode({ world, bloomPass, gradePass, starsUrl }) {
-  if (bloomPass) bloomPass.enabled = true;
+/* `bloomAan` komt van de aanroeper en is niet optioneel-met-terugval-op-true.
+   Sinds sessie 41 is de gloed een VOORKEUR, en een vaste `true` hier zou hem
+   stil omzetten zodra iemand één keer door de schematische weergave heen loopt —
+   de rij zegt dan "off" en het beeld gloeit. Dezelfde val als bij
+   nightBrightness in sessie 35. */
+export function exitExpertMode({ world, bloomPass, gradePass, starsUrl, bloomAan }) {
+  if (typeof bloomAan !== 'boolean') {
+    throw new Error('exitExpertMode: bloomAan is verplicht (de voorkeur, niet true)');
+  }
+  if (bloomPass) bloomPass.enabled = bloomAan;
   if (gradePass) gradePass.enabled = true;
   if (world.showAtmosphere) world.showAtmosphere(true);
   // starsUrl komt mee omdat de sterrenhemel bij de gekozen textuurkwaliteit hoort.
