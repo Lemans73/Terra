@@ -110,6 +110,41 @@ export const dayNightShader = {
        grijzer. */
     uniform float dayGain;
     uniform float dayLift;
+    uniform float dayKnee;
+    uniform float dayGamma;
+    uniform float macroAmbient;
+    uniform float macroSun;
+
+    /* DE ZACHTE SCHOUDER (sessie 41, Terry).
+
+       Het probleem dat hij oplost: bij hoge zonnestand slaat de dagzijde vlak
+       wit uit boven woestijn en poolkappen, terwijl dezelfde scene bij lage zon
+       juist mooi is. Dat is geen kleurkwestie maar AFKAPPEN. Reken het na op
+       het subsolaire punt, met dayGain 2,5 en dayLift 0,05:
+
+         macro       = 0,55 + 0,75 * 1,0            = 1,30
+         woestijn    = (0,75 * 2,5 + 0,05) * 1,30   = 2,51   -> afgekapt op 1
+         savanne     = (0,45 * 2,5 + 0,05) * 1,30   = 1,53   -> afgekapt op 1
+
+       Twee heel verschillende oppervlakken komen als hetzelfde wit uit de
+       shader, en al het detail ertussen is weg. Bij een zonhoogte van 30 graden
+       is macro 0,78 en blijft het meeste eronder — vandaar dat het tegen de
+       avond wél klopt.
+
+       DE CURVE: onder de knie verandert er niets, erboven loopt het
+       asymptotisch naar 1 in plaats van er hard tegenaan. De afgeleide is
+       precies 1 op de knie, dus er is geen zichtbare knik.
+
+           f(x) = x                                          voor x <= k
+           f(x) = k + (1-k) * (1 - exp(-(x-k)/(1-k)))        voor x > k
+
+       Met k = 1 is dit exact het oude gedrag (hard afkappen), en dat is de
+       fabrieksstand: deze regeling verandert niets tot iemand hem verzet. */
+    vec3 zachteSchouder(vec3 x, float knie) {
+      float ruimte = max(1.0 - knie, 1e-4);
+      vec3 boven = max(x - knie, vec3(0.0));
+      return min(x, vec3(knie)) + ruimte * (1.0 - exp(-boven / ruimte));
+    }
     uniform float glintStrength;
     uniform float waterRipple;
     uniform float time;
@@ -282,7 +317,11 @@ export const dayNightShader = {
       // We nemen het *verschil* tussen bobbel- en bol-normaal en vergroten dat
       // uit (reliefStrength) → echte schaduw/highlight op hellingen i.p.v. een
       // wegvallende multiplier. Emboss faseert weg over de terminator.
-      float macro = clamp(0.55 + 0.75 * max(baseIntensity, 0.0), 0.0, 1.4);
+      /* DE TWEE GETALLEN STAAN NU IN PARAMS (sessie 41, Terry). macroAmbient is
+         wat het oppervlak ook zonder directe zon nog draagt, macroSun is hoeveel
+         de zonnestand daar bovenop legt. Ze stonden hier als 0,55 en 0,75, en
+         dat is precies de knop die "hoe hard slaat de zon op het land" heet. */
+      float macro = clamp(macroAmbient + macroSun * max(baseIntensity, 0.0), 0.0, 1.4);
       /* EN OOK DEZE MOET MEE ALS DE CYCLUS UIT STAAT (sessie 37, Terry).
 
          dayMix hierboven regelt de MENGING van dag- en nachttextuur; macro regelt de
@@ -297,7 +336,35 @@ export const dayNightShader = {
       macro = mix(1.0, macro, dayNightCycle);
       float emboss = (bumpIntensity - baseIntensity) * reliefStrength;
       float relief = clamp(macro + emboss * dayMix, 0.2, 1.7);
-      vec3 dayLayer = (dayColor.rgb * dayGain + dayLift) * relief * dayEnabled;
+      /* DE VOLGORDE IS GAMMA -> GAIN -> LIFT -> BELICHTING -> SCHOUDER, en die
+         is niet vrij te kiezen.
+
+         dayGamma tilt de DONKERE delen op en laat 1,0 op 1,0 staan; dayGain
+         vermenigvuldigt alles even hard en duwt de heldere delen dus over de
+         rand. Dat verschil is nagerekend op het subsolaire punt (macro 1,30),
+         waarden zoals de shader ze uitrekent:
+
+                        regenwoud  savanne  woestijn  poolijs
+           gain 2,5        0,650    1,000     1,000    1,000
+           gamma 2,2       0,596    0,896     0,978    0,990
+
+         Allebei maken het regenwoud even goed zichtbaar. Maar met de gain zijn
+         savanne, woestijn en poolijs alle drie exact 1,000 — één vlakke witte
+         plek waarin geen detail meer zit. Met gamma staat er tussen savanne en
+         woestijn nog 0,083 en tussen woestijn en ijs 0,011.
+
+         DE SCHOUDER KOMT ALS LAATSTE en vangt wat er dan nog boven 1 uitkomt.
+         Hij is geen vervanging voor de gamma: bij gain 2,5 zit de woestijn ruw
+         op 2,50 en ijs op 3,06, en dan drukt zelfs een knie van 0,70 ze allebei
+         naar 1,000 — onderscheid 0,0006. Een schouder redt een beetje overshoot,
+         geen factor drie. */
+      /* DE ONDERGRENS IS 1e-5 EN NIET 0. Een pow() met basis 0 is in GLSL net zo
+         ongedefinieerd als met een negatieve basis, en een NaN die hier ontstaat
+         is later niet meer te herkennen: het HDR-doel bewaart hem, de bloom
+         smeert hem met vijf blur-niveaus uit en de grade-pass maakt er zwart
+         van. Dat kostte in sessie 30 een halve sessie. */
+      vec3 dayBasis = pow(max(dayColor.rgb, vec3(1e-5)), vec3(1.0 / max(dayGamma, 0.05)));
+      vec3 dayLayer = zachteSchouder((dayBasis * dayGain + dayLift) * relief, dayKnee) * dayEnabled;
       // nachtzijde: stadslichten + instelbare ambient zodat het oppervlak zichtbaar blijft
       vec3 nightAmbient = dayColor.rgb * nightBrightness; // gedimd dag-oppervlak als "maanlicht"
       // Geen schakelaar meer op deze laag: met de cyclus uit is dayMix 1 en telt hij

@@ -166,10 +166,10 @@ export const PARAMS = {
      pixels: met de drie getallen op 0 verandert het uitzetten van de pass geen
      énkele pixel — de gloed die je dan nog ziet komt ergens anders vandaan.
      Deze schakelaar zet `bloomPass.enabled`, en dat is echt uit. */
-  bloomEnabled: true,
+  bloomEnabled: false,
   bloomStrength: 0.1, bloomRadius: 2, bloomThreshold: 1,
   // kleurgrading + chromatische aberratie
-  gradeContrast: 1.06, gradeSaturation: 1.5, gradeAberration: 0.005, gradeTemp: 0.5,
+  gradeContrast: 1.06, gradeSaturation: 1.11, gradeAberration: 0.001, gradeTemp: 2,
   // mist — fresnel-waas die naar de randen toe het kaartje vertroebelt
   fogStrength: 1.0, fogPower: 3.0, fogColor: '#b6c4d6',
   // staven — simpele cilinder die vanaf het oppervlak de ruimte in rijst (hoogte ∝ magnitude²)
@@ -667,10 +667,31 @@ export const PARAMS = {
      BEGINT ALLEBEI OP NEUTRAAL (1 en 0), zodat deze twee niets veranderen tot
      iemand ze verzet. De schuiven staan in het tuning-paneel onder Earth
      lighting. */
-  dayGain: 1.0,          // vermenigvuldiging: tilt de middentonen, laat zwart zwart
-  dayLift: 0.0,          // optelling: tilt ook de bodem op, maakt de nacht grijzer
-  normalStrength: 4.9,   // overdrijving van de normal-map-helling
-  reliefStrength: 6.2,   // emboss-uitvergroting → hardere reliëflijnen
+  dayGain: 2.5,          // vermenigvuldiging: tilt ALLES, ook wat al bijna 1 is
+  dayLift: 0.05,         // optelling: tilt ook de bodem op, maakt de nacht grijzer
+  /* GAMMA, SCHOUDER EN DE ZONSTERKTE (sessie 41, Terry). Zie de nagerekende
+     tabellen bij `dayGamma` en `zachteSchouder` in js/shaders.js.
+
+     Waar dit vandaan komt: met dayGain 2,5 blaast de dagzijde bij hoge
+     zonnestand vlak wit uit boven woestijn en poolkappen, terwijl dezelfde
+     scene bij lage zon juist klopt. Nagerekend op het subsolaire punt komen
+     savanne, woestijn én poolijs alle drie op exact 1,000 uit — al het detail
+     ertussen is weg.
+
+     `dayGamma` tilt de donkere delen op en laat 1,0 op 1,0: hetzelfde zichtbare
+     groen, zonder de heldere kant over de rand te duwen. `dayKnee` vangt wat er
+     dan nog boven 1 uitkomt. `macroAmbient` en `macroSun` stonden als 0,55 en
+     0,75 in de shader en zijn samen "hoe hard slaat de zon op het land".
+
+     ALLE VIER BEGINNEN NEUTRAAL, dus ze veranderen niets tot ze verzet worden —
+     gamma 1,0 is geen curve, knie 1,0 is het oude hard afkappen, en 0,55/0,75
+     zijn de getallen die er altijd al stonden. */
+  dayGamma: 1.0,         // >1 tilt de donkere delen op en laat 1,0 op 1,0 staan
+  dayKnee: 1.0,          // <1 buigt de top zacht om in plaats van hard af te kappen
+  macroAmbient: 0.55,    // wat het oppervlak zonder directe zon nog draagt
+  macroSun: 0.75,        // hoeveel de zonnestand daar bovenop legt
+  normalStrength: 3.6,   // overdrijving van de normal-map-helling
+  reliefStrength: 2.4,   // emboss-uitvergroting → hardere reliëflijnen
   waterRipple: 0.5,     // amplitude van de procedurele water-rimpel
   // schermvaste icoongrootte (app-breed, beide modi): iconen schalen mee met de
   // camera-afstand. Power-curve (pow>1) = agressievere zoom-respons, vooral diep
