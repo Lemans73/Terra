@@ -57,6 +57,11 @@ export function createQuakeLabels(THREE, opts = {}) {
   const getEnabled = opts.getEnabled || (() => true);
   const getBudget = opts.getBudget || (() => null);
   const onSelect = opts.onSelect || (() => {});
+  /* WAT ER GEBEURT ALS DE MUIS OVER EEN LABELREGEL GAAT. De laag weet welk
+     event het is EN met wie het in een blok staat; de indicatorlaag weet daar
+     niets van. Deze callback brengt die twee bij elkaar, zonder dat de een de
+     ander hoeft te kennen. */
+  const onHover = opts.onHover || (() => {});
   if (!P || !depthRGB || !getCoords || !getCamera || !getViewport) {
     throw new Error('createQuakeLabels: params, depthRGB, getCoords, getCamera en getViewport zijn verplicht');
   }
@@ -141,8 +146,26 @@ export function createQuakeLabels(THREE, opts = {}) {
     const rij = e.target.closest && e.target.closest('[data-id]');
     return rij ? rij.getAttribute('data-id') : null;
   };
-  host.addEventListener('pointermove', (e) => { hoveredId = idVan(e); });
-  host.addEventListener('pointerleave', () => { hoveredId = null; });
+  /* DE GROEPSGENOTEN GAAN MEE. Bij hover op één regel van een blok horen de
+     ANDERE indicatoren uit datzelfde blok weg te zakken, niet de hele kaart:
+     zo loop je met de muis het rijtje af en zie je steeds welke van de groep je
+     hebt. Wie de leden zijn staat in de node waar de regel in zit, en die is via
+     het DOM te vinden — de laag hoeft er geen tweede administratie voor bij te
+     houden. */
+  const groepVan = (e) => {
+    const box = e.target.closest && e.target.closest('.ql-box');
+    if (!box) return null;
+    const ids = [...box.querySelectorAll('.rij[data-id]')].map(r => r.getAttribute('data-id'));
+    return ids.length > 1 ? ids : null;
+  };
+  const meldHover = (id, groep) => onHover(id, groep);
+  host.addEventListener('pointermove', (e) => {
+    const id = idVan(e);
+    if (id === hoveredId) return;
+    hoveredId = id;
+    meldHover(id, id ? groepVan(e) : null);
+  });
+  host.addEventListener('pointerleave', () => { hoveredId = null; meldHover(null, null); });
   host.addEventListener('click', (e) => {
     const id = idVan(e);
     if (!id) return;
@@ -546,12 +569,37 @@ export function createQuakeLabels(THREE, opts = {}) {
       /* BUITEN DE BOLRAND. Van het middelpunt AF wijzen is niet hetzelfde als
          buiten de bol staan. Alleen wat aan de rand ligt: een beving waar je
          recht op uitkijkt zit midden op de geprojecteerde bol, en die naar
-         buiten duwen levert een leader-line zo lang als de halve planeet. */
-      if (P.quakeLabelOutside && camLen >= P.quakeLabelOutsideFrom) {
-        const vanMidden = Math.hypot(sx - midX, sy - midY);
-        if (vanMidden > bolPx * P.quakeLabelOutsideKern) {
-          const nodig = bolPx - vanMidden + P.quakeLabelOutsidePad;
-          if (nodig > off) off = Math.min(nodig, off + P.quakeLabelOutsideMax);
+         buiten duwen levert een leader-line zo lang als de halve planeet.
+
+         DE OVERGANG IS VLOEIEND SINDS SESSIE 41, en dat was een reparatie.
+         Hier stond `camLen >= quakeLabelOutsideFrom`, en die drempel is hard:
+         gemeten sprong de offset van een randlabel bij het passeren van
+         afstand 200 van 21,4 naar 61,4 pixels — veertig pixels in één frame,
+         en bij terugzoomen net zo hard terug. Dat is het uitschieten van de
+         leader-lines dat in de schematische weergave opviel; daar kom je die
+         afstand vaker tegen omdat je er tot 102 mag inzoomen tegen 120 in de
+         realistische.
+
+         `quakeLabelOutsideFade` is de breedte van de band waarover het effect
+         opkomt. Op 0 is het weer de oude harde drempel — dat is met opzet: zo
+         is de oude staat nog te kiezen zonder de code te wijzigen. */
+      if (P.quakeLabelOutside) {
+        const fade = Math.max(0, P.quakeLabelOutsideFade || 0);
+        const rauw = fade > 0
+          ? (camLen - P.quakeLabelOutsideFrom) / fade
+          : (camLen >= P.quakeLabelOutsideFrom ? 1 : 0);
+        const t = Math.min(1, Math.max(0, rauw));
+        // smoothstep: geen knik aan het begin en aan het eind van de band
+        const mate = t * t * (3 - 2 * t);
+        if (mate > 0) {
+          const vanMidden = Math.hypot(sx - midX, sy - midY);
+          if (vanMidden > bolPx * P.quakeLabelOutsideKern) {
+            const nodig = bolPx - vanMidden + P.quakeLabelOutsidePad;
+            if (nodig > off) {
+              const doel = Math.min(nodig, off + P.quakeLabelOutsideMax);
+              off += (doel - off) * mate;
+            }
+          }
         }
       }
 
