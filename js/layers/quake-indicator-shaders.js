@@ -118,6 +118,53 @@ float stackLift(float amt, float sc) {
 }
 `;
 
+/* ---- Aanwijzen -----------------------------------------------------------
+   Welke instance er onder de muis ligt. De picking zelf gebeurt in JS
+   (quake-labels.js: pickAt) omdat de shader de hoekpunten verplaatst en een
+   raycast dus stelselmatig mis mikt; wat hier gebeurt is alleen het OPLICHTEN.
+
+   EEN EIGEN INDEX-ATTRIBUUT EN NIET gl_InstanceID. Dat laatste bestaat pas in
+   GLSL ES 3.00, en de rest van dit bestand is met opzet 1.00-veilig: een shader
+   die niet compileert maakt de hele laag stil onzichtbaar.
+
+   uHoverIdx op -1 betekent niets aangewezen. De vergelijking heeft een marge van
+   een halve eenheid, want een float komt niet exact uit een attribuut terug. */
+const PICK_GLSL = /* glsl */`
+attribute float aIndex;
+attribute float aDim;
+uniform float uHoverIdx;
+uniform float uHoverBoost;
+uniform float uDimOthers;
+uniform float uDimMode;
+
+float aangewezen() {
+  return abs(aIndex - uHoverIdx) < 0.5 ? 1.0 : 0.0;
+}
+
+/* WIE ER DEMPT. Twee standen, en het verschil is precies wat sessie 41 wilde
+   uitproberen:
+
+     uDimMode 0   alles behalve de aangewezene dempt. Dat is wat je wilt bij
+                  hover op een losse indicator: één beving uit de wereld lichten.
+     uDimMode 1   alleen wat aDim op 1 heeft dempt. Dat is wat je wilt bij
+                  hover op een regel in een LABELSTACK: daar horen alleen de
+                  buren uit diezelfde stack weg te zakken, zodat je met de muis
+                  het rijtje af kunt en steeds ziet wélke van de groep je hebt.
+                  De rest van de kaart blijft staan.
+
+   aDim is een INSTANCE-attribuut en geen uniform-lijst, en dat is een
+   prestatiekeuze. Een lijst van indices zou per fragment doorlopen moeten
+   worden — bij een ring van 289 hoekpunten maal twintig clusterleden maal
+   driehonderd events loopt dat in de miljoenen. Een attribuut wordt één keer
+   bijgewerkt wanneer de hover verandert, en dat is een muisbeweging en geen
+   frame. */
+float dempFactor() {
+  float actief = step(-0.5, uHoverIdx);
+  float doelwit = mix(1.0 - aangewezen(), aDim, step(0.5, uDimMode));
+  return mix(1.0, mix(1.0, 1.0 - uDimOthers, doelwit), actief);
+}
+`;
+
 /* ---- De schermvaste icoonschaal -------------------------------------------
    Dezelfde vorm als Terra's gedeelde schaal in animateShader(), maar op EIGEN
    parameters (quakeIconScale*). Terra's iconScale* stuurt elke glyph in de
@@ -166,6 +213,7 @@ export const QUAKE_RING_VERT = /* glsl */`
 precision highp float;
 ${QUAKE_STACK_GLSL}
 ${ICON_SCALE_GLSL}
+${PICK_GLSL}
 attribute vec3  aNormal;   // eenheidsvector naar het event
 attribute vec3  aColor;    // diepte-kleur, al door depthRGB gehaald
 attribute float aMagFrac;  // 0 bij magMin, 1 bij magMax
@@ -185,9 +233,13 @@ varying float vAge;
 varying float vSeed;
 varying vec3  vWorld;
 varying vec3  vN;
+varying float vHover;
+varying float vDemp;
 
 void main() {
   vUv      = uv;
+  vHover   = aangewezen();
+  vDemp    = dempFactor();
   vColor   = aColor;
   vMagFrac = aMagFrac;
   vAge     = aAge;
@@ -248,6 +300,15 @@ uniform float uFitRings;
 uniform float uRingEdge;
 uniform float uRingVolume;
 uniform float uRingShine;
+/* DE AANWIJS-UNIFORMS MOETEN OOK HIER STAAN. PICK_GLSL wordt alleen in de
+   VERTEX-shaders ingevoegd — daar hoort het attribuut thuis — maar een uniform
+   is per SHADER en niet per programma. Zonder deze drie regels compileert de
+   fragment-shader niet, en dan tekent de hele ringlaag niets terwijl de beam
+   ernaast gewoon doorgaat. Dat leest als "de ring is even weg", niet als een
+   fout: de console meldt het, het beeld niet. */
+uniform float uHoverIdx;
+uniform float uHoverBoost;
+uniform float uDimOthers;
 
 varying vec2  vUv;
 varying vec3  vColor;
@@ -256,6 +317,8 @@ varying float vAge;
 varying float vSeed;
 varying vec3  vWorld;
 varying vec3  vN;
+varying float vHover;
+varying float vDemp;
 
 /* ---- De horizon, in de fragment-shader ------------------------------------
    Deze lagen tekenen met depthTest UIT. Dat is nodig omdat ze op straal 100
@@ -437,7 +500,15 @@ void main() {
   float lum   = ringsLit * 1.15 + fill + core;
   float alpha = (rings + fill + core * 0.95) * envelope * uOpacity * graze;
 
-  gl_FragColor = vec4(vColor * lum, clamp(alpha, 0.0, 1.0));
+  /* AANGEWEZEN LICHT OP, DE REST DEMPT (sessie 41). Twee kanalen, want ze doen
+     iets anders: uHoverBoost tilt de aangewezen ring op, uDimOthers haalt de
+     andere omlaag. Dat tweede is wat een enkele beving uit een zwerm licht —
+     alleen oplichten helpt daar niet, want de buren zijn even fel.
+
+     uDimOthers werkt ALLEEN als er iets is aangewezen. Zonder die voorwaarde
+     zou de hele laag permanent gedempt staan zodra de waarde boven nul komt. */
+  float opTil = 1.0 + uHoverBoost * vHover;
+  gl_FragColor = vec4(vColor * lum * opTil, clamp(alpha * vDemp * opTil, 0.0, 1.0));
 }
 `;
 
@@ -458,6 +529,7 @@ export const QUAKE_SHOCK_VERT = /* glsl */`
 precision highp float;
 ${QUAKE_STACK_GLSL}
 ${ICON_SCALE_GLSL}
+${PICK_GLSL}
 attribute vec3  aNormal;
 attribute vec3  aColor;
 attribute float aMagFrac;
@@ -596,5 +668,187 @@ void main() {
   if (a < 0.004) discard;
 
   gl_FragColor = vec4(vColor, clamp(a, 0.0, 1.0));
+}
+`;
+
+/* ===========================================================================
+   DE BEAM (sessie 41, Terry)
+
+   De staaf die v1 had en die bij de sloop meeging. Hij is terug omdat hij iets
+   kan wat de ring per constructie niet kan: TWEE grootheden in twee kanalen die
+   elkaar niet in de weg zitten. De ring zet magnitude in zijn straal, en straal
+   concurreert met leesbaarheid — in een zwerm liggen de cirkels over elkaar
+   heen. Hoogte doet dat niet: staven naast elkaar blijven los te lezen.
+
+   HOOGTE = MAGNITUDE, KLEUR = DIEPTE. Dezelfde afspraak als v1, met dezelfde
+   parameters: beamBase plus magnitude in het kwadraat maal beamMultiplier. Die
+   drie stonden sinds de v1-sloop wees in js/config.js en krijgen hier hun
+   betekenis terug.
+
+   EEN QUAD EN GEEN CILINDER, en dat is het verschil tussen deze beam en die van
+   v1. Daar was het een CylinderGeometry met 16 segmenten plus een tweede
+   cilinder eromheen voor de gloed — per event, in JavaScript gebouwd, en dat is
+   waar de 1.409 draw calls vandaan kwamen. Hier is het één instanced quad van
+   twee driehoeken die zich in de vertex-shader naar de camera keert. Additief
+   gemengd ziet een billboard er hetzelfde uit als een cilinder, want er is geen
+   belichting die een ronding zou verraden.
+
+   DE VOET BLIJFT OP STRAAL 100, en dat is de voorwaarde waaronder deze laag
+   mocht terugkomen. Sessie 40 haalde alles naar het oppervlak omdat hoogte
+   parallax kost: op afstand 105 schoof een zwevende indicator 222 px weg van de
+   plek die hij aanwees. Bij een beam is dat op te lossen zonder de hoogte op te
+   geven — de VOET wijst aan en blijft op het oppervlak, alleen de top steekt
+   uit. Dat is precies hoe een staaf op een kaart hoort te werken, en het is de
+   reden dat het label aan de voet hangt en niet aan de top.
+   =========================================================================== */
+
+export const QUAKE_BEAM_VERT = /* glsl */`
+precision highp float;
+${QUAKE_STACK_GLSL}
+${ICON_SCALE_GLSL}
+${PICK_GLSL}
+attribute vec3  aNormal;
+attribute vec3  aColor;
+attribute float aMagFrac;
+attribute float aAge;
+attribute float aSeed;
+
+uniform float uCamDist;
+uniform float uLift;              // uRadius komt uit het stapelblok
+uniform float uBeamSink;
+uniform float uBeamBase;
+uniform float uBeamPerMag;
+uniform float uBeamWidth;
+uniform float uMagMin;
+uniform float uMagSpan;
+uniform float uBeamScaleWithZoom;
+/* DE CAMERA IN LOKALE RUIMTE, ALS UNIFORM. Hier stond eerst
+   inverse(modelMatrix) * cameraPosition, en inverse() bestaat pas in GLSL ES
+   3.00 — op een WebGL1-context compileert die shader niet en dan is de hele
+   laag stil weg. De aanroeper kent group.matrixWorld en rekent dit één keer
+   per frame uit, wat ook goedkoper is dan een matrix-inverse per hoekpunt. */
+uniform vec3 uCamLocal;
+
+varying vec3  vColor;
+varying float vAge;
+varying float vSeed;
+varying float vLangs;
+varying float vDwars;
+varying vec3  vWorld;
+varying float vHover;
+varying float vDemp;
+
+void main() {
+  vColor = aColor;
+  vHover = aangewezen();
+  vDemp  = dempFactor();
+  vAge   = aAge;
+  vSeed  = aSeed;
+  // de uv van de basis-quad: x dwars, y langs de staaf
+  vDwars = uv.x * 2.0 - 1.0;
+  vLangs = uv.y;
+
+  float amt = stackAmount(uCamDist);
+  float sc  = iconScale(uCamDist);
+  vec3 n = stackedNormal(normalize(aNormal), amt);
+
+  /* DE MAGNITUDE TERUG UIT DE FRACTIE. aMagFrac is genormaliseerd over
+     [quakeMagMin, quakeMagMax] omdat de ring daar zijn straal uit haalt; de
+     beam wil het rauwe getal, want de v1-formule kwadrateert het en dan is een
+     fractie iets heel anders dan een magnitude. */
+  float mag = uMagMin + clamp(aMagFrac, 0.0, 1.0) * uMagSpan;
+  float hoogte = (uBeamBase + mag * mag * uBeamPerMag);
+  // Met de zoom meeschalen is een KEUZE en staat op een uniform: een staaf die
+  // schermvast is blijft leesbaar, een staaf in wereldmaat vertelt de schaal.
+  hoogte *= mix(1.0, sc, clamp(uBeamScaleWithZoom, 0.0, 1.0));
+
+  /* uLift MOET MEE, en dat is een reparatie (sessie 41). Hier stond alleen
+     stackLift(), zonder uLift — en dat is de hoogte die de WEERGAVE bepaalt: in
+     de schematische weergave staat de ring op 1,3 boven het oppervlak en de
+     beam-voet stond dus 1,3 eenheid lager. Zichtbaar als een streep die onder
+     de indicator uit stak. De ring doet uLift + stackLift; de beam hoort
+     hetzelfde te doen, anders vertrekken ze niet vanaf dezelfde plek.
+
+     uBeamSink laat de voet een klein stukje ONDER die plek beginnen, zodat er
+     geen naad tussen beam en indicator valt. Hij hoort klein te blijven: wat
+     hieronder uitsteekt hoort binnen de kern van de ring te vallen en dus niet
+     als losse streep zichtbaar te zijn. */
+  float lift = uLift + stackLift(amt, sc);
+  vec3 voet = n * (uRadius + lift);
+
+  /* NAAR DE CAMERA KEREN. De staaf staat langs n; de breedte moet loodrecht
+     staan op n EN op de blikrichting, anders kijk je er op zijn smalst tegenaan
+     en verdwijnt hij. cameraPosition is wereldruimte, dus de kijkrichting wordt
+     hier in lokale ruimte gehaald via de inverse modelMatrix — de laag hangt
+     onder de globe-wortel en die draait. */
+  vec3 kijk = normalize(uCamLocal - voet);
+  vec3 dwars = cross(n, kijk);
+  float len = length(dwars);
+  // Kijk je recht langs de staaf, dan is de cross ontaard: pak dan een
+  // willekeurige loodrechte richting in plaats van een NaN.
+  if (len < 1e-4) {
+    vec3 up = abs(n.y) < 0.99 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+    dwars = normalize(cross(n, up));
+  } else {
+    dwars /= len;
+  }
+
+  float halveBreedte = uBeamWidth * sc * (0.35 + 0.65 * clamp(aMagFrac, 0.0, 1.0));
+  vec3 lokaal = voet + n * (hoogte * vLangs - uBeamSink) + dwars * (halveBreedte * vDwars);
+
+  vWorld = (modelMatrix * vec4(lokaal, 1.0)).xyz;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(lokaal, 1.0);
+}
+`;
+
+export const QUAKE_BEAM_FRAG = /* glsl */`
+precision highp float;
+
+uniform float uOpacity;
+uniform float uBeamCore;
+uniform float uBeamFalloff;
+uniform float uHorizonRadius;
+uniform float uBeamOn;
+uniform float uHoverIdx;
+uniform float uHoverBoost;
+uniform float uDimOthers;
+
+varying vec3  vColor;
+varying float vAge;
+varying float vSeed;
+varying float vLangs;
+varying float vDwars;
+varying vec3  vWorld;
+varying float vHover;
+varying float vDemp;
+
+/* Dezelfde horizon als de ring en de shockwave. Hij staat hier opnieuw en niet
+   in een gedeeld blok omdat elke shader zijn eigen programma is; de vorm hoort
+   gelijk te blijven aan die in QUAKE_RING_FRAG. */
+bool achterDeHorizon(vec3 wereldPunt) {
+  float camLen = length(cameraPosition);
+  float grens = uHorizonRadius / max(camLen, uHorizonRadius + 0.001);
+  return dot(normalize(wereldPunt), normalize(cameraPosition)) < grens;
+}
+
+void main() {
+  if (uBeamOn < 0.5) discard;
+  /* DE VOET WORDT NIET WEGGEKNIPT DOOR DE HORIZON, de rest wel. Een staaf aan
+     de rand van de bol steekt naar buiten en hoort dan zichtbaar te blijven —
+     dat is juist waar hij het beste leesbaar is. Alleen wat ACHTER de bol staat
+     verdwijnt, en dat toetsen we op het punt zelf. */
+  if (achterDeHorizon(vWorld)) discard;
+
+  // dwarsprofiel: helder hart, zachte flanken
+  float d = abs(vDwars);
+  float kern = pow(max(1.0 - d, 0.0), max(uBeamCore, 0.01));
+  // langsprofiel: vol aan de voet, uitdovend naar de top
+  float langs = pow(max(1.0 - vLangs, 0.0), max(uBeamFalloff, 0.01));
+  float a = kern * langs * uOpacity * (1.0 - 0.55 * clamp(vAge, 0.0, 1.0));
+  // Dezelfde twee kanalen als de ring; zie de noot daar.
+  float opTil = 1.0 + uHoverBoost * vHover;
+  a *= vDemp * opTil;
+  if (a < 0.004) discard;
+  gl_FragColor = vec4(vColor * (0.75 + 0.85 * kern) * opTil, clamp(a, 0.0, 1.0));
 }
 `;
