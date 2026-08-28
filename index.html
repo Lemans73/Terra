@@ -473,6 +473,13 @@
       <span class="estat" id="es-label">on</span>
       </div>
       <div class="layer-detail" id="label-count">
+      <!-- DE TWEE INDICATOR-KEUZES (sessie 41, Terry). Ze staan hier en niet in
+           Preferences omdat ze over de BEVINGEN gaan, net als de schuif eronder:
+           wie de weergave van bevingen bijstelt, zoekt ze op één plek.
+           Ze horen in SCHAKELRIJEN en niet in PREFS_RIJEN — die tabel zet alleen
+           de klasse, en deze twee moeten ook iets DOEN. -->
+      <div class="elayer" id="beams-toggle"><span class="edot"></span>Depth beams<span class="estat" id="es-beams">off</span></div>
+      <div class="elayer" id="groupquakes-toggle"><span class="edot"></span>Group nearby quakes<span class="estat" id="es-groupquakes">on</span></div>
       <div class="opt-slider">
       <div class="ns-label">
       <span>Maximum labels</span>
@@ -6153,7 +6160,9 @@ function animateShader() {
      REDUCED_MOTION — bevriezen en niet verbergen, want elke beving draagt zijn
      eigen fase in aSeed en het beeld blijft daardoor gevarieerd. */
   const _qi = setupQuakeIndicator();
-  if (_qi) _qi.update(_camLen, motionReduced ? 0 : gt, quakeRingLiftNu());
+  // De camerapositie gaat mee: de beam keert zich naar de kijker en heeft die
+  // richting nodig in de ruimte van de laag zelf. Zie de noot bij uCamLocal.
+  if (_qi) _qi.update(_camLen, motionReduced ? 0 : gt, quakeRingLiftNu(), _cam.position);
 
   // indicatoren animeren; verwijderde objecten (uit scene) opruimen
   for (let i = glyphList.length - 1; i >= 0; i--) {
@@ -6340,13 +6349,35 @@ function pickAt(clientX, clientY) {
 
 globeEl.addEventListener('pointermove', (e) => { mouseClient = { x: e.clientX, y: e.clientY }; mouseMoved = true; });
 
+/* AANWIJZEN VAN EEN BEVING GAAT LANGS DE LABELLAAG (sessie 41).
+
+   pickAt() hierboven is een RAYCAST, en die vindt bevingen sinds de v1-sloop
+   niet meer: er staan geen quake-objecten meer in de customLayer. Een raycast
+   zou ze ook niet kunnen vinden — de v2-shader verplaatst elk hoekpunt zelf, dus
+   de geometrie in het geheugen staat ergens anders dan wat je ziet. Daarom
+   loopt quakeLabels.pickAt() dezelfde weg als de shader.
+
+   COÖRDINATEN ZIJN RELATIEF AAN DE CONTAINER. De labellaag rekent in
+   viewport-pixels, de events geven clientX/Y — zonder deze aftrekking mikt de
+   picking mis zodra de globe niet linksboven in het venster begint. */
+function pickQuakeAt(clientX, clientY) {
+  if (!quakeLabels) return null;
+  const rect = globeEl.getBoundingClientRect();
+  return quakeLabels.pickAt(clientX - rect.left, clientY - rect.top);
+}
+
 // hover-highlight via een zachte gloed-halo (geen scale meer) — fade in/uit met GSAP
 let hoverGlow = null;
 function updateHover() {
   if (!mouseMoved || !mouseClient) return;
   mouseMoved = false;
-  const o = pickAt(mouseClient.x, mouseClient.y);
-  if (o === hovered) return;
+  /* DE BEVINGEN EERST. Hun ringen liggen bovenop (renderOrder 3) en de beam
+     steekt er doorheen; wie daarop wijst bedoelt de beving en niet de vulkaan
+     eronder. Vindt de labellaag niets, dan pas de raycast voor de andere
+     lagen. */
+  const _pq = pickQuakeAt(mouseClient.x, mouseClient.y);
+  const o = _pq ? null : pickAt(mouseClient.x, mouseClient.y);
+  if (o === hovered && (_pq ? _pq.id : null) === quakeLabels.hoveredId) return;
   if (hoverGlow) {
     const g = hoverGlow; hoverGlow = null;
     gsap.to(g.material, { opacity: 0, duration: 0.2, onComplete: () => { if (g.parent) g.parent.remove(g); } });
@@ -6357,15 +6388,19 @@ function updateHover() {
   // wordt hier bewust NIET aangeroepen — dat verbergt alle ándere quake-glyphs
   // (zie de per-frame lus), wat klopt bij hover op een vast label maar hinderlijk is
   // wanneer je met de muis over de bol beweegt.
-  const hd = o && o.userData ? o.userData.d : null;
+  const hd = _pq || (o && o.userData ? o.userData.d : null);
   /* AANWIJZEN GAAT NU LANGS DE LABELLAAG. Die klapt de regel van dit event uit
      — de accordeon — in plaats van een tweede, los hover-label te tonen. Wat
      blijft is `focusedQuake`: de v1-tak isoleert daarmee één beving, en die
      tak staat er nog. */
   const _hq = hd && hd.layer === 'quake' ? hd : null;
   quakeLabels.setHovered(_hq ? _hq.id : null);
+  /* EN DE INDICATORLAAG ZELF, zodat de ring en de beam oplichten. Die weet niet
+     van labels af; hij krijgt hetzelfde id en zoekt zijn eigen index op. */
+  const _qi2 = quakeIndicator;
+  if (_qi2) _qi2.setHovered(_hq ? _hq.id : null);
   focusedQuake = _hq;
-  globeEl.style.cursor = o ? 'pointer' : '';
+  globeEl.style.cursor = (o || _pq) ? 'pointer' : '';
   if (o) {
     const spr = new THREE.Sprite(new THREE.SpriteMaterial({
       map: glowTex, color: 0xffffff, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0
@@ -6386,6 +6421,9 @@ globeEl.addEventListener('pointerup', (e) => {
   const dt = Date.now() - downInfo.t;
   downInfo = null;
   if (moved < 6 && dt < 400) {
+    // Zelfde volgorde als bij de hover: bevingen eerst, dan de andere lagen.
+    const q = pickQuakeAt(e.clientX, e.clientY);
+    if (q) { showDetail(q); return; }
     const o = pickAt(e.clientX, e.clientY);
     if (o) showDetail(o.userData.d);
   }
@@ -6430,6 +6468,16 @@ pasLabelToegankelijkheid();
 const quakeLabels = createQuakeLabels(THREE, {
   params: PARAMS,
   depthRGB,
+  /* HOVER OP EEN LABELREGEL STUURT DE INDICATORLAAG (sessie 41, Terry). De ring
+     en de beam van dat event lichten op; zit de regel in een blok met meer
+     bevingen, dan zakken alleen de ANDERE leden van dat blok weg. De rest van de
+     kaart blijft staan, zodat je met de muis het rijtje af kunt zonder dat het
+     beeld eromheen elke keer opnieuw opbouwt. Labels verdwijnen nooit. */
+  onHover: (id, groep) => {
+    if (!quakeIndicator) return;
+    quakeIndicator.setHovered(id);
+    quakeIndicator.setFocusGroup(id && groep ? groep.filter(x => x !== id) : null);
+  },
   getCoords: (lat, lng, alt) => world.getCoords(lat, lng, alt),
   getCamera: () => world.camera(),
   getViewport: () => ({
@@ -6511,7 +6559,22 @@ const SCHAKELRIJEN = [
   { id: 'labeloutline-toggle', stat: 'es-labeloutline', sleutel: 'pref.labelOutline',
     doe: pasLabelToegankelijkheid },
   { id: 'labelwhite-toggle', stat: 'es-labelwhite', sleutel: 'pref.labelWhite',
-    doe: pasLabelToegankelijkheid }
+    doe: pasLabelToegankelijkheid },
+  /* DE BEAMS EN HET GROEPEREN (sessie 41, Terry). Allebei schrijven ze naar
+     PARAMS en niet rechtstreeks naar een uniform: de laag wordt lazy gebouwd en
+     kan er bij het opstarten nog niet zijn, en `syncParams()` leest PARAMS. Zo
+     landt de keuze ook wanneer de laag pas later ontstaat — dezelfde val als
+     bij nightBrightness in sessie 35. */
+  { id: 'beams-toggle', stat: 'es-beams', sleutel: 'pref.quakeBeams',
+    doe: (v) => {
+      PARAMS.quakeBeamOn = !!v;
+      if (quakeIndicator) quakeIndicator.syncParams();
+    } },
+  { id: 'groupquakes-toggle', stat: 'es-groupquakes', sleutel: 'pref.quakeGroup',
+    doe: (v) => {
+      PARAMS.quakeStackOn = !!v;
+      if (quakeIndicator) quakeIndicator.syncParams();
+    } }
 ];
 for (const rij of SCHAKELRIJEN) {
   const el = document.getElementById(rij.id);

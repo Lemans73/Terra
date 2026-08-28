@@ -206,6 +206,19 @@ export const PREFS_DEFAULTS = {
      tekst terugwil, zet deze rij uit — de informatie was er niet minder om. */
   'pref.labelWhite': true,
 
+  /* ---- De bevingsindicator ---- (sessie 41, Terry)
+
+     `pref.quakeBeams` begint UIT. De beam is terug op proef; een laag die
+     zichzelf aanzet bij een eerste bezoek is geen proef meer, en de ring alleen
+     is de weergave waar de rest van deze sessie op geijkt is.
+
+     `pref.quakeGroup` begint AAN en volgt daarmee wat quakeStackOn in
+     js/config.js al deed. Groeperen is wat er gebeurt als bevingen te dicht op
+     elkaar liggen om apart te lezen — dat is geen uitzondering maar de normale
+     toestand rond een zwerm. */
+  'pref.quakeBeams': false,
+  'pref.quakeGroup': true,
+
   /* ---- De aardbevingen: de bron en het magnitudevenster ----
      `quake.source` is de adapter-id ('emsc' of 'usgs'). ALLEEN DE KNOP schrijft
      hem: de dekkingstoets in index.html wisselt ook van bron zodra de gekozen

@@ -167,16 +167,56 @@ export const PARAMS = {
      énkele pixel — de gloed die je dan nog ziet komt ergens anders vandaan.
      Deze schakelaar zet `bloomPass.enabled`, en dat is echt uit. */
   bloomEnabled: true,
-  bloomStrength: 0.1, bloomRadius: 1, bloomThreshold: 1.25,
+  bloomStrength: 0.1, bloomRadius: 0.5, bloomThreshold: 1,
   // kleurgrading + chromatische aberratie
-  gradeContrast: 1.06, gradeSaturation: 1.11, gradeAberration: 0.001, gradeTemp: 0,
+  gradeContrast: 1.105, gradeSaturation: 1.4, gradeAberration: 0.001, gradeTemp: 0,
   // mist — fresnel-waas die naar de randen toe het kaartje vertroebelt
   fogStrength: 1.0, fogPower: 3.0, fogColor: '#b6c4d6',
   // staven — simpele cilinder die vanaf het oppervlak de ruimte in rijst (hoogte ∝ magnitude²)
-  beamBase: 4.0,        // basislengte: ook lichte bevingen krijgen een zichtbare staaf
-  beamMultiplier: 1.0,  // hoogte-toeslag = magnitude² · deze factor
-  beamRadius: 0.1,      // kern-straal = magnitude · deze factor
+  /* DE BEAM. Deze drie stonden sinds de v1-sloop (sessie 41) wees in dit
+     bestand en zijn later diezelfde sessie hergebruikt door de nieuwe
+     instanced beam-laag, met dezelfde betekenis als in v1: hoogte is
+     `beamBase` plus magnitude in het kwadraat maal `beamMultiplier`.
+
+     `coreOpacity` en `glowOpacity` hoorden bij de twee cilinders van v1 — een
+     kern en een gloed eromheen. De shader-beam heeft één quad met een
+     dwarsprofiel, dus die twee zijn vervangen door quakeBeamCore en
+     quakeBeamOpacity hieronder. Ze staan er nog omdat de vulkaan- en
+     bosbrandglyphs ze ook lezen. */
+  beamBase: 10,        // basislengte: ook lichte bevingen krijgen een zichtbare staaf
+  beamMultiplier: 0.7,  // hoogte-toeslag = magnitude² · deze factor
+  beamRadius: 1,      // halve breedte aan de voet, maal de icoonschaal
   coreOpacity: 1.0, glowOpacity: 0.02,
+
+  /* DE BEAM-LAAG (sessie 41, Terry). Begint UIT: hij is terug op proef, en een
+     laag die zichzelf aanzet bij een eerste bezoek is geen proef meer. Zie de
+     lange noot bij QUAKE_BEAM_VERT voor waarom de voet op straal 100 blijft.
+
+     `quakeBeamScaleWithZoom` is een keuze en geen detail. Aan: de staaf houdt
+     zijn schermhoogte en blijft van elke afstand leesbaar. Uit: hij staat in
+     wereldmaat, wordt klein als je uitzoomt en vertelt daarmee de schaal van
+     de planeet. De ring doet het eerste; of de beam dat moet volgen is precies
+     wat er uitgeprobeerd wordt. */
+  /* AANWIJZEN (sessie 41, Terry). Twee kanalen omdat ze iets anders doen:
+     `quakeHoverBoost` tilt de aangewezen indicator op, `quakeHoverDim` haalt de
+     andere omlaag. Alleen optillen helpt niet in een zwerm — daar zijn de buren
+     even fel, en dan is er niets uitgelicht. Dempen alleen maakt het beeld
+     donker zonder ergens heen te wijzen. Samen wijzen ze aan.
+
+     `quakeHoverDim` op 1 zou de rest volledig laten verdwijnen; 0,55 houdt de
+     omgeving leesbaar, zodat je ziet WAAR in de zwerm je zit. */
+  quakeHoverBoost: 0.9,
+  quakeHoverDim: 0.55,
+  quakeBeamOn: true,
+  quakeBeamScaleWithZoom: true,
+  quakeBeamCore: 2,    // dwarsprofiel: hoger = smaller hart, zachtere flanken
+  quakeBeamFalloff: 1.2, // langsprofiel: hoger = sneller uitdovend naar de top
+  quakeBeamOpacity: 2,
+  /* HOE VER DE BEAM ONDER ZIJN VOET BEGINT (sessie 41, Terry). Zonder overlap
+     valt er een naad tussen de staaf en de indicator eronder; met te veel steekt
+     hij er zichtbaar onderuit. De grens is optisch: wat hieronder uitsteekt moet
+     binnen de kern van de ring vallen. Op 0 sluit hij precies aan. */
+  quakeBeamSink: 0.35,
   // shockwave — magnitude → straal binnen min/max; rand-scherpte + rand-dikte
   shockMinR: 1, shockMaxR: 20, shockMagLo: 1, shockMagHi: 10,
   shockLift: 0,         // hoogte boven het oppervlak (units)
@@ -342,10 +382,10 @@ export const PARAMS = {
      ligt klaar (stackedNormalJS in js/layers/quake-indicator.js); hij wordt
      aangesloten bij de labellaag, stap D van het integratiecontract. */
   quakeStackOn: true,
-  quakeStackNear: 150,       // camera-afstand waarop het stapelen begint
-  quakeStackFar: 350,        // en waarop het volledig is
-  quakeStackLift: 1.5,       // hoogtewinst per verdieping (maal de icoonschaal)
-  quakeStackSpread: 2,       // hoe ver verdiepingen opzij worden gezet
+  quakeStackNear: 125,       // camera-afstand waarop het stapelen begint
+  quakeStackFar: 300,        // en waarop het volledig is
+  quakeStackLift: 0,       // hoogtewinst per verdieping (maal de icoonschaal)
+  quakeStackSpread: 0,       // hoe ver verdiepingen opzij worden gezet
   quakeStackOverlap: 1,      // hoe strikt twee ringen elkaar moeten raken om te stapelen
   quakeStackMaxLayers: 10,
 
@@ -404,8 +444,8 @@ export const PARAMS = {
        axisOffset  een deel van de geprojecteerde radiale as: kort waar je
                    bovenop kijkt, lang aan de bolrand */
   quakeLabelOffset: 0,
-  quakeLabelRingClear: 0.26,
-  quakeLabelAxisOffset: 0.02,
+  quakeLabelRingClear: 1.14,
+  quakeLabelAxisOffset: 0,
   /* De offset slaat op de RAND van het label, niet op zijn midden. Bij offset
      nul staat de magnitude dan precies op de indicator in plaats van er een
      halve labelbreedte naast. */
@@ -432,7 +472,7 @@ export const PARAMS = {
      omdat "soms een rare richting" beter is dan "soms geen label".
      `dropBlocked` uit betekent: liever een label dat overlapt dan geen label. */
   quakeLabelAvoid: true,
-  quakeLabelAvoidRings: 2,
+  quakeLabelAvoidRings: 1,
   quakeLabelFanDeg: 0,         // 0 = niet uitwaaieren, alleen langs de as
   quakeLabelFanStep: 10,
   quakeLabelDropBlocked: false,
@@ -445,7 +485,7 @@ export const PARAMS = {
      elke beving zijn eigen label te hebben, dus bij volle zoom valt hij naar
      nul en clustert er niets meer. */
   quakeLabelCluster: true,
-  quakeLabelClusterPx: 124,
+  quakeLabelClusterPx: 60,
   /* DE ONDERGRENS VAN DIE AFSTAND, bij volle zoom (sessie 40, Terry).
 
      De regel hierboven laat de clusterafstand met de zoom naar NUL krimpen: diep
@@ -457,8 +497,8 @@ export const PARAMS = {
      Op 0 is het gedrag exact wat het was. Hoger houdt de lijst ook bij maximale
      zoom bij elkaar; de lijst zelf staat op tijd gesorteerd met de meest recente
      bovenaan, en dát is bij een zwerm wat je wilt weten. */
-  quakeLabelClusterPxNear: 0,
-  quakeLabelClusterMax: 12,
+  quakeLabelClusterPxNear: 240,
+  quakeLabelClusterMax: 20,
 
   /* BUITEN DE BOLRAND. Van het middelpunt AF wijzen is niet hetzelfde als
      buiten de bol staan: een label bij een indicator midden op de aardbol wijst
@@ -468,6 +508,12 @@ export const PARAMS = {
      fractie van de bolstraal waarbinnen een label met rust wordt gelaten. */
   quakeLabelOutside: true,
   quakeLabelOutsideFrom: 200,  // alleen vanaf deze camera-afstand
+  /* DE BREEDTE VAN DE OVERGANGSBAND (sessie 41). Zonder deze band was
+     `quakeLabelOutsideFrom` een harde drempel, en dan springt de offset van een
+     randlabel bij het passeren van afstand 200 van 21,4 naar 61,4 pixels — in
+     één frame, en bij terugzoomen even hard terug. Over 60 eenheden loopt het
+     nu op met een smoothstep. Op 0 komt het oude gedrag terug. */
+  quakeLabelOutsideFade: 0,   // 0 = weer de harde drempel
   quakeLabelOutsidePad: 30,
   quakeLabelOutsideMax: 40,
   quakeLabelOutsideKern: 0.8,
@@ -476,7 +522,7 @@ export const PARAMS = {
   // scherper bij een hoge pixelratio, en Terra heeft die laag al.
   quakeLabelLineWidth: 2,
   quakeLabelLineOpacity: 1,
-  quakeLabelDotSize: 6,
+  quakeLabelDotSize: 8,
 
   /* NAGLIJDEN. Ook met een continue as springt een label nog als de ontwijking
      van ring wisselt of als een cluster van samenstelling verandert.
@@ -487,7 +533,7 @@ export const PARAMS = {
 
   // Toegankelijkheid: een omlijning maakt de tekst leesbaar op elke ondergrond,
   // wit negeert de dieptekleur voor wie het contrast nodig heeft.
-  quakeLabelOutline: 2,
+  quakeLabelOutline: 4,
   quakeLabelWhite: false,
   // Trefstraal bij het aanwijzen van een indicator, in pixels.
   quakeLabelPickRadius: 20,
