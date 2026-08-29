@@ -2033,6 +2033,17 @@
     color: var(--ink-faint);
   }
   .readout .sec:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+  /* EEN ALINEA OVER DE VOLLE BREEDTE (sessie 42). De rijen hierboven zetten hun
+     waarde rechts tegen de rand; dat is goed voor een getal en fout voor de
+     lopende tekst van een JTWC-waarschuwing. Iets kleiner en met meer regelwit
+     dan een rij, zodat het als tekst leest en niet als nog een meting. */
+  .readout .prose {
+    margin: 6px 0 2px;
+    font-size: 11.5px;
+    line-height: 1.5;
+    color: var(--ink-dim);
+    text-align: left;
+  }
   /* Een rij direct ná een kop heeft zijn eigen bovenrand niet nodig: die van de
      kop staat er al, en twee lijnen op vier pixels leest als een fout. */
   .readout .sec + .row { border-top: 0; }

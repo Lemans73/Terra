@@ -159,6 +159,17 @@ export function createDetailPanel(env) {
         rowsEl.appendChild(secEl);
         continue;
       }
+      /* A PARAGRAPH IS A ROW WITHOUT A KEY (session 42). A key/value row puts
+         its value hard against the right edge, which is right for a number and
+         wrong for the running text of a JTWC warning. `{ prose: '…' }` says so
+         explicitly, the same way `{ section: '…' }` does. */
+      if (k && typeof k === 'object' && typeof k.prose === 'string') {
+        const proseEl = document.createElement('p');
+        proseEl.className = 'prose';
+        proseEl.textContent = k.prose;
+        rowsEl.appendChild(proseEl);
+        continue;
+      }
       const rowEl = document.createElement('div');
       rowEl.className = 'row';
       const keyEl = document.createElement('span');
@@ -263,8 +274,9 @@ export function createDetailPanel(env) {
        color     kleur van die tekst
        headline  de naam van het ding
        rows      [[label, waarde], …]   waarde: string, {text, href} of Node.
-                 Een rij `[{ section: 'Kop' }]` tekent een sectiekop in plaats
-                 van een sleutel/waarde-paar; een waarde
+                 Een rij `[{ section: 'Kop' }]` tekent een sectiekop en
+                 `[{ prose: 'tekst' }]` een alinea over de volle breedte, beide
+                 in plaats van een sleutel/waarde-paar; een waarde
                  `{ absent: true, text: '…' }` tekent bleek en cursief. Zie
                  drawRows.
        plot      (el) => void           optioneel, tekent in een leeg element

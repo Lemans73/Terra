@@ -2118,6 +2118,8 @@ import {
   TEXTURE_SETS, DEFAULT_QUALITY, assetsFor, textureSetSize, RELAY_URL, REPO_URL,
   ANALYTICS_HOSTS, LOCK_DETAILS, ASSET_BASE, asset
 } from './js/config.js';
+import { peekStormReport, fetchStormReport, knotsToKmh, nmToKm }
+  from './js/compute/storm-report.js';
 // GLSL shader-bronnen (Stap 0 refactor).
 import {
   SHOCK_VERT, SHOCK_FRAG,
@@ -11044,6 +11046,72 @@ antipodeUitgang?.addEventListener('click', () => {
    `opts` reist ongewijzigd door naar de module. Daar zit `backTo` in: de bouwer van
    de view die híéronder ligt, waardoor de sluitknop een terugpijl wordt. Alleen de
    zonnegebieden geven hem mee; overal elders is hij afwezig en sluit de knop gewoon. */
+/* HET JTWC-WAARSCHUWINGSRAPPORT IN HET VENSTER (sessie 42, Terry).
+
+   EONET wijst een storm naar het waarschuwingsbestand van het Joint Typhoon
+   Warning Center. Dat werd stil gedownload; het is platte tekst en JTWC stuurt
+   `access-control-allow-origin: *`, dus we lezen het gewoon zelf.
+
+   VIER STANDEN, en de meest voorkomende is "weg". JTWC haalt het bestand weg
+   zodra hij stopt met waarschuwen, EONET houdt de url. Gemeten op 2026-08-28:
+   om 09:00 hadden twee van de zes open stormen nog een bestand, om 12:15 geen
+   enkele. Zie js/compute/storm-report.js.
+
+   OPHALEN GEBEURT NA HET TONEN. Het venster tekent meteen met wat er is en
+   hertekent zodra het antwoord binnen is — maar alleen als het dan nog steeds
+   dezelfde storm toont, anders schrijft een laat antwoord over een ander
+   onderwerp heen. */
+let shownEventKey = null;
+
+function stormReportRows(d) {
+  if (d.layer !== 'storm' || !d.url || !/\.tcw$/i.test(d.url)) return [];
+  const res = peekStormReport(d.url);
+  if (!res) return [['Report', { absent: true, text: 'reading the JTWC warning…' }]];
+  if (res.state === 'gone') {
+    return [['Report', { absent: true, text: 'JTWC has withdrawn this warning file' }]];
+  }
+  if (res.state !== 'ok') {
+    return [['Report', { absent: true, text: 'the warning file could not be reached' }]];
+  }
+  const r = res.report;
+  const rijen = [[{ section: 'JTWC warning' }]];
+  const uur = (dt) => dt ? dt.toISOString().slice(11, 16) + ' UTC' : null;
+  if (r.warningNr) {
+    rijen.push(['Warning', 'nr ' + r.warningNr + (r.issued ? ' · ' + uur(r.issued) : '')]);
+  }
+  if (r.winds != null) {
+    rijen.push(['Winds', r.winds + ' kt (' + knotsToKmh(r.winds) + ' km/h)' +
+      (r.gusts != null ? ', gusts ' + r.gusts + ' kt (' + knotsToKmh(r.gusts) + ' km/h)' : '')]);
+  }
+  if (r.movement) {
+    rijen.push(['Movement', r.movement.bearing + '° at ' + r.movement.knots +
+      ' kt (' + knotsToKmh(r.movement.knots) + ' km/h)']);
+  }
+  // De hele fix op één regel: waar de meting vandaan komt en hoe scherp hij is.
+  const fix = [r.basis, r.accuracyNm != null
+    ? '±' + r.accuracyNm + ' NM (' + nmToKm(r.accuracyNm) + ' km)' : null].filter(Boolean);
+  if (fix.length) rijen.push(['Fix', fix.join(' · ')]);
+  // Alleen de VOORUITblik: tau 0 staat al in de regels hierboven.
+  const vooruit = r.forecast.filter(f => f.tau > 0);
+  if (vooruit.length) {
+    rijen.push(['Forecast', vooruit.map(f => '+' + f.tau + ' h ' + f.knots + ' kt').join(' · ')]);
+  }
+  if (r.remarks) rijen.push([{ prose: r.remarks }]);
+  return rijen;
+}
+
+/* Ophalen zodra het venster een storm toont waarvan we het rapport nog niet
+   hebben. `peekStormReport` beslist of er iets te halen valt, dus een tweede
+   hertekening haalt niet opnieuw op en er ontstaat geen lus. */
+function ensureStormReport(d) {
+  if (d.layer !== 'storm' || !d.url || !/\.tcw$/i.test(d.url)) return;
+  if (peekStormReport(d.url)) return;
+  const sleutel = shownEventKey;
+  fetchStormReport(d.url).then(() => {
+    if (detailVisible && shownEventKey === sleutel) showDetail(d);
+  });
+}
+
 /* DE BRONKNOP, EERLIJK GELABELD (sessie 42, Terry).
 
    Drie uitkomsten, en de url beslist welke:
@@ -11066,7 +11134,14 @@ function sourceLink(d) {
   if (DEAD_LINK_HOSTS.some(h => host === h || host.endsWith('.' + h))) return null;
   const m = /\.([a-z0-9]{2,4})$/i.exec(pad);
   const type = m && FILE_LINK_TYPES[m[1].toLowerCase()];
-  if (type) return { href: d.url, label: type, download: true };
+  if (type) {
+    /* WETEN WE AL DAT HET BESTAND WEG IS, dan ook geen knop. Zonder dit reikt
+       Terra een 403-foutpagina aan onder de naam van een waarschuwing — precies
+       wat er vóór deze sessie gebeurde. */
+    const res = peekStormReport(d.url);
+    if (res && res.state !== 'ok') return null;
+    return { href: d.url, label: type, download: true };
+  }
   return { href: d.url,
            label: d.layer === 'quake' ? 'View on ' + d.source
                                       : (DETAIL_LINK_LABELS[d.layer] || 'More info') };
@@ -11082,6 +11157,8 @@ function showDetail(d, opts) {
      onderwerp — of geen beving — laat de selectie los. */
   selectedQuakeId = d && d.layer === 'quake' ? d.id : null;
   syncQuakeHighlight();
+  // Waar dit venster over gaat, voor een antwoord dat later binnenkomt.
+  shownEventKey = d ? (d.id || d.label || '') + '|' + (d.layer || d.kind || '') : null;
   /* Een ander onderwerp betekent een andere antipode. Toetsen op de PLEK en niet
      blindweg opruimen: `showDetail(d)` wordt ook aangeroepen om dezelfde beving te
      hertekenen nadat de knop is omgezet, en een blinde `hideAntipode()` zou de
@@ -11109,13 +11186,16 @@ function showDetail(d, opts) {
       ...(d.extra || []),
       // En een bleke noot waar het bestand niet is wat de knop suggereert.
       ...(FILE_LINK_NOTES[d.layer] && sourceLink(d) && sourceLink(d).download
-          ? [['Note', { absent: true, text: FILE_LINK_NOTES[d.layer] }]] : [])
+          ? [['Note', { absent: true, text: FILE_LINK_NOTES[d.layer] }]] : []),
+      // Het uitgelezen JTWC-rapport, of waarom het er niet is.
+      ...stormReportRows(d)
     ],
     actions: detailActions(d),
     // Bevingen komen uit twee catalogi, dus het label kan niet vastliggen per laag;
     // en wat er achter de knop zit verschilt per bron. Zie sourceLink().
     link: sourceLink(d)
   }, opts);
+  ensureStormReport(d);
 }
 
 // ---- Fetch loop ----------------------------------------------
