@@ -162,10 +162,12 @@ export function createQuakeLabels(THREE, opts = {}) {
     if (!id) return;
     e.stopPropagation();
     const q = events.find(x => x.id === id);
-    // KLIKKEN OPENT HET DETAILSCHERM. In de workbench zette dit `selectedId`;
-    // hier is dat Terra's eigen paneel, hetzelfde dat een klik op de indicator
-    // opent. Hover geeft de samenvatting, klik de rest.
-    if (q) { selectedId = id; onSelect(q); }
+    /* CLICKING OPENS THE DETAIL PANEL, and the panel sets `selectedId` back on
+       this layer through setSelected(). Writing it here as well would make this
+       layer a second writer of a state the app already owns — and then a click
+       on the indicator and a click on a label would leave it in different
+       places. Hover gives the summary, a click gives the rest. */
+    if (q) onSelect(q);
   });
 
   // ---- de knooppunten ----------------------------------------------------

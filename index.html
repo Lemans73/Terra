@@ -6388,6 +6388,33 @@ function pickQuakeAt(clientX, clientY) {
   return quakeLabels.pickAt(clientX - rect.left, clientY - rect.top);
 }
 
+/* WIE ER OPLICHT — ÉÉN PLEK DIE HET BESLIST (sessie 42, Terry).
+
+   Tot nu schreven twee plekken los van elkaar naar setHovered(): updateHover()
+   hieronder en de onHover van de labellaag. Twee schrijvers naar één stand is
+   dezelfde tweede waarheid die js/ui/panels.js als les opschrijft, en met de
+   selectie erbij zou het er een derde worden.
+
+   DE REGEL: de aangewezene wint zolang de muis ergens op staat, de SELECTIE is
+   de ruststand. Open je een beving, dan blijft die oplichten ook als je met de
+   muis wegvaart; wijs je ondertussen een andere aan, dan geeft die een voorproef
+   en valt het beeld daarna terug op de geopende beving.
+
+   Niet "selectie wint altijd": dan geeft aanwijzen met een geopend venster geen
+   enkele terugkoppeling meer terwijl klikken wél iets doet.
+
+   De LABELLAAG krijgt de twee apart. `hoveredId` klapt de regel uit — dat hoort
+   bij de muis en niet bij de selectie — en `selectedId` houdt het label van de
+   geopende beving in beeld. */
+let hoveredQuakeId = null, selectedQuakeId = null;
+function syncQuakeHighlight() {
+  if (quakeLabels) {
+    quakeLabels.setHovered(hoveredQuakeId);
+    quakeLabels.setSelected(selectedQuakeId);
+  }
+  if (quakeIndicator) quakeIndicator.setHovered(hoveredQuakeId || selectedQuakeId);
+}
+
 // hover-highlight via een zachte gloed-halo (geen scale meer) — fade in/uit met GSAP
 let hoverGlow = null;
 function updateHover() {
@@ -6416,11 +6443,8 @@ function updateHover() {
      blijft is `focusedQuake`: de v1-tak isoleert daarmee één beving, en die
      tak staat er nog. */
   const _hq = hd && hd.layer === 'quake' ? hd : null;
-  quakeLabels.setHovered(_hq ? _hq.id : null);
-  /* EN DE INDICATORLAAG ZELF, zodat de ring en de beam oplichten. Die weet niet
-     van labels af; hij krijgt hetzelfde id en zoekt zijn eigen index op. */
-  const _qi2 = quakeIndicator;
-  if (_qi2) _qi2.setHovered(_hq ? _hq.id : null);
+  hoveredQuakeId = _hq ? _hq.id : null;
+  syncQuakeHighlight();
   focusedQuake = _hq;
   globeEl.style.cursor = (o || _pq) ? 'pointer' : '';
   if (o) {
@@ -6494,7 +6518,7 @@ const quakeLabels = createQuakeLabels(THREE, {
      ring and beam light up and everything else dims — exactly what hovering
      the indicator itself does. Session 41 dimmed only the other members of the
      same label block; that exception is gone. Labels never disappear. */
-  onHover: (id) => { if (quakeIndicator) quakeIndicator.setHovered(id); },
+  onHover: (id) => { hoveredQuakeId = id; syncQuakeHighlight(); },
   getCoords: (lat, lng, alt) => world.getCoords(lat, lng, alt),
   getCamera: () => world.camera(),
   getViewport: () => ({
@@ -10770,6 +10794,9 @@ function detailForget() { yieldedPanels = []; }
 function hideDetail() {
   if (!detailVisible) return;
   detailVisible = false;
+  // De selectie hoort bij het geopende venster, dus die gaat mee dicht.
+  selectedQuakeId = null;
+  syncQuakeHighlight();
   detail.hide();
   detailRestore();
   /* HIER EN NIET IN `detail.onClose` (sessie 28). Die haak vuurt alleen bij een
@@ -10993,6 +11020,12 @@ function showDetail(d, opts) {
   // Vóór beide takken, want allebei zetten ze `detailVisible` — en detailYield() leest
   // die vlag om te weten of de herinnering al staat.
   detailYield();
+  /* DE GEOPENDE BEVING BLIJFT OPLICHTEN (sessie 42, Terry). Hier en niet in de
+     klikafhandeling, want er zijn drie wegen naar dit venster: de indicator, een
+     labelregel, en `showDetail` opnieuw aanroepen om te hertekenen. Een ander
+     onderwerp — of geen beving — laat de selectie los. */
+  selectedQuakeId = d && d.layer === 'quake' ? d.id : null;
+  syncQuakeHighlight();
   /* Een ander onderwerp betekent een andere antipode. Toetsen op de PLEK en niet
      blindweg opruimen: `showDetail(d)` wordt ook aangeroepen om dezelfde beving te
      hertekenen nadat de knop is omgezet, en een blinde `hideAntipode()` zou de
