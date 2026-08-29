@@ -2635,6 +2635,30 @@ function leefdeOpMoment(ev, geos, momentMs, respijtDagen, respijtEindeloos, slui
 // raden: `dagen` (hoe ver het venster terugkijkt én hoe lang een stille gebeurtenis nog
 // meetelt), `dekkingVanaf` (vanaf welk jaar deze categorie gevuld is) en `blijftOpen`
 // (of "geen einddatum" hier betekent: nog steeds bezig). Zie de spec bij `Adapters`.
+/* WELKE BRON EEN EONET-EVENT KRIJGT (sessie 42, Terry).
+
+   EONET geeft per gebeurtenis een LIJST bronnen en de app pakte er blind de
+   eerste van. Bij vulkanen is dat vaak een NASA Earth Observatory-verhaal: een
+   artikel over één foto van één uitbarsting, terwijl de Smithsonian-pagina de
+   catalogus-ingang van díé vulkaan is — type, hoogte, uitbarstingsgeschiedenis,
+   tectonische setting. Gemeten op 2026-08-28: alle 32 open vulkanen hebben een
+   `SIVolcano`-bron; bij 6 stond er iets anders vóór (5x EO, 1x Copernicus).
+
+   GEEN NETWERKAANROEP. De goede url zit al in het antwoord dat we toch al
+   ophalen; dit kiest alleen welke. De losstaande versie draagt dit dus gewoon.
+
+   Een laag zonder regel houdt de volgorde van EONET. */
+const EONET_SOURCE_ORDER = { volcano: ['SIVolcano'] };
+
+function eonetSourceUrl(layer, sources) {
+  const lijst = sources || [];
+  for (const id of (EONET_SOURCE_ORDER[layer] || [])) {
+    const s = lijst.find(x => x && x.id === id && x.url);
+    if (s) return s.url;
+  }
+  return (lijst[0] && lijst[0].url) || null;
+}
+
 function eonetAdapters(spec) {
   const out = {};
   for (const [layer, { category, dagen, dekkingVanaf, blijftOpen, sluitAdministratief }]
@@ -2723,7 +2747,7 @@ function eonetAdapters(spec) {
             label: ev.title,
             time: new Date(g.date).getTime(),
             source: 'NASA EONET',
-            url: (ev.sources && ev.sources[0] && ev.sources[0].url) || null // externe bron-melding
+            url: eonetSourceUrl(layer, ev.sources) // externe bron-melding, zie EONET_SOURCE_ORDER
           });
         }
         // Wat de volledigheidsnoot vergelijkt: het aantal dat op dit moment LEEFDE, niet
