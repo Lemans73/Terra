@@ -210,7 +210,10 @@ export const PARAMS = {
   quakeBeamScaleWithZoom: true,
   quakeBeamCore: 0.2,    // cross profile: higher = narrower core, softer flanks
   quakeBeamFalloff: 0.1, // length profile: higher = fades out faster towards the top
-  quakeBeamOpacity: 2,
+  // Per globe mode, see the note at quakeRingOpacityRealistic.
+  quakeBeamOpacityRealistic: 0.8,
+  quakeBeamOpacityExpert: 1,
+  quakeBeamOpacity: 0.8,
   /* HOE VER DE BEAM ONDER ZIJN VOET BEGINT (sessie 41, Terry). Zonder overlap
      valt er een naad tussen de staaf en de indicator eronder; met te veel steekt
      hij er zichtbaar onderuit. De grens is optisch: wat hieronder uitsteekt moet
@@ -309,6 +312,17 @@ export const PARAMS = {
   quakeRingGapMinPx: 5,      // minimale hart-op-hart-afstand tussen twee ringen, px
   quakeRingFill: 0,          // vulling binnen de buitenste ring
   quakeRingCore: 3,          // helderheid van de kern
+  /* OPACITY PER GLOBE MODE (session 42, Terry). The realistic earth carries its
+     own light and texture, so an indicator at full strength sits on top of it
+     as a sticker; the schematic map is flat and needs the full value.
+
+     `quakeRingOpacity` and `quakeBeamOpacity` stay the LIVE values — they are
+     what the uniform reads. The pair below is what applyGlobeMode() copies into
+     them on every mode switch. Same shape as overlayOpacityExpert /
+     overlayOpacityRealistic, and `Expert` is deliberate: the mode is called
+     'expert' everywhere in the code and only its visible label says Schematic. */
+  quakeRingOpacityRealistic: 0.8,
+  quakeRingOpacityExpert: 1,
   quakeRingOpacity: 1,
   /* DE RING ZELF AAN OF UIT (sessie 40, Terry). Een vraag die het proberen waard
      is: bij een dichte zwerm dragen de concentrische ringen vooral drukte, en

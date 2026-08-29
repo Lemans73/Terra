@@ -4242,6 +4242,10 @@ if (IS_LOCAL) {
         getEarthMaterial: () => shaderMaterial,
         // Ook een getter: de v2-laag wordt lazy in animateShader gebouwd.
         getQuakeIndicator: () => quakeIndicator,
+        /* De actieve weergave, voor de twee schuiven die PER MODUS bewaren
+           (Ring op. en Beam op.). Zonder deze haak schrijft zo'n schuif naar de
+           live waarde en gooit de eerstvolgende moduswissel hem weg. */
+        getGlobeMode: () => globeMode,
         /* DE DIEPTEGRENZEN VRAGEN OM MEER DAN EEN UNIFORM (sessie 41). De
            kleuren zitten niet in een uniform maar in het `aColor`-ATTRIBUUT:
            depthRGB draait in JS en de uitkomst gaat per event naar de GPU. Een
@@ -4944,10 +4948,28 @@ function pasZoomMinToe() {
     ? PARAMS.zoomMinDistanceExpert : PARAMS.zoomMinDistance;
 }
 
+/* INDICATOR OPACITY FOLLOWS THE GLOBE MODE (session 42, Terry).
+
+   The realistic earth carries its own light and texture; an indicator at full
+   strength sits on top of that as a sticker. The schematic map is flat and
+   needs the full value. Same shape as overlayOpacityExpert/Realistic.
+
+   WRITES PARAMS AND THEN SYNCS, rather than touching the uniform. The indicator
+   layer is built lazily and may not exist yet at boot; syncParams() reads
+   PARAMS, so the choice still lands once the layer appears. Same route as the
+   switch rows of session 41. */
+function syncIndicatorOpacity() {
+  const expert = globeMode === 'expert';
+  PARAMS.quakeRingOpacity = expert ? PARAMS.quakeRingOpacityExpert : PARAMS.quakeRingOpacityRealistic;
+  PARAMS.quakeBeamOpacity = expert ? PARAMS.quakeBeamOpacityExpert : PARAMS.quakeBeamOpacityRealistic;
+  if (quakeIndicator) quakeIndicator.syncParams();
+}
+
 function applyGlobeMode() {
   pasZoomMinToe();     // de schematische weergave mag dichterbij dan de realistische
   updateEarthLayers(); // toont/verbergt het Earth-lagen blok per modus
   renderOverlays(true); // overlays blijven in béíde modi staan, maar wisselen van stijl én hoogte
+  syncIndicatorOpacity();
   if (globeMode === 'realistic') {
     realisticActive = true;
     leaveExpertIfNeeded(); // post-proc/atmosfeer/sterren terug; polygons + raster weg
