@@ -118,50 +118,34 @@ float stackLift(float amt, float sc) {
 }
 `;
 
-/* ---- Aanwijzen -----------------------------------------------------------
-   Welke instance er onder de muis ligt. De picking zelf gebeurt in JS
-   (quake-labels.js: pickAt) omdat de shader de hoekpunten verplaatst en een
-   raycast dus stelselmatig mis mikt; wat hier gebeurt is alleen het OPLICHTEN.
+/* ---- Hover ---------------------------------------------------------------
+   Which instance sits under the mouse. The picking itself happens in JS
+   (quake-labels.js: pickAt) because the shader moves the vertices and a raycast
+   would systematically miss; all that happens here is the HIGHLIGHT.
 
-   EEN EIGEN INDEX-ATTRIBUUT EN NIET gl_InstanceID. Dat laatste bestaat pas in
-   GLSL ES 3.00, en de rest van dit bestand is met opzet 1.00-veilig: een shader
-   die niet compileert maakt de hele laag stil onzichtbaar.
+   AN INDEX ATTRIBUTE OF OUR OWN, NOT gl_InstanceID. That only exists in GLSL ES
+   3.00, and the rest of this file is deliberately 1.00-safe: a shader that
+   fails to compile makes the whole layer silently invisible.
 
-   uHoverIdx op -1 betekent niets aangewezen. De vergelijking heeft een marge van
-   een halve eenheid, want een float komt niet exact uit een attribuut terug. */
+   uHoverIdx at -1 means nothing is hovered. The comparison has a half-unit
+   margin, because a float does not come back exactly from an attribute. */
 const PICK_GLSL = /* glsl */`
 attribute float aIndex;
-attribute float aDim;
 uniform float uHoverIdx;
 uniform float uHoverBoost;
 uniform float uDimOthers;
-uniform float uDimMode;
 
 float aangewezen() {
   return abs(aIndex - uHoverIdx) < 0.5 ? 1.0 : 0.0;
 }
 
-/* WIE ER DEMPT. Twee standen, en het verschil is precies wat sessie 41 wilde
-   uitproberen:
-
-     uDimMode 0   alles behalve de aangewezene dempt. Dat is wat je wilt bij
-                  hover op een losse indicator: één beving uit de wereld lichten.
-     uDimMode 1   alleen wat aDim op 1 heeft dempt. Dat is wat je wilt bij
-                  hover op een regel in een LABELSTACK: daar horen alleen de
-                  buren uit diezelfde stack weg te zakken, zodat je met de muis
-                  het rijtje af kunt en steeds ziet wélke van de groep je hebt.
-                  De rest van de kaart blijft staan.
-
-   aDim is een INSTANCE-attribuut en geen uniform-lijst, en dat is een
-   prestatiekeuze. Een lijst van indices zou per fragment doorlopen moeten
-   worden — bij een ring van 289 hoekpunten maal twintig clusterleden maal
-   driehonderd events loopt dat in de miljoenen. Een attribuut wordt één keer
-   bijgewerkt wanneer de hover verandert, en dat is een muisbeweging en geen
-   frame. */
+/* ONE RULE: everything except the hovered one dims. Session 41 also had a
+   stack-only mode (dim just the neighbours in the same label block); session 42
+   dropped it — hovering a label now does exactly what hovering an indicator
+   does. */
 float dempFactor() {
   float actief = step(-0.5, uHoverIdx);
-  float doelwit = mix(1.0 - aangewezen(), aDim, step(0.5, uDimMode));
-  return mix(1.0, mix(1.0, 1.0 - uDimOthers, doelwit), actief);
+  return mix(1.0, mix(1.0, 1.0 - uDimOthers, 1.0 - aangewezen()), actief);
 }
 `;
 

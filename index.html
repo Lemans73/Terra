@@ -6490,16 +6490,11 @@ pasLabelToegankelijkheid();
 const quakeLabels = createQuakeLabels(THREE, {
   params: PARAMS,
   depthRGB,
-  /* HOVER OP EEN LABELREGEL STUURT DE INDICATORLAAG (sessie 41, Terry). De ring
-     en de beam van dat event lichten op; zit de regel in een blok met meer
-     bevingen, dan zakken alleen de ANDERE leden van dat blok weg. De rest van de
-     kaart blijft staan, zodat je met de muis het rijtje af kunt zonder dat het
-     beeld eromheen elke keer opnieuw opbouwt. Labels verdwijnen nooit. */
-  onHover: (id, groep) => {
-    if (!quakeIndicator) return;
-    quakeIndicator.setHovered(id);
-    quakeIndicator.setFocusGroup(id && groep ? groep.filter(x => x !== id) : null);
-  },
+  /* HOVERING A LABEL ROW DRIVES THE INDICATOR LAYER (session 42, Terry). Its
+     ring and beam light up and everything else dims — exactly what hovering
+     the indicator itself does. Session 41 dimmed only the other members of the
+     same label block; that exception is gone. Labels never disappear. */
+  onHover: (id) => { if (quakeIndicator) quakeIndicator.setHovered(id); },
   getCoords: (lat, lng, alt) => world.getCoords(lat, lng, alt),
   getCamera: () => world.camera(),
   getViewport: () => ({

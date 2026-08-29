@@ -146,26 +146,17 @@ export function createQuakeLabels(THREE, opts = {}) {
     const rij = e.target.closest && e.target.closest('[data-id]');
     return rij ? rij.getAttribute('data-id') : null;
   };
-  /* DE GROEPSGENOTEN GAAN MEE. Bij hover op één regel van een blok horen de
-     ANDERE indicatoren uit datzelfde blok weg te zakken, niet de hele kaart:
-     zo loop je met de muis het rijtje af en zie je steeds welke van de groep je
-     hebt. Wie de leden zijn staat in de node waar de regel in zit, en die is via
-     het DOM te vinden — de laag hoeft er geen tweede administratie voor bij te
-     houden. */
-  const groepVan = (e) => {
-    const box = e.target.closest && e.target.closest('.ql-box');
-    if (!box) return null;
-    const ids = [...box.querySelectorAll('.rij[data-id]')].map(r => r.getAttribute('data-id'));
-    return ids.length > 1 ? ids : null;
-  };
-  const meldHover = (id, groep) => onHover(id, groep);
+  /* HOVERING A LABEL ROW IS HOVERING ITS INDICATOR. Session 41 passed the
+     other members of the same label block along so only those would dim;
+     session 42 dropped that — a label and an indicator now do the same thing,
+     and everything but the hovered quake dims either way. */
   host.addEventListener('pointermove', (e) => {
     const id = idVan(e);
     if (id === hoveredId) return;
     hoveredId = id;
-    meldHover(id, id ? groepVan(e) : null);
+    onHover(id);
   });
-  host.addEventListener('pointerleave', () => { hoveredId = null; meldHover(null, null); });
+  host.addEventListener('pointerleave', () => { hoveredId = null; onHover(null); });
   host.addEventListener('click', (e) => {
     const id = idVan(e);
     if (!id) return;

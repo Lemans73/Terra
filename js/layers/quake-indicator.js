@@ -131,8 +131,7 @@ export function createQuakeIndicator(THREE, opts = {}) {
        één vergeten aanroep genoeg om de helft te laten meedoen. */
     uHoverIdx:   { value: -1 },
     uHoverBoost: { value: P.quakeHoverBoost },
-    uDimOthers:  { value: P.quakeHoverDim },
-    uDimMode:    { value: 0 }
+    uDimOthers:  { value: P.quakeHoverDim }
   });
 
   const ringUniforms = Object.assign(sharedUniforms(), {
@@ -369,8 +368,6 @@ export function createQuakeIndicator(THREE, opts = {}) {
        1.00-veilig. Deze volgorde is dezelfde als die van `events`, en daar
        hangt ook de labellaag aan (die leest de gestapelde plek per index). */
     const idx = new Float32Array(n);
-    // Wie er dempt bij een groepsfocus. Blijft nul tot setFocusGroup() hem vult.
-    const dim = new Float32Array(n);
     const rootN = new Float32Array(n * 3);
     const layerA = new Float32Array(n);
     const normals = [];
@@ -430,7 +427,6 @@ export function createQuakeIndicator(THREE, opts = {}) {
       geo.setAttribute('aAgeH',    new THREE.InstancedBufferAttribute(ageH, 1));
       geo.setAttribute('aSeed',    new THREE.InstancedBufferAttribute(seed, 1));
       geo.setAttribute('aIndex',   new THREE.InstancedBufferAttribute(idx, 1));
-      geo.setAttribute('aDim',     new THREE.InstancedBufferAttribute(dim, 1));
       geo.setAttribute('aRoot',    new THREE.InstancedBufferAttribute(rootN, 3));
       geo.setAttribute('aLayer',   new THREE.InstancedBufferAttribute(layerA, 1));
       geo.instanceCount = n;
@@ -444,34 +440,6 @@ export function createQuakeIndicator(THREE, opts = {}) {
      ZOEKT LINEAIR, en dat mag: dit draait op een muisbeweging en niet per
      frame, en de lijst is een paar honderd lang. Een map bijhouden zou een
      tweede waarheid zijn die bij elke uploadEvents opnieuw moet kloppen. */
-  /* DE DEMP-VLAGGEN. Eén array, gedeeld door de drie geometrieën — ze delen al
-     hun andere attributen ook, en uiteenlopen zou betekenen dat de beam van een
-     event dempt terwijl zijn ring blijft staan.
-
-     `null` zet de laag terug op de gewone regel: alles behalve de aangewezene
-     dempt. Een lijst met id's zet de GROEPSstand: alleen wat erin staat dempt,
-     de rest van de kaart blijft onaangeroerd. Dat tweede is voor het aflopen van
-     een labelstack — zie de noot bij dempFactor() in de shader. */
-  function setFocusGroup(ids) {
-    const geos = [ringGeo, shockGeo, beamGeo];
-    const attr = ringGeo.getAttribute('aDim');
-    if (!attr) return 0;
-    const arr = attr.array;
-    if (!ids) {
-      for (const uni of [ringUniforms, shockUniforms, beamUniforms]) uni.uDimMode.value = 0;
-      return 0;
-    }
-    const set = ids instanceof Set ? ids : new Set(ids);
-    let n = 0;
-    for (let i = 0; i < events.length && i < arr.length; i++) {
-      const aan = set.has(events[i].id) ? 1 : 0;
-      arr[i] = aan; n += aan;
-    }
-    for (const g of geos) { const a = g.getAttribute('aDim'); if (a) a.needsUpdate = true; }
-    for (const uni of [ringUniforms, shockUniforms, beamUniforms]) uni.uDimMode.value = 1;
-    return n;
-  }
-
   /* REDO THE GROUPING WITHOUT A DATA REFRESH.
 
      computeStacking() runs inside uploadEvents and returns an all-zero layer
@@ -517,8 +485,8 @@ export function createQuakeIndicator(THREE, opts = {}) {
     return idx;
   }
 
-  /* Welke indices er gedempt MOGEN worden. Leeg = de gewone regel (alles behalve
-     de aangewezene dempt). Zie de noot bij uDimOthers in de ring-shader. */
+  // The instance index currently highlighted, or -1. Read straight from the
+  // uniform, so it reports what the shader actually draws.
   function hoveredIndex() {
     return ringUniforms.uHoverIdx.value;
   }
@@ -714,7 +682,7 @@ export function createQuakeIndicator(THREE, opts = {}) {
 
   return {
     group, ringMesh, shockMesh, beamMesh, ringMat, shockMat, beamMat,
-    uploadEvents, update, syncParams, dispose, setHovered, hoveredIndex, setFocusGroup,
+    uploadEvents, update, syncParams, dispose, setHovered, hoveredIndex,
     restack,
     get count() { return ringGeo.instanceCount; },
     // Meethaken en gedeelde wiskunde — de labels en het aanwijzen lopen
