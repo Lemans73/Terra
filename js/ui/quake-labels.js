@@ -704,15 +704,21 @@ export function createQuakeLabels(THREE, opts = {}) {
       n.dot.setAttribute('stroke', actief ? 'rgba(255,255,255,0.45)' : 'none');
       n.dot.setAttribute('stroke-width', actief ? 3 : 0);
 
-      /* GEEN LIJN ALS DE INDICATOR IN HET LABEL LIGT. Met offset en ringClear op
-         nul valt het label over zijn eigen indicator, en dan steekt een
-         leader-line dwars door de tekst — hij verbindt twee dingen die al op
-         elkaar liggen. */
+      /* NO LINE WHEN THE INDICATOR SITS INSIDE THE LABEL. With offset and
+         ringClear at zero the label falls over its own indicator, and then a
+         leader line runs straight through the text — it joins two things that
+         already coincide.
+
+         AND NO LINE AT ALL AT OPACITY ZERO (session 42, Terry). The hover branch
+         used to force 1 there, which is why turning the line off did not stick.
+         Zero now means gone, hover included; the placement maths above is
+         untouched, only the drawing is skipped. */
       const bw = n.maat ? n.maat.w : maat.w, bh = n.maat ? n.maat.h : maat.h;
       const marge = 4;
       const inHetLabel = dx0 > px - marge && dx0 < px + bw + marge &&
                          dy0 > py - marge && dy0 < py + bh + marge;
-      if (inHetLabel || Math.hypot(hechtX - dx0, hechtY - dy0) < 2) {
+      if (P.quakeLabelLineOpacity <= 0 || inHetLabel ||
+          Math.hypot(hechtX - dx0, hechtY - dy0) < 2) {
         n.line.setAttribute('stroke-opacity', '0');
       } else {
         n.line.setAttribute('x1', dx0); n.line.setAttribute('y1', dy0);

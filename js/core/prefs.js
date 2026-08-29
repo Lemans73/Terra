@@ -217,6 +217,12 @@ export const PREFS_DEFAULTS = {
      `pref.quakeGroup` starts OFF and follows quakeStackOn. */
   'pref.quakeBeams': true,
   'pref.quakeGroup': false,
+  /* `pref.quakeLabelLines` starts OFF (session 42, Terry). Now that a label and
+     its indicator light up together, the leader line joins two things that
+     already point at each other and mostly gets in the way. The config value
+     quakeLabelLineOpacity stays at 1: that is how visible the line is WHEN it
+     is on, and the switch is what turns it off. Same split as labelOutline. */
+  'pref.quakeLabelLines': false,
 
   /* ---- De aardbevingen: de bron en het magnitudevenster ----
      `quake.source` is de adapter-id ('emsc' of 'usgs'). ALLEEN DE KNOP schrijft
