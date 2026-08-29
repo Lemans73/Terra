@@ -765,11 +765,20 @@ void main() {
      de indicator uit stak. De ring doet uLift + stackLift; de beam hoort
      hetzelfde te doen, anders vertrekken ze niet vanaf dezelfde plek.
 
-     uBeamSink laat de voet een klein stukje ONDER die plek beginnen, zodat er
-     geen naad tussen beam en indicator valt. Hij hoort klein te blijven: wat
-     hieronder uitsteekt hoort binnen de kern van de ring te vallen en dus niet
-     als losse streep zichtbaar te zijn. */
+     uBeamSink lets the foot start a little BELOW that spot, so no seam falls
+     between the beam and the indicator. It has to stay small: whatever sticks
+     out below belongs inside the core of the ring and must not read as a
+     separate streak.
+
+     AND IT SCALES WITH THE ZOOM, exactly like the height (session 42, Terry).
+     Without that it is a fixed world distance while the indicator is screen
+     sized, so zooming in grows it relative to the ring. Measured as
+     sink / ring radius: 0.019 at camera 450, 0.038 at 200, 0.199 at 120 and
+     1.263 at 104 — a full ring radius below the indicator, which is the streak
+     that showed up in the schematic view. Schematic is the only place it was
+     visible because realistic stops at 120. */
   float lift = uLift + stackLift(amt, sc);
+  float sink = uBeamSink * mix(1.0, sc, clamp(uBeamScaleWithZoom, 0.0, 1.0));
   vec3 voet = n * (uRadius + lift);
 
   /* NAAR DE CAMERA KEREN. De staaf staat langs n; de breedte moet loodrecht
@@ -790,7 +799,7 @@ void main() {
   }
 
   float halveBreedte = uBeamWidth * sc * (0.35 + 0.65 * clamp(aMagFrac, 0.0, 1.0));
-  vec3 lokaal = voet + n * (hoogte * vLangs - uBeamSink) + dwars * (halveBreedte * vDwars);
+  vec3 lokaal = voet + n * (hoogte * vLangs - sink) + dwars * (halveBreedte * vDwars);
 
   vWorld = (modelMatrix * vec4(lokaal, 1.0)).xyz;
   gl_Position = projectionMatrix * modelViewMatrix * vec4(lokaal, 1.0);

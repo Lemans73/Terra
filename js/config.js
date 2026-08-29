@@ -219,11 +219,17 @@ export const PARAMS = {
   quakeBeamOpacityRealistic: 0.8,
   quakeBeamOpacityExpert: 1,
   quakeBeamOpacity: 0.8,
-  /* HOE VER DE BEAM ONDER ZIJN VOET BEGINT (sessie 41, Terry). Zonder overlap
-     valt er een naad tussen de staaf en de indicator eronder; met te veel steekt
-     hij er zichtbaar onderuit. De grens is optisch: wat hieronder uitsteekt moet
-     binnen de kern van de ring vallen. Op 0 sluit hij precies aan. */
-  quakeBeamSink: 0.35,
+  /* HOW FAR THE BEAM STARTS BELOW ITS FOOT. Without overlap a seam falls
+     between the shaft and the indicator under it; with too much it sticks out
+     visibly. The limit is optical: whatever pokes out below has to stay inside
+     the core of the ring. At 0 it joins exactly.
+
+     0.15 AND NOT 0.35 SINCE SESSION 42. The value now scales with the zoom (see
+     QUAKE_BEAM_VERT), and at 0.35 that would have sunk the beam 2.4x deeper at
+     the usual camera distance than the 0.35 did before. 0.15 keeps the overlap
+     at the 0.022 of the ring radius that was tuned in session 41 — only now it
+     is that same fraction at EVERY zoom instead of just at one. */
+  quakeBeamSink: 0.15,
   // shockwave — magnitude → straal binnen min/max; rand-scherpte + rand-dikte
   shockMinR: 1, shockMaxR: 20, shockMagLo: 1, shockMagHi: 10,
   shockLift: 0,         // hoogte boven het oppervlak (units)
