@@ -11066,12 +11066,18 @@ let shownEventKey = null;
 function stormReportRows(d) {
   if (d.layer !== 'storm' || !d.url || !/\.tcw$/i.test(d.url)) return [];
   const res = peekStormReport(d.url);
-  if (!res) return [['Report', { absent: true, text: 'reading the JTWC warning…' }]];
+  /* NIETS TONEN ZOLANG HET ANTWOORD ONDERWEG IS. Het venster krijgt er dan een
+     regel BIJ zodra er iets te zeggen valt, in plaats van een regel te tonen die
+     hij daarna weer vervangt. */
+  if (!res) return [];
   if (res.state === 'gone') {
-    return [['Report', { absent: true, text: 'JTWC has withdrawn this warning file' }]];
+    // Geen storing, en het hoort niet als storing te lezen: JTWC publiceert dit
+    // bestand alleen zolang er waarschuwingen lopen.
+    return [['Report', { absent: true,
+      text: 'JTWC publishes this file only while warnings are running — for this system they have ended' }]];
   }
   if (res.state !== 'ok') {
-    return [['Report', { absent: true, text: 'the warning file could not be reached' }]];
+    return [['Report', { absent: true, text: 'the JTWC warning file could not be reached' }]];
   }
   const r = res.report;
   const rijen = [[{ section: 'JTWC warning' }]];
@@ -11135,11 +11141,22 @@ function sourceLink(d) {
   const m = /\.([a-z0-9]{2,4})$/i.exec(pad);
   const type = m && FILE_LINK_TYPES[m[1].toLowerCase()];
   if (type) {
-    /* WETEN WE AL DAT HET BESTAND WEG IS, dan ook geen knop. Zonder dit reikt
-       Terra een 403-foutpagina aan onder de naam van een waarschuwing — precies
-       wat er vóór deze sessie gebeurde. */
-    const res = peekStormReport(d.url);
-    if (res && res.state !== 'ok') return null;
+    /* EEN JTWC-RAPPORT KRIJGT PAS EEN KNOP ALS HET BESTAND ER BEWEZEN IS.
+
+       Niet omgekeerd, en dat is Terry's punt uit sessie 42: een knop die
+       verschijnt en na een halve seconde weer verdwijnt is slechter dan geen
+       knop. En "weg" is hier de normale toestand — JTWC haalt het product weg
+       zodra hij stopt met waarschuwen en EONET houdt de url. Gemeten op
+       2026-08-29: van de zeven open stormen was er geen enkele meer met een
+       bestand, en de twee die er 's ochtends nog waren, waren 's middags weg.
+
+       Zolang het antwoord er nog niet is, is er dus ook nog geen knop. Alleen
+       een `.tcw` gaat langs deze weg; een csv of txt van een andere bron heeft
+       geen ophaler en houdt zijn knop. */
+    if (/\.tcw$/i.test(pad)) {
+      const res = peekStormReport(d.url);
+      return res && res.state === 'ok' ? { href: d.url, label: type, download: true } : null;
+    }
     return { href: d.url, label: type, download: true };
   }
   return { href: d.url,
