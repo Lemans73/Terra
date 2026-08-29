@@ -473,13 +473,12 @@
       <span class="estat" id="es-label">on</span>
       </div>
       <div class="layer-detail" id="label-count">
-      <!-- DE TWEE INDICATOR-KEUZES (sessie 41, Terry). Ze staan hier en niet in
-           Preferences omdat ze over de BEVINGEN gaan, net als de schuif eronder:
-           wie de weergave van bevingen bijstelt, zoekt ze op één plek.
-           Ze horen in SCHAKELRIJEN en niet in PREFS_RIJEN — die tabel zet alleen
-           de klasse, en deze twee moeten ook iets DOEN. -->
+      <!-- THE QUAKE INDICATOR CHOICES. They sit here and not in Preferences
+           because they are about the QUAKES, like the slider below it: whoever
+           adjusts how quakes are drawn looks in one place.
+           They belong in SCHAKELRIJEN and not in PREFS_RIJEN — that table only
+           sets the class, and these have to DO something as well. -->
       <div class="elayer" id="beams-toggle"><span class="edot"></span>Depth beams<span class="estat" id="es-beams">on</span></div>
-      <div class="elayer" id="groupquakes-toggle"><span class="edot"></span>Group nearby quakes<span class="estat" id="es-groupquakes">off</span></div>
       <div class="elayer" id="leaderlines-toggle"><span class="edot"></span>Leader lines<span class="estat" id="es-leaderlines">off</span></div>
       <div class="opt-slider">
       <div class="ns-label">
@@ -6604,19 +6603,13 @@ const SCHAKELRIJEN = [
     doe: pasLabelToegankelijkheid },
   { id: 'labelwhite-toggle', stat: 'es-labelwhite', sleutel: 'pref.labelWhite',
     doe: pasLabelToegankelijkheid },
-  /* DE BEAMS EN HET GROEPEREN (sessie 41, Terry). Allebei schrijven ze naar
-     PARAMS en niet rechtstreeks naar een uniform: de laag wordt lazy gebouwd en
-     kan er bij het opstarten nog niet zijn, en `syncParams()` leest PARAMS. Zo
-     landt de keuze ook wanneer de laag pas later ontstaat — dezelfde val als
-     bij nightBrightness in sessie 35. */
+  /* THE BEAMS. Writes to PARAMS and not straight to a uniform: the layer is
+     built lazily and may not exist yet at boot, and syncParams() reads PARAMS.
+     That way the choice still lands once the layer appears — the same trap as
+     nightBrightness in session 35. */
   { id: 'beams-toggle', stat: 'es-beams', sleutel: 'pref.quakeBeams',
     doe: (v) => {
       PARAMS.quakeBeamOn = !!v;
-      if (quakeIndicator) quakeIndicator.syncParams();
-    } },
-  { id: 'groupquakes-toggle', stat: 'es-groupquakes', sleutel: 'pref.quakeGroup',
-    doe: (v) => {
-      PARAMS.quakeStackOn = !!v;
       if (quakeIndicator) quakeIndicator.syncParams();
     } },
   /* DE LEADER-LINES (sessie 42, Terry). Loopt langs pasLabelToegankelijkheid(),

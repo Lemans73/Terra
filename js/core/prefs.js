@@ -208,15 +208,15 @@ export const PREFS_DEFAULTS = {
 
   /* ---- The quake indicator ---- (session 42, Terry)
 
-     BOTH OF THESE OVERRIDE js/config.js AT STARTUP, so changing the config
-     value alone does nothing. The switch rows run their `doe()` once on boot
-     and write straight into PARAMS — see SCHAKELRIJEN in index.html. Whoever
-     changes quakeBeamOn or quakeStackOn has to change the preference here too.
+     THIS OVERRIDES js/config.js AT STARTUP, so changing quakeBeamOn there alone
+     does nothing. The switch row runs its `doe()` once on boot and writes
+     straight into PARAMS — see SCHAKELRIJEN in index.html.
 
-     `pref.quakeBeams` now starts ON: the trial from session 41 is over.
-     `pref.quakeGroup` starts OFF and follows quakeStackOn. */
+     `pref.quakeBeams` starts ON: the trial from session 41 is over. Grouping
+     had a row here too; it was dropped in session 42 because with
+     quakeStackSpread and quakeStackLift at 0 it moved an indicator by at most
+     0.03 degrees — under a pixel. It lives on as quakeStackOn in config. */
   'pref.quakeBeams': true,
-  'pref.quakeGroup': false,
   /* `pref.quakeLabelLines` starts OFF (session 42, Terry). Now that a label and
      its indicator light up together, the leader line joins two things that
      already point at each other and mostly gets in the way. The config value
