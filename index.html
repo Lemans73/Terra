@@ -2112,6 +2112,7 @@ import { gsap } from 'gsap';
 // PARAMS, WINDOW_MS, TEXTURE_SETS, MODE_*. Pure data — gedeelde objectreferenties.
 import {
   COLORS, SOURCE_URLS, DETAIL_LINK_LABELS,
+  FILE_LINK_TYPES, DEAD_LINK_HOSTS, FILE_LINK_NOTES,
   AQI_BANDS, aqiBand, aqiHex, magHex,
   PARAMS, WINDOW_MS, MODE_LABELS, MODE_ICONS, EXPERT_LAYER_SCALE,
   TEXTURE_SETS, DEFAULT_QUALITY, assetsFor, textureSetSize, RELAY_URL, REPO_URL,
@@ -11043,6 +11044,34 @@ antipodeUitgang?.addEventListener('click', () => {
    `opts` reist ongewijzigd door naar de module. Daar zit `backTo` in: de bouwer van
    de view die híéronder ligt, waardoor de sluitknop een terugpijl wordt. Alleen de
    zonnegebieden geven hem mee; overal elders is hij afwezig en sluit de knop gewoon. */
+/* DE BRONKNOP, EERLIJK GELABELD (sessie 42, Terry).
+
+   Drie uitkomsten, en de url beslist welke:
+
+     null           een inlogmuur (IRWIN). Geen knop: eentje die niet kan
+                    werken is erger dan geen.
+     download       een BESTAND (.tcw, .csv, ...). Het label noemt het type, de
+                    knop krijgt het download-attribuut en een ⤓. Een echte
+                    "Opslaan als"-dialoog kan een pagina niet openen — dat is
+                    browserbeleid — dus dit is hoe ver het gaat.
+     pagina         zoals het was, met een ↗.
+
+   DE EXTENSIE UIT HET PAD EN NIET UIT DE HELE URL: een query met een punt erin
+   (?v=1.2) zou anders als bestandstype gelezen worden. */
+function sourceLink(d) {
+  if (!d || !d.url) return null;
+  let pad = d.url, host = '';
+  try { const u = new URL(d.url); pad = u.pathname; host = u.hostname; }
+  catch { /* een relatieve of kapotte url: dan blijft het de kale string */ }
+  if (DEAD_LINK_HOSTS.some(h => host === h || host.endsWith('.' + h))) return null;
+  const m = /\.([a-z0-9]{2,4})$/i.exec(pad);
+  const type = m && FILE_LINK_TYPES[m[1].toLowerCase()];
+  if (type) return { href: d.url, label: type, download: true };
+  return { href: d.url,
+           label: d.layer === 'quake' ? 'View on ' + d.source
+                                      : (DETAIL_LINK_LABELS[d.layer] || 'More info') };
+}
+
 function showDetail(d, opts) {
   // Vóór beide takken, want allebei zetten ze `detailVisible` — en detailYield() leest
   // die vlag om te weten of de herinnering al staat.
@@ -11077,12 +11106,15 @@ function showDetail(d, opts) {
                    href: SOURCE_URLS[d.source] || '#' }],
       // Vrije regels. Leeg voor alles behalve een zonnegebied, dat meer te
       // vertellen heeft: positie, twee classificaties en drie flare-kansen.
-      ...(d.extra || [])
+      ...(d.extra || []),
+      // En een bleke noot waar het bestand niet is wat de knop suggereert.
+      ...(FILE_LINK_NOTES[d.layer] && sourceLink(d) && sourceLink(d).download
+          ? [['Note', { absent: true, text: FILE_LINK_NOTES[d.layer] }]] : [])
     ],
     actions: detailActions(d),
-    // Bevingen komen uit twee catalogi, dus het label kan niet vastliggen per laag.
-    link: d.url ? { href: d.url,
-      label: d.layer === 'quake' ? 'View on ' + d.source : (DETAIL_LINK_LABELS[d.layer] || 'More info') } : null
+    // Bevingen komen uit twee catalogi, dus het label kan niet vastliggen per laag;
+    // en wat er achter de knop zit verschilt per bron. Zie sourceLink().
+    link: sourceLink(d)
   }, opts);
 }
 

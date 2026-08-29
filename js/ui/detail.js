@@ -239,9 +239,17 @@ export function createDetailPanel(env) {
 
     drawActions(view.actions);
 
+    /* A FILE AND A PAGE ARE NOT THE SAME BUTTON (session 42). `download` marks
+       a link that saves a file instead of opening a page: it gets a ⤓ and the
+       download attribute, so the browser saves rather than navigating away.
+       The attribute is REMOVED again on a page link — the element is reused
+       across views, and a leftover `download` would turn every later link into
+       a save. */
     if (view.link && view.link.href) {
       linkEl.href = view.link.href;
-      linkEl.textContent = (view.link.label || 'More info') + ' ↗';
+      linkEl.textContent = (view.link.label || 'More info') + (view.link.download ? ' ⤓' : ' ↗');
+      if (view.link.download) linkEl.setAttribute('download', '');
+      else linkEl.removeAttribute('download');
       linkEl.hidden = false;
     } else {
       linkEl.hidden = true;

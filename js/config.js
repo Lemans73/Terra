@@ -91,6 +91,35 @@ export const DETAIL_LINK_LABELS = {
   storm: 'Source report', ice: 'Source report', aqi: 'Station on WAQI'
 };
 
+/* WAT ER ACHTER DE BRONKNOP ZIT (session 42, Terry).
+
+   EONET hands out whatever url the reporting agency published, and a good third
+   of them are not pages at all. The button said "Source report" for all of them
+   and quietly downloaded a file, or led to a login wall.
+
+   FILE_LINK_TYPES: extension → the label the button gets. The button then also
+   carries the `download` attribute and a ⤓ instead of an ↗. A browser cannot
+   open a real "Save as" dialog — that is browser policy — so honest labelling
+   plus saving instead of navigating is as far as this goes.
+
+   DEAD_LINK_HOSTS: hosts that answer with a login wall. IRWIN is the only
+   source EONET has for US wildfires and it is not public; a button that cannot
+   work is worse than no button. What those fires get instead is a lookup at
+   NIFC — see wildfireFacts() in index.html.
+
+   FILE_LINK_NOTES: a pale line under the button where the file is not what the
+   button suggests. The iceberg csv is the table of ALL icebergs, not this one. */
+export const FILE_LINK_TYPES = {
+  tcw: 'Warning report (.tcw)',
+  csv: 'Data table (.csv)',
+  txt: 'Text bulletin (.txt)',
+  zip: 'Archive (.zip)'
+};
+export const DEAD_LINK_HOSTS = ['irwin.doi.gov'];
+export const FILE_LINK_NOTES = {
+  ice: 'The file is the US National Ice Center table of all tracked icebergs, not just this one.'
+};
+
 // Luchtkwaliteit (AQI) → officiële US-EPA bandkleuren (groen=goed … kastanje=gevaarlijk).
 // De glyph wordt per station in deze kleur gezet; de band geeft ook een label.
 export const AQI_BANDS = [
