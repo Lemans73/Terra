@@ -109,10 +109,11 @@ export function createQuakeIndicator(THREE, opts = {}) {
   const sharedUniforms = () => ({
     uCamDist:     { value: 260 },
     uRadius:      { value: GLOBE_R },
-    // De straal waartegen de fragment-shader zijn horizon uitrekent. Los van
-    // uRadius omdat die in de VERTEX-shader zit; een uniform is per programma
-    // en de twee blokken staan elk in hun eigen helft.
-    uHorizonRadius: { value: GLOBE_R },
+    /* THE LIMB BAND, computed in JS once per frame — see setLimbBand(). Two
+       cosines: x where the fade ends (gone), y where it begins (still full).
+       Doing it here rather than in the shader keeps acos() out of the fragment
+       stage and leaves one place to clamp against NaN. */
+    uHorizonBand: { value: new THREE.Vector2(1, 1) },
     uScaleRef:    { value: P.quakeIconScaleRef },
     uScalePow:    { value: P.quakeIconScalePow },
     uScaleMin:    { value: P.quakeIconScaleMin },
@@ -499,11 +500,39 @@ export function createQuakeIndicator(THREE, opts = {}) {
   const _camLokaal = new THREE.Vector3();
   const _inv = new THREE.Matrix4();
 
+  /* THE LIMB BAND, in cosines (session 42, Terry).
+
+     The horizon sits at cos(theta_h) = R / camDist. The band runs from a few
+     degrees before it to a few degrees after, so an indicator turning around
+     the globe fades instead of vanishing in one frame.
+
+     CLAMPED BEFORE acos, because a rounding error above 1.0 there gives NaN —
+     and a NaN uniform makes the whole layer draw nothing without a word in the
+     console. Below the surface (camDist <= R) there is no horizon at all: the
+     band then opens all the way and everything draws. */
+  const _band = new THREE.Vector2(1, 1);
+  function setLimbBand(camDist) {
+    const grens = GLOBE_R / Math.max(camDist, GLOBE_R + 0.001);
+    const thetaH = Math.acos(Math.max(-1, Math.min(1, grens)));
+    const d = Math.max(0, P.quakeLimbFadeDeg) * Math.PI / 180;
+    let lo = Math.cos(Math.min(Math.PI, thetaH + d));
+    const hi = Math.cos(Math.max(0, thetaH - d));
+    /* THE TWO EDGES MAY NEVER COINCIDE. smoothstep(x, x, v) divides by
+       edge1 - edge0 and is undefined in GLSL — measured at fade 0: the beam
+       then changed across the whole disc instead of only at the limb, because
+       every fragment was reading a division by zero. The floor turns fade 0
+       into a very narrow ramp, which is the old hard cut-off. */
+    if (hi - lo < 1e-4) lo = hi - 1e-4;
+    _band.set(lo, hi);
+    for (const uni of [ringUniforms, shockUniforms, beamUniforms]) uni.uHorizonBand.value.copy(_band);
+  }
+
   function update(camDist, timeSec, lift, camWereld) {
     ringUniforms.uCamDist.value = camDist;
     shockUniforms.uCamDist.value = camDist;
     beamUniforms.uCamDist.value = camDist;
     shockUniforms.uTime.value = timeSec;
+    setLimbBand(camDist);
 
     /* DE CAMERA IN LOKALE RUIMTE, één keer per frame. De beam keert zich naar
        de camera en heeft die richting nodig in de ruimte waar hij zelf staat;

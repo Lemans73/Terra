@@ -206,6 +206,11 @@ export const PARAMS = {
      omgeving leesbaar, zodat je ziet WAAR in de zwerm je zit. */
   quakeHoverBoost: 0.9,
   quakeHoverDim: 0.55,
+  /* HOW WIDE THE LIMB FADE IS, IN DEGREES (session 42, Terry). Full until this
+     many degrees before the horizon, gone this many degrees past it. At 0 the
+     behaviour is the old hard cut-off, which makes it the null measurement for
+     this feature. */
+  quakeLimbFadeDeg: 6,
   quakeBeamOn: true,
   quakeBeamScaleWithZoom: true,
   quakeBeamCore: 0.2,    // cross profile: higher = narrower core, softer flanks

@@ -323,14 +323,18 @@ varying float vDemp;
    verbergen. Dat doet dit blok. Per FRAGMENT en niet per instance, want een
    grote schijf bij de limb ligt deels voor en deels achter de horizon; een
    toets per event zou hem in één keer laten verspringen. */
-uniform float uHorizonRadius;
+uniform vec2 uHorizonBand;
 
-bool achterDeHorizon(vec3 wereldPunt) {
-  float camLen = length(cameraPosition);
-  // De raakcirkel gezien vanaf de camera. Op camLen <= R is er geen horizon
-  // meer — dan zit je op of in het oppervlak en tekenen we alles.
-  float grens = uHorizonRadius / max(camLen, uHorizonRadius + 0.001);
-  return dot(normalize(wereldPunt), normalize(cameraPosition)) < grens;
+/* THE LIMB AS A BAND, NOT A CUT-OFF (session 42, Terry). An indicator turning
+   around the globe used to vanish in a single frame; it is now full until a few
+   degrees before the horizon and gone a few degrees past it.
+
+   uHorizonBand is computed in JS once per frame: x = the cosine where the fade
+   ends (gone), y = where it begins (still full). That keeps acos() out of the
+   fragment shader and puts the clamp against NaN in one place instead of three. */
+float limbFade(vec3 wereldPunt) {
+  return smoothstep(uHorizonBand.x, uHorizonBand.y,
+                    dot(normalize(wereldPunt), normalize(cameraPosition)));
 }
 
 uniform float uRingOn;
@@ -343,7 +347,10 @@ void main() {
   vec2 p = vUv * 2.0 - 1.0;
   float r = length(p);
   if (r > 1.0) discard;
-  if (achterDeHorizon(vWorld)) discard;
+  // The limb, as a factor. discard only once nothing is left, so a fragment in
+  // the band still draws — that is the whole point of the band.
+  float limb = limbFade(vWorld);
+  if (limb <= 0.0) discard;
 
   float mf = clamp(vMagFrac, 0.0, 1.0);
 
@@ -492,7 +499,7 @@ void main() {
      uDimOthers werkt ALLEEN als er iets is aangewezen. Zonder die voorwaarde
      zou de hele laag permanent gedempt staan zodra de waarde boven nul komt. */
   float opTil = 1.0 + uHoverBoost * vHover;
-  gl_FragColor = vec4(vColor * lum * opTil, clamp(alpha * vDemp * opTil, 0.0, 1.0));
+  gl_FragColor = vec4(vColor * lum * opTil, clamp(alpha * vDemp * opTil * limb, 0.0, 1.0));
 }
 `;
 
@@ -617,19 +624,24 @@ varying vec3  vWorld;
    verbergen. Dat doet dit blok. Per FRAGMENT en niet per instance, want een
    grote schijf bij de limb ligt deels voor en deels achter de horizon; een
    toets per event zou hem in één keer laten verspringen. */
-uniform float uHorizonRadius;
+uniform vec2 uHorizonBand;
 
-bool achterDeHorizon(vec3 wereldPunt) {
-  float camLen = length(cameraPosition);
-  // De raakcirkel gezien vanaf de camera. Op camLen <= R is er geen horizon
-  // meer — dan zit je op of in het oppervlak en tekenen we alles.
-  float grens = uHorizonRadius / max(camLen, uHorizonRadius + 0.001);
-  return dot(normalize(wereldPunt), normalize(cameraPosition)) < grens;
+/* THE LIMB AS A BAND, NOT A CUT-OFF (session 42, Terry). An indicator turning
+   around the globe used to vanish in a single frame; it is now full until a few
+   degrees before the horizon and gone a few degrees past it.
+
+   uHorizonBand is computed in JS once per frame: x = the cosine where the fade
+   ends (gone), y = where it begins (still full). That keeps acos() out of the
+   fragment shader and puts the clamp against NaN in one place instead of three. */
+float limbFade(vec3 wereldPunt) {
+  return smoothstep(uHorizonBand.x, uHorizonBand.y,
+                    dot(normalize(wereldPunt), normalize(cameraPosition)));
 }
 
 void main() {
   if (vFresh <= 0.002) discard;
-  if (achterDeHorizon(vWorld)) discard;
+  float limb = limbFade(vWorld);
+  if (limb <= 0.0) discard;
 
   float d = length(vUv * 2.0 - 1.0);      // 0 = hart, 1 = rand
   if (d > 1.0) discard;
@@ -651,7 +663,7 @@ void main() {
   a *= vFresh * uOpacity;
   if (a < 0.004) discard;
 
-  gl_FragColor = vec4(vColor, clamp(a, 0.0, 1.0));
+  gl_FragColor = vec4(vColor, clamp(a * limb, 0.0, 1.0));
 }
 `;
 
@@ -791,7 +803,7 @@ precision highp float;
 uniform float uOpacity;
 uniform float uBeamCore;
 uniform float uBeamFalloff;
-uniform float uHorizonRadius;
+uniform vec2 uHorizonBand;
 uniform float uBeamOn;
 uniform float uHoverIdx;
 uniform float uHoverBoost;
@@ -806,22 +818,22 @@ varying vec3  vWorld;
 varying float vHover;
 varying float vDemp;
 
-/* Dezelfde horizon als de ring en de shockwave. Hij staat hier opnieuw en niet
-   in een gedeeld blok omdat elke shader zijn eigen programma is; de vorm hoort
-   gelijk te blijven aan die in QUAKE_RING_FRAG. */
-bool achterDeHorizon(vec3 wereldPunt) {
-  float camLen = length(cameraPosition);
-  float grens = uHorizonRadius / max(camLen, uHorizonRadius + 0.001);
-  return dot(normalize(wereldPunt), normalize(cameraPosition)) < grens;
+/* The same limb band as the ring and the shockwave. Repeated here and not
+   shared, because every shader is its own program; the shape has to stay equal
+   to the one in QUAKE_RING_FRAG. */
+float limbFade(vec3 wereldPunt) {
+  return smoothstep(uHorizonBand.x, uHorizonBand.y,
+                    dot(normalize(wereldPunt), normalize(cameraPosition)));
 }
 
 void main() {
   if (uBeamOn < 0.5) discard;
-  /* DE VOET WORDT NIET WEGGEKNIPT DOOR DE HORIZON, de rest wel. Een staaf aan
-     de rand van de bol steekt naar buiten en hoort dan zichtbaar te blijven —
-     dat is juist waar hij het beste leesbaar is. Alleen wat ACHTER de bol staat
-     verdwijnt, en dat toetsen we op het punt zelf. */
-  if (achterDeHorizon(vWorld)) discard;
+  /* THE FOOT IS NOT CLIPPED BY THE HORIZON, the rest is. A shaft at the edge of
+     the globe sticks outwards and should stay visible there — that is exactly
+     where it reads best. Only what stands BEHIND the globe disappears, and we
+     test that on the point itself. */
+  float limb = limbFade(vWorld);
+  if (limb <= 0.0) discard;
 
   // dwarsprofiel: helder hart, zachte flanken
   float d = abs(vDwars);
@@ -833,6 +845,6 @@ void main() {
   float opTil = 1.0 + uHoverBoost * vHover;
   a *= vDemp * opTil;
   if (a < 0.004) discard;
-  gl_FragColor = vec4(vColor * (0.75 + 0.85 * kern) * opTil, clamp(a, 0.0, 1.0));
+  gl_FragColor = vec4(vColor * (0.75 + 0.85 * kern) * opTil, clamp(a * limb, 0.0, 1.0));
 }
 `;
