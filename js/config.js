@@ -168,8 +168,8 @@ export const PARAMS = {
      Deze schakelaar zet `bloomPass.enabled`, en dat is echt uit. */
   bloomEnabled: true,
   bloomStrength: 0.1, bloomRadius: 0.5, bloomThreshold: 1,
-  // kleurgrading + chromatische aberratie
-  gradeContrast: 1.105, gradeSaturation: 1.4, gradeAberration: 0.001, gradeTemp: 0,
+  // colour grading + chromatic aberration
+  gradeContrast: 1.105, gradeSaturation: 1.4, gradeAberration: 0.001, gradeTemp: -0.2,
   // mist — fresnel-waas die naar de randen toe het kaartje vertroebelt
   fogStrength: 1.0, fogPower: 3.0, fogColor: '#b6c4d6',
   // staven — simpele cilinder die vanaf het oppervlak de ruimte in rijst (hoogte ∝ magnitude²)
@@ -183,20 +183,19 @@ export const PARAMS = {
      dwarsprofiel, dus die twee zijn vervangen door quakeBeamCore en
      quakeBeamOpacity hieronder. Ze staan er nog omdat de vulkaan- en
      bosbrandglyphs ze ook lezen. */
-  beamBase: 10,        // basislengte: ook lichte bevingen krijgen een zichtbare staaf
-  beamMultiplier: 0.7,  // hoogte-toeslag = magnitude² · deze factor
-  beamRadius: 1,      // halve breedte aan de voet, maal de icoonschaal
+  beamBase: 10,         // base length, so even light quakes get a visible shaft
+  beamMultiplier: 0.7,  // height bonus = magnitude² · this factor
+  beamRadius: 0.24,     // half-width at the foot, times the icon scale
   coreOpacity: 1.0, glowOpacity: 0.02,
 
-  /* DE BEAM-LAAG (sessie 41, Terry). Begint UIT: hij is terug op proef, en een
-     laag die zichzelf aanzet bij een eerste bezoek is geen proef meer. Zie de
-     lange noot bij QUAKE_BEAM_VERT voor waarom de voet op straal 100 blijft.
+  /* THE BEAM LAYER. On by default since session 42 — the trial it was put on
+     in session 41 is over. See the long note at QUAKE_BEAM_VERT for why the
+     foot stays on radius 100.
 
-     `quakeBeamScaleWithZoom` is een keuze en geen detail. Aan: de staaf houdt
-     zijn schermhoogte en blijft van elke afstand leesbaar. Uit: hij staat in
-     wereldmaat, wordt klein als je uitzoomt en vertelt daarmee de schaal van
-     de planeet. De ring doet het eerste; of de beam dat moet volgen is precies
-     wat er uitgeprobeerd wordt. */
+     `quakeBeamScaleWithZoom` is a choice, not a detail. On: the shaft keeps
+     its screen height and stays readable from any distance. Off: it sits in
+     world scale, shrinks as you zoom out and tells you the size of the planet.
+     The ring does the first, and the beam follows it. */
   /* AANWIJZEN (sessie 41, Terry). Twee kanalen omdat ze iets anders doen:
      `quakeHoverBoost` tilt de aangewezen indicator op, `quakeHoverDim` haalt de
      andere omlaag. Alleen optillen helpt niet in een zwerm — daar zijn de buren
@@ -209,8 +208,8 @@ export const PARAMS = {
   quakeHoverDim: 0.55,
   quakeBeamOn: true,
   quakeBeamScaleWithZoom: true,
-  quakeBeamCore: 2,    // dwarsprofiel: hoger = smaller hart, zachtere flanken
-  quakeBeamFalloff: 1.2, // langsprofiel: hoger = sneller uitdovend naar de top
+  quakeBeamCore: 0.2,    // cross profile: higher = narrower core, softer flanks
+  quakeBeamFalloff: 0.1, // length profile: higher = fades out faster towards the top
   quakeBeamOpacity: 2,
   /* HOE VER DE BEAM ONDER ZIJN VOET BEGINT (sessie 41, Terry). Zonder overlap
      valt er een naad tussen de staaf en de indicator eronder; met te veel steekt
@@ -346,7 +345,7 @@ export const PARAMS = {
 
      BOVEN 1, want een golf dijt VOORBIJ zijn bron uit. Op 1,0 valt de puls
      precies samen met de buitenste ring, daaronder verdwijnt hij er weer in. */
-  quakeShockScale: 0.25,
+  quakeShockScale: 1.25,
   /* MEE OMHOOG met de ring: boven de kaartlijnen (0,6) maar onder de ring
      (0,8), zodat de puls onder zijn eigen indicator door loopt in plaats van
      eroverheen. Precies 0,6 zou gelijk liggen met de lijnen en dan beslist
@@ -365,28 +364,24 @@ export const PARAMS = {
   quakeShockAgeHi: 4,       // hier is er niets meer over (uren)
   quakeShockOpacity: 1,
 
-  // ---- stapelen ----
-  /* STAAT AAN sinds Terry's ronde met de schuiven (sessie 40). Hij begon uit,
-     zodat de eerste toets — valt de ring op dezelfde plek als de v1-indicator? —
-     niet door de stapelverschuiving heen liep.
+  // ---- stacking ----
+  /* OFF by default since session 42 (Terry).
 
-     Verschuiven mag, want anders is een kluwen niet te ontwarren. HERSCHIKKEN
-     niet: de tangentiële richting van een event ten opzichte van zijn basis
-     blijft precies wat hij is, en alleen de AFSTAND wordt opgerekt. Zie de lange
-     noot in QUAKE_STACK_GLSL over waarom een zonnebloempatroon daar niet mag.
+     Pushing apart is allowed, because otherwise a cluster cannot be untangled.
+     REARRANGING is not: the tangential direction of an event relative to its
+     base stays exactly what it is, and only the DISTANCE is stretched. See the
+     long note in QUAKE_STACK_GLSL on why a sunflower pattern is wrong there.
 
-     LET OP — DE LABELS REKENEN HIER NOG NIET MEE. positionLabels() gebruikt de
-     ONgestapelde plek, dus zolang deze schuif aan staat wijzen de leader-lines
-     naast hun eigen indicator. In de workbench was dat gemeten op 257 van de 450
-     events, gemiddeld 43 px en tot 141 px aan toe. De JS-spiegel die dit oplost
-     ligt klaar (stackedNormalJS in js/layers/quake-indicator.js); hij wordt
-     aangesloten bij de labellaag, stap D van het integratiecontract. */
-  quakeStackOn: true,
-  quakeStackNear: 125,       // camera-afstand waarop het stapelen begint
-  quakeStackFar: 300,        // en waarop het volledig is
-  quakeStackLift: 0,       // hoogtewinst per verdieping (maal de icoonschaal)
-  quakeStackSpread: 0,       // hoe ver verdiepingen opzij worden gezet
-  quakeStackOverlap: 1,      // hoe strikt twee ringen elkaar moeten raken om te stapelen
+     The labels follow the stacked position (stackedNormalJS in
+     js/layers/quake-indicator.js). Without that they hung beside their own
+     indicator: measured in the workbench on 257 of 450 events, 43 px on
+     average and up to 141 px. */
+  quakeStackOn: false,
+  quakeStackNear: 125,       // camera distance where stacking starts
+  quakeStackFar: 300,        // and where it is complete
+  quakeStackLift: 0,         // height gained per storey (times the icon scale)
+  quakeStackSpread: 0,       // how far storeys are pushed sideways
+  quakeStackOverlap: 1,      // how strictly two rings must touch before they stack
   quakeStackMaxLayers: 10,
 
   // ---- de schaal, alleen voor deze laag ----
@@ -742,13 +737,13 @@ export const PARAMS = {
   depthStop3: 160,
   depthStop4: 320,
   depthStop5: 620,       // en alles dieper krijgt deze kleur
-  dayGamma: 1.85,         // >1 tilt de donkere delen op en laat 1,0 op 1,0 staan
-  dayKnee: 0.85,          // <1 buigt de top zacht om in plaats van hard af te kappen
-  macroAmbient: 0.55,    // wat het oppervlak zonder directe zon nog draagt
-  macroSun: 0.85,        // hoeveel de zonnestand daar bovenop legt
-  normalStrength: 3.6,   // overdrijving van de normal-map-helling
-  reliefStrength: 2.4,   // emboss-uitvergroting → hardere reliëflijnen
-  waterRipple: 0.51,     // amplitude van de procedurele water-rimpel
+  dayGamma: 1.8,          // >1 lifts the dark parts and leaves 1.0 at 1.0
+  dayKnee: 0.85,          // <1 bends the top over softly instead of clipping it
+  macroAmbient: 0.55,     // what the surface still carries without direct sun
+  macroSun: 0.85,         // how much the sun angle adds on top of that
+  normalStrength: 5,      // exaggeration of the normal-map slope
+  reliefStrength: 2.4,    // emboss gain → harder relief lines
+  waterRipple: 1,         // amplitude of the procedural water ripple
   // schermvaste icoongrootte (app-breed, beide modi): iconen schalen mee met de
   // camera-afstand. Power-curve (pow>1) = agressievere zoom-respons, vooral diep
   // ingezoomd kleiner. camDist-bereik in de praktijk ≈ 169 (diep in) → 438 (uit).

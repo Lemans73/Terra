@@ -283,6 +283,10 @@ export function createQuakeIndicator(THREE, opts = {}) {
 
   let events = [];
   let stackRoot = null, stackLayer = null;
+  /* The per-event normals, kept from the last upload so restack() can redo the
+     grouping without a data refresh. See restack() for why that is needed. */
+  let stackNormals = null;
+  let stackWasOn = null;
   const _v = new THREE.Vector3();
 
   /* Wie hangt aan wie, en op welke verdieping. Draait bij een datawissel en
@@ -407,6 +411,8 @@ export function createQuakeIndicator(THREE, opts = {}) {
     }
     stackRoot = rootN;
     stackLayer = layerA;
+    stackNormals = normals;
+    stackWasOn = !!P.quakeStackOn;
 
     /* Dezelfde buffers voor beide meshes. Niet apart opbouwen: dan kunnen ze
        uiteen gaan lopen zodra er ergens een regel bijkomt, en dan tekent de
@@ -464,6 +470,40 @@ export function createQuakeIndicator(THREE, opts = {}) {
     for (const g of geos) { const a = g.getAttribute('aDim'); if (a) a.needsUpdate = true; }
     for (const uni of [ringUniforms, shockUniforms, beamUniforms]) uni.uDimMode.value = 1;
     return n;
+  }
+
+  /* REDO THE GROUPING WITHOUT A DATA REFRESH.
+
+     computeStacking() runs inside uploadEvents and returns an all-zero layer
+     array while quakeStackOn is off, and aRoot/aLayer are instance attributes
+     written only there. So flipping the switch at runtime used to change
+     uStackOn and nothing else: with the default now OFF, turning "Group nearby
+     quakes" back on did nothing at all until the next data arrived.
+
+     Called from syncParams() and only when the flag actually changed — the
+     inner loop is O(n²) with an acos per pair, which is fine on a click and
+     wrong on a slider. */
+  function restack() {
+    if (!stackNormals || !stackRoot || !stackLayer) return 0;
+    const stack = computeStacking(events, stackNormals);
+    const nor = ringGeo.getAttribute('aNormal');
+    if (!nor) return 0;
+    let stacked = 0;
+    for (let i = 0; i < events.length; i++) {
+      const r = stack.root[i];
+      stackRoot[i * 3]     = nor.array[r * 3];
+      stackRoot[i * 3 + 1] = nor.array[r * 3 + 1];
+      stackRoot[i * 3 + 2] = nor.array[r * 3 + 2];
+      stackLayer[i] = stack.layer[i];
+      if (stack.layer[i] > 0.5) stacked++;
+    }
+    for (const g of [ringGeo, shockGeo, beamGeo]) {
+      const a = g.getAttribute('aRoot'), b = g.getAttribute('aLayer');
+      if (a) a.needsUpdate = true;
+      if (b) b.needsUpdate = true;
+    }
+    stackWasOn = !!P.quakeStackOn;
+    return stacked;
   }
 
   function setHovered(id) {
@@ -649,6 +689,7 @@ export function createQuakeIndicator(THREE, opts = {}) {
       uni.uNearPerUnit.value = P.quakeIconNearPerUnit;
       uni.uNearFloor.value = P.quakeIconNearFloor;
       uni.uStackOn.value = P.quakeStackOn ? 1 : 0;
+
       uni.uStackNear.value = P.quakeStackNear;
       uni.uStackFar.value = P.quakeStackFar;
       uni.uStackLift.value = P.quakeStackLift;
@@ -656,6 +697,10 @@ export function createQuakeIndicator(THREE, opts = {}) {
       uni.uHoverBoost.value = P.quakeHoverBoost;
       uni.uDimOthers.value = P.quakeHoverDim;
     }
+    // The grouping itself lives in an attribute, not a uniform, so the switch
+    // needs a rebuild and not just a new uniform value. See restack().
+    if (stackWasOn !== null && stackWasOn !== !!P.quakeStackOn) restack();
+
     /* DE MAGNITUDE-SCHAAL MOET MEE. De beam rekent aMagFrac terug naar een
        magnitude, en die omrekening hangt aan quakeMagMin/Max — draait daar
        iemand aan, dan zou de hoogte stil verkeerd blijven. */
@@ -670,6 +715,7 @@ export function createQuakeIndicator(THREE, opts = {}) {
   return {
     group, ringMesh, shockMesh, beamMesh, ringMat, shockMat, beamMat,
     uploadEvents, update, syncParams, dispose, setHovered, hoveredIndex, setFocusGroup,
+    restack,
     get count() { return ringGeo.instanceCount; },
     // Meethaken en gedeelde wiskunde — de labels en het aanwijzen lopen
     // hierlangs, zodat ze niet met een eigen formule naast de shader komen.
