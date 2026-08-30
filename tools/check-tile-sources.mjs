@@ -38,6 +38,8 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const MODULES = [
   'js/layers/tile-shell/sources.js',
   'js/layers/tile-shell/quadtree.js',
+  'js/layers/tile-shell/loader.js',
+  'js/layers/tile-shell/cache.js',
   'js/layers/tile-shell/shell.js'
 ];
 const SHADER = 'js/shaders.js';

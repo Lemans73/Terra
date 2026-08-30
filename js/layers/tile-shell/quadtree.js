@@ -280,6 +280,7 @@ export function createQuadtree(THREE, opts = {}) {
 
   return {
     setView, select, clampNode, prune, buildRoots, setSource,
+    roots: () => roots.slice(),
     acquireGeometry, releaseGeometry, fillGeometry,
     tick: () => ++frameId,
     frame: () => frameId,

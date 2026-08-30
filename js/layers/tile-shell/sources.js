@@ -31,6 +31,11 @@
 
 export const TILE_DEG = Math.PI / 180;
 
+/* Eén plek voor de megabyte. Hij stond in de loader én in de cache, en dat is in
+   de browser onzichtbaar — elke module heeft daar zijn eigen scope. De standalone
+   giet ze in ÉÉN scope en dan is het een SyntaxError. Zo gevonden. */
+export const TILE_MB = 1048576;
+
 /* A grid is rectangular on purpose: not every source uses square tiles, and a
    single equirectangular texture is simply a grid of 360 by 180 degrees with one
    tile at level 0. That is what lets the world texture be a SOURCE rather than a

@@ -26,6 +26,8 @@
 
 import { TILE_GRIDS, TILE_SOURCES, tileAttribution, checkSources } from './sources.js';
 import { createQuadtree } from './quadtree.js';
+import { createTileLoader } from './loader.js';
+import { createTileCache } from './cache.js';
 
 export function createTileShell(THREE, opts = {}) {
   const getMaterial = opts.getMaterial;
@@ -51,6 +53,23 @@ export function createTileShell(THREE, opts = {}) {
   group.visible = false;          // pas zichtbaar als er iets te tonen is
 
   const quadtree = createQuadtree(THREE, { grid, source, radius, segments: opts.segments || 16 });
+
+  /* De schijfcache en de loader. Allebei optioneel: zonder cache gaat alles naar
+     het netwerk, en een bron zonder `url` (de wereldtextuur) raakt de loader
+     nooit aan. */
+  const schijf = createTileCache({ budgetMB: opts.cacheBudgetMB || 200 });
+  schijf.init();
+  const loader = createTileLoader(THREE, {
+    fetch: opts.fetch,
+    cache: schijf,
+    getSource: () => source,
+    getGrid: () => grid,
+    vintage: opts.vintage,
+    maxAnisotropy: opts.maxAnisotropy,
+    textureBudgetMB: opts.textureBudgetMB || 384,
+    maxConcurrent: opts.maxConcurrent,
+    ratePerSec: opts.ratePerSec
+  });
 
   /* ---- materials --------------------------------------------------------
      One material per visible tile. That sounds expensive and is not: they all
@@ -98,10 +117,17 @@ export function createTileShell(THREE, opts = {}) {
   /* Climb to the nearest ancestor that HAS an image and work out which part of it
      belongs to this node. Without this the globe flashes white while zooming:
      the coarse image stays up until the sharp one arrives. */
+  /* De textuur van deze tegel, of van de dichtstbijzijnde voorouder die er wel
+     een heeft. Eerst de eigen map (daar zit de wereldtextuur), dan de loader. */
+  function vindTextuur(level, x, y) {
+    return textures.get(texKey(level, x, y))
+        || loader.getTexture(loader.texKey(sourceId, level, x, y));
+  }
+
   function resolveTexture(node) {
     let n = node;
     while (n) {
-      const tex = textures.get(texKey(n.level, n.x, n.y));
+      const tex = vindTextuur(n.level, n.x, n.y);
       if (tex) {
         const d = node.level - n.level;
         const scale = 1 / Math.pow(2, d);
@@ -132,15 +158,58 @@ export function createTileShell(THREE, opts = {}) {
     liveMeshes.delete(`${node.level}/${node.x}/${node.y}`);
   }
 
+  /* ---- aanvragen ---------------------------------------------------------
+     Welke tegels er nodig zijn, en met welke voorrang. Van het midden van het
+     scherm naar buiten: wat je aankijkt komt eerst.
+
+     ALLEEN LADEN BIJ STILSTAND. Tijdens draaien en zoomen is het overgrote deel
+     van wat je zou opvragen twee frames in beeld en daarna nooit meer; de
+     voorouder-textuur overbrugt die tijd. Dat scheelt de bron het meeste
+     verkeer van alle maatregelen hier, en de bezoeker merkt er niets van. */
+  const _vorigeCam = new THREE.Vector3();
+  let stilSinds = 0;
+  let laatsteVraag = 0;
+
+  function vraagTegels(camera, nodes, nu) {
+    if (source.kind === 'local' || !source.url) return;
+
+    const gewenst = new Set();
+    const vragen = [];
+    for (const node of nodes) {
+      const doel = quadtree.clampNode(node);
+      const key = loader.texKey(sourceId, doel.level, doel.x, doel.y);
+      const afstand = camera.position.distanceTo(node.center);
+      if (!gewenst.has(key)) { gewenst.add(key); vragen.push({ n: doel, prio: afstand }); }
+
+      /* Niets om op terug te vallen? Vraag dan ook de OUDER. Die dekt vier buren
+         tegelijk, dus dat is goedkoper dan het lijkt, en het geeft de vertrouwde
+         opbouw van grof naar scherp in plaats van wit knipperen. */
+      if (!resolveTexture(node) && doel.parent) {
+        const a = doel.parent;
+        const ak = loader.texKey(sourceId, a.level, a.x, a.y);
+        if (!gewenst.has(ak)) { gewenst.add(ak); vragen.push({ n: a, prio: afstand - 0.01 }); }
+      }
+    }
+
+    loader.setWanted(gewenst);
+    const stil = nu - stilSinds > (opts.settleMs || 150);
+    if (stil) for (const v of vragen) loader.request(sourceId, v.n.level, v.n.x, v.n.y, v.prio);
+    loader.pump();
+  }
+
   function update(camera, screenHeight, threshold) {
     if (!group.visible) return;
     const base = getMaterial();
     if (!base) return;
     syncLocalTexture();
 
+    const nu = Date.now();
+    if (!camera.position.equals(_vorigeCam)) { _vorigeCam.copy(camera.position); stilSinds = nu; }
+
     quadtree.tick();
     quadtree.setView(camera, screenHeight);
     selected = quadtree.select(threshold === undefined ? 1.5 : threshold);
+    vraagTegels(camera, selected, nu);
 
     onParent = 0;
     const keep = new Set();
@@ -219,18 +288,58 @@ export function createTileShell(THREE, opts = {}) {
     return grootste;
   }
 
+  /* DE VOORLADING. De wortels van de boom, meteen bij het aanzetten: dat is voor
+     EOX level 1, en dat zijn precies acht tegels van 90 graden — vier per
+     halfrond. GEMETEN op 2026-08-30: samen 63 kB, tegen 540 kB voor de
+     2K-dagkaart die ze vervangen.
+
+     Ze worden BUITEN de stilstandregel om gevraagd. Die regel bestaat om te
+     voorkomen dat je laadt wat twee frames later weg is; de wortels zijn juist
+     wat er ALTIJD staat, op elke camerastand. */
+  function preload() {
+    if (source.kind === 'local' || !source.url) return 0;
+    const wortels = quadtree.roots();
+    const gewenst = new Set();
+    for (const r of wortels) {
+      gewenst.add(loader.texKey(sourceId, r.level, r.x, r.y));
+      loader.request(sourceId, r.level, r.x, r.y, -1);   // -1: vóór alles anders
+    }
+    loader.pump();
+    return wortels.length;
+  }
+
+  /* VAN BRON WISSELEN HERBOUWT DE BOOM, want het raster hoort bij de bron: op een
+     ander raster is dezelfde z/x/y een ander stuk aarde. Wat er onderweg was
+     wordt afgebroken; de schijfcache blijft, die is per URL. */
+  function setSource(nieuweBron) {
+    if (!TILE_SOURCES[nieuweBron] || nieuweBron === sourceId) return false;
+    loader.clear();
+    for (const node of [...liveMeshes.values()]) disposeNode(node);
+    sourceId = nieuweBron;
+    source = TILE_SOURCES[sourceId];
+    grid = TILE_GRIDS[source.grid];
+    textures.clear();
+    quadtree.setSource(source, grid);
+    return true;
+  }
+
   return {
     group,
     update,
     setVisible,
     setWireframe,
+    setSource,
+    preload,
+    loader,
+    cache: schijf,
     isVisible: () => group.visible,
     checkFrame,
     attribution: () => tileAttribution(sourceId),
     sourceId: () => sourceId,
     stats: () => ({
-      ...quadtree.stats(), selected: selected.length,
-      meshes: liveMeshes.size, onParent, textures: textures.size, materials: materials.length
+      ...quadtree.stats(), bron: sourceId, selected: selected.length,
+      meshes: liveMeshes.size, onParent, textures: textures.size, materials: materials.length,
+      net: loader.stats(), schijf: schijf.stats()
     })
   };
 }

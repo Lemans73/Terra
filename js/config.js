@@ -1123,6 +1123,15 @@ export const PARAMS = {
      1,5 is de stand uit de POC. Hij hoort straks per bandbreedtetrap te
      verschillen; tot die keuze bestaat is dit één waarde voor iedereen. */
   tileSplitError: 1.5,
+  /* HOE DICHT DE TEGELSCHIL TOELAAT. `zoomMinDistance` hieronder is gezet op wat
+     één wereldtextuur aankan; de tegels halen beeld bij naarmate je nadert, dus
+     daar geldt die grens niet.
+
+     102 is 127 km hoogte: onder de wolkenschil (103,5) en ruim boven de harde
+     bodem `zoomFloorRadius` (101). EOX levert tot ongeveer 10 m per pixel en zou
+     100,2 aankunnen — dat wachten we bewust af, want daar komen de icoonschaal
+     en de mistschil opnieuw ter sprake. */
+  zoomMinDistanceTiles: 102,
   zoomMinDistance: 120,
   /* DE SCHEMATISCHE WEERGAVE MAG VERDER (sessie 38, Terry). De grens hierboven is
      gezet op de TEXTUUR, en die bestaat in de schematische weergave niet: daar is de

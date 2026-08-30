@@ -4683,7 +4683,11 @@ function syncTileShell() {
   const wil = tegelSchilAan();
   if (wil === tileShell.isVisible()) return;
   tileShell.setVisible(wil);
-  if (wil) tileShell.update(world.camera(), window.innerHeight, PARAMS.tileSplitError);
+  if (wil) {
+    tileShell.preload();     // de acht wortels eerst, zie de noot in shell.js
+    tileShell.update(world.camera(), window.innerHeight, PARAMS.tileSplitError);
+  }
+  pasZoomMinToe();           // de tegels laten dichterbij toe dan één wereldtextuur
 }
 
 function setupTileShell() {
@@ -5007,8 +5011,18 @@ function quakeRingLiftNu() {
 function pasZoomMinToe() {
   if (viewStates && (viewStates.isActive('sun') || viewStates.isActive('space')
       || viewStates.isActive('msphere'))) return;
+  /* DE GRENS VAN 120 IS GEZET OP DE TEXTUUR en niet op de techniek — zie de lange
+     noot bij `zoomMinDistance` in js/config.js. Met de tegelschil bestaat die
+     beperking niet meer: die haalt beeld bij naarmate je nadert. Vandaar een
+     derde stand, en niet een verruiming van de bestaande.
+
+     102 EN NIET DIEPER, voorlopig. Daar is de wolkenschil (103,5) net gepasseerd
+     en houdt de icoonschaal het nog; het volle bereik van de bron vraagt eerst
+     eigen metingen aan allebei. */
+  const metTegels = tileShell && tileShell.isVisible();
   world.controls().minDistance = globeMode === 'expert'
-    ? PARAMS.zoomMinDistanceExpert : PARAMS.zoomMinDistance;
+    ? PARAMS.zoomMinDistanceExpert
+    : (metTegels ? PARAMS.zoomMinDistanceTiles : PARAMS.zoomMinDistance);
 }
 
 /* INDICATOR OPACITY FOLLOWS THE GLOBE MODE (session 42, Terry).
@@ -12610,6 +12624,28 @@ if (IS_LOCAL) {
         return this.stand();
       },
       raster(v = true) { tileShell?.setWireframe(v); return this.stand(); },
+      /* Van bron wisselen herbouwt de boom — het raster hoort bij de bron. Geldig
+         zijn 'world-texture' (de eigen kaart, geen netwerk), 'eox-cloudless' en
+         'eox-bluemarble'. */
+      bron(id) {
+        if (!tileShell) return 'de schil bestaat nog niet';
+        if (id === undefined) return tileShell.sourceId();
+        const gewisseld = tileShell.setSource(id);
+        if (gewisseld && tileShell.isVisible()) {
+          tileShell.update(world.camera(), window.innerHeight, PARAMS.tileSplitError);
+        }
+        return { gewisseld, ...this.stand() };
+      },
+      /* Eén ronde aanvragen doen zonder op de renderlus te wachten. Handig in een
+         weergave waar requestAnimationFrame niet loopt. */
+      async pomp(rondes = 20, ms = 200) {
+        if (!tileShell) return 'de schil bestaat nog niet';
+        for (let i = 0; i < rondes; i++) {
+          tileShell.update(world.camera(), window.innerHeight, PARAMS.tileSplitError);
+          await new Promise((r) => setTimeout(r, ms));
+        }
+        return this.stand();
+      },
       drempel(v) { if (v !== undefined) PARAMS.tileSplitError = v; return PARAMS.tileSplitError; },
       stand() {
         const m = findEarthMesh();
