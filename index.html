@@ -11249,14 +11249,19 @@ function setStormTrack(report) {
   }
 
   stormPaths = uit;
-  renderOverlays(true);
+  /* ZONDER `force`. Die vlag vervangt ELK overlay-pad door een kopie zodat
+     globe.gl kleur, dikte en hoogte opnieuw leest — nodig bij een moduswissel,
+     maar hier niet: de stormpaden zijn per definitie verse objecten. Gemeten:
+     met force overleeft 0 van de 482 grens- en plaatlijnen, en die worden dan
+     allemaal opnieuw opgebouwd bij elk openen en sluiten van een stormvenster. */
+  renderOverlays();
   return uit.length;
 }
 
 function clearStormTrack() {
   if (!stormPaths.length) return;
   stormPaths = [];
-  renderOverlays(true);
+  renderOverlays();   // geen force, zie setStormTrack()
 }
 
 /* THE JTWC WARNING REPORT IN THE PANEL.
