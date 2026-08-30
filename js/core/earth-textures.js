@@ -64,6 +64,27 @@ export function createEarthTextures(THREE, opts = {}) {
 
      LET OP: dit moet vóór de globe staan — de sterrenachtergrond leest de set
      meteen bij het bouwen. */
+  /* ANISOTROPISCH FILTEREN, en dit is geen finetuning. Een bol bekijk je bijna
+     overal onder een SCHERENDE hoek: naar de rand toe wordt een texel tot een
+     lange dunne strook uitgerekt. Met anisotropy 1 pakt de GPU één mipniveau voor
+     die hele strook, en dat leest als diagonale strepen over het beeld.
+
+     GEMETEN: de wolkenschil was de duidelijkste bron ervan — met die schil weg
+     verdwenen de strepen, en met anisotropy 16 werden ze scherp. Het raakt elke
+     textuur die onder een hoek te zien is, dus de dagkaart en de tegels net zo.
+
+     Wat de GPU aankan zegt de renderer zelf; hier is dat 16. Het kost geen
+     geheugen, alleen samples per pixel, en alleen waar de hoek scherp is. */
+  const maxAniso = () => {
+    try { return getWorld().renderer().capabilities.getMaxAnisotropy(); }
+    catch { return 1; }
+  };
+
+  function zetAniso(...texturen) {
+    const a = maxAniso();
+    for (const t of texturen) { if (t && t.anisotropy !== a) { t.anisotropy = a; t.needsUpdate = true; } }
+  }
+
   const IMAGERY_TRAPPEN = ['2k', '8k', 'tiles'];
   const setVoorTrap = (t) => (t === 'tiles' ? DEFAULT_QUALITY : t);
 
@@ -194,6 +215,7 @@ export function createEarthTextures(THREE, opts = {}) {
         if (t && 'colorSpace' in t) t.colorSpace = THREE.SRGBColorSpace;
         else if (t && 'encoding' in t && THREE.sRGBEncoding) t.encoding = THREE.sRGBEncoding;
       });
+      zetAniso(dayTex, nightTex, cloudsTex, specTex, normalTex);
       const mat = new THREE.ShaderMaterial({
         uniforms: {
           dayTexture:   { value: dayTex },
@@ -376,6 +398,7 @@ export function createEarthTextures(THREE, opts = {}) {
       // kleurtexturen naar sRGB; normal/specular zijn datamaps en blijven lineair
       [day, night, clouds].forEach(t => { if (t) t.colorSpace = THREE.SRGBColorSpace; });
       if (clouds) clouds.wrapS = THREE.RepeatWrapping;
+      zetAniso(day, night, clouds, spec, normal);
 
       const u = getMaterial().uniforms;
       const swap = (uniform, tex) => {
@@ -492,6 +515,7 @@ export function createEarthTextures(THREE, opts = {}) {
     try {
       const tex = await loader.loadAsync(url);
       tex.colorSpace = THREE.SRGBColorSpace;  // kleurtextuur, geen datamap
+      zetAniso(tex);
       const u = getMaterial().uniforms;
       const doel = slot === 'day' ? u.dayTexture : u.nightTexture;
       const oud = doel.value;

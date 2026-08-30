@@ -1127,11 +1127,25 @@ export const PARAMS = {
      één wereldtextuur aankan; de tegels halen beeld bij naarmate je nadert, dus
      daar geldt die grens niet.
 
-     102 is 127 km hoogte: onder de wolkenschil (103,5) en ruim boven de harde
-     bodem `zoomFloorRadius` (101). EOX levert tot ongeveer 10 m per pixel en zou
-     100,2 aankunnen — dat wachten we bewust af, want daar komen de icoonschaal
-     en de mistschil opnieuw ter sprake. */
-  zoomMinDistanceTiles: 102,
+     100,25 is 16 km hoogte, en dat is waar de BRON ophoudt: EOX levert tot level
+     13, ongeveer 10 meter per pixel. Dieper zou de shader alleen nog vergroten.
+
+     WAT ER OP DEZE HOOGTE TE ZIEN IS: straten, stadsblokken, start- en
+     landingsbanen, rivieren met hun zandbanken. Geen losse huizen — bij 10 m per
+     pixel ligt de herkenningsgrens rond 20 tot 30 meter.
+
+     DE ICOONSCHAAL KAN MEE. Gemeten: zodra de nabijheidsklem bijt (onder ~123)
+     staat de hoekstraal van een marker constant op 0,46 graden, en dat blijft zo
+     tot 101,6. Er hoefde dus niets aan bij.
+
+     JE GAAT WEL DOOR DE WOLKENSCHIL (103,5) EN DE MISTSCHIL. Dat is voorbereid:
+     de wolkenschil is DoubleSide en CLOUD_FRAG heeft een onderzijde, en de fade
+     rekent met de absolute afstand tot de schil, dus van onderaf blijft het dek
+     weg zoals het hoort.
+
+     `zoomFloorRadius` gaat mee omlaag; die is er om de camera BUITEN de bol te
+     houden, niet om de beeldkwaliteit te bewaken. */
+  zoomMinDistanceTiles: 100.25,
   zoomMinDistance: 120,
   /* DE SCHEMATISCHE WEERGAVE MAG VERDER (sessie 38, Terry). De grens hierboven is
      gezet op de TEXTUUR, en die bestaat in de schematische weergave niet: daar is de
@@ -1153,9 +1167,15 @@ export const PARAMS = {
   // schuift het draaipunt naar het oppervlak en zoom je met een keurig geldige
   // `minDistance` alsnog de bol in.
   //
-  // Dit is dus geen kijkwaarde maar een vangrail: onder de wolkenschil en ruim boven
-  // het oppervlak (100). Zie `houdCameraBovenDeAarde()` in index.html.
-  zoomFloorRadius: 101,
+  // Dit is dus geen kijkwaarde maar een vangrail: hij houdt de camera BUITEN de
+  // bol, meer niet. Zie `houdCameraBovenDeAarde()` in index.html.
+  //
+  // 100,1 SINDS DE TEGELSCHIL. Hij stond op 101 — 64 km hoogte — omdat de
+  // beeldkwaliteit toch niet dieper toeliet, en dan is een ruime marge gratis. Met
+  // tegels gaat de kijkgrens naar 100,25 en zou 101 die grens zelf worden, wat de
+  // vangrail tot bediening maakt. 100,1 is 6 km boven het oppervlak: ruim onder
+  // waar iemand mag kijken en ruim boven de bol.
+  zoomFloorRadius: 100.1,
   // ===== ZON EN MAAN (sessie 14) ================================================
   // Afstanden zijn BEWUST niet realistisch. De echte maan staat op 60 aardstralen
   // (dus 6030 in deze eenheden) en de zon op 23.480 (2,3 miljoen). Op die schaal is

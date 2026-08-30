@@ -64,6 +64,21 @@ export function createQuadtree(THREE, opts = {}) {
     return attr;
   }
 
+  /* GEEN SKIRTS, en dat is gemeten en niet aangenomen. Tussen twee tegels van
+     verschillend niveau ontstaat wiskundig een T-junctie: de fijnere heeft daar
+     vertices die de grovere niet heeft, en daartussen loopt de grovere als een
+     rechte koorde onder het oppervlak door. Dat is de klassieke reden voor een
+     randje langs elke tegel.
+
+     ALLEEN: die koorde zakt op level 2 hooguit 0,12 eenheden weg, en dat is op
+     camera-afstand 235 nog geen halve beeldpixel. GEMETEN met de tegels fel
+     gekleurd, alles eromheen weg, en geteld binnen de bolomtrek: NUL ongedekte
+     pixels — met skirt en zonder, op 71 tegels over zes niveaus. Dieper splitsen
+     maakt de tegels fijner en de fout kleiner, dus het loopt niet weg.
+
+     Een skirt zou 25 % meer vertices per tegel kosten voor niets. Komt er ooit een
+     zichtbare naad, dan is dit de plek: een extra ring in dit raster op een iets
+     kleinere straal. */
   function acquireGeometry() {
     if (geoPool.length) return geoPool.pop();
     const n = (segments + 1) * (segments + 1);

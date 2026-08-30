@@ -603,17 +603,20 @@
         </div>
       </section>
 
-      <!-- ---------- AARDE-TEXTUREN ----------
-           Earth layers en Texture quality zijn hier samengevoegd: het zijn allebei
-           instellingen over hoe de aarde WORDT GETEKEND, niet over wat je erop ziet.
-           Ze stonden in een eigen Aarde-tab, die daarmee overbodig werd.
+      <!-- ---------- HOE DE AARDE ERUITZIET ----------
+           HEET GEEN `textures` MEER, en dat is niet cosmetisch. Sinds de
+           kwaliteitstrappen naar Imagery & data zijn verhuisd, staat hier alleen
+           nog wat OPTIONEEL is: wolken, waterreflectie, golfslag, reliëf, het
+           raster en de nachtzijde. Dat zijn effecten, geen texturen — en voor wie
+           de bol als werkinstrument gebruikt is dat precies het verschil dat hij
+           moet zien voordat hij ze uitzet.
 
            #earth-layers en #aarde-empty moeten hier binnen blijven staan:
            updateEarthLayers() verbergt het eerste en toont het tweede zodra je naar
            de schematische weergave wisselt, waar texturen geen rol spelen. -->
       <section class="acc" data-acc="settings-textures">
         <button class="acc-head" type="button" aria-expanded="false">
-          <span>Earth textures</span>
+          <span>Earth appearance</span>
           <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
         <div class="acc-body">
@@ -665,7 +668,7 @@
               with an invented one. Kept for this session only.
             </div>
           </div>
-          <div class="aarde-empty" id="aarde-empty">The Earth textures only apply in <b>Realistic</b> mode. Switch mode at the top to control them.</div>
+          <div class="aarde-empty" id="aarde-empty">These only apply in <b>Realistic</b> mode. Switch mode at the top to control them.</div>
         </div>
       </section>
 
@@ -686,7 +689,7 @@
            uitklapmechaniek erbovenop. Twee gevolgen: het las alsof de bronnen bij de
            verbindingen hoorden, en het liet witruimte achter omdat het niet meedeed
            in de accordeon-rij. Bronvermelding staat op hetzelfde niveau als
-           Preferences, Earth textures en Connections — het is geen onderdeel van
+           Preferences, Earth appearance en Connections — het is geen onderdeel van
            een van drieën. Nu dezelfde `.acc`, dezelfde kop, dezelfde chevron. -->
       <section class="acc" data-acc="settings-sources">
       <button class="acc-head" type="button" aria-expanded="false">
@@ -4761,7 +4764,11 @@ function setupTileShell() {
   tileShell = createTileShell(THREE, {
     getMaterial: () => shaderMaterial,
     getCoords: (lat, lng, alt) => world.getCoords(lat, lng, alt),
-    globeRadius: GLOBE_R
+    globeRadius: GLOBE_R,
+    /* Zonder dit staan de tegels op anisotropy 1 en krijg je strepen zodra je
+       schuin op het oppervlak kijkt — zie de noot bij zetAniso() in
+       js/core/earth-textures.js. */
+    maxAnisotropy: world.renderer().capabilities.getMaxAnisotropy()
   });
   mesh.parent.add(tileShell.group);
   /* DE BEWAARDE KEUZE TOEPASSEN, en pas hier: de schil bestaat een regel eerder
