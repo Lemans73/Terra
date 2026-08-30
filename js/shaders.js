@@ -39,8 +39,31 @@ export const dayNightShader = {
     varying vec3 vNormal;
     varying vec3 vWorldNormal;
     varying vec2 vUv;
+    /* DE UV VAN DE WERELDKAARTEN, en waarom die apart staat van vUv.
+
+       Op de BOL zijn ze hetzelfde en verandert er niets. Op een TEGEL niet: daar
+       draagt vUv een uitsnede van één tegelbeeld, terwijl de nacht-, wolken-,
+       specular- en reliëfkaart elk ÉÉN wereldtextuur zijn die op lengte en
+       breedte bemonsterd hoort te worden — los van welk tegelraster eronder ligt.
+
+       GEMETEN dat deze twee op de bol gelijk zijn: over twaalf vertices van de
+       aarde-mesh gaf (lon+180)/360 en (lat+90)/180 exact de uv die three-globe
+       daar zelf heeft, op elf van de twaalf tot op vier decimalen. De twaalfde is
+       de pool, waar de lengtegraad wiskundig onbepaald is. */
+    varying vec2 vWorldUv;
     varying vec3 vViewDir;
     varying float vCamDist;
+    #ifdef TILE_MODE
+      /* De tegelschil levert de wereld-uv als attribuut, want zijn eigen uv is
+         die van het tegelkader. uvOffset/uvScale zijn de parent fallback: zolang
+         de eigen tegel er niet is wordt het juiste stukje uit de textuur van een
+         voorouder gesampled. uvInset is een halve texel naar binnen, zodat
+         bilineair filteren niet over de tegelrand heen kijkt. */
+      attribute vec2 worldUv;
+      uniform vec2 uvOffset;
+      uniform float uvScale;
+      uniform float uvInset;
+    #endif
     void main() {
       vNormal = normalize(normalMatrix * normal);
       // De normaal in ECHTE WERELDRUIMTE, zonder de camera erin. Nodig voor de
@@ -54,7 +77,14 @@ export const dayNightShader = {
       // en die brengt textuur-lengte 0 precies op +Z: dezelfde conventie waarin
       // Polar2Cartesian rekent. Beide zijden spreken hier dus hetzelfde frame.
       vWorldNormal = normalize(mat3(modelMatrix) * normal);
-      vUv = uv;
+      #ifdef TILE_MODE
+        vec2 tileUv = mix(vec2(uvInset), vec2(1.0 - uvInset), uv);
+        vUv = uvOffset + tileUv * uvScale;
+        vWorldUv = worldUv;
+      #else
+        vUv = uv;
+        vWorldUv = uv;
+      #endif
       vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
       vViewDir = normalize(-mvPosition.xyz);
       // Zelfde grootheid als in CLOUD_VERT, voor de fade op de wolkenSCHADUW.
@@ -165,6 +195,7 @@ export const dayNightShader = {
     varying vec3 vNormal;
     varying vec3 vWorldNormal;
     varying vec2 vUv;
+    varying vec2 vWorldUv;
     varying vec3 vViewDir;
     varying float vCamDist;
 
@@ -219,7 +250,7 @@ export const dayNightShader = {
       mat3 TBN = mat3(tangent, bitangent, baseNormal);
 
       vec4 dayColor = texture2D(dayTexture, vUv);
-      vec4 nightColor = texture2D(nightTexture, vUv);
+      vec4 nightColor = texture2D(nightTexture, vWorldUv);
 
       // ---- reliëf uit echte normal map ----
       // De normal map codeert oppervlaktenormalen in RGB (tangent space). We
@@ -227,7 +258,7 @@ export const dayNightShader = {
       // normaal zodat bergketens het licht merkbaar breken.
       vec3 normal = baseNormal;
       if (hasNormal > 0.5) {
-        vec3 nTex = texture2D(normalTexture, vUv).rgb * 2.0 - 1.0;
+        vec3 nTex = texture2D(normalTexture, vWorldUv).rgb * 2.0 - 1.0;
         nTex.xy *= normalStrength;   // overdrijf de helling → bergen vangen meer licht
         nTex = normalize(nTex);
         normal = normalize(TBN * nTex);
@@ -374,14 +405,14 @@ export const dayNightShader = {
 
       // ---- gerimpelde waterreflectie met procedurele ruis (zonneglinster) ----
       if (hasSpecular > 0.5) {
-        float spec = texture2D(specularTexture, vUv).r; // 1 = water, 0 = land
+        float spec = texture2D(specularTexture, vWorldUv).r; // 1 = water, 0 = land
         // De glinster moet met de eclips mee doven: zonder deze factor blijft het
         // water schitteren midden in een schaduw waar de zon bedekt is.
         float water = spec * smoothstep(-0.05, 0.2, baseIntensity) * (1.0 - eclipse);
 
         // bewegende rimpel: ruis-gradiënt verstoort de wateroppervlaknormaal,
         // zodat de zon op een levend oppervlak breekt i.p.v. een gladde highlight.
-        vec2 rc = vUv * vec2(2600.0, 1300.0);  // hogere frequentie → kleinere golven
+        vec2 rc = vWorldUv * vec2(2600.0, 1300.0);  // hogere frequentie → kleinere golven
         float t = time * 0.45;
         float e = 0.6;
         float h0 = fbm(rc + t);
@@ -406,7 +437,7 @@ export const dayNightShader = {
       // wolken-schaduw: de losse zwevende wolkenschil dimt het oppervlak eronder
       // (alleen dagzijde). De heldere wolken zelf zitten op de aparte schil-mesh.
       if (hasClouds > 0.5) {
-        float cloud = texture2D(cloudsTexture, vec2(vUv.x + cloudDrift, vUv.y)).r;
+        float cloud = texture2D(cloudsTexture, vec2(vWorldUv.x + cloudDrift, vWorldUv.y)).r;
         // De schaduw dooft mee met de schil; zie de noot bij cloudFadeNear.
         cloud *= mix(1.0, smoothstep(cloudFadeNear, cloudFadeFar, vCamDist), cloudFadeGate);
         surface *= (1.0 - cloudShadow * cloud * dayMix);

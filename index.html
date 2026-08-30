@@ -2187,6 +2187,7 @@ import { createDipoleLayer } from './js/layers/magnetosphere/dipole-layer.js';
 import { createMagnetosphereCraft } from './js/ui/magnetosphere-craft.js';
 import { Prefs, PREFS_DEFAULTS } from './js/core/prefs.js';
 import { createEarthTextures } from './js/core/earth-textures.js';
+import { createTileShell } from './js/layers/tile-shell/shell.js';
 import { createMagnetosphereScale } from './js/ui/magnetosphere-scale.js';
 import { MSPHERE_RE, MSPHERE_DRAW_MAX, pocNaarTerra }
   from './js/layers/magnetosphere/boundary-layer.js';
@@ -4651,10 +4652,67 @@ function findEarthMesh() {
 // wolkschaduw in de oppervlakteshader wél tekende → wolken als donkere waas in
 // plaats van wit. Zichtbaar geworden toen de 2K-set veel sneller laadde dan 8K.
 // Daarom wachten in plaats van gokken op de timing.
+/* ---- De tegelschil ----
+   Een eigen groep NAAST de bol van globe.gl, op een haar erboven. Hij hangt aan
+   dezelfde ouder als de aarde-mesh en niet aan de mesh zelf: three-globe zet daar
+   een draai van -90 graden op, en de tegels rekenen al in wereldruimte.
+
+   STAAT STANDAARD UIT. Blok 1 zet hem alleen aan vanuit het meetluik; de
+   bandbreedtekeuze die hem straks bedient bestaat nog niet. */
+let tileShell = null;
+
+/* WIL DE BEZOEKER DE SCHIL. Eén plek, net als bij `wolkenSchilAan()` hierboven,
+   en om dezelfde reden: `group.visible` is de UITKOMST en mag nooit de bron van
+   die keuze worden. Zolang de bandbreedtekeuze niet bestaat is dit alleen de
+   handbediening uit het meetluik.
+
+   ALLEEN IN DE REALISTISCHE WEERGAVE. De tegels dragen de aardtextuur; over de
+   schematische vectorkaart heen zouden ze precies dat tonen wat die weergave
+   juist weglaat. Zelfde afweging als de wolkenschil. */
+let tileShellWanted = false;
+
+function tegelSchilAan() {
+  return !!(tileShellWanted && globeMode === 'realistic');
+}
+
+/* De stand toepassen, vanuit applyGlobeMode() én vanuit de handbediening. Weg is
+   ook OPRUIMEN: de tegels vasthouden terwijl niemand ze ziet kost geheugen dat
+   een moduswissel niet hoort te betalen. */
+function syncTileShell() {
+  if (!tileShell) return;
+  const wil = tegelSchilAan();
+  if (wil === tileShell.isVisible()) return;
+  tileShell.setVisible(wil);
+  if (wil) tileShell.update(world.camera(), window.innerHeight, PARAMS.tileSplitError);
+}
+
+function setupTileShell() {
+  if (tileShell || !shaderMaterial) return;
+  const mesh = findEarthMesh();
+  if (!mesh || !mesh.parent) return;
+  tileShell = createTileShell(THREE, {
+    getMaterial: () => shaderMaterial,
+    getCoords: (lat, lng, alt) => world.getCoords(lat, lng, alt),
+    globeRadius: GLOBE_R
+  });
+  mesh.parent.add(tileShell.group);
+}
+
+/* EEN TIMER NAAST rAF, en niet in plaats daarvan. In een tabblad op de
+   achtergrond vuurt requestAnimationFrame niet, en dan staat deze lus stil: de
+   wolkenschil, de mist, het poollicht en de tegelschil worden dan nooit gebouwd
+   en de bezoeker komt terug op een halve aarde. GEMETEN in een verborgen
+   weergave: nul frames, `tries` telde niet af, de lus hing.
+
+   rAF blijft de snelle weg — die vuurt zodra er echt getekend wordt. De timer is
+   alleen het vangnet eronder, en wie het eerst is wint. */
 function whenEarthMeshReady(fn, tries = 90) {
   if (findEarthMesh()) { fn(); return; }
   if (tries <= 0) { console.warn('Earth mesh not found — cloud shell and fog skipped.'); return; }
-  requestAnimationFrame(() => whenEarthMeshReady(fn, tries - 1));
+  let gedaan = false;
+  const opnieuw = () => { if (gedaan) return; gedaan = true; whenEarthMeshReady(fn, tries - 1); };
+  requestAnimationFrame(opnieuw);
+  setTimeout(opnieuw, 32);
 }
 /* EEN ECHT LENGTE/BREEDTE-ROOSTER, GEEN MESH-WIREFRAME (sessie 28, Terry's test).
    Hier stond `new SphereGeometry(100, 48, 32)` met `wireframe: true`, en dat gaf
@@ -5011,6 +5069,7 @@ function applyGlobeMode() {
             setupCloudSphere();  // losse wolkenschil opbouwen
             setupFog();          // mist-schil opbouwen
             setupAuroraShell();  // aurora-ovaal erboven
+            setupTileShell();    // de tegelschil over de bol
           });
         });
       } else {
@@ -5025,6 +5084,7 @@ function applyGlobeMode() {
   // NA beide takken, want de stand hangt van `globeMode` én `wireframeOn` af en
   // enter/exitExpertMode raken het polygon-kanaal niet meer aan (sessie 28).
   syncLandPolygons();
+  syncTileShell();   // de tegels horen alleen bij de realistische weergave
 }
 
 // Realistische tak: maak eerst alle deskundig-wijzigingen ongedaan
@@ -6108,6 +6168,10 @@ function animateShader() {
     _windVorig = gt;
   }
   zetZonGloed(_cam);
+  /* De tegelschil kiest zijn tegels per frame: welke in beeld zijn, welke boven
+     de horizon staan, en welke te grof zijn voor deze camera-afstand. Doet niets
+     zolang de schil onzichtbaar is, en dat is de normale stand. */
+  if (tileShell) tileShell.update(_cam, window.innerHeight, PARAMS.tileSplitError);
   updateHover();      // raycaster-highlight bijwerken
   quakeLabels.update(nowMs);   // de beving-labels plaatsen
   requestAnimationFrame(animateShader);
@@ -12506,6 +12570,56 @@ backBtn.hidden = !viewStates.activeState();
    Achter IS_LOCAL, zodat hij niet meegaat naar de demo of de standalone. */
 if (IS_LOCAL) {
   window.__test = {
+    /* De tegelschil, om hem aan te kunnen zetten en zijn tellers te lezen. Er is
+       nog geen bediening voor: die komt met de bandbreedtekeuze.
+
+       `tiles` is de bediening met de hand. Die is er omdat de schil bij goed
+       werken NIET van de bol te onderscheiden is — dat is het doel, en het maakt
+       hem meteen onzichtbaar om te toetsen. Vandaar het raster en het wegzetten
+       van de bol eronder: pas dan is er iets te zien. */
+    get tileShell() { return tileShell; },
+    tiles: {
+      aan(raster = true) {
+        if (!tileShell) return 'de schil bestaat nog niet';
+        tileShellWanted = true;
+        syncTileShell();
+        if (!tileShell.isVisible()) return 'de schil staat aan, maar de schematische weergave toont hem niet';
+        tileShell.setWireframe(raster);
+        /* Meteen één keer selecteren in plaats van op het volgende frame wachten.
+           Dat scheelt niet alleen een tel: in een weergave waar
+           requestAnimationFrame niet loopt komt dat frame nooit, en dan meldt de
+           teller nul tegels terwijl er niets mis is. */
+        tileShell.update(world.camera(), window.innerHeight, PARAMS.tileSplitError);
+        return this.stand();
+      },
+      uit() {
+        if (!tileShell) return 'de schil bestaat nog niet';
+        tileShellWanted = false;
+        syncTileShell();
+        tileShell.setWireframe(false);
+        const m = findEarthMesh(); if (m) m.visible = true;
+        return this.stand();
+      },
+      /* De bol eronder weg: wat je dan ziet is puur de tegels. Zet hem terug met
+         `uit()` of met `bol(true)` — een moduswissel doet het ook, want globe.gl
+         zet zijn eigen mesh bij elke laag-update terug op zichtbaar. */
+      bol(zichtbaar) {
+        const m = findEarthMesh();
+        if (!m) return 'geen aarde-mesh';
+        m.visible = zichtbaar !== false;
+        return this.stand();
+      },
+      raster(v = true) { tileShell?.setWireframe(v); return this.stand(); },
+      drempel(v) { if (v !== undefined) PARAMS.tileSplitError = v; return PARAMS.tileSplitError; },
+      stand() {
+        const m = findEarthMesh();
+        return tileShell
+          ? { schil: tileShell.isVisible(), gewenst: tileShellWanted,
+              weergave: globeMode, bolZichtbaar: m ? m.visible : null,
+              drempel: PARAMS.tileSplitError, ...tileShell.stats() }
+          : 'de schil bestaat nog niet';
+      }
+    },
     get planets() { return planets; },
     get disks() { return disks; },
     get lagrange() { return lagrange; },

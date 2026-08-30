@@ -1108,6 +1108,21 @@ export const PARAMS = {
   // De vangrail hieronder is `zoomFloorRadius`, die om het MIDDELPUNT meet en dus ook
   // standhoudt als het draaipunt ooit gaat schuiven. Die blijft bewust op 101 staan:
   // hij bewaakt de aardbol, niet de beeldkwaliteit.
+  /* ===== DE TEGELSCHIL ==========================================================
+     De splitsdrempel: hoeveel schermpixels één texel van een tegel mag beslaan
+     voordat hij in vieren gaat. DIT IS DE DIRECTE BANDBREEDTEKNOP en hij werkt
+     kwadratisch — elke stap omhoog haalt er ruwweg driekwart van het verkeer af
+     tegen nauwelijks zichtbaar scherpteverlies:
+
+         drempel   data t.o.v. 1,0
+           1,0         100 %
+           1,5          44 %   <- hier
+           2,0          25 %
+           2,5          16 %
+
+     1,5 is de stand uit de POC. Hij hoort straks per bandbreedtetrap te
+     verschillen; tot die keuze bestaat is dit één waarde voor iedereen. */
+  tileSplitError: 1.5,
   zoomMinDistance: 120,
   /* DE SCHEMATISCHE WEERGAVE MAG VERDER (sessie 38, Terry). De grens hierboven is
      gezet op de TEXTUUR, en die bestaat in de schematische weergave niet: daar is de
