@@ -2186,6 +2186,7 @@ import { createWindLayer } from './js/layers/magnetosphere/wind-layer.js';
 import { createDipoleLayer } from './js/layers/magnetosphere/dipole-layer.js';
 import { createMagnetosphereCraft } from './js/ui/magnetosphere-craft.js';
 import { Prefs, PREFS_DEFAULTS } from './js/core/prefs.js';
+import { createEarthTextures } from './js/core/earth-textures.js';
 import { createMagnetosphereScale } from './js/ui/magnetosphere-scale.js';
 import { MSPHERE_RE, MSPHERE_DRAW_MAX, pocNaarTerra }
   from './js/layers/magnetosphere/boundary-layer.js';
@@ -4115,51 +4116,21 @@ document.querySelectorAll('.elayer[data-overlay]').forEach(el => {
 
 // ---- Globe ----------------------------------------------------
 
-// Textuurkwaliteit. Start op 2K zodat een eerste bezoeker ~2,4 MB laadt in plaats
-// van ~29 MB; de keuze wordt onthouden. Een ongeldige of oude waarde in
-// localStorage valt terug op de standaard.
-// LET OP: moet vóór `world` staan — de sterrenachtergrond leest 'm meteen.
-/* Sinds sessie 35 uit het gedeelde register; de oude losse sleutel
-   `terra-tex-quality` wordt daar bij de eerste start ingelezen en opgeruimd.
-   De geldigheidstoets blijft: een oude of onbekende naam in de opslag valt
-   terug op de standaard in plaats van de app zonder textuur te laten. */
-let texQuality = (() => {
-  const bewaard = Prefs.get('pref.texQuality');
-  return TEXTURE_SETS[bewaard] ? bewaard : DEFAULT_QUALITY;
-})();
+/* ---- Earth textures ----
+   The five maps, the quality swap and the visitor's own upload all live in
+   js/core/earth-textures.js. What stays here is the material itself: only
+   applyGlobeMode() knows when the earth exists at all.
 
-// ---- Eigen texturen -------------------------------------------------------
-//
-// Alleen de DAG- en NACHTkaart zijn te vervangen. De normal map en de specular
-// map blijven van ons, en dat is een bewuste beperking met een prijs: die twee
-// horen bij ónze aarde, dus bij een eigen kaart klopt het reliëf en het
-// watermasker alleen als die kaart dezelfde equirectangulaire projectie en
-// dezelfde kustlijnen heeft. Bij een echte aardtextuur is dat zo; bij een
-// fantasiekaart glinstert het water op de verkeerde plek. Dat staat zo in de
-// uitleg bij de knoppen.
-//
-// GEEN PERSISTENTIE, en dat is een keuze. Een blob-URL overleeft een herlaadbeurt
-// niet, en de bestanden in localStorage bewaren zou megabytes aan dataURL kosten
-// op een quotum van ongeveer 5 MB. IndexedDB zou het kunnen, maar juist in de
-// standalone — waar dit het meeste nut heeft — draait de app onder `file:` en is
-// die opslag vaak afgeschermd. Eén sessie is eerlijker dan iets dat soms werkt.
-const customTex = { day: null, night: null };   // { url, naam, bytes } of null
-
-/* Eén plek die bepaalt welke dagtextuur geldt: een eigen kaart wint van die van
-   de set. Tot sessie 41 stond er een derde mogelijkheid tussen — de
-   `bathyDay`-variant achter de schakelaar `Ocean floor`. Die is vervallen omdat
-   de nieuwe dagtexturen altijd bathymetrie hebben; er viel niets meer te kiezen. */
-function dayUrlFor(quality) {
-  if (customTex.day) return customTex.day.url;
-  return assetsFor(quality).day;
-}
-
-// Idem voor de nachtzijde. Bestond nog niet omdat er tot nu toe niets te kiezen
-// viel; nu er wél iets te kiezen valt, hoort het langs dezelfde ene plek te gaan.
-function nightUrlFor(quality) {
-  if (customTex.night) return customTex.night.url;
-  return assetsFor(quality).night;
-}
+   THIS RUNS BEFORE THE GLOBE IS CONSTRUCTED, and that is required — the star
+   background reads the quality the moment the globe is built. Hence the three
+   getters: world, shaderMaterial and the layer status all come into being
+   further down this file, so a value passed here would be in the temporal
+   dead zone. */
+const earthTex = createEarthTextures(THREE, {
+  getWorld: () => world,
+  getMaterial: () => shaderMaterial,
+  onLayerStatus: (status) => { earthLayerStatus = status; updateEarthLayers(); }
+});
 
 // Hulpobjecten voor de radiale oriëntatie van de indicatoren — zie de lange noot
 // in customThreeObjectUpdate hieronder. Buiten de callback zodat er niet per
@@ -4168,7 +4139,7 @@ const _glyphM = new THREE.Matrix4();
 const _glyphLook = new THREE.Vector3();
 
 const world = Globe()
-  .backgroundImageUrl(assetsFor(texQuality).stars)
+  .backgroundImageUrl(assetsFor(earthTex.quality()).stars)
   // lijn-overlays (platen, landgrenzen) — GeoJSON-coördinaten zijn [lng, lat]
   .pathsData([])
   .pathPoints(d => d.coords)
@@ -4439,7 +4410,6 @@ function sunPositionAt(dt) {
 // houd referenties zodat we tussen modi kunnen wisselen
 let shaderMaterial = null;
 let cloudMesh = null;       // losse zwevende wolkenschil-mesh
-let cloudsTexture = null;   // gedeelde wolkentextuur (schaduw + schil)
 let wireMesh = null;        // het grove lengte/breedte-rooster van de doorkijk (15°)
 let wireFineMesh = null;    // het fijne rooster (5°), alleen ingezoomd zichtbaar
 let wireframeOn = Prefs.get('tex.wire');
@@ -4593,147 +4563,6 @@ function updateEarthLayers() {
   }
 }
 
-function buildRealisticMaterial() {
-  const T = findThree();
-  if (!T) {
-    console.warn('THREE not available for the shader — realistic mode falls back to day mode.');
-    return null;
-  }
-  const loader = new T.TextureLoader();
-  // Expliciet, ook al is dit three's eigen standaard. Zodra ASSET_BASE naar een CDN
-  // wijst (de standalone-variant) is deze vlag het verschil tussen een aarde en een
-  // zwarte bol: zonder CORS-toestemming laadt het plaatje wel, maar raakt het canvas
-  // tainted en weigert WebGL het als texture. Gemeten op 2026-08-01.
-  loader.setCrossOrigin('anonymous');
-  const load = url => loader.loadAsync ? loader.loadAsync(url) : new Promise(res => loader.load(url, res));
-
-  /* EEN MISLUKTE TEXTUUR MAG DE AARDE NIET ZWART LATEN (session 42, Terry).
-
-     Wat er gebeurde: `day` en `night` hadden geen catch en de keten hierna geen
-     enkele, dus een enkel plaatje dat niet binnenkwam gooide een UNHANDLED
-     rejection. `shaderMaterial` bleef daardoor null — een zwarte bol — en elke
-     weg terug was dicht, want setTextureQuality() en de eigen-textuurknop
-     beginnen allebei met `if (!shaderMaterial) return`. De bezoeker kon dus niet
-     eens naar 2K terug om zich eruit te redden.
-
-     Op de productie-host gebeurde dat met de 8K-set: 29,7 MB, en de console gaf
-     ERR_HTTP2_PING_FAILED op twee bestanden. Lokaal viel het nooit op omdat de
-     schijf niet faalt.
-
-     DE HERSTELWEG IS DE KLEINERE SET. Lukt de gevraagde set niet, dan die van
-     DEFAULT_QUALITY; lukt die ook niet, dan `null` en valt de aanroeper terug op
-     de schematische kaart. De bewaarde VOORKEUR blijft staan: een haperende
-     verbinding is geen keuze van de bezoeker, en de volgende keer kan het weer
-     gewoon lukken. Wat er wél gebeurt is dat het paneel het zegt. */
-  const laadSet = (q) => {
-    const A = assetsFor(q);
-    return Promise.all([
-      load(dayUrlFor(q)),
-      load(nightUrlFor(q)),
-      load(A.clouds).catch(() => null),
-      load(A.specular).catch(() => null),
-      load(A.normal).catch(() => null)
-    ]);
-  };
-  const gevraagd = texQuality;
-  return laadSet(gevraagd)
-    .catch(() => {
-      if (gevraagd === DEFAULT_QUALITY) return null;
-      texQualityFallback = gevraagd;
-      return laadSet(DEFAULT_QUALITY).catch(() => null);
-    })
-    .then((texturen) => {
-      // Allebei mislukt: de aanroeper ziet `null` en valt terug op de kaart.
-      if (!texturen) return null;
-      // Gelukt met de kleinere set: dan is DAT wat er draait, en de rest van de
-      // app moet dat weten — anders wisselt de kwaliteitsknop naar een stand die
-      // hij denkt al te hebben.
-      if (texQualityFallback) { texQuality = DEFAULT_QUALITY; meldTexqTerugval(); }
-      return texturen;
-    })
-    .then((texturen) => {
-    if (!texturen) return null;
-    const [dayTex, nightTex, cloudsTex, specTex, normalTex] = texturen;
-    // rapporteer welke lagen succesvol geladen zijn voor de UI-indicatie
-    earthLayerStatus = {
-      day: !!dayTex, night: !!nightTex, clouds: !!cloudsTex,
-      specular: !!specTex, normal: !!normalTex
-    };
-    updateEarthLayers();
-    // color-textures naar sRGB zodat ze niet uitgewassen ogen in recente three.
-    // normal/specular zijn data-maps → laat die lineair (geen sRGB).
-    // wolken horizontaal kunnen herhalen zodat ze naadloos kunnen driften
-    if (cloudsTex) cloudsTex.wrapS = T.RepeatWrapping;
-    cloudsTexture = cloudsTex; // bewaren voor de zwevende wolkenschil
-    [dayTex, nightTex, cloudsTex].forEach(t => {
-      if (t && 'colorSpace' in t) t.colorSpace = T.SRGBColorSpace;
-      else if (t && 'encoding' in t && T.sRGBEncoding) t.encoding = T.sRGBEncoding;
-    });
-    const mat = new T.ShaderMaterial({
-      uniforms: {
-        dayTexture:   { value: dayTex },
-        nightTexture: { value: nightTex },
-        cloudsTexture:   { value: cloudsTex || dayTex },
-        specularTexture: { value: specTex || dayTex },
-        normalTexture:   { value: normalTex || dayTex },
-        hasClouds:   { value: cloudsTex ? 1 : 0 },
-        hasSpecular: { value: specTex ? 1 : 0 },
-        hasNormal:   { value: normalTex ? 1 : 0 },
-        dayEnabled:   { value: 1 },
-        dayNightCycle: { value: 1 },
-        /* UIT HET REGISTER EN NIET UIT EEN LITERAL (sessie 35). Dit materiaal
-           wordt in een `.then()` gebouwd, ná het laden van vijf texturen, en dus
-           ruim ná het blok dat de bewaarde voorkeuren toepast. Een vaste 0,12
-           hier overschreef daarom stilletjes de stand die de bezoeker had
-           gekozen: de schuif zei 20 %, de scene toonde 12. */
-        nightBrightness: { value: Prefs.get('pref.nightGlow') / 100 },
-        /* UIT PARAMS EN NIET UIT EEN LITERAL (sessie 40), om dezelfde reden als
-           `nightBrightness` hierboven: dit materiaal wordt in een `.then()`
-           gebouwd, dus een vast getal hier overschrijft stil wat er elders is
-           gezet. Zie de noot bij `reliefStrength` in js/config.js voor wat
-           deze drie doen. */
-        normalStrength: { value: PARAMS.normalStrength },
-        reliefStrength: { value: PARAMS.reliefStrength },
-        /* De helderheid van de dagkaart, uit PARAMS om dezelfde reden als de
-           regels erboven: dit materiaal wordt in een `.then()` gebouwd. Zie de
-           noot bij `dayGain` in js/shaders.js voor waarom dit een
-           vermenigvuldiging is en `dayLift` een optelling. */
-        dayGain:        { value: PARAMS.dayGain },
-        dayLift:        { value: PARAMS.dayLift },
-        dayGamma:       { value: PARAMS.dayGamma },
-        dayKnee:        { value: PARAMS.dayKnee },
-        macroAmbient:   { value: PARAMS.macroAmbient },
-        macroSun:       { value: PARAMS.macroSun },
-        glintStrength:  { value: PARAMS.glintStrength }, // sterkte zonneglinster
-        waterRipple:    { value: PARAMS.waterRipple },
-        cloudDrift:    { value: 0 },     // horizontale wolken-offset (drift)
-        cloudShadow:   { value: PARAMS.cloudShadow }, // sterkte wolk-schaduw op oppervlak
-        // De fade op wolken EN wolkenschaduw. Hier is de bron; de wolkenschil pakt
-        // dezelfde referenties over, zodat de tik ze op één plek bijwerkt en schil en
-        // schaduw per constructie nooit uit elkaar kunnen lopen.
-        cloudFadeNear: { value: 0 },
-        cloudFadeFar:  { value: 1 },
-        cloudFadeGate: { value: 0 },
-        time:          { value: 0 },
-        sunPosition:   { value: new T.Vector2() },
-        globeRotation: { value: new T.Vector2() },
-        // Zonsverduistering. `moonPosition` is [lng, lat] van het sublunaire punt,
-        // net als sunPosition, zodat hij dezelfde omzetting en camera-rotatie
-        // ondergaat. De afstanden zijn echte kilometers.
-        moonPosition:   { value: new T.Vector2() },
-        sunDistanceKm:  { value: 149597870.7 },
-        moonDistanceKm: { value: 384400 },
-        eclipseEnabled: { value: 0 },
-        atmosphereDayColor:      { value: new T.Color('#6bb3ff') },
-        atmosphereTwilightColor: { value: new T.Color('#ff6b3d') }
-      },
-      vertexShader: dayNightShader.vertexShader,
-      fragmentShader: dayNightShader.fragmentShader
-    });
-    return mat;
-  });
-}
-
 // ---- Zwevende wolkenschil ----
 // Aparte transparante bol op iets grotere straal dan de aarde, zodat de wolken
 // aan de rand van de bol zichtbaar "zweven". Day/night-belichting deelt dezelfde
@@ -4743,7 +4572,7 @@ function buildRealisticMaterial() {
 // Wolken-shader (CLOUD_VERT/FRAG) → ./js/shaders.js (Stap 0).
 
 function setupCloudSphere() {
-  if (!shaderMaterial || !cloudsTexture) return;
+  if (!shaderMaterial || !earthTex.cloudsTexture()) return;
   // vind de aarde-mesh (die ons shader-material draagt) om aan te parenten
   let earthMesh = null;
   world.scene().traverse(o => { if (o.material === shaderMaterial) earthMesh = o; });
@@ -5162,13 +4991,18 @@ function applyGlobeMode() {
       if (cloudMesh) cloudMesh.visible = wolkenSchilAan();
     } else {
       // bouw eenmalig, daarna hergebruiken
-      const built = buildRealisticMaterial();
+      const built = earthTex.buildMaterial();
       if (built && built.then) {
         built.then(mat => {
           if (!mat) { fallbackToDay(); return; }
           shaderMaterial = mat;
           world.globeMaterial(mat);
           bootFaseKlaar('earth');   // vanaf hier is de bol geen zwarte bal meer
+          /* De aarde staat er nu met de kleine set. Wie een zwaardere koos krijgt
+             die hierna, in de achtergrond — zie upgradeIfNeeded() in de module.
+             DEZE REGEL HOORT NA `shaderMaterial = mat`: de wissel schrijft in de
+             uniforms van dat materiaal, en dat bestaat een regel eerder nog niet. */
+          earthTex.upgradeIfNeeded();
           world.atmosphereColor('#6bb3ff');
           updateSunUniform();
           applyLayerToggles();
@@ -5196,7 +5030,7 @@ function applyGlobeMode() {
 // Realistische tak: maak eerst alle deskundig-wijzigingen ongedaan
 // (post-proc terug aan, atmosfeer/sterren terug, polygons/graticule weg).
 function leaveExpertIfNeeded() {
-  exitExpertMode({ world, bloomPass, gradePass, starsUrl: assetsFor(texQuality).stars,
+  exitExpertMode({ world, bloomPass, gradePass, starsUrl: assetsFor(earthTex.quality()).stars,
                    bloomAan: !!PARAMS.bloomEnabled });
 }
 
@@ -5922,263 +5756,7 @@ document.querySelectorAll('.elayer').forEach(el => {
   });
 });
 
-// ---- Textuurkwaliteit (2K standaard ⇄ 8K op verzoek) ----
-// Het materiaal wordt NIET opnieuw gebouwd: we vervangen alleen de waarden in de
-// bestaande uniforms. De zwevende wolkenschil deelt diezelfde uniform-referenties
-// (zie buildCloudShell) en synct daardoor vanzelf mee.
-const texqNote = document.getElementById('texq-note');
-const texqBtns = [...document.querySelectorAll('.texq-opt')];
-/* DE GROOTTES KOMEN UIT `textureSetSize()` EN NIET UIT DE MARKUP (sessie 41).
-   Ze stonden er als "~2.5 MB" en "~31 MB" bij, en die getallen liepen achter
-   zodra een set veranderde — precies wat er deze sessie gebeurde: de 2K-set
-   ging naar 4,6 MB en de markup bleef 2,5 zeggen. Een cijfer dat over iemands
-   eigen download gaat, hoort niet op twee plekken te staan. */
-function texqMB(q) {
-  return textureSetSize(q).replace(/([\d.]+) MB/, (_, n) => Math.round(Number(n)) + ' MB');
-}
-const TEXQ_NOTE_IDLE = '8K is sharper up close, but downloads about '
-  + texqMB('8k') + ' in total.';
-
-function updateTexqUI() {
-  texqBtns.forEach(b => b.classList.toggle('active', b.dataset.q === texQuality));
-  document.querySelectorAll('[data-texq-size]').forEach(el => {
-    const q = el.dataset.texqSize;
-    el.textContent = q.toUpperCase() + ' \u00b7 ~' + texqMB(q);
-  });
-}
-
-/* Welke set NIET geladen kon worden, of null. Gezet door
-   buildRealisticMaterial() wanneer die op DEFAULT_QUALITY moest terugvallen; het
-   paneel leest hem zodat de bezoeker niet hoeft te raden waarom hij 2K ziet
-   terwijl er 8K staat ingesteld. */
-let texQualityFallback = null;
-
-function meldTexqTerugval() {
-  if (!texQualityFallback) return;
-  const naam = (TEXTURE_SETS[texQualityFallback] || {}).label || texQualityFallback;
-  if (texqNote) {
-    texqNote.textContent = naam + ' could not be loaded — ' +
-      (TEXTURE_SETS[DEFAULT_QUALITY] || {}).label + ' is active. Try again to retry.';
-  }
-  if (typeof updateTexqUI === 'function') updateTexqUI();
-}
-
-let texqBusy = false;
-async function setTextureQuality(q) {
-  if (texqBusy || q === texQuality || !TEXTURE_SETS[q]) return;
-  const T = findThree();
-  /* ZONDER SHADERMATERIAAL VALT ER NIETS TE WISSELEN, maar stil niets doen is
-     wat de bezoeker opsloot: hij drukt op 2K om zich uit een zwarte bol te
-     redden en er gebeurt niets. Nu zegt de knop tenminste waarom. */
-  if (!T || !shaderMaterial) {
-    if (texqNote) texqNote.textContent = 'The earth material is not built — reload the page.';
-    return;
-  }
-
-  texqBusy = true;
-  texqBtns.forEach(b => b.disabled = true);
-  texqNote.classList.add('busy');
-  texqNote.textContent = 'Loading… fetching ' + textureSetSize(q);
-
-  const A = assetsFor(q);
-  const loader = new T.TextureLoader();
-  loader.setCrossOrigin('anonymous');          // zie de toelichting bij de andere loader
-  const load = url => loader.loadAsync(url);
-  /* EEN HANGENDE VERBINDING MAG DE KNOPPEN NIET OPSLUITEN (session 42, Terry).
-
-     Een afbeelding die niet aankomt geeft niet altijd een `error`: bij een
-     gestrande HTTP/2-verbinding blijft de request minutenlang open en lost de
-     promise nooit op. `texqBusy` bleef dan true en beide knoppen disabled — het
-     paneel stond op "Loading… fetching 29,7 MB" met de tol, en er was geen weg
-     terug. Deze race maakt daar een gewone mislukking van. Het onderliggende
-     verzoek loopt door; alleen wacht de interface er niet meer op. */
-  const OPHAALGRENS_MS = 90_000;
-  let tolTimer = null;
-  const metGrens = (p) => Promise.race([
-    p,
-    new Promise((_, af) => { tolTimer = setTimeout(() => af(new Error('timeout')), OPHAALGRENS_MS); })
-  ]);
-  try {
-    const [day, night, clouds, spec, normal] = await metGrens(Promise.all([
-      load(dayUrlFor(q)), load(nightUrlFor(q)),
-      load(A.clouds).catch(() => null),
-      load(A.specular).catch(() => null),
-      load(A.normal).catch(() => null)
-    ]));
-    // kleurtexturen naar sRGB; normal/specular zijn datamaps en blijven lineair
-    [day, night, clouds].forEach(t => { if (t) t.colorSpace = T.SRGBColorSpace; });
-    if (clouds) clouds.wrapS = T.RepeatWrapping;
-
-    const u = shaderMaterial.uniforms;
-    const swap = (uniform, tex) => {
-      if (!tex) return;
-      const old = uniform.value;
-      uniform.value = tex;
-      // alleen weggooien als de oude textuur nergens anders meer hangt
-      if (old && old !== tex && old.dispose) old.dispose();
-    };
-    swap(u.dayTexture, day);
-    swap(u.nightTexture, night);
-    swap(u.cloudsTexture, clouds);
-    swap(u.specularTexture, spec);
-    swap(u.normalTexture, normal);
-    if (clouds) cloudsTexture = clouds;
-    world.backgroundImageUrl(A.stars);
-
-    texQuality = q;
-    Prefs.set('pref.texQuality', q);
-    updateTexqUI();
-    texqNote.textContent = A.label + ' actief.';
-  } catch (e) {
-    texqNote.textContent = e && e.message === 'timeout'
-      ? 'Loading timed out — the previous textures remain active.'
-      : 'Loading failed — the previous textures remain active.';
-  } finally {
-    clearTimeout(tolTimer);
-    texqBusy = false;
-    texqBtns.forEach(b => b.disabled = false);
-    texqNote.classList.remove('busy');
-    setTimeout(() => { if (!texqBusy) texqNote.textContent = TEXQ_NOTE_IDLE; }, 4000);
-  }
-}
-
-texqBtns.forEach(b => b.addEventListener('click', () => setTextureQuality(b.dataset.q)));
-/* En de noot ook bij het opstarten uit dezelfde bron. Stond hij alleen in de
-   markup, dan zou het getal daar opnieuw kunnen gaan afwijken. */
-if (texqNote) texqNote.textContent = TEXQ_NOTE_IDLE;
-updateTexqUI();
 vulDiepteLegenda();
-
-// ---- Eigen texturen: kiezen, toepassen en weer weghalen --------------------
-// Zie de noot bij `customTex` bovenaan voor het waarom van alleen dag/nacht en
-// van het ontbreken van persistentie.
-const ctexFile = document.getElementById('ctex-file');
-const ctexResetBtn = document.getElementById('ctex-reset');
-const ctexNoteEl = document.getElementById('ctex-note');
-const CTEX_NOTE_IDLE = ctexNoteEl?.textContent.replace(/\s+/g, ' ').trim() || '';
-let ctexBusy = false;
-
-function ctexKort(naam) {
-  // Lange bestandsnamen duwen de rij uit elkaar; de staart zegt meestal het meeste.
-  return naam.length <= 22 ? naam : naam.slice(0, 10) + '…' + naam.slice(-10);
-}
-
-function updateCtexUI() {
-  for (const slot of ['day', 'night']) {
-    const gekozen = customTex[slot];
-    const val = document.getElementById('ctex-' + slot + '-value');
-    const clr = document.querySelector('.ctex-clear[data-clear="' + slot + '"]');
-    if (val) {
-      val.textContent = gekozen ? ctexKort(gekozen.naam) : 'default';
-      val.classList.toggle('custom', !!gekozen);
-      val.title = gekozen ? gekozen.naam + ' · ' + Math.round(gekozen.bytes / 1024) + ' KB' : '';
-    }
-    if (clr) clr.hidden = !gekozen;
-  }
-  const iets = !!(customTex.day || customTex.night);
-  if (ctexResetBtn) ctexResetBtn.hidden = !iets;
-  document.querySelectorAll('.ctex-pick').forEach(b => b.disabled = ctexBusy);
-}
-
-function ctexMelding(tekst) {
-  if (!ctexNoteEl) return;
-  ctexNoteEl.textContent = tekst;
-  clearTimeout(ctexMelding._t);
-  ctexMelding._t = setTimeout(() => { ctexNoteEl.textContent = CTEX_NOTE_IDLE; }, 7000);
-}
-
-// Zet één sleuf en laadt de bijbehorende uniform opnieuw. `bron` is null om terug
-// te vallen op onze eigen kaart.
-async function setCustomTexture(slot, bron) {
-  const T = findThree();
-  if (!T || !shaderMaterial) return;
-  ctexBusy = true; updateCtexUI();
-
-  const vorige = customTex[slot];
-  customTex[slot] = bron;
-  const url = slot === 'day' ? dayUrlFor(texQuality) : nightUrlFor(texQuality);
-  const loader = new T.TextureLoader();
-  loader.setCrossOrigin('anonymous');   // zie de toelichting bij de andere loaders
-  try {
-    const tex = await loader.loadAsync(url);
-    tex.colorSpace = T.SRGBColorSpace;  // kleurtextuur, geen datamap
-    const u = shaderMaterial.uniforms;
-    const doel = slot === 'day' ? u.dayTexture : u.nightTexture;
-    const oud = doel.value;
-    doel.value = tex;
-    // De dagtextuur dient ook als terugval voor ontbrekende maps; alleen weggooien
-    // als hij nergens anders meer aan hangt. Zelfde toets als bij de oceaanbodem.
-    const nogInGebruik = [u.cloudsTexture, u.specularTexture, u.normalTexture, u.dayTexture, u.nightTexture]
-      .some(sl => sl.value === oud);
-    if (oud && oud !== tex && !nogInGebruik && oud.dispose) oud.dispose();
-
-    // Pas hier de oude blob vrijgeven: eerder zou de loader hem nog nodig hebben.
-    if (vorige && vorige.url.startsWith('blob:')) URL.revokeObjectURL(vorige.url);
-    if (bron) {
-      ctexMelding('Loaded ' + bron.naam + (bron.waarschuwing ? ' — ' + bron.waarschuwing : ''));
-    } else {
-      ctexMelding('Back to Terra\'s own ' + slot + ' map.');
-    }
-  } catch {
-    // Terugdraaien: de vorige keuze blijft staan én zichtbaar.
-    customTex[slot] = vorige;
-    if (bron && bron.url.startsWith('blob:')) URL.revokeObjectURL(bron.url);
-    ctexMelding('That image could not be loaded.');
-  } finally {
-    ctexBusy = false;
-    updateCtexUI();
-  }
-}
-
-// Meet de afmetingen vóór we hem als textuur aanbieden. Niet om te blokkeren —
-// iemand mag best een rare verhouding proberen — maar om te kunnen zeggen wat
-// eraan scheelt wanneer het er vreemd uitziet.
-function meetAfbeelding(url) {
-  return new Promise((res) => {
-    const img = new Image();
-    img.onload = () => res({ w: img.naturalWidth, h: img.naturalHeight });
-    img.onerror = () => res(null);
-    img.src = url;
-  });
-}
-
-document.querySelectorAll('.ctex-pick').forEach(btn => {
-  btn.addEventListener('click', () => {
-    ctexFile.dataset.slot = btn.dataset.pick;
-    ctexFile.click();
-  });
-});
-
-ctexFile?.addEventListener('change', async () => {
-  const f = ctexFile.files[0];
-  const slot = ctexFile.dataset.slot;
-  ctexFile.value = '';                   // hetzelfde bestand nog eens kiezen moet vuren
-  if (!f || !slot) return;
-  if (!f.type.startsWith('image/')) { ctexMelding('That is not an image.'); return; }
-
-  const url = URL.createObjectURL(f);
-  const maat = await meetAfbeelding(url);
-  if (!maat) { URL.revokeObjectURL(url); ctexMelding('That image could not be read.'); return; }
-  // 2:1 is de equirectangulaire verhouding waar de hele bol op rekent. Een kleine
-  // afwijking is onschuldig; een grote betekent dat de kaart uitgerekt op de bol komt.
-  const verhouding = maat.w / maat.h;
-  const waarschuwing = Math.abs(verhouding - 2) > 0.02
-    ? maat.w + '×' + maat.h + ' is not 2:1, so it will be stretched'
-    : null;
-  await setCustomTexture(slot, { url, naam: f.name, bytes: f.size, waarschuwing });
-});
-
-document.querySelectorAll('.ctex-clear').forEach(btn => {
-  btn.addEventListener('click', () => setCustomTexture(btn.dataset.clear, null));
-});
-
-ctexResetBtn?.addEventListener('click', async () => {
-  if (customTex.day) await setCustomTexture('day', null);
-  if (customTex.night) await setCustomTexture('night', null);
-  ctexMelding('All custom textures removed.');
-});
-
-updateCtexUI();
 
 // ---- Nachtzijde-helderheid ----
 const nightSliderEl = document.getElementById('night-slider');
@@ -11922,8 +11500,9 @@ function dismissBoot() {
   /* DE AARDE MOET GESCHILDERD ZIJN. Anders haalt de loader zijn eigen doel
      onderuit: hij verdwijnt en laat een zwarte bol achter. `bootFaseKlaar`
      roept ons terug zodra het materiaal op de bol staat — en dat gebeurt
-     gegarandeerd, want een mislukte textuurset valt terug op de kleinere en
-     daarna op de schematische kaart (zie buildRealisticMaterial). */
+     gegarandeerd, want de aarde wordt altijd met de kleine set gebouwd, en
+     faalt die ook, dan valt de app terug op de schematische kaart. De
+     zwaardere set komt pas erna en kan dit moment niet meer tegenhouden. */
   if (!bootKlaar.has('earth')) { bootWachtOpAarde = true; return; }
   bootDismissed = true;
   // Sein aan het vangnet in de <head>: vanaf hier zwijgt de watchdog, en een fout
@@ -12490,7 +12069,7 @@ if (globalThis.TerraCore) {
         world.backgroundImageUrl(null);
       },
       skyRestore() {
-        world.backgroundImageUrl(assetsFor(texQuality).stars);
+        world.backgroundImageUrl(assetsFor(earthTex.quality()).stars);
       },
 
       /* DE ATMOSFEER STAAT APART VAN DE STERREN (sessie 31), en dat is geen
@@ -13411,7 +12990,7 @@ document.getElementById('sketch-open')?.addEventListener('click', async () => {
     // De onderlaag volgt de bol: staat de oceaanbodem aan, dan teken je daarop.
     // Altijd de 2K-variant, ook wanneer de bol op 8K staat — de kaart wordt hier
     // op zo'n 600 px breed getekend, dus 4,5 MB zou niets toevoegen.
-    ed.openEditor(dayUrlFor('2k'), () => {
+    ed.openEditor(earthTex.dayUrl('2k'), () => {
       if (sketch.count() > 0 && !sketchOn) setSketchVisible(true);
       else if (sketch) sketch.setVisible(sketchOn);
     });
