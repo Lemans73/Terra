@@ -111,18 +111,6 @@ export function createQuakeLabels(THREE, opts = {}) {
 #quake-labels .ql-box .rij:hover, #quake-labels .ql-box.actief { filter: brightness(1.35); }
 #quake-labels .ql-box .rij.op { text-shadow: 0 1px 10px rgba(0,0,0,0.95), 0 0 14px currentColor; }
 #quake-labels .ql-box.actief { text-shadow: 0 1px 10px rgba(0,0,0,0.95), 0 0 14px currentColor; }
-/* THE DEPTH ROW GOES WHITE ON HOVER TOO. The .dep row had no colour of its own
-   and inherited the one above it: the DEPTH COLOUR. On an opened label "Depth:
-   565 KM" therefore read in the same purple as the ring, while the place name
-   and the time beside it already went white. Exactly at the deepest quakes,
-   where that colour is darkest, that row was the least readable. It now follows
-   .loc and .tim.
-
-   GEEN BACKTICKS IN DIT BLOK. Dit commentaar staat IN de CSS-template-literal
-   hierboven, en een backtick sluit die string. Bij een even aantal parseert het
-   bestand nog gewoon door — het wordt dan een property-access plus een tagged
-   template — en dan is er geen syntaxfout, alleen een halve stylesheet en een
-   app die verderop omvalt met "Cannot access X before initialization". */
 #quake-labels .ql-box.actief .loc, #quake-labels .ql-box.actief .tim,
 #quake-labels .ql-box.actief .dep { color: var(--ink, #e8eef7); }
 #quake-labels .ql-box.omlijnd { -webkit-text-stroke: var(--ql-stroke) #000; paint-order: stroke fill; }

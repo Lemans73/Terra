@@ -674,11 +674,7 @@ uniform float uBeamWidth;
 uniform float uMagMin;
 uniform float uMagSpan;
 uniform float uBeamScaleWithZoom;
-/* THE CAMERA IN LOCAL SPACE, AS A UNIFORM. This used to be
-   inverse(modelMatrix) * cameraPosition, and inverse() only exists in GLSL ES
-   3.00 — on a WebGL1 context that shader does not compile and the whole layer
-   is silently gone. The caller knows group.matrixWorld and computes this once
-   per frame, which is also cheaper than a matrix inverse per vertex. */
+/* THE CAMERA IN LOCAL SPACE, AS A UNIFORM. */
 uniform vec3 uCamLocal;
 
 varying vec3  vColor;
@@ -714,12 +710,10 @@ void main() {
   // shaft stays readable, a world-sized one tells you the scale of the planet.
   hoogte *= mix(1.0, sc, clamp(uBeamScaleWithZoom, 0.0, 1.0));
 
-  /* uLift HAS TO BE INCLUDED, and that is a repair. This used to be just
-     stackLift() without uLift — and uLift is the height the VIEW MODE sets: in
-     the schematic view the ring sits 1.3 above the surface, so the beam foot sat
-     1.3 units lower. Visible as a streak sticking out below the indicator. The
-     ring does uLift + stackLift; the beam has to do the same, or the two do not
-     start from the same place.
+  /* uLift HAS TO BE INCLUDED. It is the height the VIEW MODE sets — the ring in
+     schematic view sits 1.3 above the surface — and the ring does
+     uLift + stackLift. Leave it out and the beam foot starts 1.3 units lower,
+     visible as a streak under the indicator.
 
      uBeamSink lets the foot start a little BELOW that spot, so no seam falls
      between the beam and the indicator. It has to stay small: whatever sticks
