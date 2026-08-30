@@ -2120,6 +2120,8 @@ import {
 } from './js/config.js';
 import { peekStormReport, fetchStormReport, knotsToKmh, nmToKm }
   from './js/compute/storm-report.js';
+import { forecastSegments, forecastStops, windFootprint, circleAround, footprintSpan }
+  from './js/compute/storm-track.js';
 // GLSL shader-bronnen (Stap 0 refactor).
 import {
   SHOCK_VERT, SHOCK_FRAG,
@@ -3577,7 +3579,14 @@ function buildOverlayPaths(kind, geo) {
   return { lines, casings: lines.map(p => ({ ...p, casing: true })) };
 }
 
+/* EEN PAD MAG ZIJN EIGEN STIJL MEEBRENGEN (sessie 42). De drie getters
+   hieronder besloten alles op `p.kind`, en dat past voor de vaste overlays —
+   platen en landgrenzen, die per weergave van stijl wisselen. De stormbaan is
+   iets anders: hij ontstaat en verdwijnt met een selectie en draagt zijn kleur
+   uit de intensiteit. Wie een waarde meegeeft, krijgt die; de rest loopt langs
+   de oude weg. */
 function overlayColor(p) {
+  if (p.color) return p.color;
   if (p.casing) return PARAMS.overlayCasingColor;
   const expert = globeMode === 'expert';
   let a = expert ? PARAMS.overlayOpacityExpert : PARAMS.overlayOpacityRealistic;
@@ -3589,6 +3598,7 @@ function overlayColor(p) {
 }
 
 function overlayStroke(p) {
+  if (p.stroke != null) return p.stroke;
   const base = globeMode === 'expert' ? PARAMS.overlayStrokeExpert : PARAMS.overlayStrokeRealistic;
   const w = base * (p.kind === 'borders' ? PARAMS.borderStrokeFactor : 1);
   return p.casing ? w + PARAMS.overlayCasingExtra : w;
@@ -3607,6 +3617,9 @@ function overlayAltitudeExpertNu() {
 
 function overlayAlt(p) {
   const base = globeMode === 'expert' ? overlayAltitudeExpertNu() : PARAMS.overlayAltitude;
+  // Een stormpad ligt BOVEN de kaartlijnen, met dezelfde opslag in beide
+  // weergaven — anders duikt hij in de schematische kaart onder de platen door.
+  if (p.stormAlt) return base + PARAMS.stormTrackLift;
   return p.casing ? base - PARAMS.overlayCasingDrop : base;
 }
 
@@ -3850,6 +3863,9 @@ function renderOverlays(force) {
     if (!expert) out.push(...set.casings);
     out.push(...set.lines);
   }
+  // De baan en de voetafdruk van de geselecteerde storm liggen er bovenop. Leeg
+  // zolang er geen storm openstaat, dus dit kost niets als er niets te tonen is.
+  out.push(...stormPaths);
   world.pathsData(out);
 }
 
@@ -10827,6 +10843,8 @@ function hideDetail() {
   // De selectie hoort bij het geopende venster, dus die gaat mee dicht.
   selectedQuakeId = null;
   syncQuakeHighlight();
+  // En de stormbaan net zo: hij hoort bij het venster, niet bij de kaart.
+  clearStormTrack();
   detail.hide();
   detailRestore();
   /* HIER EN NIET IN `detail.onClose` (sessie 28). Die haak vuurt alleen bij een
@@ -11046,6 +11064,67 @@ antipodeUitgang?.addEventListener('click', () => {
    `opts` reist ongewijzigd door naar de module. Daar zit `backTo` in: de bouwer van
    de view die híéronder ligt, waardoor de sluitknop een terugpijl wordt. Alleen de
    zonnegebieden geven hem mee; overal elders is hij afwezig en sluit de knop gewoon. */
+/* DE BAAN EN DE VOETAFDRUK VAN DE GEOPENDE STORM (sessie 42, Terry).
+
+   Ze verschijnen wanneer je een storm opent waarvan het waarschuwingsbestand
+   gelezen is, en verdwijnen als het venster sluit. Dat is dezelfde regel als
+   bij de opgelichte beving: één onderwerp tegelijk.
+
+   ZE GAAN LANGS `pathsData` EN NIET LANGS EEN EIGEN THREE-LAAG. Die laag bestaat
+   al, tekent een pad met echte dikte, verdeelt hem zelf langs de grootcirkel en
+   legt hem op de opgegeven hoogte. Een eigen laag zou al dat werk overdoen — en
+   een LineBasicMaterial kan in WebGL niet eens dikker dan één pixel.
+
+   `renderOverlays()` plakt deze lijst achter de vaste overlays. Leeg zolang er
+   geen storm openstaat. */
+let stormPaths = [];
+
+function setStormTrack(report) {
+  const uit = [];
+  const nu = (report.forecast || []).find(f => f.tau === 0);
+
+  // 1. DE VERWACHTE BAAN, één segment per tijdstap zodat de kleur de kracht
+  //    van dat stuk kan dragen.
+  for (const seg of forecastSegments(report)) {
+    uit.push({ coords: seg.coords, color: seg.color,
+               stroke: PARAMS.stormTrackStroke, stormAlt: true,
+               label: '+' + seg.tauFrom + ' h → +' + seg.tauTo + ' h · ' + seg.knots + ' kt' });
+  }
+
+  // 2. EEN RINGETJE PER TIJDSTAP, zodat je ziet WAAR de uren liggen. Zonder die
+  //    markeringen is een baan een streep zonder tijd erin.
+  for (const stop of forecastStops(report)) {
+    uit.push({ coords: circleAround(stop.lat, stop.lng, PARAMS.stormStopRadiusDeg),
+               color: stop.color, stroke: PARAMS.stormStopStroke, stormAlt: true,
+               label: (stop.tau === 0 ? 'now' : '+' + stop.tau + ' h') + ' · ' + stop.knots + ' kt' });
+  }
+
+  // 3. DE 34-KNOOPSVOETAFDRUK op de huidige plek. Alleen als het bestand de vier
+  //    kwadranten geeft; windFootprint() geeft null bij een onvolledige set en
+  //    dan tekenen we liever niets dan een halve vorm.
+  if (nu && report.radii && report.radii[34]) {
+    const lat = nu.lat.value * (nu.lat.hemi === 'S' ? -1 : 1);
+    const lng = nu.lng.value * (nu.lng.hemi === 'W' ? -1 : 1);
+    const ring = windFootprint(lat, lng, report.radii[34]);
+    if (ring) {
+      const span = footprintSpan(report.radii[34]);
+      uit.push({ coords: ring, color: PARAMS.stormFootprintColor,
+                 stroke: PARAMS.stormFootprintStroke, stormAlt: true,
+                 label: '34 kt winds · ' + span.min + '–' + span.max + ' NM' });
+    }
+  }
+
+  stormPaths = uit;
+  renderOverlays(true);
+  return uit.length;
+}
+
+function clearStormTrack() {
+  if (!stormPaths.length) return;
+  stormPaths = [];
+  renderOverlays(true);
+}
+
 /* HET JTWC-WAARSCHUWINGSRAPPORT IN HET VENSTER (sessie 42, Terry).
 
    EONET wijst een storm naar het waarschuwingsbestand van het Joint Typhoon
@@ -11101,6 +11180,14 @@ function stormReportRows(d) {
   const vooruit = r.forecast.filter(f => f.tau > 0);
   if (vooruit.length) {
     rijen.push(['Forecast', vooruit.map(f => '+' + f.tau + ' h ' + f.knots + ' kt').join(' · ')]);
+  }
+  /* DE ASYMMETRIE OOK IN TEKST. De voetafdruk op de bol laat hem zien, maar
+     alleen als je ernaar kijkt; de twee uitersten zetten hem in cijfers. */
+  const span = r.radii && footprintSpan(r.radii[34]);
+  if (span) {
+    rijen.push(['34 kt winds', span.min === span.max
+      ? span.max + ' NM (' + nmToKm(span.max) + ' km) all round'
+      : span.min + '–' + span.max + ' NM (' + nmToKm(span.min) + '–' + nmToKm(span.max) + ' km)']);
   }
   if (r.remarks) rijen.push([{ prose: r.remarks }]);
   return rijen;
@@ -11176,6 +11263,17 @@ function showDetail(d, opts) {
   syncQuakeHighlight();
   // Waar dit venster over gaat, voor een antwoord dat later binnenkomt.
   shownEventKey = d ? (d.id || d.label || '') + '|' + (d.layer || d.kind || '') : null;
+  /* DE STORMBAAN VOLGT HET VENSTER. Staat er een gelezen rapport klaar, dan
+     komt hij op de bol; bij elk ander onderwerp gaat hij weg. Vóór
+     `detail.show()`, zodat een wissel van storm naar storm niet één frame lang
+     de baan van de vorige laat staan. */
+  const _sr = d && d.layer === 'storm' && d.url ? peekStormReport(d.url) : null;
+  if (_sr && _sr.state === 'ok') setStormTrack(_sr.report);
+  else clearStormTrack();
+  /* Welke storm er openstaat, zodat het tuning-paneel zijn baan opnieuw kan
+     laten bouwen na een schuif — globe.gl leest de stijl van een pad alleen bij
+     het aanmaken. Alleen op de ontwikkelmachine, net als het paneel zelf. */
+  if (IS_LOCAL) window.__terraStormOpen = _sr && _sr.state === 'ok' ? d : null;
   /* Een ander onderwerp betekent een andere antipode. Toetsen op de PLEK en niet
      blindweg opruimen: `showDetail(d)` wordt ook aangeroepen om dezelfde beving te
      hertekenen nadat de knop is omgezet, en een blinde `hideAntipode()` zou de

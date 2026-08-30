@@ -44,6 +44,34 @@ function stampToDate(raw) {
   return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4]));
 }
 
+/* THE WIND RADII, from the tail of a `T` line:
+
+     T000 381N 1791W 035 R034 100 NE QD 080 SE QD 000 SW QD 080 NW QD
+
+   `R034` opens a group and the four numbers after it are the radius of that
+   wind speed in each quadrant, in nautical miles. A warning carries R034 (gale
+   force), and a stronger system also R050 and R064.
+
+   THE QUADRANTS ARE GENUINELY DIFFERENT, and that is the point of showing them:
+   LALA had NE 100, SE 80, NW 80 and SW 0 — no wind of that strength on its
+   south-west side at all. A single radius would hide exactly the thing that
+   makes a storm's footprint informative.
+
+   Returns { 34: {ne, se, sw, nw}, … } in NM, or null when the line has no radii. */
+function parseRadii(tail) {
+  if (!tail) return null;
+  const uit = {};
+  for (const groep of tail.matchAll(/R(\d{3})((?:\s+\d{3}\s+(?:NE|SE|SW|NW)\s+QD)+)/g)) {
+    const kt = parseInt(groep[1], 10);
+    const per = {};
+    for (const q of groep[2].matchAll(/(\d{3})\s+(NE|SE|SW|NW)\s+QD/g)) {
+      per[q[2].toLowerCase()] = parseInt(q[1], 10);
+    }
+    if (Object.keys(per).length === 4) uit[kt] = per;
+  }
+  return Object.keys(uit).length ? uit : null;
+}
+
 /* Turn the report into an object, or null when the text is not a JTWC warning.
    NULL AND NOT A HALF-FILLED OBJECT: a partial parse would render a panel with
    empty rows, and that reads as "no wind" rather than "not understood". The
@@ -57,7 +85,7 @@ export function parseJtwcWarning(text) {
     subject: subj[1].trim(),
     warningNr: parseInt(subj[2], 10),
     issued: null, position: null, movement: null,
-    accuracyNm: null, basis: null, winds: null, gusts: null,
+    accuracyNm: null, basis: null, winds: null, gusts: null, radii: null,
     forecast: [], remarks: ''
   };
 
@@ -94,11 +122,12 @@ export function parseJtwcWarning(text) {
   /* THE TRACK COMES FROM THE `T` LINES and not from the prose. Same numbers,
      but one regular shape instead of a paragraph per lead time: `T012 385N
      1798E 030` is tau 12 hours, 38.5N 179.8E, 30 knots. */
-  for (const m of text.matchAll(/^T(\d{3})\s+(\d+[NS])\s+(\d+[EW])\s+(\d+)/gm)) {
+  for (const m of text.matchAll(/^T(\d{3})\s+(\d+[NS])\s+(\d+[EW])\s+(\d+)(.*)$/gm)) {
     out.forecast.push({
       tau: parseInt(m[1], 10),
       lat: coord(m[2]), lng: coord(m[3]),
-      knots: parseInt(m[4], 10)
+      knots: parseInt(m[4], 10),
+      radii: parseRadii(m[5])
     });
   }
 
@@ -106,6 +135,11 @@ export function parseJtwcWarning(text) {
      UPDATES." is boilerplate that the file repeats up to four times; it says
      nothing about this storm and goes. */
   const rem = /^REMARKS:\s*\n([\s\S]*?)(?=^\/\/\s*$|^NNNN\s*$)/m.exec(text);
+  // De radii van NU, want daar hangt de voetafdruk aan. Staan ze op geen enkele
+  // T-regel, dan blijft dit null en tekent de laag alleen de baan.
+  const nu = out.forecast.find(f => f.tau === 0);
+  out.radii = (nu && nu.radii) || null;
+
   if (rem) {
     out.remarks = rem[1]
       .split('\n')

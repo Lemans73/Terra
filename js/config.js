@@ -922,6 +922,17 @@ export const PARAMS = {
   overlayCasingExtra:   0.55,       // hoeveel breder de casing is dan de lijn
   overlayCasingDrop:    0.0008,     // hoeveel lager de casing ligt
 
+  /* ---- De stormbaan en de windvoetafdruk (sessie 42, Terry) ----
+     Beide komen RECHTSTREEKS uit het JTWC-waarschuwingsbestand: de baan uit de
+     `T`-regels (positie en kracht per tijdstap) en de voetafdruk uit de straal
+     van 34-knoopswind per kwadrant. Er wordt niets geëxtrapoleerd, en er is
+     bewust GEEN onzekerheidskegel — zie js/compute/storm-track.js. */
+  stormTrackLift: 0.004,     // boven de kaartlijnen, in beide weergaven
+  stormTrackStroke: 0.9,     // de verwachte baan
+  stormStopRadiusDeg: 0.35,  // de markering per tijdstap, in graden booglengte
+  stormStopStroke: 0.5,
+  stormFootprintStroke: 0.4, // de 34-knoopsvoetafdruk: dunner, het is een contour
+  stormFootprintColor: '#4dd0e1',
   overlayStrokeRealistic: 0.75,     // lijndikte in de realistische modus
   overlayStrokeExpert:    0.8,      // schematische kaart
   borderStrokeFactor:     0.7,      // landgrenzen dunner dan plaatgrenzen — hiërarchie
