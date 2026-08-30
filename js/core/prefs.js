@@ -207,15 +207,16 @@ export const PREFS_DEFAULTS = {
   'pref.reducedMotion': (typeof window !== 'undefined' && window.matchMedia)
     ? window.matchMedia('(prefers-reduced-motion: reduce)').matches : false,
   'pref.labelOutline': true,
-  /* HOOG CONTRAST BEGINT AAN (sessie 41, Terry). Hij stond op false omdat de
-     dieptekleur in de labeltekst herhaalt wat de ring al zegt, en dat leek
-     gratis informatie. Op de nieuwe satellietkaart is het dat niet: de rode,
-     roze en paarse tinten uit de diepteschaal vallen weg tegen bruine woestijn
-     en groen land, terwijl de ring diezelfde kleur nog steeds draagt.
+  /* HIGH CONTRAST STARTS OFF (session 42, Terry). The label text then carries
+     the depth colour, the same colour the ring already shows.
 
-     Kleur zit dus in het SYMBOOL en leesbaarheid in de TEKST. Wie de gekleurde
-     tekst terugwil, zet deze rij uit — de informatie was er niet minder om. */
-  'pref.labelWhite': true,
+     Switching it ON makes every label white. That does not buy WCAG contrast —
+     measured, no single colour reaches 3.0 on every background, and white gets
+     1.17 on snow and 1.79 on desert. What it does buy is that all labels are
+     EQUALLY readable, instead of the deep purple ones disappearing against dark
+     ground while the shallow ones stand out. The outline (pref.labelOutline) is
+     what actually carries readability. */
+  'pref.labelWhite': false,
 
   /* ---- The quake indicator ---- (session 42, Terry)
 
