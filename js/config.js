@@ -856,7 +856,7 @@ export const PARAMS = {
   // staat in `labelBudget` in index.html; rebuildLabels() bouwt er zoveel, en
   // positionLabels() interpoleert ernaartoe. Wie hier een grens zoekt: die is
   // labelCountCeiling.
-  labelCountMax: 12,   // aantal beving-labels diep ingezoomd (meer detail)
+  labelCountMax: 20,   // aantal beving-labels diep ingezoomd (meer detail)
   labelCountCeiling: 40, // bovengrens van de slider — zie de meting hieronder
   /* DE POOL IS ALLES WAT DOOR DE FILTERS KOMT, en dat is een correctie uit sessie 37.
 
@@ -927,11 +927,11 @@ export const PARAMS = {
      `T`-regels (positie en kracht per tijdstap) en de voetafdruk uit de straal
      van 34-knoopswind per kwadrant. Er wordt niets geëxtrapoleerd, en er is
      bewust GEEN onzekerheidskegel — zie js/compute/storm-track.js. */
-  stormTrackLift: 0.004,     // boven de kaartlijnen, in beide weergaven
-  stormTrackStroke: 0.9,     // de verwachte baan
-  stormStopRadiusDeg: 0.35,  // de markering per tijdstap, in graden booglengte
-  stormStopStroke: 0.5,
-  stormFootprintStroke: 0.4, // de 34-knoopsvoetafdruk: dunner, het is een contour
+  stormTrackLift: 0.02,      // boven de kaartlijnen, in beide weergaven
+  stormTrackStroke: 1,       // de verwachte baan
+  stormStopRadiusDeg: 0.3,   // de markering per tijdstap, in graden booglengte
+  stormStopStroke: 2,
+  stormFootprintStroke: 2,   // de 34-knoopsvoetafdruk
   stormFootprintColor: '#4dd0e1',
   overlayStrokeRealistic: 0.75,     // lijndikte in de realistische modus
   overlayStrokeExpert:    0.8,      // schematische kaart

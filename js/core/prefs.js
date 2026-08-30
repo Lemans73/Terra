@@ -180,7 +180,11 @@ export const PREFS_DEFAULTS = {
   'pref.quakeLabels': true,
   'pref.autoRotate': true,
   'pref.utc':        false,
-  'pref.labelCount': 12,
+  /* OVERSCHRIJFT labelCountMax IN js/config.js, dus die twee horen gelijk te
+     lopen — zie de val bij pref.quakeBeams hieronder. 20 sinds sessie 42
+     (Terry): met de plaatsing van de nieuwe labellaag voegt een vollere kaart
+     iets toe waar hij bij de oude laag alleen drukte gaf. */
+  'pref.labelCount': 20,
   'pref.nightGlow':  12,
 
   /* ---- Toegankelijkheid ---- (sessie 40)
