@@ -94,11 +94,18 @@ const PREFS_OUD = {
    valt door de vangrail in `ontbrekend()` — een stille schakelaar
    die niets bewaart zou pas opvallen als een bezoeker klaagt.
 
-   DE DATALAGEN BEGINNEN LEEG OP TWEE NA (Terry, sessie 35). Tot deze
-   sessie stonden storms, sea ice, wildfires en lightning ook aan, en
-   dan opende Terra met vijf soorten markeringen over elkaar heen.
-   Nu zijn het er twee, en wie meer wil krijgt dat terug zodra hij het
-   één keer aanzet.
+   VIER DATALAGEN STAAN AAN BIJ EEN EERSTE BEZOEK (Terry, sessie 42):
+   aardbevingen, vulkanen, stormen en zee-ijs. Sessie 35 bracht dat
+   terug tot twee omdat Terra toen opende met vijf soorten markeringen
+   over elkaar heen; sinds sessie 42 heeft elk van die vier een eigen,
+   herkenbare indicator en een uitlezing die iets te vertellen heeft —
+   stormen dragen hun JTWC-baan en voetafdruk, zee-ijs zijn tabel.
+   Bosbranden, luchtkwaliteit, bliksem en aurora blijven uit: die zijn
+   dicht, groot in aantal, of vragen een relay.
+
+   HET BLIJVEN VOORKEUREN. Dit is de stand bij een EERSTE bezoek; wie
+   een laag aan- of uitzet krijgt die keuze terug bij het volgende
+   bezoek, want deze sleutels worden bewaard.
 
    EN DIT SCHEELT OOK OPHALEN, sinds sessie 36. Tot dan niet: `pull()`
    in index.html kende alleen `adapter.enabled` en niet `active[laag]`,
@@ -112,8 +119,8 @@ export const PREFS_DEFAULTS = {
   /* ---- De databronnen. `active` in index.html leest deze. ---- */
   'layer.quake':     true,
   'layer.volcano':   true,
-  'layer.storm':     false,
-  'layer.ice':       false,
+  'layer.storm':     true,
+  'layer.ice':       true,
   'layer.wildfire':  false,
   'layer.aqi':       false,
   'layer.lightning': false,
