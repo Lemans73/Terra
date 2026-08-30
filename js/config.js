@@ -1426,9 +1426,48 @@ export const TEXTURE_SETS = {
 export const DEFAULT_QUALITY = '2k';
 
 // Leesbare grootte, voor de waarschuwing in de interface.
-export function textureSetSize(quality) {
-  const b = (TEXTURE_SETS[quality] || TEXTURE_SETS[DEFAULT_QUALITY]).bytes;
+/* DE DERDE TRAP IS GEEN TEXTUURSET, en dat is precies het punt. Standard en High
+   resolution downloaden één wereldkaart en zijn daarna klaar; Satellite haalt bij
+   terwijl je kijkt. Die twee zijn niet in hetzelfde getal uit te drukken, dus
+   staat er `once` bij de eerste twee en `per visit` bij de derde.
+
+   WAT SATELLITE EENMALIG KOST zijn de 2K-hulpkaarten (nacht, wolken, specular,
+   reliëf — 1,76 MB) plus de acht worteltegels. GEMETEN op 2026-08-30: die acht
+   wegen samen 63 kB, tegen 540 kB voor de 2K-dagkaart die ze vervangen. De start
+   is daarmee LICHTER dan Standard.
+
+   WAT HIJ PER BEZOEK KOST is gemeten in Terra zelf: één keer diep inzoomen op één
+   plek gaf 215 tegels en 1,9 MB. Bovenin komt uit de POC-berekening voor
+   intensief rondvliegen. Een tweede bezoek aan dezelfde plek kostte 20 kB — de
+   schijfcache doet daar het werk. */
+export const IMAGERY_TILES = {
+  label: 'Satellite',
+  detail: '10 m',
+  bytesOnce: 1_826_000,
+  perVisitLowBytes: 2_000_000,
+  perVisitHighBytes: 18_000_000
+};
+
+function mbTekst(b) {
   return b >= 1_000_000 ? Math.round(b / 100_000) / 10 + ' MB' : Math.round(b / 1000) + ' KB';
+}
+
+export function textureSetSize(quality) {
+  if (quality === 'tiles') return mbTekst(IMAGERY_TILES.bytesOnce);
+  const b = (TEXTURE_SETS[quality] || TEXTURE_SETS[DEFAULT_QUALITY]).bytes;
+  return mbTekst(b);
+}
+
+/* De regel onder de knop. Voor de eerste twee is dat "2K · 2 MB once", voor de
+   derde "10 m · 2-18 MB/visit" — het onderscheid dat de hele keuze draagt. */
+export function imageryMeta(trap) {
+  if (trap === 'tiles') {
+    const laag = Math.round(IMAGERY_TILES.perVisitLowBytes / 1_000_000);
+    const hoog = Math.round(IMAGERY_TILES.perVisitHighBytes / 1_000_000);
+    return IMAGERY_TILES.detail + ' \u00b7 ' + laag + '\u2013' + hoog + ' MB/visit';
+  }
+  const mb = textureSetSize(trap).replace(/([\d.]+) MB/, (_, n) => Math.round(Number(n)) + ' MB');
+  return trap.toUpperCase() + ' \u00b7 ' + mb + ' once';
 }
 
 export function assetsFor(quality) {

@@ -31,7 +31,7 @@
    instance, and an import here would be a second route to it.
    ============================================================ */
 
-import { TEXTURE_SETS, DEFAULT_QUALITY, assetsFor, textureSetSize, PARAMS } from '../config.js';
+import { TEXTURE_SETS, DEFAULT_QUALITY, assetsFor, textureSetSize, imageryMeta, PARAMS } from '../config.js';
 import { dayNightShader } from '../shaders.js';
 import { Prefs } from './prefs.js';
 
@@ -39,22 +39,39 @@ export function createEarthTextures(THREE, opts = {}) {
   const getWorld = opts.getWorld;
   const getMaterial = opts.getMaterial;
   const onLayerStatus = opts.onLayerStatus;
+  /* De trapwissel melden aan de app. Alleen `tiles` doet daar iets mee — de
+     tegelschil aan of uit — maar de module weet niets van die schil en hoort dat
+     ook niet te weten. */
+  const onImagery = opts.onImagery;
   if (!getWorld || !getMaterial || !onLayerStatus) {
     throw new Error('createEarthTextures: getWorld, getMaterial en onLayerStatus zijn verplicht');
   }
 
-  // Textuurkwaliteit. Start op 2K zodat een eerste bezoeker ~2,4 MB laadt in plaats
-  // van ~29 MB; de keuze wordt onthouden. Een ongeldige of oude waarde in
-  // localStorage valt terug op de standaard.
-  // LET OP: moet vóór `world` staan — de sterrenachtergrond leest 'm meteen.
-  /* Sinds sessie 35 uit het gedeelde register; de oude losse sleutel
-     `terra-tex-quality` wordt daar bij de eerste start ingelezen en opgeruimd.
-     De geldigheidstoets blijft: een oude of onbekende naam in de opslag valt
-     terug op de standaard in plaats van de app zonder textuur te laten. */
-  let texQuality = (() => {
+  /* DE TRAP EN DE TEXTUURSET ZIJN NIET HETZELFDE, en dat onderscheid draagt de
+     hele sectie Imagery & data.
+
+       trap `2k`      wereldkaart van 2048 px          set 2k
+       trap `8k`      wereldkaart van 8192 px          set 8k
+       trap `tiles`   satellietbeeld uit de tegelschil set 2k
+
+     Bij `tiles` komt de DAGKAART uit de tegels; wat er dan nog uit een
+     wereldtextuur komt zijn de vier hulpkaarten — nacht, wolken, specular en
+     reliëf — en die hebben op 2K genoeg. Vandaar dat de zwaarste trap de KLEINE
+     set laadt, wat op het eerste gezicht omgekeerd lijkt.
+
+     ÉÉN BEWAARDE WAARDE, want twee zouden uit elkaar kunnen lopen. `texQuality`
+     hieronder is afgeleid en wordt nooit apart opgeslagen.
+
+     LET OP: dit moet vóór de globe staan — de sterrenachtergrond leest de set
+     meteen bij het bouwen. */
+  const IMAGERY_TRAPPEN = ['2k', '8k', 'tiles'];
+  const setVoorTrap = (t) => (t === 'tiles' ? DEFAULT_QUALITY : t);
+
+  let imagery = (() => {
     const bewaard = Prefs.get('pref.texQuality');
-    return TEXTURE_SETS[bewaard] ? bewaard : DEFAULT_QUALITY;
+    return IMAGERY_TRAPPEN.includes(bewaard) ? bewaard : DEFAULT_QUALITY;
   })();
+  let texQuality = setVoorTrap(imagery);
 
   // ---- Eigen texturen -------------------------------------------------------
   //
@@ -252,18 +269,18 @@ export function createEarthTextures(THREE, opts = {}) {
      Ze stonden er als "~2.5 MB" en "~31 MB" bij, en die getallen liepen achter
      zodra een set veranderde — precies wat er deze sessie gebeurde: de 2K-set
      ging naar 4,6 MB en de markup bleef 2,5 zeggen. Een cijfer dat over iemands
-     eigen download gaat, hoort niet op twee plekken te staan. */
-  function texqMB(q) {
-    return textureSetSize(q).replace(/([\d.]+) MB/, (_, n) => Math.round(Number(n)) + ' MB');
-  }
-  const TEXQ_NOTE_IDLE = '8K is sharper up close, but downloads about '
-    + texqMB('8k') + ' in total.';
+     eigen download gaat, hoort niet op twee plekken te staan. `imageryMeta()` in
+     js/config.js maakt de hele regel, inclusief het onderscheid tussen `once` en
+     `per visit`. */
+  const TEXQ_NOTE_IDLE = 'Satellite fetches imagery while you look, and lets you zoom in further.';
 
+  /* DE ACTIEVE KNOP VOLGT DE TRAP EN NIET DE SET. Die twee lopen bij `tiles`
+     uiteen: daar draait de 2K-set, en zou de knop op Standard springen terwijl de
+     bezoeker Satellite koos. */
   function updateTexqUI() {
-    texqBtns.forEach(b => b.classList.toggle('active', b.dataset.q === texQuality));
+    texqBtns.forEach(b => b.classList.toggle('active', b.dataset.q === imagery));
     document.querySelectorAll('[data-texq-size]').forEach(el => {
-      const q = el.dataset.texqSize;
-      el.textContent = q.toUpperCase() + ' \u00b7 ~' + texqMB(q);
+      el.textContent = imageryMeta(el.dataset.texqSize);
     });
   }
 
@@ -294,8 +311,18 @@ export function createEarthTextures(THREE, opts = {}) {
   });
 
   let texqBusy = false;
+  /* WISSELT EEN TRAP, NIET EEN TEXTUURSET. Vaak vallen die samen; bij `tiles`
+     niet, want die deelt zijn set met `2k`. Dan is er niets te downloaden en
+     verschuift alleen wat er getekend wordt — dat mag geen laadscherm opleveren. */
   async function setTextureQuality(q) {
-    if (texqBusy || q === texQuality || !TEXTURE_SETS[q]) return;
+    if (texqBusy || !IMAGERY_TRAPPEN.includes(q)) return;
+    /* ER IS WERK ALS DE TRAP ÓF DE SET VERSCHILT, en niet alleen bij een andere
+       trap. Bij het opstarten lopen die twee juist uiteen: de trap staat op de
+       bewaarde keuze terwijl de kleine set draait, en dat is precies het moment
+       waarop upgradeIfNeeded() de zwaardere set komt halen. Alleen op de trap
+       toetsen liet die upgrade er stil uit vallen. */
+    const doelSetVooraf = setVoorTrap(q);
+    if (q === imagery && doelSetVooraf === texQuality) return;
     /* ZONDER SHADERMATERIAAL VALT ER NIETS TE WISSELEN, maar stil niets doen is
        wat de bezoeker opsloot: hij drukt op 2K om zich uit een zwarte bol te
        redden en er gebeurt niets. Nu zegt de knop tenminste waarom. */
@@ -304,12 +331,24 @@ export function createEarthTextures(THREE, opts = {}) {
       return;
     }
 
+    const doelSet = doelSetVooraf;
+
+    /* Zelfde set: alleen de trap verschuift. Geen netwerk, geen knoppen op slot. */
+    if (doelSet === texQuality) {
+      imagery = q;
+      texQualityFallback = null;
+      Prefs.set('pref.texQuality', q);
+      updateTexqUI();
+      if (onImagery) onImagery(q);
+      return;
+    }
+
     texqBusy = true;
     texqBtns.forEach(b => b.disabled = true);
     texqNote.classList.add('busy');
-    texqNote.textContent = 'Loading… fetching ' + textureSetSize(q);
+    texqNote.textContent = 'Loading… fetching ' + textureSetSize(doelSet);
 
-    const A = assetsFor(q);
+    const A = assetsFor(doelSet);
     const loader = new THREE.TextureLoader();
     loader.setCrossOrigin('anonymous');          // zie de toelichting bij de andere loader
     const load = url => loader.loadAsync(url);
@@ -329,7 +368,7 @@ export function createEarthTextures(THREE, opts = {}) {
     ]);
     try {
       const [day, night, clouds, spec, normal] = await metGrens(Promise.all([
-        load(dayUrlFor(q)), load(nightUrlFor(q)),
+        load(dayUrlFor(doelSet)), load(nightUrlFor(doelSet)),
         load(A.clouds).catch(() => null),
         load(A.specular).catch(() => null),
         load(A.normal).catch(() => null)
@@ -369,11 +408,13 @@ export function createEarthTextures(THREE, opts = {}) {
       if (clouds) cloudsTexture = clouds;
       getWorld().backgroundImageUrl(A.stars);
 
-      texQuality = q;
+      imagery = q;
+      texQuality = doelSet;
       texQualityFallback = null;   // gelukt, dus de standing notice hoort weg
       Prefs.set('pref.texQuality', q);
       updateTexqUI();
       texqNote.textContent = A.label + ' actief.';
+      if (onImagery) onImagery(q);
     } catch (e) {
       texqNote.textContent = e && e.message === 'timeout'
         ? 'Loading timed out — the previous textures remain active.'
@@ -548,7 +589,9 @@ export function createEarthTextures(THREE, opts = {}) {
   /* WHAT THE APP GETS BACK. Deliberately narrow: the panel rows and their
      notes are bound in here, so nothing outside needs to reach them. */
   return {
-    quality: () => texQuality,
+    quality: () => texQuality,          // de textuurSET (2k of 8k)
+    imagery: () => imagery,             // de gekozen TRAP (2k, 8k of tiles)
+    setImagery: setTextureQuality,
     setQuality: setTextureQuality,
     buildMaterial: buildRealisticMaterial,
     upgradeIfNeeded,

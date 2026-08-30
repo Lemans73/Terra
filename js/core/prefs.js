@@ -133,6 +133,13 @@ export const PREFS_DEFAULTS = {
   'tex.normal':   true,
   'tex.wave':     true,
   'tex.wire':     false,
+  /* DRIE WAARDEN SINDS DE TEGELSCHIL: '2k' | '8k' | 'tiles'. De sleutel heet nog
+     texQuality omdat een hernoeming een versiebump en een migratietak vraagt, en
+     die twee horen bij het opruimen aan het eind — niet halverwege.
+
+     `tiles` is geen textuurset maar een TRAP: hij draait op de 2K-set (voor de
+     nacht-, wolken-, specular- en reliëfkaart) en haalt de dagkaart uit
+     satellietbeeld. Zie de noot bij IMAGERY_TRAPPEN in js/core/earth-textures.js. */
   'pref.texQuality': '2k',
 
   /* ---- Wat er op de bol getekend wordt ---- */

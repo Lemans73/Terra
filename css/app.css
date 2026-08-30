@@ -1718,10 +1718,20 @@
   }
   .apply:not(:disabled):hover { border-color: var(--accent); color: var(--accent); }
   .apply:disabled { opacity: 0.35; cursor: default; }
-  /* ---- Textuurkwaliteit (Aarde-tab) ---- */
-  .texq { display: flex; gap: 6px; }
+  /* ---- Beeldkwaliteit (sectie Imagery & data) ----
+     DRIE KNOPPEN IN PLAATS VAN TWEE sinds de satelliettrap, en ze komen op TWEE
+     REGELS te staan: twee naast elkaar, de derde eronder over de volle breedte.
+
+     Dat is gemeten en niet toevallig. Het instellingenpaneel geeft deze rij 266
+     px; drie kolommen zouden er 85 per stuk worden, en daar past `10 m · 2-18
+     MB/visit` niet op zonder te breken. Bovendien onderscheidt de volle breedte
+     de satelliettrap van de twee erboven, en dat is precies wat hij is: geen
+     derde stap op dezelfde schaal maar een andere soort keuze.
+
+     De ondergrens van 92 px is wat twee naast elkaar houdt; wrap doet de rest. */
+  .texq { display: flex; flex-wrap: wrap; gap: 6px; }
   .texq-opt {
-    flex: 1;
+    flex: 1 1 92px;
     display: flex; flex-direction: column; gap: 2px;
     background: transparent;
     border: 1px solid var(--hair);

@@ -537,6 +537,72 @@
       </div>
       </section>
 
+      <!-- ---------- BEELD EN DATA ----------
+           EEN EIGEN SECTIE, EN NIET EEN RIJ BIJ DE TEXTUREN. Die twee
+           beantwoorden verschillende vragen: hier staat wat het beeld MAG KOSTEN,
+           daaronder hoe de aarde ERUITZIET. De satelliettrap haalt tijdens het
+           kijken bij, en dat is geen graduele stap maar een andere soort keuze —
+           vandaar `once` tegenover `per visit` in de metaregel.
+
+           DE MB'S KOMEN UIT DE CODE, niet uit deze markup: updateTexqUI() vult ze
+           uit textureSetSize(). Ze stonden hier ooit met de hand en liepen
+           achter zodra een set veranderde.
+
+           De uitklap draagt wat er niet op een knop past: dat de satelliettrap
+           ook DIEPER laat zoomen, wat er op schijf staat, en de wisknop. -->
+      <section class="acc" data-acc="settings-imagery">
+        <button class="acc-head" type="button" aria-expanded="false">
+          <span>Imagery &amp; data</span>
+          <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="acc-body">
+          <div class="texq" id="texq">
+            <button class="texq-opt" data-q="2k">
+              <span class="texq-name">Standard</span>
+              <span class="texq-meta" data-texq-size="2k">2K</span>
+            </button>
+            <button class="texq-opt" data-q="8k">
+              <span class="texq-name">High resolution</span>
+              <span class="texq-meta" data-texq-size="8k">8K</span>
+            </button>
+            <button class="texq-opt" data-q="tiles">
+              <span class="texq-name">Satellite</span>
+              <span class="texq-meta" data-texq-size="tiles">10 m</span>
+            </button>
+          </div>
+          <div class="texq-note" id="texq-note">Satellite fetches imagery while you look, and lets you zoom in further.</div>
+
+          <div class="elayer expandable" id="imagery-detail-row" data-prefs="none">
+            <span class="edot"></span>What this costs
+            <button class="row-expand" data-note="imagery-detail" title="About imagery and data" aria-label="About imagery and data" aria-expanded="false">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <span class="estat" id="es-imagery-disk">&#8212;</span>
+          </div>
+          <div class="layer-detail" id="imagery-detail">
+            <b>Standard</b> and <b>High resolution</b> each download one world map,
+            once. After that they cost nothing and work offline.
+            <br /><br />
+            <b>Satellite</b> is different: it fetches Sentinel-2 imagery for the
+            place you are looking at, so it keeps costing a little while you use
+            it. In return it is about five hundred times sharper than the 8K map,
+            and it is the only setting that lets you <b>zoom in further</b> &#8212;
+            the other two stop where one world map runs out of detail.
+            <br /><br />
+            Tiles are kept on your device so a second visit to the same place is
+            almost free, for you and for the source. They expire after 30 days and
+            never grow past their budget.
+            <div class="ctex" id="imagery-disk">
+              <div class="ctex-slot">
+                <span class="ctex-label">On this device</span>
+                <span class="ctex-value" id="imagery-disk-value">nothing stored</span>
+                <button class="ctex-pick" id="imagery-clear" type="button">Clear</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- ---------- AARDE-TEXTUREN ----------
            Earth layers en Texture quality zijn hier samengevoegd: het zijn allebei
            instellingen over hoe de aarde WORDT GETEKEND, niet over wat je erop ziet.
@@ -565,19 +631,6 @@
               </div>
               <input type="range" id="night-slider" class="range" min="0" max="60" value="12" />
             </div>
-            <h3>Texture quality</h3>
-            <div class="texq" id="texq">
-              <button class="texq-opt" data-q="2k">
-                <span class="texq-name">Standard</span>
-                <span class="texq-meta" data-texq-size="2k">2K</span>
-              </button>
-              <button class="texq-opt" data-q="8k">
-                <span class="texq-name">High resolution</span>
-                <span class="texq-meta" data-texq-size="8k">8K</span>
-              </button>
-            </div>
-            <div class="texq-note" id="texq-note">8K is sharper up close, but downloads more.</div>
-
             <!-- EIGEN TEXTUREN. Staat hier en niet bij de tekenlaag, om twee redenen:
                  dit gaat over de aarde en niet over annoteren, en alles in díé tab
                  wordt uit de standalone geknipt — terwijl juist dít daar werkt. Een
@@ -643,6 +696,14 @@
       <div class="acc-body">
       <div class="credits">
         <dl>
+          <!-- BEWEEGT MEE MET DE ACTIEVE BRON, en staat er niet altijd. Bij EOX is
+               vermelding een LICENTIEVOORWAARDE en geen beleefdheid, dus hij hoort
+               te verschijnen zodra die beelden getoond worden en te verdwijnen als
+               dat niet zo is. Gevuld door toonBeeldbron() uit de gestructureerde
+               attributie van de bron zelf — één plek, geen tweede lijst hier. -->
+          <dt id="imagery-credit-dt" hidden>Satellite imagery</dt>
+          <dd id="imagery-credit-dd" hidden></dd>
+
           <dt>Textures</dt>
           <dd><a href="https://www.solarsystemscope.com/textures/" target="_blank" rel="noopener">Solar System Scope</a> · CC BY 4.0</dd>
 
@@ -4130,7 +4191,10 @@ document.querySelectorAll('.elayer[data-overlay]').forEach(el => {
 const earthTex = createEarthTextures(THREE, {
   getWorld: () => world,
   getMaterial: () => shaderMaterial,
-  onLayerStatus: (status) => { earthLayerStatus = status; updateEarthLayers(); }
+  onLayerStatus: (status) => { earthLayerStatus = status; updateEarthLayers(); },
+  /* De trap `tiles` IS de tegelschil. De textuurmodule weet daar niets van en
+     hoeft dat ook niet; ze meldt alleen dat de keuze veranderd is. */
+  onImagery: kiesBeeldtrap
 });
 
 // Hulpobjecten voor de radiale oriëntatie van de indicatoren — zie de lange noot
@@ -4700,6 +4764,78 @@ function setupTileShell() {
     globeRadius: GLOBE_R
   });
   mesh.parent.add(tileShell.group);
+  /* DE BEWAARDE KEUZE TOEPASSEN, en pas hier: de schil bestaat een regel eerder
+     nog niet, en `onImagery` heeft bij het opstarten niets gevuurd omdat er niets
+     gewisseld is. Zonder deze regel kiest de bezoeker Satellite, komt terug, en
+     ziet de knop wel maar de tegels niet. */
+  if (earthTex.imagery() === 'tiles') kiesBeeldtrap('tiles');
+  else toonSchijfbezetting();
+}
+
+/* WAT DE TRAP `tiles` BETEKENT voor de rest van de app. De textuurmodule kent
+   alleen de trap; welke BRON daarbij hoort is een keuze van de app, en die staat
+   hier zodat er één plek is waar `tiles` en `eox-cloudless` bij elkaar komen.
+
+   De bron wordt gezet vóór de schil aangaat: setSource() herbouwt de boom, en dat
+   op een zichtbare schil doen zou de tegels die er net staan weggooien. */
+function kiesBeeldtrap(trap) {
+  const wil = trap === 'tiles';
+  if (wil && tileShell && tileShell.sourceId() !== 'eox-cloudless') {
+    tileShell.setSource('eox-cloudless');
+  }
+  tileShellWanted = wil;
+  syncTileShell();
+  toonSchijfbezetting();
+  toonBeeldbron();
+}
+
+/* DE BRONVERMELDING VAN HET SATELLIETBEELD. Bij EOX is dit een voorwaarde uit de
+   licentie: de naam, de maker en de melding dat het gewijzigde Copernicus
+   Sentinel-data bevat. De tekst komt uit de attributie van de BRON en niet uit de
+   markup, zodat een tweede bron er nooit naast kan komen te staan.
+
+   Weg als de tegels niet draaien — een vermelding voor beeld dat er niet is, is
+   net zo misleidend als geen vermelding voor beeld dat er wel is. */
+function toonBeeldbron() {
+  const dt = document.getElementById('imagery-credit-dt');
+  const dd = document.getElementById('imagery-credit-dd');
+  if (!dt || !dd) return;
+  const aan = tileShell && tileShell.isVisible() && tileShell.sourceId() !== 'world-texture';
+  dt.hidden = !aan; dd.hidden = !aan;
+  if (!aan) { dd.textContent = ''; return; }
+  dd.replaceChildren();
+  tileShell.attribution().forEach((a, i) => {
+    if (i) dd.appendChild(document.createTextNode(' · '));
+    if (a.url) {
+      const link = document.createElement('a');
+      link.href = a.url; link.target = '_blank'; link.rel = 'noopener';
+      link.textContent = a.name;
+      dd.appendChild(link);
+    } else {
+      dd.appendChild(document.createTextNode(a.name));
+    }
+    const staart = [a.by, a.licence, a.note].filter(Boolean).join(' · ');
+    if (staart) dd.appendChild(document.createTextNode(' by ' + staart));
+  });
+}
+
+/* Wat er van de beelden op deze schijf staat. Het getal komt van de BROWSER en
+   niet uit onze eigen boekhouding: die telt alles van deze oorsprong mee, en dat
+   is wat iemand wil weten voordat hij op wissen drukt. */
+async function toonSchijfbezetting() {
+  const waarde = document.getElementById('imagery-disk-value');
+  const kort = document.getElementById('es-imagery-disk');
+  const knop = document.getElementById('imagery-clear');
+  if (!waarde) return;
+  const bezet = tileShell ? await tileShell.cache.diskUsage() : null;
+  const bytes = bezet ? bezet.eigenIndex : 0;
+  const tekst = bytes > 0 ? (bytes >= 1e6 ? (Math.round(bytes / 1e5) / 10) + ' MB'
+                                          : Math.round(bytes / 1000) + ' KB')
+                          : 'nothing stored';
+  waarde.textContent = tekst;
+  waarde.classList.toggle('custom', bytes > 0);
+  if (kort) kort.textContent = bytes > 0 ? tekst : '\u2014';
+  if (knop) knop.hidden = bytes === 0;
 }
 
 /* EEN TIMER NAAST rAF, en niet in plaats daarvan. In een tabblad op de
@@ -5832,6 +5968,21 @@ document.querySelectorAll('.elayer').forEach(el => {
 
 vulDiepteLegenda();
 
+/* ---- De wisknop voor beelddata ----
+   Hij staat achter de uitklap en niet in de rij zelf: wissen is zeldzaam, en een
+   knop die je zelden nodig hebt hoort niet permanent ruimte te claimen. Wat er
+   WEL in de rij staat is het getal, want dat is de reden om te kijken. */
+document.getElementById('imagery-clear')?.addEventListener('click', async () => {
+  if (!tileShell) return;
+  const knop = document.getElementById('imagery-clear');
+  knop.disabled = true;
+  const gewist = await tileShell.cache.clear();
+  knop.disabled = false;
+  const waarde = document.getElementById('imagery-disk-value');
+  if (waarde && !gewist) { waarde.textContent = 'could not clear'; return; }
+  toonSchijfbezetting();
+});
+
 // ---- Nachtzijde-helderheid ----
 const nightSliderEl = document.getElementById('night-slider');
 nightSliderEl.addEventListener('input', () => {
@@ -6917,6 +7068,7 @@ document.getElementById('notif-list').addEventListener('click', (e) => {
    `requestAnimationFrame`, en zonder net blijft dit paneel bij een stilstaand
    tabblad halfdoorzichtig staan en vangt het nog kliks af ook. */
 let settingsOpen = false;
+let schijfTik = null;
 function finishSettingsClose() {
   if (settingsOpen) return;   // ondertussen weer geopend: niets doen
   const el = document.getElementById('settings-panel');
@@ -6927,6 +7079,20 @@ function setSettingsOpen(open) {
   if (open === settingsOpen) return;
   settingsOpen = open;
   const el = document.getElementById('settings-panel');
+  /* De rij `What this costs` draagt het getal, en dat VERSCHUIFT terwijl je kijkt:
+     elke tegel die binnenkomt telt mee. Eenmalig bij het openen is dus niet
+     genoeg — dan staat er "nothing stored" terwijl er megabytes bijkomen.
+     GEMETEN: 33 tegels op schijf terwijl de rij nog op nul stond.
+
+     De tik loopt alleen zolang het paneel OPEN staat; dicht kost hij niets. */
+  if (open) {
+    toonSchijfbezetting();
+    clearInterval(schijfTik);
+    schijfTik = setInterval(toonSchijfbezetting, 2000);
+  } else {
+    clearInterval(schijfTik);
+    schijfTik = null;
+  }
   if (open) {
     el.style.display = 'flex';   // flexkolom: vaste kop + scrollend middendeel
     gsap.fromTo(el, { opacity: 0, y: -12, scale: 0.97 },
@@ -9371,6 +9537,11 @@ document.querySelectorAll('.row-expand[data-note]').forEach(btn => {
     note.classList.toggle('show', open);
     btn.classList.toggle('open', open);
     btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    /* De schijfbezetting VERSCHUIFT terwijl je kijkt: elke tegel die binnenkomt
+       telt mee. Hem alleen bij een trapwissel bijwerken laat "nothing stored"
+       staan terwijl er megabytes op schijf komen. Het moment dat telt is dit:
+       iemand slaat de uitleg open om te kijken. */
+    if (open && btn.dataset.note === 'imagery-detail') toonSchijfbezetting();
   });
 });
 
