@@ -1,36 +1,28 @@
 /* ============================================================
-   TERRA — EQ-indicator v2 · de laag
+   TERRA — the quake indicator · the layer
    ------------------------------------------------------------
-   De aardbeving-indicator uit logs/indicator-workbench.html, als
-   twee instanced lagen NAAST globe.gl's eigen scene.
+   Three instanced layers NEXT TO globe.gl's own scene: the ring,
+   the shockwave and the beam.
 
-   WAAROM NAAST EN NIET ALS customThreeObject (contract, sessie 39).
+   WHY BESIDE IT AND NOT AS A customThreeObject. The older approach
+   built a THREE.Group per quake — three meshes each — and updated
+   position and orientation per data change. At 450 quakes that is
+   1350 meshes and it is where 1409 draw calls came from.
 
-   Terra bouwt vandaag een THREE.Group per beving: buildQuakeObject()
-   maakt drie meshes — gloed-cilinder, kern-cilinder, shockwave-ring —
-   en customThreeObjectUpdate zet per datawijziging positie en
-   orientatie. Bij 450 bevingen zijn dat 1.350 meshes.
+   This layer does the opposite: InstancedBufferGeometry holding ALL
+   quakes together, with the placement done in the vertex shader.
+   One draw call per sub-layer for the whole field.
 
-   Deze laag doet het omgekeerd: twee InstancedBufferGeometry's
-   waarin ALLE bevingen samen zitten, en de plaatsing gebeurt in de
-   vertex-shader. Twee draw calls voor het hele veld.
+   AN InstancedBufferGeometry AND NOT AN InstancedMesh. The shader
+   decides where every vertex goes, so an instanceMatrix would be a
+   second and diverging truth — and the raycast you get for free
+   would aim at that wrong truth. Picking therefore follows the same
+   formula as the shader; see iconScaleJS and ringWorldRadius at the
+   bottom.
 
-   Die twee modellen passen niet in dezelfde laag. Vandaar een eigen
-   groep, en globe.gl's quake-laag wordt leeggemaakt in plaats van
-   vervangen. De v1-tak blijft staan: terugkeren is een schakelaar
-   en geen revert.
-
-   EEN InstancedBufferGeometry EN GEEN InstancedMesh. De shader
-   bepaalt zelf waar elk hoekpunt komt, dus een instanceMatrix zou
-   een tweede, afwijkende waarheid zijn — en de raycast die je er
-   gratis bij krijgt, zou op die verkeerde waarheid mikken.
-   Aanwijzen loopt daarom langs dezelfde formule als de shader; zie
-   iconScaleJS en ringWorldRadius onderaan.
-
-   WAT DEZE MODULE NIET DOET: de kleurschaal en de omrekening van
-   lat/lon. Allebei komen ze van de aanroeper (depthRGB en
-   world.getCoords), zodat er van geen van beide een tweede versie
-   in dit bestand staat.
+   WHAT THIS MODULE DOES NOT DO: the colour scale and the lat/lon
+   conversion. Both come from the caller (depthRGB and
+   world.getCoords), so neither has a second version in here.
    ============================================================ */
 
 import {
@@ -40,13 +32,15 @@ import {
 } from './quake-indicator-shaders.js';
 
 export function createQuakeIndicator(THREE, opts = {}) {
-  /* DE STRAAL STAAT HIER EN NIET IN DE MODULE-SCOPE, en dat is geen stijlkeuze.
-     tools/build-standalone.mjs giet alle modules in ÉÉN script voor de
-     standalone, en index.html declareert zijn eigen GLOBE_R. Twee const-en met
-     dezelfde naam in dezelfde scope is een SyntaxError — in de browser valt dat
-     nooit op, want daar heeft elke module zijn eigen scope. De build ving het.
+  /* THE RADIUS LIVES HERE AND NOT IN THE MODULE SCOPE, and that is not a style
+     choice. tools/build-standalone.mjs pours every module into ONE script for
+     the standalone build, and index.html declares its own GLOBE_R. Two consts
+     with the same name in the same scope is a SyntaxError — in the browser that
+     never shows, because there every module has its own scope. The build caught
+     it.
 
-     Als optie meegeven mag; de app draait op 100 en dat is three-globe.  */
+     Passing it as an option is allowed; the app runs on 100, which is
+     three-globe's radius. */
   const GLOBE_R = opts.globeRadius || 100;
   const P = opts.params;
   const depthRGB = opts.depthRGB;
@@ -58,21 +52,20 @@ export function createQuakeIndicator(THREE, opts = {}) {
   const group = new THREE.Group();
   group.name = 'quake-indicator-v2';
 
-  // ---- geometrie ---------------------------------------------------------
+  // ---- geometry ----------------------------------------------------------
 
-  /* ZESTIEN BIJ ZESTIEN, en niet 1x1. De vertex-shader projecteert elk
-     hoekpunt op de bol, maar de DRIEHOEKEN ertussen blijven vlak — die lopen
-     als koorde onder het oppervlak door. Met vier hoekpunten ligt het midden
-     van zo'n driehoek bij een schijf van 13 graden hoekradius 2,65 eenheden
-     BINNEN de bol, en dan verdwijnt de hele indicator in de aarde.
+  /* SIXTEEN BY SIXTEEN, and not 1x1. The vertex shader projects every vertex
+     onto the globe, but the TRIANGLES between them stay flat — they run under
+     the surface as a chord. With four vertices the middle of such a triangle
+     sits 2.65 units INSIDE the globe for a disc of 13 degrees angular radius,
+     and then the whole indicator disappears into the earth.
 
-     GEMETEN 2026-08-23: met 1x1 en de aarde zichtbaar verschilden er NUL
-     pixels tussen ring aan en ring uit, terwijl dezelfde stand met de aarde
-     verborgen 24.546 verlichte pixels gaf. Met 16x16 blijft de
-     koorde-afwijking per segment onder 0,01 eenheid.
+     MEASURED: with 1x1 and the earth visible there were ZERO pixels of
+     difference between ring on and ring off, while the same setting with the
+     earth hidden gave 24,546 lit pixels. With 16x16 the chord error per segment
+     stays under 0.01 unit.
 
-     Het staat nergens uitgelegd en het is niet vanzelfsprekend, maar zonder
-     is de indicator onzichtbaar. */
+     Not obvious, and without it the indicator is invisible. */
   const discBase = new THREE.PlaneGeometry(2, 2, 16, 16);
 
   const makeDiscGeometry = () => {
@@ -87,13 +80,13 @@ export function createQuakeIndicator(THREE, opts = {}) {
   const ringGeo = makeDiscGeometry();
   const shockGeo = makeDiscGeometry();
 
-  /* DE BEAM KRIJGT EEN 1x1-QUAD en niet de 16x16 van de schijven. Die fijne
-     verdeling is er omdat een schijf op de BOL geprojecteerd wordt en de
-     driehoeken ertussen anders als koorde onder het oppervlak door lopen. Een
-     staaf steekt recht naar buiten en raakt de bol alleen in zijn voet — daar
-     valt niets weg te zakken, en vier hoekpunten volstaan. */
+  /* THE BEAM GETS A 1x1 QUAD and not the 16x16 of the discs. That fine
+     subdivision exists because a disc is projected onto the GLOBE and its
+     triangles would otherwise run under the surface as a chord. A shaft points
+     straight outwards and touches the globe only at its foot — nothing can sink
+     there, and four vertices are enough. */
   const beamBase = new THREE.PlaneGeometry(1, 1, 1, 1);
-  beamBase.translate(0, 0.5, 0);   // oorsprong in het midden van de ONDERrand
+  beamBase.translate(0, 0.5, 0);   // origin at the middle of the BOTTOM edge
   const beamGeo = new THREE.InstancedBufferGeometry();
   beamGeo.index = beamBase.index;
   beamGeo.setAttribute('position', beamBase.attributes.position);
@@ -102,10 +95,10 @@ export function createQuakeIndicator(THREE, opts = {}) {
 
   // ---- uniforms ----------------------------------------------------------
 
-  /* De schaal- en stapeluniforms zijn per constructie gelijk tussen de twee
-     lagen: ze komen uit een functie. Zouden ze uiteen lopen, dan tekent de
-     shockwave een andere plek dan de ring eronder — en dat is precies het
-     soort fout dat alleen bij een bepaalde zoomstand opvalt. */
+  /* The scale and stacking uniforms are equal across the layers by
+     construction: they come out of one function. Were they to drift apart, the
+     shockwave would draw a different spot than the ring under it — exactly the
+     kind of fault that only shows at one particular zoom. */
   const sharedUniforms = () => ({
     uCamDist:     { value: 260 },
     uRadius:      { value: GLOBE_R },
@@ -126,10 +119,10 @@ export function createQuakeIndicator(THREE, opts = {}) {
     uStackFar:    { value: P.quakeStackFar },
     uStackLift:   { value: P.quakeStackLift },
     uStackSpread: { value: P.quakeStackSpread },
-    /* AANWIJZEN. Deze drie staan in het GEDEELDE blok en niet per laag: wijs je
-       een beving aan, dan horen zijn ring, zijn beam en zijn puls samen op te
-       lichten en de andere samen te dempen. Zouden ze per laag staan, dan is
-       één vergeten aanroep genoeg om de helft te laten meedoen. */
+    /* HOVER. These three sit in the SHARED block and not per layer: hover a
+       quake and its ring, its beam and its pulse should light up together while
+       the others dim together. Per layer, one forgotten call would be enough to
+       let half of them join in. */
     uHoverIdx:   { value: -1 },
     uHoverBoost: { value: P.quakeHoverBoost },
     uDimOthers:  { value: P.quakeHoverDim }
@@ -157,12 +150,10 @@ export function createQuakeIndicator(THREE, opts = {}) {
     uRingOn:    { value: P.quakeRingOn ? 1 : 0 }
   });
 
-  /* DE BEAM (sessie 41). Zijn maat komt uit de OUDE v1-parameters — beamBase,
-     beamMultiplier en beamRadius stonden sinds de sloop wees in js/config.js en
-     betekenen hier weer wat ze betekenden. uMagMin en uMagSpan staan erbij omdat
-     de shader de rauwe magnitude nodig heeft: aMagFrac is genormaliseerd, en het
-     kwadraat van een fractie is iets heel anders dan het kwadraat van een
-     magnitude. */
+  /* THE BEAM. Its size comes from beamBase, beamMultiplier and beamRadius in
+     js/config.js. uMagMin and uMagSpan are here because the shader needs the raw
+     magnitude: aMagFrac is normalised, and the square of a fraction is something
+     else entirely than the square of a magnitude. */
   const beamUniforms = Object.assign(sharedUniforms(), {
     uLift:       { value: P.quakeRingLift },
     uBeamSink:   { value: P.quakeBeamSink },
@@ -182,9 +173,9 @@ export function createQuakeIndicator(THREE, opts = {}) {
   const shockUniforms = Object.assign(sharedUniforms(), {
     uTime:      { value: 0 },
     uLift:      { value: P.quakeShockLift },
-    /* DE RINGMAAT, niet een eigen. Zie de lange noot in QUAKE_SHOCK_VERT: twee
-       losse maten liepen uiteen zodra er aan één werd gedraaid, en dan valt de
-       puls binnen zijn eigen indicator. */
+    /* THE RING'S SIZE, not one of its own. See the long note in
+       QUAKE_SHOCK_VERT: two separate sizes drifted apart the moment either was
+       adjusted, and then the pulse falls inside its own indicator. */
     uRadLo:     { value: P.quakeRingRadiusLo },
     uRadHi:     { value: P.quakeRingRadiusHi },
     uRadPow:    { value: P.quakeRingRadiusPow },
@@ -198,32 +189,31 @@ export function createQuakeIndicator(THREE, opts = {}) {
     uOpacity:   { value: P.quakeShockOpacity }
   });
 
-  // ---- materialen --------------------------------------------------------
+  // ---- materials ---------------------------------------------------------
 
-  /* Additief, zoals elke indicator in Terra: onverlicht neon dat niet met de
-     ondergrond mengt. Wel met polygonOffset, anders vecht de schijf met de
-     bol op de vlakke stukken — die staat hier op straal 100 en de ring met
-     quakeRingLift 0 net zo. */
+  /* Additive, like every indicator in Terra: unlit neon that does not blend
+     with what is under it. With polygonOffset, otherwise the disc fights the
+     globe on the flat stretches — that sits at radius 100 and so does the ring
+     with quakeRingLift at 0. */
   const ringMat = new THREE.ShaderMaterial({
     uniforms: ringUniforms,
     vertexShader: QUAKE_RING_VERT,
     fragmentShader: QUAKE_RING_FRAG,
     transparent: true,
     depthWrite: false,
-    /* DEPTHTEST UIT, en dat is de kern van de parallax-reparatie (sessie 40).
+    /* DEPTH TEST OFF, and that is the heart of the parallax repair.
 
-       Deze laag lag op straal 100,8 om boven de kaartlijnen uit te komen, en
-       daar betaalde hij parallax voor: bij een scheve blik schuift een zwevende
-       indicator weg van de plek die hij aanwijst. GEMETEN op 15 graden uit het
-       beeldmidden — 0,49 px op camera-afstand 450, maar 30,8 px op 120 en 222 px
-       op 105. Precies wat er bij diep inzoomen te zien was.
+       This layer sat at radius 100.8 to clear the map lines, and paid parallax
+       for it: under an oblique view a floating indicator drifts away from the
+       spot it points at. MEASURED at 15 degrees off centre — 0.49 px at camera
+       distance 450, but 30.8 px at 120 and 222 px at 105.
 
-       Op straal 100 is die verschuiving per constructie nul, maar dan vecht de
-       laag met de bol en de kaart. Dus geen dieptetoets, en de tekenvolgorde uit
-       renderOrder. Wat de dieptebuffer nog wél deed — de ACHTERKANT van de bol
-       verbergen — is naar de fragment-shader verhuisd; zie achterDeHorizon()
-       daar. polygonOffset is daarmee overbodig: er is geen dieptetoets meer om
-       tegen te duwen. */
+       At radius 100 that drift is zero by construction, but there the layer
+       fights the globe and the map. So no depth test, and the draw order comes
+       from renderOrder. What the depth buffer still did — hiding the BACK of the
+       globe — moved into the fragment shader; see the limb band there.
+       polygonOffset is redundant with it: there is no depth test left to push
+       against. */
     depthTest: false,
     blending: THREE.AdditiveBlending,
     side: THREE.DoubleSide,
@@ -237,16 +227,16 @@ export function createQuakeIndicator(THREE, opts = {}) {
     fragmentShader: QUAKE_SHOCK_FRAG,
     transparent: true,
     depthWrite: false,
-    depthTest: false,   // zelfde reden als bij de ring hierboven
+    depthTest: false,   // same reason as the ring above
     blending: THREE.AdditiveBlending,
     side: THREE.DoubleSide,
     toneMapped: false
   });
 
-  /* GEEN DIEPTETOETS, net als de andere twee, en om dezelfde reden: de voet
-     ligt op straal 100 en zou daar met de bol en de kaartlijnen vechten. Wat de
-     dieptebuffer nog deed — de achterkant verbergen — doet achterDeHorizon() in
-     de fragment-shader. */
+  /* NO DEPTH TEST, like the other two and for the same reason: the foot sits at
+     radius 100 and would fight the globe and the map lines there. What the depth
+     buffer still did — hiding the back — is done by the limb band in the
+     fragment shader. */
   const beamMat = new THREE.ShaderMaterial({
     uniforms: beamUniforms,
     vertexShader: QUAKE_BEAM_VERT,
@@ -262,17 +252,16 @@ export function createQuakeIndicator(THREE, opts = {}) {
   const ringMesh = new THREE.Mesh(ringGeo, ringMat);
   const shockMesh = new THREE.Mesh(shockGeo, shockMat);
   const beamMesh = new THREE.Mesh(beamGeo, beamMat);
-  // De shader verplaatst de hoekpunten, dus een boundingSphere op de
-  // basisgeometrie liegt: die zou de hele laag wegculllen zodra de camera
-  // niet naar de oorsprong kijkt.
+  // The shader moves the vertices, so a boundingSphere on the base geometry
+  // lies: it would cull the whole layer as soon as the camera looks away from
+  // the origin.
   ringMesh.frustumCulled = false;
   shockMesh.frustumCulled = false;
   beamMesh.frustumCulled = false;
   ringMesh.renderOrder = 3;
-  shockMesh.renderOrder = 1;   // onder alles: hij is de achtergrondpuls
-  /* TUSSEN DE SHOCKWAVE EN DE RING. De ring hoort bovenop te liggen: die wijst
-     de plek aan en draagt het label. De beam steekt naar buiten en mag daar
-     onderdoor. */
+  shockMesh.renderOrder = 1;   // under everything: it is the background pulse
+  /* BETWEEN THE SHOCKWAVE AND THE RING. The ring belongs on top: it marks the
+     spot and carries the label. The beam points outwards and may pass under. */
   beamMesh.renderOrder = 2;
   ringMesh.userData.noPick = true;
   shockMesh.userData.noPick = true;
@@ -289,14 +278,13 @@ export function createQuakeIndicator(THREE, opts = {}) {
   let stackWasOn = null;
   const _v = new THREE.Vector3();
 
-  /* Wie hangt aan wie, en op welke verdieping. Draait bij een datawissel en
-     niet per frame; de camera bepaalt alleen hoe ver de lagen naar hun basis
-     toe kruipen, en dat gebeurt in de shader.
+  /* Who hangs off whom, and on which storey. Runs on a data change and not per
+     frame; the camera only decides how far the storeys creep back towards their
+     base, and that happens in the shader.
 
-     SLAAT OVER ALS HET STAPELEN UIT STAAT, en dat is niet alleen zuinig maar
-     ook eerlijk: deze lus is O(n-kwadraat) en zou bij 450 events ruim
-     tweehonderdduizend keer een acos() doen voor een uitkomst die nergens
-     wordt gelezen. */
+     SKIPPED WHEN STACKING IS OFF, which is not just thrifty but honest: this
+     loop is O(n squared) and at 450 events would do over two hundred thousand
+     acos() calls for a result nobody reads. */
   function computeStacking(list, normals) {
     const n = list.length;
     const root = new Int32Array(n);
@@ -310,8 +298,8 @@ export function createQuakeIndicator(THREE, opts = {}) {
       return ringWorldRadius(mf) / GLOBE_R;
     };
 
-    // De ZWAARSTE eerst: die wordt de basis van zijn stapel en blijft daarmee
-    // op zijn werkelijke plek staan.
+    // The HEAVIEST first: it becomes the base of its stack and therefore stays
+    // on its real spot.
     const order = Array.from({ length: n }, (_, i) => i)
       .sort((a, b) => (list[b].value || 0) - (list[a].value || 0));
 
@@ -338,14 +326,12 @@ export function createQuakeIndicator(THREE, opts = {}) {
     return { root, layer };
   }
 
-  /* De buffers vullen. Draait bij een datawissel, niet per frame — dat is
-     precies het verschil waar de P1 uit sessie 37 naartoe werkte.
+  /* Filling the buffers. Runs on a data change, not per frame.
 
-     `nowMs` IS VERPLICHT EN KOMT VAN DE AANROEPER. Niet Date.now(), want
-     Terra heeft een tijdschuif: render() rekent met momentNow().getTime() en
-     waarschuwt daar expliciet dat de wandklok een lege kaart oplevert. Met de
-     wandklok zou bij een reis naar 1985 elke beving miljoenen uren oud zijn
-     en stond de shockwave permanent uit — een laag die stil niets doet. */
+     nowMs IS REQUIRED AND COMES FROM THE CALLER. Not Date.now(), because Terra
+     has a time slider: render() works from momentNow().getTime(). With the wall
+     clock, a trip to 1985 would make every quake millions of hours old and the
+     shockwave would sit permanently off — a layer silently doing nothing. */
   function uploadEvents(list, nowMs, windowMs) {
     if (!Number.isFinite(nowMs)) {
       throw new Error('uploadEvents: nowMs is verplicht (het GEKOZEN moment, niet Date.now())');
@@ -362,12 +348,12 @@ export function createQuakeIndicator(THREE, opts = {}) {
     const col = new Float32Array(n * 3);
     const magF = new Float32Array(n);
     const age = new Float32Array(n);
-    const ageH = new Float32Array(n);   // leeftijd in UREN, voor de shockwave
+    const ageH = new Float32Array(n);   // age in HOURS, for the shockwave
     const seed = new Float32Array(n);
-    /* DE INDEX GAAT MEE NAAR DE GPU. De shader kan hem niet zelf afleiden —
-       gl_InstanceID bestaat pas in GLSL ES 3.00 en deze shaders zijn met opzet
-       1.00-veilig. Deze volgorde is dezelfde als die van `events`, en daar
-       hangt ook de labellaag aan (die leest de gestapelde plek per index). */
+    /* THE INDEX GOES TO THE GPU. The shader cannot derive it — gl_InstanceID
+       only exists in GLSL ES 3.00 and these shaders are deliberately 1.00-safe.
+       This order is the same as that of the events array, and the label layer
+       hangs off it too (it reads the stacked position per index). */
     const idx = new Float32Array(n);
     const rootN = new Float32Array(n * 3);
     const layerA = new Float32Array(n);
@@ -386,8 +372,8 @@ export function createQuakeIndicator(THREE, opts = {}) {
       nor[i * 3] = _v.x; nor[i * 3 + 1] = _v.y; nor[i * 3 + 2] = _v.z;
       normals.push(_v.clone());
 
-      // De diepte-kleur komt van de aanroeper (depthRGB), zodat de zes-stops-
-      // schaal een bron van waarheid houdt. De shader krijgt de uitkomst.
+      // The depth colour comes from the caller (depthRGB) so the six-stop scale
+      // keeps one source of truth. The shader gets the result.
       const [r, g, b] = depthRGB(q.depth);
       col[i * 3] = r / 255; col[i * 3 + 1] = g / 255; col[i * 3 + 2] = b / 255;
 
@@ -412,14 +398,10 @@ export function createQuakeIndicator(THREE, opts = {}) {
     stackNormals = normals;
     stackWasOn = !!P.quakeStackOn;
 
-    /* Dezelfde buffers voor beide meshes. Niet apart opbouwen: dan kunnen ze
-       uiteen gaan lopen zodra er ergens een regel bijkomt, en dan tekent de
-       shockwave een andere beving dan de ring eronder. */
-    /* DE BEAM EET UIT DEZELFDE BUFFERS, en dat is geen zuinigheid maar de enige
-       manier waarop hij niet uiteen kan lopen met de ring eronder. Zou hij zijn
-       eigen aNormal krijgen, dan staat er bij de eerstvolgende wijziging een
-       staaf op een andere plek dan zijn eigen ring — en dat valt pas op bij een
-       bepaalde zoomstand. */
+    /* ALL THREE MESHES EAT FROM THE SAME BUFFERS, and that is not thrift but
+       the only way they cannot drift apart. Give the beam its own aNormal and
+       the next change puts a shaft somewhere other than its own ring — visible
+       only at one particular zoom. */
     for (const geo of [ringGeo, shockGeo, beamGeo]) {
       geo.setAttribute('aNormal',  new THREE.InstancedBufferAttribute(nor, 3));
       geo.setAttribute('aColor',   new THREE.InstancedBufferAttribute(col, 3));
@@ -434,13 +416,6 @@ export function createQuakeIndicator(THREE, opts = {}) {
     }
   }
 
-  /* WELKE BEVING IS AANGEWEZEN. Neemt een event-ID en niet een index, want de
-     aanroeper werkt met events en de index is een detail van deze laag. Bij een
-     onbekend of leeg id gaat de highlight uit.
-
-     ZOEKT LINEAIR, en dat mag: dit draait op een muisbeweging en niet per
-     frame, en de lijst is een paar honderd lang. Een map bijhouden zou een
-     tweede waarheid zijn die bij elke uploadEvents opnieuw moet kloppen. */
   /* REDO THE GROUPING WITHOUT A DATA REFRESH.
 
      computeStacking() runs inside uploadEvents and returns an all-zero layer
@@ -475,6 +450,13 @@ export function createQuakeIndicator(THREE, opts = {}) {
     return stacked;
   }
 
+  /* WHICH QUAKE IS HOVERED. Takes an event id and not an index, because the
+     caller works with events and the index is a detail of this layer. An
+     unknown or empty id turns the highlight off.
+
+     SEARCHES LINEARLY, and that is fine: this runs on a mouse move and not per
+     frame, and the list is a few hundred long. Keeping a map would be a second
+     truth that has to hold again after every uploadEvents. */
   function setHovered(id) {
     let idx = -1;
     if (id != null) {
@@ -494,9 +476,9 @@ export function createQuakeIndicator(THREE, opts = {}) {
 
   // ---- per frame ---------------------------------------------------------
 
-  /* Drie regels, en dat is het hele punt van deze laag. Alles wat per event
-     verschilt zit in de shader; hier gaat alleen wat voor het hele veld
-     tegelijk geldt naar de GPU. */
+  /* Three lines, and that is the whole point of this layer. Everything that
+     differs per event lives in the shader; only what holds for the entire field
+     at once goes to the GPU here. */
   const _camLokaal = new THREE.Vector3();
   const _inv = new THREE.Matrix4();
 
@@ -534,58 +516,56 @@ export function createQuakeIndicator(THREE, opts = {}) {
     shockUniforms.uTime.value = timeSec;
     setLimbBand(camDist);
 
-    /* DE CAMERA IN LOKALE RUIMTE, één keer per frame. De beam keert zich naar
-       de camera en heeft die richting nodig in de ruimte waar hij zelf staat;
-       de laag hangt onder de globe-wortel en die draait mee met de aarde.
+    /* THE CAMERA IN LOCAL SPACE, once per frame. The beam turns towards the
+       camera and needs that direction in the space where it sits itself; this
+       layer hangs under the globe root, which rotates with the earth.
 
-       Zonder de wereldpositie valt hij terug op de laatste waarde in plaats van
-       op nul: een uCamLocal van (0,0,0) laat elke kruisproduct-richting samen-
-       vallen met de normaal en dan is de staaf oneindig smal. Stil onzichtbaar
-       is erger dan verkeerd. */
+       Without the world position it falls back to the last value rather than to
+       zero: a uCamLocal of (0,0,0) makes every cross-product direction coincide
+       with the normal and the shaft becomes infinitely thin. Silently invisible
+       is worse than wrong. */
     if (camWereld) {
       group.updateMatrixWorld();
       _inv.copy(group.matrixWorld).invert();
       _camLokaal.copy(camWereld).applyMatrix4(_inv);
       beamUniforms.uCamLocal.value.copy(_camLokaal);
     }
-    /* DE HOOGTE KOMT VAN BUITEN, want hij hangt aan de WEERGAVE en die kent
-       deze laag niet. Realistisch liggen de kaartlijnen op 0,006 en volstaat
-       een vaste 0,8; schematisch lopen ze tot 0,013 en ligt diezelfde 0,8 er
-       juist ONDER.
+    /* THE HEIGHT COMES FROM OUTSIDE, because it depends on the VIEW MODE and
+       this layer does not know about that. In realistic view the map lines sit
+       at 0.006 and a fixed 0.8 is enough; in schematic they run up to 0.013 and
+       that same 0.8 sits UNDER them.
 
-       WAT ER KNIPT ZIJN DE LIJNEN, NIET DE LANDVLAKKEN. Die laatste liggen
-       schematisch op 0,01 en zouden een ring op 0,8 moeten wegknippen, maar
-       het materiaal hieronder draagt polygonOffset en dat duwt de ring in de
-       dieptebuffer naar voren. Gemeten met de lift van -0,5 tot 2,5: het
-       aantal ringpixels blijft constant. Tegen LIJNEN helpt polygonOffset
-       niet — die zijn geen polygonen — en daar is de hoogte dus wel de enige
-       weg. Zie quakeRingLiftNu() in index.html voor de meetreeks.
+       WHAT CLIPS IS THE LINES, NOT THE LAND POLYGONS. Those sit at 0.01 in
+       schematic and should clip a ring at 0.8, but the material below carries
+       polygonOffset which pushes the ring forward in the depth buffer. Measured
+       with the lift from -0.5 to 2.5: the ring pixel count stays constant.
+       Against LINES polygonOffset does not help — they are not polygons — so
+       there the height really is the only way. See quakeRingLiftNu() in
+       index.html for the measurement series.
 
-       Zelfde patroon als labelBaseAltitude() en overlayAlt() in index.html:
-       de weergave bepaalt de hoogte, de laag voert hem uit. */
+       Same pattern as labelBaseAltitude() and overlayAlt() in index.html: the
+       view mode decides the height, the layer carries it out. */
     if (lift != null) {
       ringUniforms.uLift.value = lift;
-      // De shockwave blijft eronder, zodat de puls onder zijn eigen indicator
-      // door loopt in plaats van eroverheen.
+      // The shockwave stays below, so the pulse runs under its own indicator
+      // instead of over it.
       shockUniforms.uLift.value = Math.max(0, lift - (P.quakeRingLift - P.quakeShockLift));
-      // De beam vertrekt vanaf dezelfde voet als de ring, anders zweeft hij.
+      // The beam starts from the same foot as the ring, or it floats.
       beamUniforms.uLift.value = lift;
     }
   }
 
-  // ---- de wiskunde die JS moet spiegelen ---------------------------------
+  // ---- the maths JS has to mirror ----------------------------------------
 
-  /* Wie in JavaScript met de ONgestapelde plek rekent, mikt stelselmatig mis:
-     de shader verplaatst de indicator en de labels weten dat niet. GEMETEN in
-     de workbench op 2026-08-25 met stapelen aan: 257 van de 450 events staan
-     op een verdieping en die verschuiven gemiddeld 43 pixels op het scherm,
-     tot 141 pixels aan toe.
+  /* Anything computing in JavaScript from the UNstacked position misses
+     systematically: the shader moves the indicator and the labels do not know.
+     MEASURED with stacking on: 257 of 450 events sit on a storey and those
+     shift 43 pixels on screen on average, up to 141.
 
-     In deze eerste ronde staat het stapelen uit, dus geeft dit de normaal
-     ongewijzigd terug en is de lift nul. Dat is geen reden om de functie weg
-     te laten: zodra de schuif omgaat, moet dit al kloppen. Loopt hij ooit
-     uiteen met de GLSL, dan zijn labels en aanwijzen allebei stuk — ze horen
-     bij elkaar veranderd te worden. */
+     With stacking off this returns the normal unchanged and a lift of zero.
+     That is no reason to leave the function out: the moment the switch goes on,
+     this has to be right already. If it ever drifts from the GLSL, both the
+     labels and the picking break — they belong changed together. */
   const _sr = new THREE.Vector3();
   const _st = new THREE.Vector3();
 
@@ -623,13 +603,13 @@ export function createQuakeIndicator(THREE, opts = {}) {
       const want = P.quakeStackSpread * Math.sqrt(layer) / GLOBE_R;
       target.copy(_sr).addScaledVector(_st, d + (Math.max(d, want) - d) * amt).normalize();
     }
-    // De lift gaat maal de icoonschaal, net als in de shader.
+    // The lift is multiplied by the icon scale, exactly as in the shader.
     return layer * P.quakeStackLift * amt * iconScaleJS(camDist);
   }
 
-  /* De hoogte waarop de ring van dit event werkelijk ligt, als ALTITUDE —
-     dezelfde eenheid die world.getCoords() en getScreenCoords() verwachten.
-     Hier komt de leader-line van het label op uit. */
+  /* The height at which this event's ring actually sits, as an ALTITUDE — the
+     same unit world.getCoords() and getScreenCoords() expect. This is where the
+     label's leader line lands. */
   function ringAltitude(i, camDist) {
     if (!P.quakeStackOn || !stackLayer || i == null || i >= stackLayer.length) {
       return P.quakeRingLift / GLOBE_R;
@@ -640,7 +620,7 @@ export function createQuakeIndicator(THREE, opts = {}) {
     return lift / GLOBE_R;
   }
 
-  // ---- opruimen ----------------------------------------------------------
+  // ---- teardown ----------------------------------------------------------
 
   function dispose() {
     if (group.parent) group.parent.remove(group);
@@ -649,8 +629,8 @@ export function createQuakeIndicator(THREE, opts = {}) {
     ringMat.dispose(); shockMat.dispose(); beamMat.dispose();
   }
 
-  /* De uniforms opnieuw uit PARAMS lezen. Nodig zodra er aan een schuif wordt
-     gedraaid; in de app is dat voorlopig alleen de tuning tijdens het meten. */
+  /* Re-read the uniforms from PARAMS. Needed as soon as a slider moves, and
+     when applyGlobeMode() writes the per-view opacity. */
   function syncParams() {
     const pairs = [
       [ringUniforms, {
@@ -665,7 +645,7 @@ export function createQuakeIndicator(THREE, opts = {}) {
         uLift: 'quakeShockLift', uAgeLo: 'quakeShockAgeLo', uAgeHi: 'quakeShockAgeHi',
         uWaves: 'quakeShockWaves', uSpeed: 'quakeShockSpeed', uThickness: 'quakeShockThickness',
         uEdge: 'quakeShockEdge', uOpacity: 'quakeShockOpacity',
-      // De maat volgt de RING, plus de eigen factor.
+      // The size follows the RING, times its own factor.
       uRadLo: 'quakeRingRadiusLo', uRadHi: 'quakeRingRadiusHi',
       uRadPow: 'quakeRingRadiusPow', uShockScale: 'quakeShockScale'
       }],
@@ -698,9 +678,9 @@ export function createQuakeIndicator(THREE, opts = {}) {
     // needs a rebuild and not just a new uniform value. See restack().
     if (stackWasOn !== null && stackWasOn !== !!P.quakeStackOn) restack();
 
-    /* DE MAGNITUDE-SCHAAL MOET MEE. De beam rekent aMagFrac terug naar een
-       magnitude, en die omrekening hangt aan quakeMagMin/Max — draait daar
-       iemand aan, dan zou de hoogte stil verkeerd blijven. */
+    /* THE MAGNITUDE SCALE HAS TO FOLLOW. The beam converts aMagFrac back into a
+       magnitude, and that conversion depends on quakeMagMin/Max — adjust those
+       and the height would silently stay wrong. */
     beamUniforms.uMagMin.value = P.quakeMagMin;
     beamUniforms.uMagSpan.value = Math.max(0.1, P.quakeMagMax - P.quakeMagMin);
     beamUniforms.uBeamOn.value = P.quakeBeamOn ? 1 : 0;
@@ -714,8 +694,9 @@ export function createQuakeIndicator(THREE, opts = {}) {
     uploadEvents, update, syncParams, dispose, setHovered, hoveredIndex,
     restack,
     get count() { return ringGeo.instanceCount; },
-    // Meethaken en gedeelde wiskunde — de labels en het aanwijzen lopen
-    // hierlangs, zodat ze niet met een eigen formule naast de shader komen.
+    // Measurement hooks and shared maths — the labels and the picking go
+    // through here so they never end up with a formula of their own beside the
+    // shader.
     iconScaleJS, ringWorldRadius, stackedNormalJS, ringAltitude,
     get events() { return events; }
   };

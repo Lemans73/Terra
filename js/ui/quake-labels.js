@@ -1,44 +1,37 @@
 /* ============================================================
-   TERRA — De beving-labels
+   TERRA — the quake labels
    ------------------------------------------------------------
-   De plaatsingswiskunde uit logs/indicator-workbench.html
-   (sessie 38-39), waar hij in twee ronden is afgesteld. Vervangt
-   de oude laag in index.html: rebuildLabels, positionLabels en
-   het hover-label.
+   Placement, clustering and the leader lines for the earthquake
+   labels.
 
-   WAT DEZE LAAG ANDERS DOET DAN ZIJN VOORGANGER
+   FOUR THINGS CARRY THIS LAYER
 
-   1  DE RICHTING IS CONTINU. Er stonden acht vaste plekken met
-      een eigen uitlijning per stuk; nu is er één eenheidsvector
-      en één regel meetkunde. Zet het MIDDELPUNT van het label op
+   1  THE DIRECTION IS CONTINUOUS. An earlier version had eight
+      fixed positions each with its own alignment; here there is
+      one unit vector and one line of geometry. Put the CENTRE of
+      the label at
 
-          C = indicator + n * (off + rand(n, w, h))
+          C = indicator + n * (off + edge(n, w, h))
 
-      met `rand` de afstand van het middelpunt tot de labelrand
-      langs n. Dan ligt de RAND altijd precies `off` pixels van de
-      indicator, bij elke hoek, en glijdt het aanhechtpunt over
-      die rand mee. Dat punt is bovendien exact `indicator + n*off`,
-      dus de leader-line heeft geen hoekberekening nodig.
+      with edge the distance from the centre to the label border
+      along n. Then the BORDER always sits exactly `off` pixels
+      from the indicator at any angle, and the attachment point
+      slides along that border. That point is exactly
+      indicator + n*off, so the leader line needs no angle maths.
 
-   2  CLUSTEREN. Bij een zwerm hoort de LIJST bij de GROEP in
-      plaats van elk label bij één stip. Dan bestaat de vraag welk
-      label bij welke indicator hoort niet meer.
+   2  CLUSTERING. In a swarm the LIST belongs to the GROUP instead
+      of each label to one dot. Then the question of which label
+      belongs to which indicator no longer exists.
 
-   3  DE ACCORDEON. Aanwijzen breekt een groep niet op maar klapt
-      één regel BINNEN het label uit. De plaatsing rekent daarbij
-      met de DICHTE maat, zodat de aangewezen regel stil blijft
-      staan en alleen wat eronder zit opschuift.
+   3  THE ACCORDION. Hovering does not break a group up; it opens
+      one row INSIDE the label. Placement keeps using the CLOSED
+      size, so the hovered row stays put and only what is below it
+      moves down.
 
-   4  DE GESTAPELDE PLEK. De shader verplaatst een indicator die
-      op een verdieping staat; wie in JavaScript met de echte plek
-      rekent mikt stelselmatig mis. GEMETEN in de workbench: 257
-      van de 450 events verschoven gemiddeld 43 px, tot 141 px.
-
-   VIER DINGEN ZIJN OMGEZET BIJ HET VERHUIZEN
-     - de veldnamen: q.mag/q.lon/q.place worden q.value/q.lng/q.label
-     - de leeftijd komt van het GEKOZEN moment, niet van Date.now()
-     - de leader-lines zijn SVG in plaats van gedraaide div's
-     - klikken opent Terra's detailscherm
+   4  THE STACKED POSITION. The shader moves an indicator that sits
+      on a storey; computing from the real position in JavaScript
+      misses systematically. MEASURED: 257 of 450 events shifted
+      43 px on average, up to 141 px.
    ============================================================ */
 
 export function createQuakeLabels(THREE, opts = {}) {
@@ -49,18 +42,17 @@ export function createQuakeLabels(THREE, opts = {}) {
   const getViewport = opts.getViewport;
   const getIndicator = opts.getIndicator || (() => null);
   const momentNow = opts.momentNow || (() => new Date());
-  /* AAN/UIT EN HET BUDGET WORDEN GELEZEN, niet gezet. Beide leven in index.html
-     als `let`-binding: `labelsOn` hangt aan de schakelaar in Settings én aan de
-     view-states, `labelBudget` aan de schuif. Ze worden op vijf plekken
-     geschreven, en elke plek die het óók aan deze laag zou moeten doorgeven is
-     een plek die het kan vergeten. Zo is er één bron. */
+  /* ON/OFF AND THE BUDGET ARE READ, not set. Both live in index.html as let
+     bindings: labelsOn hangs off the switch in Settings and off the view
+     states, labelBudget off the slider. They are written in five places, and
+     every place that would also have to forward it to this layer is a place
+     that can forget. This way there is one source. */
   const getEnabled = opts.getEnabled || (() => true);
   const getBudget = opts.getBudget || (() => null);
   const onSelect = opts.onSelect || (() => {});
-  /* WAT ER GEBEURT ALS DE MUIS OVER EEN LABELREGEL GAAT. De laag weet welk
-     event het is EN met wie het in een blok staat; de indicatorlaag weet daar
-     niets van. Deze callback brengt die twee bij elkaar, zonder dat de een de
-     ander hoeft te kennen. */
+  /* WHAT HAPPENS WHEN THE MOUSE ENTERS A LABEL ROW. This layer knows which
+     event it is; the indicator layer does not. The callback brings the two
+     together without either having to know the other. */
   const onHover = opts.onHover || (() => {});
   if (!P || !depthRGB || !getCoords || !getCamera || !getViewport) {
     throw new Error('createQuakeLabels: params, depthRGB, getCoords, getCamera en getViewport zijn verplicht');
@@ -69,15 +61,15 @@ export function createQuakeLabels(THREE, opts = {}) {
   const GLOBE_R = 100;
   const SVG_NS = 'http://www.w3.org/2000/svg';
 
-  // ---- de laag in de DOM -------------------------------------------------
+  // ---- the layer in the DOM ----------------------------------------------
 
-  /* DE OVERLAY-LAAG KOMT VAN BUITEN. Terra heeft er al een — `#quake-labels` —
-     en die is GEDEELD: de zonnegebieden (.rlabel) en de aslabels (.alabel)
-     hangen er ook in, met hun leader-lines in dezelfde `#label-lines`-SVG. Een
-     tweede laag ernaast zou een tweede z-index-verhaal openen over precies
-     dezelfde soort inhoud.
+  /* THE OVERLAY LAYER COMES FROM OUTSIDE. Terra already has one, #quake-labels,
+     and it is SHARED: the solar regions (.rlabel) and the axis labels (.alabel)
+     hang in it too, with their leader lines in the same #label-lines SVG. A
+     second layer beside it would open a second z-index story about exactly the
+     same kind of content.
 
-     Zonder host maakt deze module er zelf een; dat is de weg voor een losse
+     Without a host this module makes one itself; that is the route for a
      proefopstelling. */
   const eigenHost = !opts.host;
   const host = opts.host || (() => {
@@ -94,10 +86,10 @@ export function createQuakeLabels(THREE, opts = {}) {
   })();
 
   const css = document.createElement('style');
-  css.textContent = `
-/* De laag zelf en de SVG krijgen hier GEEN regels: die staan in css/app.css en
-   worden gedeeld met de zonnegebieden en de aslabels. Alles hieronder hangt aan
-   .ql-* en raakt dus alleen deze laag. */
+  css.textContent = /* css */`
+/* The layer itself and the SVG get NO rules here: those live in css/app.css and
+   are shared with the solar regions and the axis labels. Everything below hangs
+   off .ql-* and therefore touches only this layer. */
 #quake-labels .ql-wrap { position: absolute; inset: 0; pointer-events: none; }
 #quake-labels .ql-box {
   position: absolute; left: 0; top: 0;
@@ -119,12 +111,12 @@ export function createQuakeLabels(THREE, opts = {}) {
 #quake-labels .ql-box .rij:hover, #quake-labels .ql-box.actief { filter: brightness(1.35); }
 #quake-labels .ql-box .rij.op { text-shadow: 0 1px 10px rgba(0,0,0,0.95), 0 0 14px currentColor; }
 #quake-labels .ql-box.actief { text-shadow: 0 1px 10px rgba(0,0,0,0.95), 0 0 14px currentColor; }
-/* DE DIEPTEREGEL GAAT MEE NAAR WIT BIJ HOVER (sessie 41, Terry). De regel .dep
-   had geen eigen kleur en erfde die van de regel erboven: de DIEPTEKLEUR. Op een
-   uitgeklapt label las "Depth: 565 KM" daardoor in dezelfde paarse tint als de
-   ring, terwijl de plaatsnaam en de tijd ernaast al wit werden. Juist bij de
-   diepste bevingen, waar die kleur het donkerst is, was die regel het slechtst
-   leesbaar. Nu volgt hij .loc en .tim.
+/* THE DEPTH ROW GOES WHITE ON HOVER TOO. The .dep row had no colour of its own
+   and inherited the one above it: the DEPTH COLOUR. On an opened label "Depth:
+   565 KM" therefore read in the same purple as the ring, while the place name
+   and the time beside it already went white. Exactly at the deepest quakes,
+   where that colour is darkest, that row was the least readable. It now follows
+   .loc and .tim.
 
    GEEN BACKTICKS IN DIT BLOK. Dit commentaar staat IN de CSS-template-literal
    hierboven, en een backtick sluit die string. Bij een even aantal parseert het
@@ -138,9 +130,9 @@ export function createQuakeLabels(THREE, opts = {}) {
 `;
   document.head.appendChild(css);
 
-  /* AANWIJZEN EN KLIKKEN op de laag zelf en niet per regel. Eén luisteraar voor
-     alle labels samen: de regels worden per frame opnieuw geschreven, en een
-     luisteraar per regel zou dan per frame opnieuw gehangen moeten worden. */
+  /* HOVER AND CLICK ON THE LAYER ITSELF and not per row. One listener for all
+     labels together: the rows are rewritten every frame, and a listener per row
+     would have to be reattached every frame. */
   let hoveredId = null, selectedId = null;
   const idVan = (e) => {
     const rij = e.target.closest && e.target.closest('[data-id]');
@@ -170,7 +162,7 @@ export function createQuakeLabels(THREE, opts = {}) {
     if (q) onSelect(q);
   });
 
-  // ---- de knooppunten ----------------------------------------------------
+  // ---- the nodes ---------------------------------------------------------
 
   const pool = [];
   function makeNode() {
@@ -184,9 +176,9 @@ export function createQuakeLabels(THREE, opts = {}) {
     const dot = document.createElementNS(SVG_NS, 'circle');
     svg.appendChild(line);
     svg.appendChild(dot);
-    /* De inhoud wordt per keer opgebouwd en niet uit vaste velden gevuld: een
-       knooppunt draagt óf één regel per beving (een cluster), óf de vier regels
-       van een uitgeklapt event. Dat wisselt, dus vaste velden zitten in de weg. */
+    /* The content is rebuilt each time rather than filled into fixed fields: a
+       node carries either one row per quake (a cluster) or the four rows of an
+       opened event. That alternates, so fixed fields get in the way. */
     return { wrap, box, line, dot, sleutel: null, maat: null, openEl: null };
   }
 
@@ -196,10 +188,10 @@ export function createQuakeLabels(THREE, opts = {}) {
     n.dot.style.display = 'none';
   };
 
-  // ---- de inhoud ---------------------------------------------------------
+  // ---- the content -------------------------------------------------------
 
-  // "3H AGO" / "2D AGO", vanaf het GEKOZEN moment. Met de wandklok zou er na een
-  // tijdreis "720H AGO" staan bij een beving die op dat moment een uur oud was.
+  // "3H AGO" / "2D AGO", from the CHOSEN moment. With the wall clock a time
+  // trip would show "720H AGO" for a quake that was an hour old back then.
   function formatAgo(ms) {
     const min = (momentNow().getTime() - ms) / 60000;
     if (min < 60) return Math.max(0, Math.round(min)) + 'M AGO';
@@ -214,20 +206,20 @@ export function createQuakeLabels(THREE, opts = {}) {
       const ns = q.lat >= 0 ? 'N' : 'S', ew = q.lng >= 0 ? 'E' : 'W';
       return Math.abs(q.lat).toFixed(2) + ns + ' ' + Math.abs(q.lng).toFixed(2) + ew;
     }
-    // Terra's plaatsnaam draagt vaak een land erachter; de eerste helft is de
-    // ligging en dat is wat je op een label wilt lezen.
+    // Terra's place name often carries a country behind it; the first half is
+    // the location, and that is what you want to read on a label.
     return (q.label || '').split(',')[0].replace(/^\d+\s*km\s+[\w-]+\s+of\s+/i, '');
   };
 
-  /* De inhoud van één label. Twee gedaanten:
+  /* The content of one label. Two shapes:
 
-     OVERZICHT   één regel per beving, alleen de magnitude. Meer hoeft niet om
-                 te zien waar iets gebeurde en hoe zwaar, en het blok wordt er
-                 drie keer kleiner van — dat scheelt de ontwijking werk.
-     UITGEKLAPT  vier regels, met diepte, ligging en tijd. Alleen van het event
-                 dat je AANWIJST.
+     OVERVIEW  one row per quake, magnitude only. Nothing more is needed to see
+               where something happened and how heavy, and the block is three
+               times smaller for it — which saves the avoidance work.
+     OPENED    four rows, with depth, location and time. Only for the event you
+               HOVER.
 
-     ÉÉN OPBOUW VOOR BEIDE. Elke beving is dezelfde regel; aanwijzen hangt er
+     ONE BUILD FOR BOTH. Every quake is the same row; hovering hangs
      alleen velden ONDER. Daardoor is de regel die je leest in beide gedaanten
      even hoog en even breed — de eis van de accordeon, want anders schuift hij
      weg onder de muis. */
@@ -239,24 +231,24 @@ export function createQuakeLabels(THREE, opts = {}) {
     n.sleutel = sleutel;
     n.maat = null;
 
-    // Meest recente bovenaan: bij een zwerm die zich over dagen ontrolt is dat
-    // wat je wilt weten, en niet welke er toevallig het zwaarst was.
+    // Most recent on top: in a swarm unfolding over days that is what you want
+    // to know, not which one happened to be the heaviest.
     const gesorteerd = [...leden].sort((a, b) => (b.time || 0) - (a.time || 0));
     const nu = momentNow().getTime();
     n.box.innerHTML = gesorteerd.map(q => {
       const vers = nu - (q.time || 0) < 3600e3;
       const uit = !!(open && open.has(q.id));
-      // data-id maakt elke regel aanwijsbaar; bij een cluster is dat de enige
-      // manier om één beving uit de groep te kiezen.
+      // data-id makes every row hoverable; in a cluster that is the only way to
+      // pick one quake out of the group.
       let h = '<div class="rij' + (uit ? ' op' : '') + '" data-id="' + q.id +
               '" style="color:' + kleurVan(q) + '">M' + (q.value != null ? q.value.toFixed(1) : '?') +
               (vers ? '<span class="live">LIVE</span>'
                     : (gesorteerd.length > 1 ? '<span class="t">' + formatAgo(q.time) + '</span>' : '')) +
               '</div>';
-      /* De uitgeklapte velden dragen HETZELFDE data-id als hun regel. Zonder dat
-         valt de hover weg zodra de muis over "Depth" schuift, klapt het label
-         dicht, komt de muis weer op de regel, klapt het open — en dan knippert
-         het label. */
+      /* The opened fields carry THE SAME data-id as their row. Without that the
+         hover drops as soon as the mouse moves over "Depth", the label closes,
+         the mouse lands on the row again, it opens — and then it flickers
+         the label. */
       if (uit) {
         const d = ' data-id="' + q.id + '"';
         if (P.quakeLabelDepth && q.depth != null) h += '<div class="extra dep"' + d + '>Depth: ' + Math.round(q.depth) + ' KM</div>';
@@ -268,13 +260,13 @@ export function createQuakeLabels(THREE, opts = {}) {
     n.openEl = n.box.querySelector('.rij.op');
   }
 
-  // ---- meetkunde ---------------------------------------------------------
+  // ---- geometry ----------------------------------------------------------
 
-  /* De afstand van het middelpunt van een w x h-rechthoek tot zijn rand, langs
-     de eenheidsvector n. Welke van de twee zijden de rand bepaalt hangt van de
-     hoek af; de kleinste van de twee wint. De klem op 1e-6 vangt de assen waar
-     één component nul is — daar loopt de deling naar oneindig en pakt `min` de
-     andere kant, wat precies goed is. */
+  /* The distance from the centre of a w by h rectangle to its border, along the
+     unit vector n. Which of the two sides sets the border depends on the angle;
+     the smaller of the two wins. The clamp at 1e-6 catches the axes where one
+     component is zero — there the division runs to infinity and min() takes the
+     other side, which is exactly right. */
   function randAfstand(nx, ny, w, h) {
     const ax = Math.abs(nx), ay = Math.abs(ny);
     const tx = ax > 1e-6 ? (w * 0.5) / ax : Infinity;
@@ -290,24 +282,24 @@ export function createQuakeLabels(THREE, opts = {}) {
     return t * t * (3 - 2 * t);
   };
 
-  // Hergebruikte vectoren: deze functies draaien per label per frame en mogen
-  // niets aanmaken.
+  // Reused vectors: these functions run per label per frame and must not
+  // allocate.
   const _n = new THREE.Vector3();
   const _p = new THREE.Vector3();
   const _c = new THREE.Vector3();
   const _u = new THREE.Vector3();
   const _u2 = new THREE.Vector3();
 
-  // De eenheidsnormaal van een event, langs Terra's eigen omrekening.
+  // The unit normal of an event, through Terra's own conversion.
   function normaalVan(q, doel) {
     const c = getCoords(q.lat, q.lng, 0);
     return doel.set(c.x, c.y, c.z).normalize();
   }
 
-  /* De onthouden staat per beving: de richting van vorig frame (om te bevriezen
-     als de as te kort wordt) en de positie van vorig frame (om naartoe te
-     glijden). Op de ANKER-id en niet op het knooppunt — die wisselen van event
-     zodra het budget schuift. */
+  /* The remembered state per quake: last frame's direction (to freeze when the
+     axis gets too short) and last frame's position (to glide towards). Keyed on
+     the ANCHOR id and not on the node — nodes swap events as soon as the budget
+     shifts. */
   const state = new Map();
 
   /* DE RICHTING WAARIN HET LABEL HANGT.
@@ -335,10 +327,10 @@ export function createQuakeLabels(THREE, opts = {}) {
     if (P.quakeLabelUpright) {
       ux = asX; uy = asY;
       geldig = asPx >= P.quakeLabelUprightMinPx;
-      /* TE KORT: de as wijst naar de camera en zijn richting is ruis. Bevriezen
-         op vorig frame — anders tolt het label rond zodra je er recht op
-         uitkijkt. De LENGTE bevriest niet mee: die is juist wel betrouwbaar
-         (bijna nul) en hoort het label naar zijn indicator toe te trekken. */
+      /* TOO SHORT: the axis points at the camera and its direction is noise.
+         Freeze on last frame — otherwise the label spins as soon as you look
+         straight down on it. The LENGTH does not freeze with it: that one is
+         reliable (near zero) and should pull the label towards its indicator. */
       if (!geldig && st && st.nx !== undefined) return { nx: st.nx, ny: st.ny, asPx };
     }
     if (!geldig && P.quakeLabelOutward) {
@@ -350,7 +342,7 @@ export function createQuakeLabels(THREE, opts = {}) {
     return { nx: ux / len, ny: uy / len, asPx };
   }
 
-  // ---- de lus ------------------------------------------------------------
+  // ---- the loop ----------------------------------------------------------
 
   let events = [];
   let vorigeTijd = 0, frame = 0, sprong = 0;
@@ -374,9 +366,9 @@ export function createQuakeLabels(THREE, opts = {}) {
     const W = vp.w, H = vp.h;
     if (!W || !H) return;
 
-    /* DE ECHTE dt, en niet een aanname. Bij 60 fps is de stap 16,7 ms; een
-       demping die op een verzonnen dt rekent glijdt bij een andere verversing
-       te snel of te traag. */
+    /* THE REAL dt, and not an assumption. At 60 fps the step is 16.7 ms; a
+       damping computed from an invented dt glides too fast or too slow at any
+       other refresh rate. */
     const nu = nowMs || (vorigeTijd + 16);
     const dtMs = Math.min(100, Math.max(0, nu - vorigeTijd)) || 16;
     vorigeTijd = nu;
@@ -387,9 +379,9 @@ export function createQuakeLabels(THREE, opts = {}) {
     const qi = getIndicator();
     const lift = qi ? qi.ringMat.uniforms.uLift.value : 0;
 
-    /* De randmarge schaalt mee met de zichtbare kap: de horizon loopt van 0,22
-       op afstand 450 naar 0,952 op 105, en een vaste marge snoept daar meer dan
-       de helft van de kap weg. */
+    /* The edge margin scales with the visible cap: the horizon runs from 0.22
+       at distance 450 to 0.952 at 105, and a fixed margin would eat more than
+       half of that cap. */
     const randMarge = horizon + 0.04 * (1 - horizon);
 
     const ver = Math.max(P.quakeLabelZoomFar, P.quakeLabelZoomNear + 1);
@@ -400,10 +392,11 @@ export function createQuakeLabels(THREE, opts = {}) {
     const basisBudget = gevraagd == null ? P.quakeLabelBudget : Math.max(0, gevraagd);
     const budgetNu = Math.round(basisBudget + (P.quakeLabelZoomBudget - basisBudget) * t);
 
-    /* Eerst wegstrepen wat niet in beeld staat, dan pas het budget — andersom
-       werkt het budget als een verborgen magnitudedrempel. En ook of het punt
-       écht in beeld valt: de horizon zegt alleen dat een event op de voorkant
-       van de bol staat, en dat is diep ingezoomd iets anders. */
+    /* First strike out what is off screen, then apply the budget — the other
+       way round the budget acts as a hidden magnitude threshold. And also
+       whether the point really falls inside the view: the horizon only says an
+       event is on the near side of the globe, which zoomed in is not the same
+       thing. */
     const bMarge = 0.12;
     const zichtbaar = [];
     for (let i = 0; i < events.length; i++) {
@@ -411,11 +404,11 @@ export function createQuakeLabels(THREE, opts = {}) {
       if ((q.value || 0) < minMag) continue;
       normaalVan(q, _n);
       if (_n.dot(_c) < randMarge) continue;
-      /* DE GESTAPELDE PLEK, niet de echte. Staat het stapelen aan, dan schuift
-         de shader deze indicator opzij en omhoog; een label dat met de echte
-         plek rekent hangt dan tientallen pixels naast zijn eigen stip. De index
-         `i` loopt gelijk met de instance-attributen, want uploadEvents vult ze
-         in dezelfde volgorde. */
+      /* THE STACKED POSITION, not the real one. With stacking on the shader
+         pushes this indicator sideways and up; a label computing from the real
+         position then hangs tens of pixels away from its own dot. The index i
+         runs in step with the instance attributes, because uploadEvents fills
+         them in the same order. */
       const eigenLift = qi ? qi.stackedNormalJS(i, _n, camLen, _p) : (_p.copy(_n), 0);
       _p.multiplyScalar(GLOBE_R + lift + eigenLift).project(cam);
       if (Math.abs(_p.x) > 1 + bMarge || Math.abs(_p.y) > 1 + bMarge) continue;
@@ -426,20 +419,20 @@ export function createQuakeLabels(THREE, opts = {}) {
     const aandacht = new Set();
     for (const id of [selectedId, hoveredId]) if (id) aandacht.add(id);
 
-    /* AANWIJZEN BREEKT DE GROEP NIET OP. Tot sessie 38 werd het aangewezen event
-       uit de rij gehaald en als los label teruggezet; de overgebleven leden
-       herclusteren dan greedy vanaf de zwaarste, dus verspringt de hele groep en
-       stond de muis na één frame op niets meer. De nieuwe regel: aanwijzen
-       promoveert alleen wat nog GEEN label heeft; wie er al een heeft klapt
-       BINNEN dat label uit. */
+    /* HOVERING DOES NOT BREAK THE GROUP UP. An earlier version pulled the
+       hovered event out of the list and put it back as a separate label; the
+       remaining members then recluster greedily from the heaviest, so the whole
+       group jumps and after one frame the mouse is on nothing. The rule now:
+       hovering only promotes what has NO label yet; whatever already has one
+       opens INSIDE that label. */
     const rest = zichtbaar.slice(0, Math.max(0, budgetNu));
 
-    /* DE CLUSTERAFSTAND KRIMPT MET DE ZOOM, maar niet meer naar nul. Diep
-       ingezoomd is er meestal ruimte genoeg en hoort elke beving zijn eigen
-       label te hebben — behalve bij een zwerm, en juist daar zoom je in. De
-       ondergrens houdt de lijst daar bij elkaar. `t` is dezelfde zoomfactor die
-       hierboven de drempel en het budget stuurt: 0 ver weg, 1 volledig
-       ingezoomd. Zie de noot bij quakeLabelClusterPxNear in js/config.js. */
+    /* THE CLUSTER DISTANCE SHRINKS WITH THE ZOOM, but no longer to zero. Zoomed
+       in there is usually room enough and every quake should have its own label
+       — except in a swarm, and a swarm is exactly what you zoom into. The floor
+       keeps the list together there. t is the same zoom factor that drives the
+       threshold and the budget above: 0 far away, 1 fully zoomed in. See the
+       note at quakeLabelClusterPxNear in js/config.js. */
     const clusterVer = P.quakeLabelClusterPx;
     const clusterNabij = Math.min(P.quakeLabelClusterPxNear, clusterVer);
     const clusterPx = clusterNabij + (clusterVer - clusterNabij) * (1 - t);
@@ -456,12 +449,12 @@ export function createQuakeLabels(THREE, opts = {}) {
           if (leden.length >= P.quakeLabelClusterMax) break;
           leden.push(a); gedaan.add(a.q.id);
         }
-        /* DE STIP KOMT OP HET ANKER, niet op het zwaartepunt van de groep. Dat
-           leek netter, maar het zwaartepunt van twee indicatoren is een plek
-           waar niets staat — de leader-line wees dan naar leegte. Het anker is
-           de zwaarste van de groep en dus een echte indicator.
-           DE SCHERMPOSITIE VAN ELK LID GAAT MEE, anders kan de lijn niet anders
-           dan naar het anker wijzen, ook als je een ander lid aanwijst. */
+        /* THE DOT GOES ON THE ANCHOR, not on the centroid of the group. The
+           centroid looked tidier, but the centroid of two indicators is a place
+           where nothing stands — the leader line then pointed at emptiness. The
+           anchor is the heaviest of the group and therefore a real indicator.
+           THE SCREEN POSITION OF EVERY MEMBER COMES ALONG, or the line could
+           only ever point at the anchor, even when another member is hovered. */
         groepen.push({ leden: leden.map(l => l.q), idx: z.i, x: z.x, y: z.y,
                        anker: z.q, open: null,
                        pos: new Map(leden.map(l => [l.q.id, [l.x, l.y]])) });
@@ -480,9 +473,9 @@ export function createQuakeLabels(THREE, opts = {}) {
       }
     }
 
-    /* Wat nog GEEN label heeft komt er alsnog bij: boven het budget en boven de
-       drempel. Wie een indicator aanwijst wil weten wat het is, ook als het een
-       M2,9 is en ook als er al tien labels staan. */
+    /* Whatever has NO label yet still gets one: above the budget and above the
+       threshold. Whoever hovers an indicator wants to know what it is, even at
+       M2.9 and even with ten labels already on screen. */
     const los = [];
     for (const id of aandacht) {
       if (alGelabeld.has(id)) continue;
@@ -510,7 +503,7 @@ export function createQuakeLabels(THREE, opts = {}) {
       n.dot.style.display = '';
       vulLabel(n, g.leden, g.open);
     }
-    // Meten NA het schrijven: één reflow in plaats van één per label.
+    // Measure AFTER writing: one reflow instead of one per label.
     for (const n of pool) {
       if (n.wrap.style.display === 'none' || n.maat) continue;
       const r = n.box.getBoundingClientRect();
@@ -522,8 +515,8 @@ export function createQuakeLabels(THREE, opts = {}) {
 
     _p.set(0, 0, 0).project(cam);
     const midX = (_p.x + 1) / 2 * W, midY = (1 - (_p.y + 1) / 2) * H;
-    // De geprojecteerde bolstraal in pixels: element [5] van de projectiematrix
-    // is 1/tan(halve fov), dezelfde weg als overal elders.
+    // The projected globe radius in pixels: element [5] of the projection
+    // matrix is 1/tan(half fov), the same route as everywhere else.
     const bolHoek = Math.asin(Math.min(1, GLOBE_R / Math.max(camLen, GLOBE_R + 0.001)));
     const bolPx = Math.tan(bolHoek) * cam.projectionMatrix.elements[5] * (H * 0.5);
 
@@ -539,8 +532,9 @@ export function createQuakeLabels(THREE, opts = {}) {
       const ringPx = ringRadiusInPixels(mf, camLen, H);
       const actief = !!(g.open && g.open.size);
 
-      // WELK EVENT WIJST DE LIJN AAN? Het aangewezen lid als er een is, anders
-      // het anker. Daaraan hangen drie dingen: de stip, het lijneinde en de kleur.
+      // WHICH EVENT DOES THE LINE POINT AT? The hovered member if there is one,
+      // otherwise the anchor. Three things hang off it: the dot, the line end
+      // and the colour.
       const openId = actief ? [...g.open].find(id => g.pos && g.pos.has(id)) : null;
       const doelQ = (openId && g.leden.find(q => q.id === openId)) || g.anker;
       const doelPos = (openId && g.pos.get(openId)) || [sx, sy];
@@ -549,22 +543,22 @@ export function createQuakeLabels(THREE, opts = {}) {
       let st = state.get(g.anker.id);
       if (!st) { st = {}; state.set(g.anker.id, st); }
 
-      /* DE PLAATSING REKENT MET DE DICHTE MAAT, en dat is de kern van de
-         accordeon. Zou hij met de uitgeklapte maat rekenen, dan verschuift het
-         hele blok zodra er velden bijkomen en glijdt de regel onder de muis weg.
-         De dichte maat komt uit de STAAT en niet uit een aftreksom: een label is
-         altijd eerst dicht geweest voordat je het kunt aanwijzen. */
+      /* PLACEMENT USES THE CLOSED SIZE, and that is the heart of the accordion.
+         Computing from the opened size would shift the whole block as soon as
+         fields appear, sliding the row out from under the mouse. The closed size
+         comes from the STATE and not from a subtraction: a label has always been
+         closed before you can hover it. */
       if (!actief && n.maat) st.maatDicht = n.maat;
       const maat = (actief && st.maatDicht) || n.maat || { w: 60, h: 18 };
 
       let off = P.quakeLabelOffset + ringPx * P.quakeLabelRingClear;
 
-      /* BUITEN DE BOLRAND. Van het middelpunt AF wijzen is niet hetzelfde als
-         buiten de bol staan. Alleen wat aan de rand ligt: een beving waar je
-         recht op uitkijkt zit midden op de geprojecteerde bol, en die naar
-         buiten duwen levert een leader-line zo lang als de halve planeet.
+      /* OUTSIDE THE GLOBE'S EDGE. Pointing AWAY from the centre is not the same
+         as standing outside the globe. Only what lies near the edge: a quake you
+         look straight down on sits in the middle of the projected globe, and
+         pushing that outwards gives a leader line half a planet long.
 
-         DE OVERGANG IS VLOEIEND SINDS SESSIE 41, en dat was een reparatie.
+         THE TRANSITION IS SMOOTH, and that was a repair.
          Hier stond `camLen >= quakeLabelOutsideFrom`, en die drempel is hard:
          gemeten sprong de offset van een randlabel bij het passeren van
          afstand 200 van 21,4 naar 61,4 pixels — veertig pixels in één frame,
@@ -582,7 +576,7 @@ export function createQuakeLabels(THREE, opts = {}) {
           ? (camLen - P.quakeLabelOutsideFrom) / fade
           : (camLen >= P.quakeLabelOutsideFrom ? 1 : 0);
         const t = Math.min(1, Math.max(0, rauw));
-        // smoothstep: geen knik aan het begin en aan het eind van de band
+        // smoothstep: no kink at the start or the end of the band
         const mate = t * t * (3 - 2 * t);
         if (mate > 0) {
           const vanMidden = Math.hypot(sx - midX, sy - midY);
@@ -600,11 +594,11 @@ export function createQuakeLabels(THREE, opts = {}) {
       st.nx = richting.nx; st.ny = richting.ny;
       off += (richting.asPx || 0) * P.quakeLabelAxisOffset;
 
-      /* PLAATSEN LANGS ÉÉN CONTINUE AS. Eerst de as zelf op oplopende afstand;
-         past het daar niet, dan waaiert het label uit over een continu
-         hoekbereik, dichtstbij eerst en om en om links en rechts. Dat laatste is
-         de uitweg: zonder hem ruil je "soms een rare richting" in voor "soms
-         geen label". */
+      /* PLACED ALONG ONE CONTINUOUS AXIS. First the axis itself at increasing
+         distance; if it does not fit there, the label fans out over a continuous
+         angular range, nearest first and alternating left and right. That last
+         part is the escape: without it you trade "sometimes an odd direction"
+         for "sometimes no label". */
       const zetNeer = (nx, ny, uit) => {
         const rand = P.quakeLabelOffsetToEdge ? randAfstand(nx, ny, maat.w, maat.h) : 0;
         const cx = sx + nx * (uit + rand), cy = sy + ny * (uit + rand);
@@ -647,16 +641,16 @@ export function createQuakeLabels(THREE, opts = {}) {
         gekozen = { ...p, doos: { x: p.x - pad, y: p.y - pad, w: maat.w + pad * 2, h: maat.h + pad * 2 } };
       }
 
-      /* DE DOOS GEBRUIKT DE DICHTE MAAT, ook bij een uitgeklapt label. Het
-         uitgeklapte deel mag dus over een buurlabel vallen. Dat is een bewuste
-         ruil: de doos oprekken zou de groep in de wedloop om ruimte vooruit of
-         achteruit duwen, en dan verspringt hij alsnog. */
+      /* THE BOX USES THE CLOSED SIZE, even for an opened label. The opened part
+         may therefore fall across a neighbouring label. That is a deliberate
+         trade: growing the box would push the group forwards or backwards in
+         the race for space, and then it jumps anyway. */
       bezet.push(gekozen.doos);
 
-      /* NAGLIJDEN. Ook met een continue as springt een label nog als de
-         ontwijking van ring wisselt of een cluster van samenstelling verandert.
-         Een label dat NIEUW is of van event wisselt begint OP zijn doel — niet
-         op de vorige plek, want dan schiet het over het scherm. */
+      /* GLIDING. Even with a continuous axis a label still jumps when the
+         avoidance changes ring or a cluster changes composition. A label that is
+         NEW or swaps event starts ON its target — not at the previous place, or
+         it shoots across the screen. */
       let px = gekozen.x, py = gekozen.y;
       const tau = Math.max(0, P.quakeLabelEaseMs);
       if (tau > 0 && st.px !== undefined && st.frame === frame - 1) {
@@ -664,25 +658,25 @@ export function createQuakeLabels(THREE, opts = {}) {
         px = st.px + (gekozen.x - st.px) * k;
         py = st.py + (gekozen.y - st.py) * k;
       }
-      /* DE SPRONG METEN, MAAR ALLEEN OVER ÉÉN FRAME. `st` hangt aan de ANKER-id,
-         en een anker dat een tijd geen label had draagt nog zijn positie van
-         toen. Zonder deze check meet je dan de verplaatsing over alle frames
-         daartussen: bij 0,35 graden per frame gaf dat uitschieters tot 990 px
-         voor een label dat gewoon op zijn plek verscheen.
+      /* MEASURE THE JUMP, BUT ONLY OVER ONE FRAME. st is keyed on the ANCHOR id,
+         and an anchor that had no label for a while still carries its position
+         from back then. Without this check you measure the movement across all
+         the frames in between: at 0.35 degrees per frame that gave outliers up
+         to 990 px for a label that simply appeared in its place.
 
-         Dezelfde voorwaarde die het naglijden hieronder al gebruikt, en om
-         dezelfde reden. Ze hoorden vanaf het begin bij elkaar. */
+         The same condition the gliding above already uses, and for the same
+         reason. */
       if (st.px !== undefined && st.frame === frame - 1) {
         const d = Math.hypot(px - st.px, py - st.py);
         if (d > sprong) sprong = d;
       }
       st.px = px; st.py = py; st.frame = frame;
 
-      /* DE LIJN VERBINDT TWEE DINGEN EN ALLEBEI MOETEN KLOPPEN. Het BOL-uiteinde
+      /* THE LINE CONNECTS TWO THINGS AND BOTH HAVE TO BE RIGHT. The GLOBE end
          hoort op de indicator van het event dat je aanwijst — stond dat op het
-         anker, dan liep de lijn van de regel van de ene beving naar de indicator
-         van een andere. Het LABEL-uiteinde hoort op de regel die je leest, en
-         allebei op dezelfde maat gemeten. */
+         anchor, the line ran from one quake's row to another quake's indicator.
+         The LABEL end belongs on the row you are reading, and both measured
+         against the same size. */
       const schuifX = px - gekozen.x, schuifY = py - gekozen.y;
       let hechtX = gekozen.hx + schuifX, hechtY = gekozen.hy + schuifY;
       if (actief && n.openEl) {
@@ -691,7 +685,7 @@ export function createQuakeLabels(THREE, opts = {}) {
         hechtY = py + n.openEl.offsetTop + n.openEl.offsetHeight * 0.5;
       }
 
-      // Voor de meethaak: welk event de stip aanwijst, en welk event het anker is.
+      // For the measurement hook: which event the dot marks, and which is the anchor.
       n.doelId = doelQ.id;
       n.ankerId = g.anker.id;
 
@@ -730,8 +724,8 @@ export function createQuakeLabels(THREE, opts = {}) {
 
       n.box.style.transform = 'translate(' + px + 'px,' + py + 'px)';
       n.box.style.color = kleurVan(g.anker);
-      // Aangewezen ligt bovenop. De wrap is gepositioneerd (inset: 0), dus
-      // z-index doet hier ook echt iets.
+      // The hovered one lies on top. The wrap is positioned (inset: 0), so
+      // z-index actually does something here.
       n.wrap.style.zIndex = actief ? '20' : '';
       n.box.classList.toggle('actief', actief);
       n.box.classList.toggle('omlijnd', P.quakeLabelOutline > 0);
@@ -741,9 +735,9 @@ export function createQuakeLabels(THREE, opts = {}) {
     frame++;
   }
 
-  /* De ringstraal in schermpixels, langs dezelfde weg als de shader. Loopt deze
-     formule ooit uiteen met de GLSL, dan mikken de labels én het aanwijzen mis —
-     daarom komt hij van de indicatorlaag en staat hij hier niet nog eens. */
+  /* The ring radius in screen pixels, along the same route as the shader. If
+     this formula ever drifts from the GLSL, both the labels and the picking miss
+     — which is why it comes from the indicator layer and is not repeated here. */
   function ringRadiusInPixels(magFrac, camLen, viewH) {
     const qi = getIndicator();
     if (!qi) return 0;
@@ -752,10 +746,10 @@ export function createQuakeLabels(THREE, opts = {}) {
          / Math.max(camLen - GLOBE_R, 1);
   }
 
-  /* Aanwijzen MET DE HAND en niet met THREE.Raycaster: de shader bepaalt zelf
-     waar elk hoekpunt terechtkomt, dus de geometrie in het geheugen staat ergens
-     anders dan wat je ziet. Een raycast zou keurig werken en stelselmatig mis
-     mikken. Hier wordt dezelfde weg gelopen als de shader. */
+  /* PICKING BY HAND and not with THREE.Raycaster: the shader decides where every
+     vertex ends up, so the geometry in memory sits somewhere other than what you
+     see. A raycast would work perfectly and miss systematically. This walks the
+     same route as the shader. */
   function pickAt(px, py) {
     if (!events.length) return null;
     const cam = getCamera(), vp = getViewport();
@@ -770,9 +764,9 @@ export function createQuakeLabels(THREE, opts = {}) {
     for (let i = 0; i < events.length; i++) {
       const q = events[i];
       normaalVan(q, _n);
-      /* De horizontoets gaat op de ECHTE ligging, de trefplek op de gestapelde:
-         een event verdwijnt niet achter de bol doordat zijn stapel hem opzij
-         duwt, maar je wijst wel aan waar hij STAAT. */
+      /* The horizon test uses the REAL position, the hit area the stacked one:
+         an event does not disappear behind the globe because its stack pushed it
+         sideways, but you do click where it STANDS. */
       if (_n.dot(_c) < horizon) continue;
       const eigenLift = qi ? qi.stackedNormalJS(i, _n, camLen, _p) : (_p.copy(_n), 0);
       _p.multiplyScalar(GLOBE_R + lift + eigenLift).project(cam);
@@ -781,17 +775,16 @@ export function createQuakeLabels(THREE, opts = {}) {
       const mf = Math.max(0, Math.min(1, ((q.value || 0) - P.quakeMagMin) / span));
       const treffer = Math.max(P.quakeLabelPickRadius, ringRadiusInPixels(mf, camLen, vp.h) * 0.95);
       if (d > treffer) continue;
-      // Bij overlap wint de DICHTSTBIJZIJNDE en niet de zwaarste: wie een klein
-      // ringetje aanwijst dat binnen een grote ring valt, bedoelt dat kleine.
+      // On overlap the NEAREST wins and not the heaviest: whoever points at a
+      // small ring that falls inside a large one means the small one.
       if (d < bestAfstand) { bestAfstand = d; best = q; }
     }
     return best;
   }
 
-  /* MEETHAAK: welk event hoort bij welke stip. Zonder dit valt de koppeling
-     alleen op TEKST te maken — en "M5.7" komt meermaals voor, wat in sessie 39
-     sprongen van 800 px opleverde die niet bestonden. De laag weet het zelf, dus
-     hij zegt het zelf. */
+  /* MEASUREMENT HOOK: which event belongs to which dot. Without it the link can
+     only be made on TEXT — and "M5.7" occurs more than once, which produced
+     800 px jumps that did not exist. The layer knows, so the layer says so. */
   function zichtbareLabels() {
     const uit = [];
     for (let i = 0; i < pool.length; i++) {
@@ -800,8 +793,8 @@ export function createQuakeLabels(THREE, opts = {}) {
       const cx = n.dot.getAttribute("cx"), cy = n.dot.getAttribute("cy");
       if (cx == null) continue;
       uit.push({
-        // Het event waar de STIP op staat — het aangewezen lid als er een is,
-        // anders het anker. Precies wat de lijn aanwijst.
+        // The event the DOT sits on — the hovered member if there is one,
+        // otherwise the anchor. Exactly what the line points at.
         id: n.doelId || null,
         ankerId: n.ankerId || null,
         stip: [+cx, +cy],
@@ -822,7 +815,7 @@ export function createQuakeLabels(THREE, opts = {}) {
     get sprong() { return sprong; },
     get stateSize() { return state.size; },
     dispose() {
-      // Alleen opruimen wat we zelf hebben gemaakt: de host is meestal gedeeld.
+      // Only clean up what we made ourselves: the host is usually shared.
       for (const n of pool) { n.wrap.remove(); n.line.remove(); n.dot.remove(); }
       if (eigenHost) host.remove();
       css.remove(); pool.length = 0; state.clear();
