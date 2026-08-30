@@ -46,12 +46,12 @@ export function irwinIdFromUrl(url) {
   return /^\d{4}(?:-[A-Z0-9]+)+$/.test(m[1]) ? m[1] : null;
 }
 
-/* EIGEN NAAM: zie de noot bij reportCache in js/compute/storm-report.js. De
-   standalone-build deelt een scope, dus een kale `cache` botst. */
+/* A NAME OF ITS OWN: see the note at reportCache in js/compute/storm-report.js.
+   The standalone build shares one scope, so a bare `cache` collides. */
 const factsCache = new Map();
 
-// Zie de noot bij peekStormReport: het venster tekent synchroon en mag geen lus
-// maken van zijn eigen wachten.
+// See the note at peekStormReport: the panel draws synchronously and must not
+// turn its own waiting into a loop.
 export function peekWildfireFacts(id) { return factsCache.get(id); }
 
 export async function fetchWildfireFacts(id, opts = {}) {
@@ -71,10 +71,10 @@ export async function fetchWildfireFacts(id, opts = {}) {
     if (!res.ok) uit = { state: 'error' };
     else {
       const json = await res.json();
-      /* ARCGIS MELDT EEN FOUT ONDER EEN 200. Een verkeerde veldnaam of een
-         kapotte query komt terug als `{error:{...}}` met status 200; zonder
-         deze toets zou dat als "niet gevonden" lezen en zouden we een echte
-         storing stil wegmoffelen. */
+      /* ARCGIS REPORTS AN ERROR UNDER A 200. A wrong field name or a broken
+         query comes back as an error object with status 200; without this test
+         that would read as "not found" and a real failure would be quietly
+         swallowed. */
       if (json && json.error) uit = { state: 'error' };
       else {
         const a = json && json.features && json.features[0] && json.features[0].attributes;
@@ -100,7 +100,7 @@ function normaliseIncident(a) {
     cause: a.FireCause || null,
     // ArcGIS levert epoch-milliseconden.
     discovered: typeof a.FireDiscoveryDateTime === 'number' ? new Date(a.FireDiscoveryDateTime) : null,
-    // "US-NV" -> "NV"; het land staat al in de titel van het event.
+    // "US-NV" -> "NV"; the country is already in the event's title.
     state: a.POOState ? String(a.POOState).replace(/^US-/, '') : null,
     where: a.IncidentShortDescription || null
   };

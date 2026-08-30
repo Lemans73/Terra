@@ -22,10 +22,9 @@
    from.
    =========================================================================== */
 
-/* EIGEN NAMEN, want de standalone-build giet elke module in ÉÉN scope en
-   js/sunmoon.js heeft al een `DEG` — die daar bovendien graden-naar-radialen
-   betekent en hier andersom. De build ving de botsing; zie
-   tools/build-standalone.mjs. */
+/* NAMES OF THEIR OWN, because the standalone build pours every module into ONE
+   scope and js/sunmoon.js already has a DEG — which there means degrees to
+   radians and here the other way round. The build caught the collision. */
 const TO_RAD = Math.PI / 180;
 const TO_DEG = 180 / Math.PI;
 // One nautical mile is one minute of arc, by definition.
@@ -59,8 +58,8 @@ function destination(latDeg, lngDeg, theta, delta) {
   const lat2 = Math.asin(Math.max(-1, Math.min(1, sinLat)));
   const lng2 = lng1 + Math.atan2(Math.sin(theta) * Math.sin(delta) * Math.cos(lat1),
                                  Math.cos(delta) - Math.sin(lat1) * sinLat);
-  // Terug naar [-180, 180]: een storm bij de datumgrens levert anders een lijn
-  // die dwars over de kaart terugspringt.
+  // Back into [-180, 180]: a storm at the date line would otherwise give a line
+  // that jumps right across the map.
   let lng = lng2 * TO_DEG;
   lng = ((lng + 540) % 360) - 180;
   return [lng, lat2 * TO_DEG];
@@ -95,7 +94,7 @@ export function forecastSegments(report) {
   return uit;
 }
 
-// De losse punten van de baan, voor een markering per tijdstap.
+// The individual points of the track, for a marker per lead time.
 export function forecastStops(report) {
   return (report && report.forecast || [])
     .filter(f => f.lat && f.lng)
@@ -108,9 +107,9 @@ export function forecastStops(report) {
     }));
 }
 
-/* EEN CIRKELTJE OP DE BOL, als gesloten lus. Voor de markering per tijdstap.
-   Straal in graden booglengte, zodat hij op elke breedtegraad even groot is —
-   een cirkel in lengte/breedte zou bij de polen een ellips worden. */
+/* A SMALL CIRCLE ON THE GLOBE, as a closed loop, for the marker per lead time.
+   The radius is in degrees of arc, so it is the same size at every latitude — a
+   circle in lat/lon space would turn into an ellipse near the poles. */
 export function circleAround(lat, lng, radiusDeg, steps = 24) {
   const delta = radiusDeg * TO_RAD;
   const uit = [];
@@ -118,19 +117,19 @@ export function circleAround(lat, lng, radiusDeg, steps = 24) {
   return uit;
 }
 
-/* DE WINDVOETAFDRUK: vier kwadrantbogen, elk met zijn eigen straal.
+/* THE WIND FOOTPRINT: four quadrant arcs, each with its own radius.
 
-   DE SPRONG TUSSEN KWADRANTEN BLIJFT ZICHTBAAR, en dat is een keuze. Op de
-   grens tussen NE en SE springt de straal van 100 naar 80 zeemijl; die twee
-   punten komen er allebei in, dus er ontstaat een radiaal stapje. Vloeiend
-   interpoleren zou er mooier uitzien en zou een meting suggereren die er niet
-   is — JTWC geeft vier getallen, geen curve.
+   THE STEP BETWEEN QUADRANTS STAYS VISIBLE, and that is a choice. At the border
+   between NE and SE the radius jumps from 100 to 80 nautical miles; both points
+   go in, so a radial step appears. Interpolating smoothly would look better and
+   would suggest a measurement that does not exist — JTWC gives four numbers,
+   not a curve.
 
-   EEN KWADRANT MET STRAAL 0 KLAPT NAAR HET MIDDDEN. Dat is precies wat het
-   bestand zegt: aan die kant staat geen wind van die kracht. */
+   A QUADRANT WITH RADIUS 0 COLLAPSES TO THE CENTRE. That is exactly what the
+   file says: no wind of that strength on that side. */
 export function windFootprint(lat, lng, quadrants, stepDeg = 5) {
   if (!quadrants) return null;
-  // Van noord met de klok mee: NE 0-90, SE 90-180, SW 180-270, NW 270-360.
+  // From north, clockwise: NE 0-90, SE 90-180, SW 180-270, NW 270-360.
   const volgorde = [['ne', 0], ['se', 90], ['sw', 180], ['nw', 270]];
   const uit = [];
   for (const [naam, start] of volgorde) {
@@ -145,8 +144,8 @@ export function windFootprint(lat, lng, quadrants, stepDeg = 5) {
   return uit;
 }
 
-// Wat er van een voetafdruk te zeggen valt in de uitlezing: de grootste en de
-// kleinste straal, zodat de asymmetrie ook in tekst staat.
+// What a footprint amounts to in the readout: the largest and the smallest
+// radius, so the asymmetry is stated in text as well.
 export function footprintSpan(quadrants) {
   if (!quadrants) return null;
   const w = ['ne', 'se', 'sw', 'nw'].map(k => quadrants[k]).filter(v => v != null);

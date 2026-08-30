@@ -108,9 +108,9 @@ export function parseJtwcWarning(text) {
      whitespace. */
   const bas = /POSITION BASED ON\s+([\s\S]*?)(?=\n\s*[A-Z][A-Z ]{4,}:|\n\s*---)/.exec(text);
   if (bas) {
-    /* "CENTER LOCATED BY" GAAT ERAF. De rij heet al Fix, dus die vier woorden
-       herhalen het label en duwen de rest over drie regels in een paneel van
-       280 px. Wat overblijft is waar de meting vandaan komt. */
+    /* "CENTER LOCATED BY" COMES OFF. The row is already called Fix, so those
+       four words repeat the label and push the rest across three lines in a
+       280 px panel. What is left is where the fix came from. */
     out.basis = bas[1].replace(/\s+/g, ' ').trim().toLowerCase()
                       .replace(/^center located by\s+/, '');
   }
@@ -135,8 +135,8 @@ export function parseJtwcWarning(text) {
      UPDATES." is boilerplate that the file repeats up to four times; it says
      nothing about this storm and goes. */
   const rem = /^REMARKS:\s*\n([\s\S]*?)(?=^\/\/\s*$|^NNNN\s*$)/m.exec(text);
-  // De radii van NU, want daar hangt de voetafdruk aan. Staan ze op geen enkele
-  // T-regel, dan blijft dit null en tekent de laag alleen de baan.
+  // The radii for NOW, because the footprint hangs off them. Absent from every
+  // T line, this stays null and the layer draws only the track.
   const nu = out.forecast.find(f => f.tau === 0);
   out.radii = (nu && nu.radii) || null;
 
@@ -162,15 +162,16 @@ export function parseJtwcWarning(text) {
    bestand verandert hooguit zes keer per etmaal. De cache bewaart ook een
    mislukking: opnieuw proberen bij elke klik zou een dode url zes keer per
    minuut aantikken. */
-/* EIGEN NAAM, want de standalone-build giet elke module in EEN scope. Een kale
-   `cache` botst met de volgende module die er ook een heeft; de build ving dat. */
+/* A NAME OF ITS OWN, because the standalone build pours every module into ONE
+   scope. A bare `cache` collides with the next module that also has one; the
+   build caught exactly that. */
 const reportCache = new Map();
 
-/* De cache MAG SYNCHROON GELEZEN WORDEN, en dat is geen gemak maar een
-   voorwaarde. Het detailvenster tekent synchroon; zonder deze kijk zou het bij
-   elke hertekening opnieuw moeten wachten, en dan roept de afhandeling van dat
-   wachten het venster weer aan — een lus. Nu haalt het venster wat er ligt, en
-   haalt het alleen op wanneer er nog niets ligt. */
+/* THE CACHE MAY BE READ SYNCHRONOUSLY, and that is a requirement rather than a
+   convenience. The detail panel draws synchronously; without this peek it would
+   have to wait again on every redraw, and the handling of that wait calls the
+   panel again — a loop. Now the panel takes what is there and only fetches when
+   there is nothing yet. */
 export function peekStormReport(url) { return reportCache.get(url); }
 
 export async function fetchStormReport(url, opts = {}) {
@@ -188,9 +189,9 @@ export async function fetchStormReport(url, opts = {}) {
     else {
       const tekst = await res.text();
       const rapport = parseJtwcWarning(tekst);
-      /* EEN 200 MET EEN FOUTPAGINA IS OOK "WEG". De bucket antwoordt soms met
-         een AccessDenied-XML onder een 200; die parseert niet als waarschuwing
-         en zou anders als storing lezen. */
+      /* A 200 CARRYING AN ERROR PAGE IS ALSO "GONE". The bucket sometimes
+         answers with an AccessDenied XML under a 200; that does not parse as a
+         warning and would otherwise read as a failure. */
       uit = rapport ? { state: 'ok', report: rapport }
                     : { state: /AccessDenied|<Error>/i.test(tekst) ? 'gone' : 'error' };
     }
@@ -203,6 +204,6 @@ export async function fetchStormReport(url, opts = {}) {
   return uit;
 }
 
-// Alleen voor de toetsen: de cache leegmaken zodat een meting niet het antwoord
-// van de vorige leest.
+// For measurements only: empty the cache so one reading does not pick up the
+// answer of the previous.
 export function clearStormReportCache() { reportCache.clear(); }
