@@ -2049,8 +2049,19 @@
   </div>
 
   <div class="boot" id="boot">
-    <div class="ring"></div>
-    <div class="msg">building the earth</div>
+    <!-- HET MERK STAAT ER ALTIJD (session 42, Terry). Het laadscherm was tot nu
+         toe een ring en een regel; wie hem te zien kreeg wist niet eens waar hij
+         was. -->
+    <div class="boot-mark">TERRA<span>.</span></div>
+    <!-- DE RING VULT ZICH, hij draait niet alleen. Een SVG en geen border-truc:
+         een ring die van 0 naar 100 % loopt vraagt een stroke-dashoffset, en dat
+         kan een border niet. De omtrek is 2*pi*15 = 94,2; dat getal staat in de
+         CSS als dasharray en de voortgang schuift de offset. -->
+    <svg class="boot-ring" viewBox="0 0 34 34" aria-hidden="true">
+      <circle class="boot-ring-baan" cx="17" cy="17" r="15"></circle>
+      <circle class="boot-ring-vul" id="boot-ring-vul" cx="17" cy="17" r="15"></circle>
+    </svg>
+    <div class="msg">painting the earth</div>
     <!-- Blijft verborgen tot het head-script `.failed` op .boot zet. De markup staat
          hier en niet in JavaScript, zodat er niets meer opgebouwd hoeft te worden op
          het moment dat er juist iets stuk is. -->
@@ -3388,31 +3399,81 @@ function renderHealth() {
 
 // ---- State ----------------------------------------------------
 
-/* WAT ER NOG MOET GEBEUREN, IN VOLGORDE VAN VOORRANG (session 42, Terry).
+/* HET LAADSCHERM: WAT ER NOG MOET GEBEUREN, IN VOLGORDE VAN VOORRANG.
 
-   Het laadscherm toont de EERSTE fase die nog niet af is. Geen orkestratie
-   nodig: elke fase meldt zichzelf klaar op de plek waar hij klaar is, en de
-   tekst volgt vanzelf. Wat er niet in staat, wordt niet beweerd.
+   DE AARDE STAAT BOVENAAN, en dat is de reden dat deze lijst er is. Het scherm
+   hing aan de BRONNEN: kernlaag binnen, scherm weg — ook als de textuur nog
+   onderweg was. Je kwam dan door de loader op een zwarte bol, en dat is het
+   moment waarop iemand de app wegklikt.
 
-   DE AARDE STAAT BOVENAAN, en dat is de hele reden dat deze lijst er is. Het
-   laadscherm hing tot nu toe aan de BRONNEN: binnen was de kernlaag, weg was
-   het scherm — ook als de textuur nog onderweg was. Je kwam dan door de loader
-   op een zwarte bol, en dat is het moment waarop iemand de app wegklikt. */
+   DE VOORTGANG LOOPT OP EEN EIGEN KLOK, en niet rechtstreeks op de fasen. Die
+   volgen elkaar soms binnen tientallen milliseconden op — dan flitst er een
+   tekst voorbij die niemand leest. Wat er getoond wordt kruipt daarom naar het
+   doel toe met een minimum per band, zodat elke regel gegarandeerd te lezen is
+   geweest. De fasen bepalen WAAR hij heen kruipt, de klok bepaalt HOE SNEL. */
 const BOOT_FASEN = [
   ['earth',   'painting the earth'],
   ['sources', 'calling the seismographs'],
   ['map',     'drawing the coastlines']
 ];
+// Hoe lang een band minimaal duurt. Drie banden, dus het scherm staat er in het
+// gunstigste geval een kleine twee seconden — lang genoeg om te lezen, kort
+// genoeg om niet in de weg te lopen.
+const BOOT_BAND_MS = 620;
+const BOOT_OMTREK = 94.25;          // 2 * pi * 15, zie .boot-ring in css/app.css
+
 const bootKlaar = new Set();
-function bootFaseKlaar(naam) {
-  if (bootKlaar.has(naam)) return;
-  bootKlaar.add(naam);
+let bootDoel = 0;                   // waar de fasen naartoe wijzen, 0..1
+let bootGetoond = 0;                // wat de ring werkelijk laat zien, 0..1
+let bootTikker = null;
+let bootTekst = null;
+
+function bootTeken() {
+  const vul = document.getElementById('boot-ring-vul');
+  if (vul) vul.style.strokeDashoffset = String(BOOT_OMTREK * (1 - bootGetoond));
+  /* DE TEKST HANGT AAN DE GETOONDE VOORTGANG en niet aan de fasen. Zo hoort er
+     bij elke band één regel, ook als de bijbehorende fase allang klaar was. */
+  const band = Math.min(BOOT_FASEN.length - 1, Math.floor(bootGetoond * BOOT_FASEN.length));
+  const wil = BOOT_FASEN[band][1];
   const el = document.querySelector('#boot .msg');
-  const volgende = BOOT_FASEN.find(([k]) => !bootKlaar.has(k));
-  if (el && volgende) el.textContent = volgende[1];
+  if (el && wil !== bootTekst) {
+    bootTekst = wil;
+    el.classList.add('wisselt');
+    setTimeout(() => { el.textContent = wil; el.classList.remove('wisselt'); }, 200);
+  }
+}
+
+function bootTik() {
+  // Per stap hoogstens zoveel als een band in zijn minimumtijd mag opschuiven.
+  const stap = (1 / BOOT_FASEN.length) * (60 / BOOT_BAND_MS);
+  bootGetoond = Math.min(bootDoel, bootGetoond + stap);
+  bootTeken();
+  if (bootGetoond >= 1 && bootDoel >= 1) {
+    clearTimeout(bootTikker); bootTikker = null;
+    dismissBoot();
+    return;
+  }
+  bootTikker = setTimeout(bootTik, 60);
+}
+
+function bootFaseKlaar(naam) {
+  if (bootKlaar.has(naam) || bootDismissed) return;
+  bootKlaar.add(naam);
+  bootDoel = bootKlaar.size / BOOT_FASEN.length;
+  if (!bootTikker) bootTikker = setTimeout(bootTik, 60);
   // De aarde was de enige die het scherm tegenhield; is die er, dan mag een
-  // eerder verzoek alsnog door.
-  if (naam === 'earth' && bootWachtOpAarde) { bootWachtOpAarde = false; dismissBoot(); }
+  // eerder verzoek alsnog door zodra de ring vol is.
+  if (naam === 'earth' && bootWachtOpAarde) bootWachtOpAarde = false;
+}
+
+/* WIE KLAAR IS VOORDAT DE RING VOL IS, WACHT OP DE RING. `dismissBoot` wordt
+   aangeroepen zodra de kernbronnen binnen zijn, en dat kan ruim vóór het einde
+   van de laatste band vallen. Dan zet dit het doel op vol en laat de tikker het
+   afmaken — anders springt het scherm alsnog weg halverwege een regel. */
+function bootMagWeg() {
+  bootDoel = 1;
+  for (const [k] of BOOT_FASEN) bootKlaar.add(k);
+  if (!bootTikker) bootTikker = setTimeout(bootTik, 60);
 }
 
 let bootDismissed = false;
@@ -13200,23 +13261,27 @@ if (IS_LOCAL) {
   const kernPulls = Object.entries(Adapters)
     .filter(([, a]) => a.layers && a.layers.length && a.enabled !== false)
     .map(([id]) => firstPulls[id]);
-  Promise.allSettled(kernPulls).then(() => { bootFaseKlaar('sources'); setTimeout(dismissBoot, 400); });
+  Promise.allSettled(kernPulls).then(() => { bootFaseKlaar('sources'); setTimeout(bootMagWeg, 400); });
 }
 // (3) bovengrens — dit is het vangnet dat een hangende bron onschadelijk maakt
-setTimeout(dismissBoot, BOOT_MAX_MS);
+setTimeout(bootMagWeg, BOOT_MAX_MS);
 /* HET LAATSTE VANGNET. `dismissBoot` wacht nu op de aarde, en dat is precies de
    bedoeling — maar een wachtvoorwaarde zonder bovengrens is een hang. Valt de
    aarde binnen deze tijd niet te schilderen, dan gaat het scherm alsnog weg:
    een lege bol waar je omheen kunt draaien is beter dan een laadscherm dat
    nooit eindigt. Ruim boven BOOT_MAX_MS, zodat dit alleen aan bod komt als er
    echt iets bijzonders aan de hand is. */
-setTimeout(() => { bootFaseKlaar('earth'); dismissBoot(); }, BOOT_MAX_MS * 3);
+setTimeout(() => {
+  bootFaseKlaar('earth');
+  bootDoel = 1; bootGetoond = 1; bootTeken();   // hier telt lezen niet meer
+  dismissBoot();
+}, BOOT_MAX_MS * 3);
 
 // (2) alles klaar. Pas hier tellen nieuwe entries als "nieuw", zodat de initiële
 // lading geen toast-regen veroorzaakt, ook niet van een late adapter.
 Promise.allSettled(Object.values(firstPulls)).finally(() => {
   initialLoadDone = true;
-  dismissBoot();
+  bootMagWeg();
 });
 
 /* SKETCH:START

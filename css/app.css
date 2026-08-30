@@ -2121,15 +2121,41 @@
     transition: opacity 0.6s;
   }
   .boot.done { opacity: 0; pointer-events: none; }
-  .boot .ring {
-    width: 34px; height: 34px;
-    border: 2px solid var(--hair);
-    border-top-color: var(--accent);
-    border-radius: 50%;
-    animation: spin 0.9s linear infinite;
+  /* HET MERK, in dezelfde vorm als de kop van de app. */
+  .boot-mark {
+    font-size: 15px; font-weight: 600; letter-spacing: 0.34em;
+    text-transform: uppercase; color: var(--ink);
   }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .boot .msg { font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-dim); }
+  .boot-mark span { color: var(--accent); }
+
+  /* DE RING VULT ZICH VAN 0 NAAR 100 % (sessie 42, Terry).
+     Hij draaide alleen maar rond, en dat zegt niets over hoe ver het is. De
+     omtrek van r=15 is 2*pi*15 = 94,25; `stroke-dasharray` zet één streep van
+     die lengte neer en `stroke-dashoffset` schuift hem weg. Offset 94,25 is leeg,
+     0 is vol. De -90 graden draai zet het beginpunt bovenaan in plaats van
+     rechts. */
+  .boot-ring { width: 34px; height: 34px; transform: rotate(-90deg); }
+  .boot-ring circle {
+    fill: none; stroke-width: 2; cx: 17; cy: 17; r: 15;
+  }
+  .boot-ring-baan { stroke: var(--hair); }
+  .boot-ring-vul {
+    stroke: var(--accent);
+    stroke-linecap: round;
+    stroke-dasharray: 94.25;
+    stroke-dashoffset: 94.25;
+    /* Vloeiend meelopen met de sprongen die de fasen maken; zonder deze
+       overgang klikt de ring van stand naar stand. */
+    transition: stroke-dashoffset 0.35s linear;
+  }
+  .boot .msg {
+    font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--ink-dim);
+    /* De tekst wisselt; een korte vervaging maakt van de wissel een overgang
+       in plaats van een sprong. */
+    transition: opacity 0.2s;
+  }
+  .boot .msg.wisselt { opacity: 0; }
 
   /* ---- Het boot-scherm als foutmelding (2026-08-01) --------------------------
      Tot sessie 11 kende dit scherm maar één toestand: draaien. Startte de module
@@ -2137,7 +2163,7 @@
      nog bezig was. Dat is precies wat de boot-hang op Vercel opleverde.
      `.failed` zet de ring uit en de uitleg aan; de opbouw zit in het head-script
      van index.html, zodat hij ook werkt als de module nooit draait. */
-  .boot.failed .ring { display: none; }
+  .boot.failed .boot-ring { display: none; }
   .boot.failed .msg { display: none; }
   .boot-error {
     display: none;
