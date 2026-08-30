@@ -4515,14 +4515,53 @@ function buildRealisticMaterial() {
   loader.setCrossOrigin('anonymous');
   const load = url => loader.loadAsync ? loader.loadAsync(url) : new Promise(res => loader.load(url, res));
 
-  const A = assetsFor(texQuality);
-  return Promise.all([
-    load(dayUrlFor(texQuality)),
-    load(nightUrlFor(texQuality)),
-    load(A.clouds).catch(() => null),
-    load(A.specular).catch(() => null),
-    load(A.normal).catch(() => null)
-  ]).then(([dayTex, nightTex, cloudsTex, specTex, normalTex]) => {
+  /* EEN MISLUKTE TEXTUUR MAG DE AARDE NIET ZWART LATEN (session 42, Terry).
+
+     Wat er gebeurde: `day` en `night` hadden geen catch en de keten hierna geen
+     enkele, dus een enkel plaatje dat niet binnenkwam gooide een UNHANDLED
+     rejection. `shaderMaterial` bleef daardoor null — een zwarte bol — en elke
+     weg terug was dicht, want setTextureQuality() en de eigen-textuurknop
+     beginnen allebei met `if (!shaderMaterial) return`. De bezoeker kon dus niet
+     eens naar 2K terug om zich eruit te redden.
+
+     Op de productie-host gebeurde dat met de 8K-set: 29,7 MB, en de console gaf
+     ERR_HTTP2_PING_FAILED op twee bestanden. Lokaal viel het nooit op omdat de
+     schijf niet faalt.
+
+     DE HERSTELWEG IS DE KLEINERE SET. Lukt de gevraagde set niet, dan die van
+     DEFAULT_QUALITY; lukt die ook niet, dan `null` en valt de aanroeper terug op
+     de schematische kaart. De bewaarde VOORKEUR blijft staan: een haperende
+     verbinding is geen keuze van de bezoeker, en de volgende keer kan het weer
+     gewoon lukken. Wat er wél gebeurt is dat het paneel het zegt. */
+  const laadSet = (q) => {
+    const A = assetsFor(q);
+    return Promise.all([
+      load(dayUrlFor(q)),
+      load(nightUrlFor(q)),
+      load(A.clouds).catch(() => null),
+      load(A.specular).catch(() => null),
+      load(A.normal).catch(() => null)
+    ]);
+  };
+  const gevraagd = texQuality;
+  return laadSet(gevraagd)
+    .catch(() => {
+      if (gevraagd === DEFAULT_QUALITY) return null;
+      texQualityFallback = gevraagd;
+      return laadSet(DEFAULT_QUALITY).catch(() => null);
+    })
+    .then((texturen) => {
+      // Allebei mislukt: de aanroeper ziet `null` en valt terug op de kaart.
+      if (!texturen) return null;
+      // Gelukt met de kleinere set: dan is DAT wat er draait, en de rest van de
+      // app moet dat weten — anders wisselt de kwaliteitsknop naar een stand die
+      // hij denkt al te hebben.
+      if (texQualityFallback) { texQuality = DEFAULT_QUALITY; meldTexqTerugval(); }
+      return texturen;
+    })
+    .then((texturen) => {
+    if (!texturen) return null;
+    const [dayTex, nightTex, cloudsTex, specTex, normalTex] = texturen;
     // rapporteer welke lagen succesvol geladen zijn voor de UI-indicatie
     earthLayerStatus = {
       day: !!dayTex, night: !!nightTex, clouds: !!cloudsTex,
@@ -5812,11 +5851,33 @@ function updateTexqUI() {
   });
 }
 
+/* Welke set NIET geladen kon worden, of null. Gezet door
+   buildRealisticMaterial() wanneer die op DEFAULT_QUALITY moest terugvallen; het
+   paneel leest hem zodat de bezoeker niet hoeft te raden waarom hij 2K ziet
+   terwijl er 8K staat ingesteld. */
+let texQualityFallback = null;
+
+function meldTexqTerugval() {
+  if (!texQualityFallback) return;
+  const naam = (TEXTURE_SETS[texQualityFallback] || {}).label || texQualityFallback;
+  if (texqNote) {
+    texqNote.textContent = naam + ' could not be loaded — ' +
+      (TEXTURE_SETS[DEFAULT_QUALITY] || {}).label + ' is active. Try again to retry.';
+  }
+  if (typeof updateTexqUI === 'function') updateTexqUI();
+}
+
 let texqBusy = false;
 async function setTextureQuality(q) {
   if (texqBusy || q === texQuality || !TEXTURE_SETS[q]) return;
   const T = findThree();
-  if (!T || !shaderMaterial) return;
+  /* ZONDER SHADERMATERIAAL VALT ER NIETS TE WISSELEN, maar stil niets doen is
+     wat de bezoeker opsloot: hij drukt op 2K om zich uit een zwarte bol te
+     redden en er gebeurt niets. Nu zegt de knop tenminste waarom. */
+  if (!T || !shaderMaterial) {
+    if (texqNote) texqNote.textContent = 'The earth material is not built — reload the page.';
+    return;
+  }
 
   texqBusy = true;
   texqBtns.forEach(b => b.disabled = true);
@@ -5827,13 +5888,27 @@ async function setTextureQuality(q) {
   const loader = new T.TextureLoader();
   loader.setCrossOrigin('anonymous');          // zie de toelichting bij de andere loader
   const load = url => loader.loadAsync(url);
+  /* EEN HANGENDE VERBINDING MAG DE KNOPPEN NIET OPSLUITEN (session 42, Terry).
+
+     Een afbeelding die niet aankomt geeft niet altijd een `error`: bij een
+     gestrande HTTP/2-verbinding blijft de request minutenlang open en lost de
+     promise nooit op. `texqBusy` bleef dan true en beide knoppen disabled — het
+     paneel stond op "Loading… fetching 29,7 MB" met de tol, en er was geen weg
+     terug. Deze race maakt daar een gewone mislukking van. Het onderliggende
+     verzoek loopt door; alleen wacht de interface er niet meer op. */
+  const OPHAALGRENS_MS = 90_000;
+  let tolTimer = null;
+  const metGrens = (p) => Promise.race([
+    p,
+    new Promise((_, af) => { tolTimer = setTimeout(() => af(new Error('timeout')), OPHAALGRENS_MS); })
+  ]);
   try {
-    const [day, night, clouds, spec, normal] = await Promise.all([
+    const [day, night, clouds, spec, normal] = await metGrens(Promise.all([
       load(dayUrlFor(q)), load(nightUrlFor(q)),
       load(A.clouds).catch(() => null),
       load(A.specular).catch(() => null),
       load(A.normal).catch(() => null)
-    ]);
+    ]));
     // kleurtexturen naar sRGB; normal/specular zijn datamaps en blijven lineair
     [day, night, clouds].forEach(t => { if (t) t.colorSpace = T.SRGBColorSpace; });
     if (clouds) clouds.wrapS = T.RepeatWrapping;
@@ -5859,8 +5934,11 @@ async function setTextureQuality(q) {
     updateTexqUI();
     texqNote.textContent = A.label + ' actief.';
   } catch (e) {
-    texqNote.textContent = 'Loading failed — the previous textures remain active.';
+    texqNote.textContent = e && e.message === 'timeout'
+      ? 'Loading timed out — the previous textures remain active.'
+      : 'Loading failed — the previous textures remain active.';
   } finally {
+    clearTimeout(tolTimer);
     texqBusy = false;
     texqBtns.forEach(b => b.disabled = false);
     texqNote.classList.remove('busy');
