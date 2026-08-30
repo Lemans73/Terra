@@ -3388,6 +3388,36 @@ function renderHealth() {
 
 // ---- State ----------------------------------------------------
 
+/* WAT ER NOG MOET GEBEUREN, IN VOLGORDE VAN VOORRANG (session 42, Terry).
+
+   Het laadscherm toont de EERSTE fase die nog niet af is. Geen orkestratie
+   nodig: elke fase meldt zichzelf klaar op de plek waar hij klaar is, en de
+   tekst volgt vanzelf. Wat er niet in staat, wordt niet beweerd.
+
+   DE AARDE STAAT BOVENAAN, en dat is de hele reden dat deze lijst er is. Het
+   laadscherm hing tot nu toe aan de BRONNEN: binnen was de kernlaag, weg was
+   het scherm — ook als de textuur nog onderweg was. Je kwam dan door de loader
+   op een zwarte bol, en dat is het moment waarop iemand de app wegklikt. */
+const BOOT_FASEN = [
+  ['earth',   'painting the earth'],
+  ['sources', 'calling the seismographs'],
+  ['map',     'drawing the coastlines']
+];
+const bootKlaar = new Set();
+function bootFaseKlaar(naam) {
+  if (bootKlaar.has(naam)) return;
+  bootKlaar.add(naam);
+  const el = document.querySelector('#boot .msg');
+  const volgende = BOOT_FASEN.find(([k]) => !bootKlaar.has(k));
+  if (el && volgende) el.textContent = volgende[1];
+  // De aarde was de enige die het scherm tegenhield; is die er, dan mag een
+  // eerder verzoek alsnog door.
+  if (naam === 'earth' && bootWachtOpAarde) { bootWachtOpAarde = false; dismissBoot(); }
+}
+
+let bootDismissed = false;
+let bootWachtOpAarde = false;
+
 let store = [];                    // alle genormaliseerde events
 /* DE ACHT DATALAGEN, EN HUN STAND KOMT UIT HET REGISTER.
 
@@ -3514,6 +3544,7 @@ fetch(asset('assets/geo/ne_110m_land.geojson'))
   .then(r => r.json())
   .then(geo => {
     landFeatures = geo.features || [];
+    bootFaseKlaar('map');
     if (globeMode === 'expert') applyGlobeMode(); // her-teken als we al in expert staan
   })
   .catch(err => console.warn('[expert] could not load country GeoJSON:', err));
@@ -5076,6 +5107,7 @@ function applyGlobeMode() {
           if (!mat) { fallbackToDay(); return; }
           shaderMaterial = mat;
           world.globeMaterial(mat);
+          bootFaseKlaar('earth');   // vanaf hier is de bol geen zwarte bal meer
           world.atmosphereColor('#6bb3ff');
           updateSunUniform();
           applyLayerToggles();
@@ -5113,6 +5145,9 @@ function fallbackToDay() {
   globeMode = 'expert';
   updateModeButton();
   applyGlobeMode();
+  // De schematische kaart is ook een geschilderde aarde: er staat iets, en dat
+  // is waar het laadscherm op wacht.
+  bootFaseKlaar('earth');
 }
 
 // bewaar het originele phong material zodat we kunnen terugschakelen
@@ -11821,9 +11856,14 @@ setInterval(updateSunUniform, 30_000);
 // bleef staan terwijl de globe allang klaar was.
 const BOOT_MAX_MS = 8000;
 
-let bootDismissed = false;
 function dismissBoot() {
   if (bootDismissed) return;
+  /* DE AARDE MOET GESCHILDERD ZIJN. Anders haalt de loader zijn eigen doel
+     onderuit: hij verdwijnt en laat een zwarte bol achter. `bootFaseKlaar`
+     roept ons terug zodra het materiaal op de bol staat — en dat gebeurt
+     gegarandeerd, want een mislukte textuurset valt terug op de kleinere en
+     daarna op de schematische kaart (zie buildRealisticMaterial). */
+  if (!bootKlaar.has('earth')) { bootWachtOpAarde = true; return; }
   bootDismissed = true;
   // Sein aan het vangnet in de <head>: vanaf hier zwijgt de watchdog, en een fout
   // in een adapter zet geen foutscherm meer over een werkende globe heen.
@@ -13160,10 +13200,17 @@ if (IS_LOCAL) {
   const kernPulls = Object.entries(Adapters)
     .filter(([, a]) => a.layers && a.layers.length && a.enabled !== false)
     .map(([id]) => firstPulls[id]);
-  Promise.allSettled(kernPulls).then(() => setTimeout(dismissBoot, 400));
+  Promise.allSettled(kernPulls).then(() => { bootFaseKlaar('sources'); setTimeout(dismissBoot, 400); });
 }
 // (3) bovengrens — dit is het vangnet dat een hangende bron onschadelijk maakt
 setTimeout(dismissBoot, BOOT_MAX_MS);
+/* HET LAATSTE VANGNET. `dismissBoot` wacht nu op de aarde, en dat is precies de
+   bedoeling — maar een wachtvoorwaarde zonder bovengrens is een hang. Valt de
+   aarde binnen deze tijd niet te schilderen, dan gaat het scherm alsnog weg:
+   een lege bol waar je omheen kunt draaien is beter dan een laadscherm dat
+   nooit eindigt. Ruim boven BOOT_MAX_MS, zodat dit alleen aan bod komt als er
+   echt iets bijzonders aan de hand is. */
+setTimeout(() => { bootFaseKlaar('earth'); dismissBoot(); }, BOOT_MAX_MS * 3);
 
 // (2) alles klaar. Pas hier tellen nieuwe entries als "nieuw", zodat de initiële
 // lading geen toast-regen veroorzaakt, ook niet van een late adapter.
