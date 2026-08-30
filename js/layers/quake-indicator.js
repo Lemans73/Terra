@@ -402,6 +402,26 @@ export function createQuakeIndicator(THREE, opts = {}) {
        the only way they cannot drift apart. Give the beam its own aNormal and
        the next change puts a shaft somewhere other than its own ring — visible
        only at one particular zoom. */
+
+    /* THE OLD GPU BUFFERS HAVE TO GO FIRST, and leaving that out cost half a
+       session (session 42).
+
+       Replacing an instanced attribute with a new object updates the JAVASCRIPT
+       side only. three keeps a vertex-array binding per geometry, and WebGL
+       clamps an instanced draw to the SHORTEST instanced attribute still bound
+       there — so the draw kept using the previous, smaller buffers.
+
+       That is why it only broke in one direction. Going from week to hour stays
+       inside the old buffer and looks fine; going from hour to week silently
+       drew the first n_old of n_new indicators. MEASURED at 1546 events after a
+       212-event upload: colouring instances 0..199 changed the picture, and
+       colouring 200..1545 changed NOTHING. The labels did show all of them,
+       because they never go near a GPU buffer — hence labels without rings.
+
+       Disposing costs one re-upload of the shared position/uv, once per data
+       change and not per frame. */
+    for (const geo of [ringGeo, shockGeo, beamGeo]) geo.dispose();
+
     for (const geo of [ringGeo, shockGeo, beamGeo]) {
       geo.setAttribute('aNormal',  new THREE.InstancedBufferAttribute(nor, 3));
       geo.setAttribute('aColor',   new THREE.InstancedBufferAttribute(col, 3));
