@@ -12780,6 +12780,10 @@ if (IS_LOCAL) {
     // tuning-paneel nodig te hebben (dat zit niet in de repo).
     PARAMS,
     quakeIndicator: () => quakeIndicator,
+    /* De scene opnieuw laten tekenen na een wijziging in `store`. Nodig voor de
+       stormplaceholder in het tuning-paneel, die een gebeurtenis toevoegt die
+       geen enkele bron levert. */
+    render,
     /* Dezelfde haak die het tuning-paneel gebruikt, en niet een kopie ervan.
        Een meting die zijn eigen herteken-weg neemt, toetst die van het paneel
        niet — en dat is precies de weg die stuk kan gaan. */
