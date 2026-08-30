@@ -12560,8 +12560,15 @@ prefsZetRijen();
    en alleen ruis geven; hier stopt hij de volgende die een rij toevoegt zonder
    sleutel. `Prefs.get` klaagt bij een ONBEKENDE sleutel al uit zichzelf. */
 if (IS_LOCAL) {
+  /* SCHAKELRIJEN HOORT ER OOK BIJ (session 42). Die tabel draagt de rijen die
+     naast bewaren ook iets DOEN — beams, leader lines, reduced motion, de twee
+     labelkeuzes. Ze stonden niet in deze opsomming, dus meldde de controle vijf
+     sleutels als "leest niemand" en dezelfde vijf rijen als "zonder sleutel",
+     terwijl ze allebei gewoon werken. Een vangrail die loos alarm geeft, leert
+     je hem te negeren — en dan mist hij de echte. */
   const gebruikt = [...Object.values(PREFS_RIJEN), ...Object.values(ACTIVE_SLEUTEL),
                     ...Object.values(OVERLAY_SLEUTEL), ...Object.values(TEX_SLEUTEL),
+                    ...SCHAKELRIJEN.map((r) => r.sleutel),
                     'pref.texQuality', 'pref.labelCount', 'pref.nightGlow',
                     'time.span', 'time.speed',
                     'quake.source', 'quake.magMin', 'quake.magMax',
@@ -12575,8 +12582,9 @@ if (IS_LOCAL) {
   /* De rijen in de DOM die geen sleutel hebben. Een `.elayer` met een id die
      niet in PREFS_RIJEN staat, bewaart niets — en dat is precies het soort
      stille misser waar dit hele register voor bedoeld is. */
+  const schakelIds = new Set(SCHAKELRIJEN.map((r) => r.id));
   const zonder = [...document.querySelectorAll('.elayer')]
-    .filter((e) => e.id && !PREFS_RIJEN[e.id] && e.dataset.prefs !== 'none')
+    .filter((e) => e.id && !PREFS_RIJEN[e.id] && !schakelIds.has(e.id) && e.dataset.prefs !== 'none')
     .map((e) => e.id);
   if (zonder.length) console.warn('[prefs] schakelaars zonder sleutel:', zonder);
   if (gat.ongebruikt.length) console.warn('[prefs] sleutels die niemand leest:', gat.ongebruikt);
