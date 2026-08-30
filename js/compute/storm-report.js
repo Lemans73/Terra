@@ -162,18 +162,20 @@ export function parseJtwcWarning(text) {
    bestand verandert hooguit zes keer per etmaal. De cache bewaart ook een
    mislukking: opnieuw proberen bij elke klik zou een dode url zes keer per
    minuut aantikken. */
-const cache = new Map();
+/* EIGEN NAAM, want de standalone-build giet elke module in EEN scope. Een kale
+   `cache` botst met de volgende module die er ook een heeft; de build ving dat. */
+const reportCache = new Map();
 
 /* De cache MAG SYNCHROON GELEZEN WORDEN, en dat is geen gemak maar een
    voorwaarde. Het detailvenster tekent synchroon; zonder deze kijk zou het bij
    elke hertekening opnieuw moeten wachten, en dan roept de afhandeling van dat
    wachten het venster weer aan — een lus. Nu haalt het venster wat er ligt, en
    haalt het alleen op wanneer er nog niets ligt. */
-export function peekStormReport(url) { return cache.get(url); }
+export function peekStormReport(url) { return reportCache.get(url); }
 
 export async function fetchStormReport(url, opts = {}) {
   if (!url) return { state: 'error' };
-  if (cache.has(url)) return cache.get(url);
+  if (reportCache.has(url)) return reportCache.get(url);
 
   const timeoutMs = opts.timeoutMs || 12000;
   const ctl = new AbortController();
@@ -197,10 +199,10 @@ export async function fetchStormReport(url, opts = {}) {
   } finally {
     clearTimeout(timer);
   }
-  cache.set(url, uit);
+  reportCache.set(url, uit);
   return uit;
 }
 
 // Alleen voor de toetsen: de cache leegmaken zodat een meting niet het antwoord
 // van de vorige leest.
-export function clearStormReportCache() { cache.clear(); }
+export function clearStormReportCache() { reportCache.clear(); }

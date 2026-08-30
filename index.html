@@ -2122,6 +2122,8 @@ import { peekStormReport, fetchStormReport, knotsToKmh, nmToKm }
   from './js/compute/storm-report.js';
 import { forecastSegments, forecastStops, windFootprint, circleAround, footprintSpan }
   from './js/compute/storm-track.js';
+import { irwinIdFromUrl, peekWildfireFacts, fetchWildfireFacts, acresToHectares }
+  from './js/compute/wildfire-facts.js';
 // GLSL shader-bronnen (Stap 0 refactor).
 import {
   SHOCK_VERT, SHOCK_FRAG,
@@ -11064,6 +11066,61 @@ antipodeUitgang?.addEventListener('click', () => {
    `opts` reist ongewijzigd door naar de module. Daar zit `backTo` in: de bouwer van
    de view die híéronder ligt, waardoor de sluitknop een terugpijl wordt. Alleen de
    zonnegebieden geven hem mee; overal elders is hij afwezig en sluit de knop gewoon. */
+/* WAT EEN AMERIKAANSE BOSBRAND IN PLAATS VAN ZIJN DODE LINK KRIJGT (sessie 42).
+
+   EONET's enige bron voor een brand in de VS is IRWIN, en dat is een
+   inlogpagina; de knop ernaartoe is deze sessie weggehaald. Het IDENTIFICATIE-
+   NUMMER stond wél in die url, en NIFC publiceert dezelfde incidenten open.
+   Zie js/compute/wildfire-facts.js.
+
+   NIET GEVONDEN IS DE NORMALE UITKOMST voor een brand waarvan het seizoen
+   voorbij is. Dan komen er geen regels bij — een korte uitlezing is beter dan
+   een rij die "onbekend" zegt. */
+function wildfireFactRows(d) {
+  if (d.layer !== 'wildfire') return [];
+  const id = irwinIdFromUrl(d.url);
+  if (!id) return [];
+  const res = peekWildfireFacts(id);
+  // Niets tonen zolang het antwoord onderweg is, en niets bij een misser: het
+  // venster krijgt er een blok BIJ zodra er iets te melden valt.
+  if (!res || res.state === 'none') return [];
+  if (res.state !== 'ok') return [['Incident', { absent: true, text: 'the NIFC incident record could not be reached' }]];
+
+  const f = res.facts;
+  const rijen = [[{ section: 'NIFC incident' }]];
+  const getal = (n) => Math.round(n).toLocaleString('en-GB');
+  if (f.acres != null) {
+    // Metrisch voorop, zoals overal in Terra; acres erachter omdat elke
+    // Amerikaanse bron erin rapporteert en het getal daarmee naslaanbaar blijft.
+    rijen.push(['Size', getal(acresToHectares(f.acres)) + ' ha (' + getal(f.acres) + ' acres)']);
+  }
+  if (f.contained != null) rijen.push(['Contained', Math.round(f.contained) + '%']);
+  if (f.cause) rijen.push(['Cause', f.cause]);
+  if (f.discovered) rijen.push(['Discovered', eventTijd(f.discovered.getTime())]);
+  /* DE STAAT ALLEEN ALS HIJ ER NIET AL STAAT. NIFC's korte omschrijving eindigt
+     meestal op de staat ("20 Miles SE from McDermitt, NV"), en die er nog eens
+     achter plakken leest als een fout. */
+  if (f.where || f.state) {
+    const heeftAl = f.where && f.state && new RegExp(',\\s*' + f.state + '\\s*$').test(f.where);
+    rijen.push(['Location', f.where ? (heeftAl || !f.state ? f.where : f.where + ' · ' + f.state) : f.state]);
+  }
+  return rijen;
+}
+
+/* Opzoeken zodra het venster een Amerikaanse brand toont die we nog niet
+   kennen. `peekWildfireFacts` beslist of er iets te halen valt, dus een tweede
+   hertekening zoekt niet opnieuw op en er ontstaat geen lus. Zelfde vorm als
+   ensureStormReport. */
+function ensureWildfireFacts(d) {
+  if (d.layer !== 'wildfire') return;
+  const id = irwinIdFromUrl(d.url);
+  if (!id || peekWildfireFacts(id)) return;
+  const sleutel = shownEventKey;
+  fetchWildfireFacts(id).then(() => {
+    if (detailVisible && shownEventKey === sleutel) showDetail(d);
+  });
+}
+
 /* DE BAAN EN DE VOETAFDRUK VAN DE GEOPENDE STORM (sessie 42, Terry).
 
    Ze verschijnen wanneer je een storm opent waarvan het waarschuwingsbestand
@@ -11303,7 +11360,9 @@ function showDetail(d, opts) {
       ...(FILE_LINK_NOTES[d.layer] && sourceLink(d) && sourceLink(d).download
           ? [['Note', { absent: true, text: FILE_LINK_NOTES[d.layer] }]] : []),
       // Het uitgelezen JTWC-rapport, of waarom het er niet is.
-      ...stormReportRows(d)
+      ...stormReportRows(d),
+      // En wat NIFC over een Amerikaanse brand weet te melden.
+      ...wildfireFactRows(d)
     ],
     actions: detailActions(d),
     // Bevingen komen uit twee catalogi, dus het label kan niet vastliggen per laag;
@@ -11311,6 +11370,7 @@ function showDetail(d, opts) {
     link: sourceLink(d)
   }, opts);
   ensureStormReport(d);
+  ensureWildfireFacts(d);
 }
 
 // ---- Fetch loop ----------------------------------------------
