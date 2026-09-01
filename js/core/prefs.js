@@ -201,6 +201,24 @@ export const PREFS_DEFAULTS = {
   'pref.labelCount': 20,
   'pref.nightGlow':  12,
 
+  /* ---- What the visitor has already been shown ----
+
+     TWO MARKERS AND NOT ONE, because the welcome screen and the tour are two
+     things. Dismissing the first says "I have made my choice"; dismissing the
+     second says "I know my way around". Someone who clicks the welcome screen
+     away still gets the tour, and that is the point.
+
+     NUMBERS AND NOT BOOLEANS. A later fourth question can then be asked on its
+     own by raising the version, instead of showing the whole screen again to
+     everyone who has already answered the first three.
+
+     THESE NEED NO PREFS_VERSIE BUMP. A key that is missing from a stored
+     register falls back to the factory value here (see `get` below), so an
+     existing visitor reads 0 and is treated as new — which for the imagery
+     choice they are. */
+  'pref.onboardingVersion': 0,
+  'pref.hintsVersion': 0,
+
   /* ---- Toegankelijkheid ---- (sessie 40)
 
      `pref.reducedMotion` is de enige met een BEREKENDE fabrieksstand: hij begint

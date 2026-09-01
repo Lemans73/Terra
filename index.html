@@ -2190,7 +2190,8 @@ import {
   FILE_LINK_TYPES, DEAD_LINK_HOSTS, FILE_LINK_NOTES,
   AQI_BANDS, aqiBand, aqiHex, magHex,
   PARAMS, WINDOW_MS, MODE_LABELS, MODE_ICONS, EXPERT_LAYER_SCALE,
-  TEXTURE_SETS, DEFAULT_QUALITY, assetsFor, textureSetSize, RELAY_URL, REPO_URL,
+  TEXTURE_SETS, DEFAULT_QUALITY, assetsFor, textureSetSize, imageryMeta,
+  RELAY_URL, REPO_URL,
   ANALYTICS_HOSTS, LOCK_DETAILS, ASSET_BASE, asset
 } from './js/config.js';
 import { peekStormReport, fetchStormReport, knotsToKmh, nmToKm }
@@ -2267,6 +2268,7 @@ import { createNavPanel } from './js/ui/nav.js';
 import { createViewSwitch } from './js/ui/view-switch.js';
 import { createPanelManager } from './js/ui/panels.js';
 import { createDetailPanel } from './js/ui/detail.js';
+import { createOnboarding } from './js/ui/onboarding.js';
 import { limbThreshold } from './js/core/label-sprite.js';
 import { PLANETS, PLANET_INFO, nextConjunction,
          previousConjunction, heliocentricState } from './js/compute/planets.js';
@@ -11751,6 +11753,37 @@ setInterval(updateSunUniform, 30_000);
 // bleef staan terwijl de globe allang klaar was.
 const BOOT_MAX_MS = 8000;
 
+/* HET WELKOMSTSCHERM (sessie 44).
+
+   LAZY AANGEMAAKT EN NIET BOVENAAN. `createOnboarding` heeft `earthTex` nodig,
+   en dismissBoot staat in dit bestand vóór de plek waar de UI wordt opgebouwd.
+   Hier aanmaken op het moment dat hij nodig is, houdt hem uit de temporal dead
+   zone — dezelfde reden als de getters bij createEarthTextures hierboven.
+
+   NA DE FADE VAN HET LAADSCHERM, en dat is geen opsmuk. Wie meteen een vraag
+   over megabytes krijgt zonder de aarde te hebben gezien, heeft geen idee
+   waarvoor hij kiest. De 0,35 s hieronder is de duur van `.boot` z'n
+   opacity-overgang plus een korte adem.
+
+   Bewust NIET achter REDUCED_MOTION: dit is geen animatie maar een volgorde. */
+let welkomstscherm = null;
+
+function toonWelkomstscherm() {
+  if (welkomstscherm) return;
+  welkomstscherm = createOnboarding({
+    prefs: Prefs,
+    imageryMeta,
+    currentImagery: () => earthTex.imagery(),
+    setImagery: (q) => earthTex.setImagery(q),
+    /* Langs zetUTC() en niet langs Prefs: die functie past de stand toe én
+       trekt beide bestaande schakelaars gelijk. Zie de noot bij utcToggles. */
+    currentUtc: () => useUTC,
+    setUtc: (on) => zetUTC(on)
+  });
+  if (!welkomstscherm.due()) return;
+  setTimeout(() => welkomstscherm.open(), 500);
+}
+
 function dismissBoot() {
   if (bootDismissed) return;
   /* DE AARDE MOET GESCHILDERD ZIJN. Anders haalt de loader zijn eigen doel
@@ -11765,6 +11798,7 @@ function dismissBoot() {
   // in een adapter zet geen foutscherm meer over een werkende globe heen.
   window.__terraBooted = true;
   document.getElementById('boot').classList.add('done');
+  toonWelkomstscherm();
   // Minder beweging gevraagd: de interface staat er meteen, zonder inschuiven.
   if (REDUCED_MOTION) return;
   // GSAP-intro: header + paneel soepel in beeld

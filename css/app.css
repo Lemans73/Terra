@@ -174,6 +174,12 @@
     --z-chrome: 35;
     --z-detail: 40;
     --z-dock: 45;
+    /* Boven het laadscherm (50) en het bewerkscherm (60), want dit is het
+       eerste wat een nieuwe bezoeker ziet en er hoort niets overheen te
+       kunnen. Die twee staan met een ingetikt getal in hun eigen regel;
+       deze staat hier omdat hij twee klanten heeft die gelijk moeten
+       lopen — het welkomstscherm en de rondleiding erna. */
+    --z-onboard: 70;
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -3272,3 +3278,193 @@
   body.space-on .sketch-editor,
   body.sun-view .sketch-editor { display: none; }
   /* SKETCH:END */
+
+  /* ---- Het welkomstscherm (sessie 44) --------------------------------------
+     Het eerste wat een nieuwe bezoeker ziet, en het enige vlak in Terra dat de
+     scene volledig afdekt. Dat mag hier: er valt nog niets te zien waar de
+     keuze niet overheen gaat, want de zware textuur wordt pas gehaald nadat
+     dit scherm dicht is.
+
+     GEEN `backdrop-filter` OP DE LAAG ZELF. Die staat elders in dit bestand op
+     panelen van 300 px; hier zou hij over het hele scherm gaan, en dat is een
+     blur over de volle bol op het moment dat de GPU net de aarde staat op te
+     bouwen. Een ondoorzichtige laag kost niets en leest rustiger. */
+  .ob {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-onboard);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(5, 7, 13, 0.92);
+    transition: opacity 0.35s;
+  }
+  .ob.done { opacity: 0; pointer-events: none; }
+
+  .ob-card {
+    position: relative;
+    width: 100%;
+    max-width: 520px;
+    max-height: 100%;
+    overflow-y: auto;
+    padding: 30px 30px 24px;
+    background: var(--void-2);
+    border: 1px solid var(--hair);
+    border-radius: 14px;
+  }
+
+  .ob-close {
+    position: absolute;
+    top: 10px; right: 12px;
+    background: none; border: none;
+    font: inherit; font-size: 19px; line-height: 1;
+    color: var(--ink-faint);
+    cursor: pointer;
+    padding: 4px 6px;
+  }
+  .ob-close:hover { color: var(--ink); }
+
+  /* Dezelfde vormtaal als de kop van de app: gespatieerd, klein, hoofdletters. */
+  .ob-title {
+    margin: 0 0 10px;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--ink);
+  }
+  .ob-lead {
+    margin: 0 0 20px;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--ink-dim);
+  }
+
+  /* DE DRIE TRAPPEN, in kolom en niet in een rij van drie. In Settings staan
+     ze naast elkaar omdat daar alleen de naam en de maat op de knop passen;
+     hier draagt elke knop ook de zin die zegt wat je krijgt, en drie van die
+     zinnen naast elkaar worden drie smalle kolommen tekst. */
+  .ob-tiers { display: flex; flex-direction: column; gap: 8px; }
+  .ob-tier {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: 1px solid var(--hair);
+    border-radius: 10px;
+    padding: 11px 13px;
+    color: var(--ink-dim);
+    font-family: inherit;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s, color 0.15s;
+  }
+  .ob-tier:hover:not(:disabled) { border-color: var(--ink-faint); color: var(--ink); }
+  .ob-tier.on {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: var(--accent);
+    color: var(--ink);
+  }
+  .ob-tier.off { opacity: 0.45; cursor: not-allowed; }
+  .ob-tier-name { font-size: 13px; font-weight: 500; }
+  .ob-tier-meta {
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    font-variant-numeric: tabular-nums;
+    color: var(--accent);
+  }
+  .ob-tier.off .ob-tier-meta { color: var(--ink-faint); }
+  .ob-tier-note { font-size: 11px; line-height: 1.5; color: var(--ink-faint); }
+
+  /* De reden onder de rij, niet erboven: eerst wat je kunt kiezen, dan waarom
+     er al iets aanstaat. Andersom leest het als een mededeling waar je nog
+     doorheen moet voordat de keuze in beeld komt. */
+  .ob-reason {
+    margin: 11px 0 0;
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--ink-faint);
+  }
+
+  .ob-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--hair);
+  }
+  .ob-row-label { font-size: 12px; color: var(--ink-dim); }
+  .ob-seg {
+    display: flex;
+    border: 1px solid var(--hair);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .ob-seg-opt {
+    background: transparent;
+    border: none;
+    padding: 6px 14px;
+    font: inherit;
+    font-size: 11px;
+    color: var(--ink-faint);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  .ob-seg-opt:hover { color: var(--ink); }
+  .ob-seg-opt.on { background: rgba(255, 255, 255, 0.07); color: var(--ink); }
+
+  .ob-acts {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 22px;
+  }
+  .ob-btn {
+    padding: 11px 16px;
+    background: transparent;
+    border: 1px solid var(--hair);
+    border-radius: 9px;
+    font: inherit;
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    color: var(--ink-dim);
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s, background 0.15s;
+  }
+  .ob-btn:hover { border-color: var(--ink-faint); color: var(--ink); }
+  /* DE AANBEVOLEN KNOP DRAAGT DE ACCENTKLEUR EN STAAT BOVENAAN. Hij is de
+     belangrijkste van het scherm: hij laat iemand die niet over megabytes wil
+     nadenken weglopen zonder over megabytes na te denken. */
+  .ob-btn-primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--void);
+    font-weight: 600;
+  }
+  .ob-btn-primary:hover { filter: brightness(1.1); color: var(--void); }
+
+  .ob-foot {
+    margin: 14px 0 0;
+    font-size: 10px;
+    text-align: center;
+    color: var(--ink-faint);
+  }
+
+  /* Op een telefoon vult de kaart de breedte en verliest hij zijn ronde hoeken
+     niet, maar wel zijn ruime binnenmarge: 30 px aan weerszijden van 375 laat
+     315 over voor tekst die op drie regels moet passen. */
+  @media (max-width: 480px) {
+    .ob { padding: 12px; }
+    .ob-card { padding: 24px 18px 18px; }
+    .ob-tier-note { font-size: 10px; }
+  }
+
+  /* Minder beweging gevraagd: geen uitvloeier, het scherm is er of het is weg. */
+  @media (prefers-reduced-motion: reduce) {
+    .ob { transition: none; }
+    .ob-tier, .ob-btn, .ob-seg-opt { transition: none; }
+  }
