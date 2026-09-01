@@ -2269,6 +2269,7 @@ import { createViewSwitch } from './js/ui/view-switch.js';
 import { createPanelManager } from './js/ui/panels.js';
 import { createDetailPanel } from './js/ui/detail.js';
 import { createOnboarding } from './js/ui/onboarding.js';
+import { createHints } from './js/ui/hints.js';
 import { limbThreshold } from './js/core/label-sprite.js';
 import { PLANETS, PLANET_INFO, nextConjunction,
          previousConjunction, heliocentricState } from './js/compute/planets.js';
@@ -11767,9 +11768,11 @@ const BOOT_MAX_MS = 8000;
 
    Bewust NIET achter REDUCED_MOTION: dit is geen animatie maar een volgorde. */
 let welkomstscherm = null;
+let rondleiding = null;
 
 function toonWelkomstscherm() {
   if (welkomstscherm) return;
+  rondleiding = createHints({ prefs: Prefs });
   welkomstscherm = createOnboarding({
     prefs: Prefs,
     imageryMeta,
@@ -11778,10 +11781,26 @@ function toonWelkomstscherm() {
     /* Langs zetUTC() en niet langs Prefs: die functie past de stand toe én
        trekt beide bestaande schakelaars gelijk. Zie de noot bij utcToggles. */
     currentUtc: () => useUTC,
-    setUtc: (on) => zetUTC(on)
+    setUtc: (on) => zetUTC(on),
+    onClose: startRondleiding
   });
-  if (!welkomstscherm.due()) return;
-  setTimeout(() => welkomstscherm.open(), 500);
+  if (welkomstscherm.due()) { setTimeout(() => welkomstscherm.open(), 500); return; }
+  /* GEEN WELKOMSTSCHERM BETEKENT NIET GEEN RONDLEIDING. Het zijn twee markers,
+     en wie het ene al heeft gezien kan het andere nog missen — bijvoorbeeld
+     doordat de rondleiding later is toegevoegd dan het welkomstscherm. */
+  startRondleiding();
+}
+
+/* NA HET WELKOMSTSCHERM, MAAR NIET ERAAN VAST. De rondleiding heeft een eigen
+   marker: wie het welkomstscherm wegklikte heeft een keuze gemaakt, niet gezegd
+   dat hij de weg weet.
+
+   De vertraging laat de uitvloeier van het welkomstscherm aflopen; zonder die
+   pauze meet de rondleiding zijn eerste uitsnede terwijl er nog een vlak
+   overheen ligt. */
+function startRondleiding() {
+  if (!rondleiding || !rondleiding.due()) return;
+  setTimeout(() => rondleiding.open(), 450);
 }
 
 function dismissBoot() {
