@@ -11,10 +11,16 @@
    wrong one for someone arriving for the first time: the earth is
    obvious, the six things you can do with it are not.
 
-   IT POINTS, IT DOES NOT DRIVE. No panel is opened, no layer switched,
-   no camera moved. Someone who skips at step two ends up in exactly the
-   same app as someone who reads all six — a tour that leaves the app
-   rearranged has cost them the state they arrived in.
+   IT OPENS WHAT IT POINTS AT, AND PUTS IT BACK. Pointing at a closed
+   button says where a thing is; opening it says what is inside, which
+   is the part a first visit actually needs. Each step opens its own
+   panel and closes the one before it, so only ever one is on screen.
+
+   PUTTING IT BACK IS THE HALF THAT IS EASY TO SKIP. The state the app
+   was in when the tour started is captured before the first step and
+   restored when it ends — however it ends, including the close button
+   and Escape. A tour that leaves the app rearranged has spent the
+   visitor's state on its own explanation.
 
    TWO SENTENCES PER STEP, AND THAT IS A CEILING NOT A TARGET. What a
    control does, and the one thing about it that is not obvious from the
@@ -39,30 +45,38 @@
    catches that, and it reads this array. Keep it importable in Node:
    nothing at module level may touch `document`.
 
+   `reveal` is a name the app resolves to a panel; the module never
+   learns what a panel is. A step without one points at a control that
+   has nothing to open — the view switch is two buttons and no drawer.
+
    The order walks the screen the way a visitor does: the two dock
    buttons on the left, the one on the right, the bar along the bottom,
    then up to the two controls in the top chrome. */
 export const HINT_STEPS = [
   {
     anchor: 'panel-open',
+    reveal: 'layers',
     label: 'Layers',
     title: 'Layers & filters',
     text: 'Everything drawn on the globe is switched on and off here — earthquakes, storms, wildfires, the magnetic field. Filters for magnitude and time sit in the same panel.'
   },
   {
     anchor: 'details-open',
+    reveal: 'details',
     label: 'Details',
     title: 'Details',
     text: 'Click anything on the globe and its measurements open here. Every figure names the source it came from.'
   },
   {
     anchor: 'nav-open',
+    reveal: 'nav',
     label: 'Navigate',
     title: 'Navigate',
     text: 'Drag to turn the Earth and scroll to zoom. This button jumps straight to a place, an event, or another view.'
   },
   {
     anchor: 'time-island',
+    reveal: 'time',
     label: 'Time',
     title: 'The time bar',
     text: 'This drives the whole scene, not just a clock. Slide or play it and the sun, the day-night line and the events on screen all move with it.'
@@ -75,6 +89,7 @@ export const HINT_STEPS = [
   },
   {
     anchor: 'settings-open',
+    reveal: 'settings',
     label: 'Settings',
     title: 'Settings',
     text: 'Everything Terra remembers between visits lives here, including the imagery quality you just chose. It is also where you can start this tour again.'
@@ -89,12 +104,15 @@ const HINT_GAP = 14;
 const HINT_EDGE = 12;
 
 export function createHints(opts) {
-  const { prefs, steps = HINT_STEPS, version = 1, onClose } = opts;
+  const { prefs, steps = HINT_STEPS, version = 1, onClose,
+          reveal, restore } = opts;
 
   let root = null, hole = null, card = null;
   let live = [];
   let at = 0;
   let lastFocus = null;
+  let shown = null;        // the element the current step revealed, if any
+  let settle = null;
 
   function el(tag, cls, text) {
     const n = document.createElement(tag);
@@ -117,14 +135,38 @@ export function createHints(opts) {
       });
   }
 
-  /* Above or below the anchor, whichever side the anchor is not on, and
-     clamped so the card never leaves the viewport. Terra puts controls
-     hard against all four edges, so a card centred on its anchor would
-     otherwise hang off the screen at four of the six stops. */
+  /* THE CUT-OUT COVERS THE BUTTON AND WHAT IT OPENED, as one rectangle.
+     Lighting only the button while its panel sits dimmed beside it would
+     point at the handle and hide the thing — and the panel is what the
+     step is about. */
+  function frame() {
+    const r = live[at].el.getBoundingClientRect();
+    if (!shown) return r;
+    const p = shown.getBoundingClientRect();
+    if (!p.width || !p.height) return r;
+    const left = Math.min(r.left, p.left), top = Math.min(r.top, p.top);
+    return {
+      left, top,
+      right: Math.max(r.right, p.right),
+      bottom: Math.max(r.bottom, p.bottom),
+      width: Math.max(r.right, p.right) - left,
+      height: Math.max(r.bottom, p.bottom) - top
+    };
+  }
+
+  /* Above or below the frame, whichever side it is not on, and clamped so
+     the card never leaves the viewport. Terra puts controls hard against
+     all four edges, so a card centred on its anchor would otherwise hang
+     off the screen at four of the six stops.
+
+     WITH A PANEL OPEN THE FRAME CAN FILL THE SCREEN, and then there is no
+     side left to stand on. The clamp still holds the card in view, and
+     it lands over the panel rather than off the edge — the lesser of the
+     two, since a card outside the viewport is not a card at all. */
   function place() {
     const step = live[at];
     if (!step || !root) return;
-    const r = step.el.getBoundingClientRect();
+    const r = frame();
 
     hole.style.left = (r.left - HINT_PAD) + 'px';
     hole.style.top = (r.top - HINT_PAD) + 'px';
@@ -144,8 +186,28 @@ export function createHints(opts) {
     card.dataset.side = onder ? 'below' : 'above';
   }
 
+  /* A PANEL SLIDES; ITS FINAL SIZE IS NOT THERE ON THE FRAME IT OPENS.
+     Measuring once gives a cut-out around whatever width it had halfway
+     through. Re-measuring while the animation runs costs nothing and
+     ends on the real geometry. */
+  function placeWhileSettling() {
+    clearInterval(settle);
+    place();
+    const until = Date.now() + 500;
+    settle = setInterval(() => {
+      if (!root || Date.now() > until) { clearInterval(settle); settle = null; return; }
+      place();
+    }, 60);
+  }
+
   function draw() {
     const step = live[at];
+
+    /* ASK FIRST, MEASURE AFTER. The app closes whatever the previous step
+       opened and opens this one's, then hands back the element it put on
+       screen — or nothing, for a step with no drawer. */
+    shown = reveal ? (reveal(step.reveal || null) || null) : null;
+
     card.innerHTML = '';
 
     const close = el('button', 'ht-close');
@@ -202,7 +264,7 @@ export function createHints(opts) {
     foot.appendChild(nav);
 
     card.appendChild(foot);
-    place();
+    placeWhileSettling();
     next.focus();
   }
 
@@ -223,13 +285,20 @@ export function createHints(opts) {
   function finish() {
     if (!root) return;
     prefs.set('pref.hintsVersion', version);
+    clearInterval(settle);
+    settle = null;
     document.removeEventListener('keydown', onKey, true);
     removeEventListener('resize', onResize);
     removeEventListener('scroll', onResize, true);
     root.classList.add('done');
     const gone = root;
     root = null;
+    shown = null;
     setTimeout(() => gone.remove(), 300);
+    /* PUT THE APP BACK BEFORE HANDING BACK FOCUS. This runs on every exit
+       — the close button, Escape, and the last step — because those are
+       three ways out of one tour and not three kinds of ending. */
+    if (restore) { try { restore(); } catch { /* the app owns its own panels */ } }
     if (lastFocus && lastFocus.focus) { try { lastFocus.focus(); } catch {} }
     if (onClose) onClose();
   }

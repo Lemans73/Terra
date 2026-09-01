@@ -514,6 +514,18 @@
       <br /><br />
       This clears all of it and reloads the page.
       </div>
+
+      <!-- ONDER `Reset to defaults` EN NIET ERBOVEN (Terry, sessie 44). Beide
+           rijen zetten iets terug naar hoe het was bij een eerste bezoek, maar
+           deze raakt geen enkele instelling aan: hij laat het welkomstscherm en
+           de rondleiding nog één keer zien en zet daarna dezelfde markers weer.
+
+           GEEN HERLAADBEURT, anders dan bij de rij hierboven. Wat hier opnieuw
+           begint is een scherm, en de app eronder hoeft nergens heen. -->
+      <div class="elayer" id="prefs-tour" data-prefs="none">
+      <span class="edot"></span>Show the welcome screen again
+      <span class="estat" id="es-prefs-tour">&#8212;</span>
+      </div>
       </div>
       </section>
 
@@ -7155,6 +7167,35 @@ function playPing(layer) {
   });
 }
 
+/* HET WELKOMSTSCHERM NOG EEN KEER (sessie 44).
+
+   DE MARKERS WEG EN DAN OPNIEUW BEGINNEN, niet de schermen rechtstreeks
+   openen. Dat is hetzelfde pad als een eerste bezoeker loopt: dezelfde
+   detectie, dezelfde volgorde, en de rondleiding die er vanzelf achteraan komt
+   omdat het welkomstscherm hem aanroept bij het sluiten.
+
+   Settings gaat eerst dicht. Het welkomstscherm dekt het scherm af, en de
+   rondleiding daarna opent zijn eigen panelen — een paneel dat daaronder blijft
+   staan zou bij het herstel achteraf alsnog terugkomen. */
+{
+  const tourEl = document.getElementById('prefs-tour');
+  if (tourEl) tourEl.addEventListener('click', () => {
+    Prefs.set('pref.onboardingVersion', 0);
+    Prefs.set('pref.hintsVersion', 0);
+    const stat = document.getElementById('es-prefs-tour');
+    if (stat) stat.textContent = 'starting';
+    panels.close('settings');
+    welkomstscherm = null;
+    rondleiding = null;
+    rondleidingStand = null;
+    welkomstHeropend = true;
+    setTimeout(() => {
+      toonWelkomstscherm();
+      if (stat) stat.textContent = '—';
+    }, 260);
+  });
+}
+
 const soundToggleEl = document.getElementById('sound-toggle');
 if (soundToggleEl) {
   soundToggleEl.addEventListener('click', () => {
@@ -11769,10 +11810,73 @@ const BOOT_MAX_MS = 8000;
    Bewust NIET achter REDUCED_MOTION: dit is geen animatie maar een volgorde. */
 let welkomstscherm = null;
 let rondleiding = null;
+/* Staat op `true` zodra de rij in Preferences dit opnieuw aftrapt. Het
+   welkomstscherm zet dan de HUIDIGE keuze voor in plaats van de detectie — zie
+   de noot bij `reopen` in js/ui/onboarding.js. */
+let welkomstHeropend = false;
+
+/* WAT DE RONDLEIDING PER STAP LAAT ZIEN.
+
+   De module kent geen panelen; hij geeft een naam door en krijgt terug wat er
+   nu op het scherm staat. Deze tabel is de enige plek waar die namen betekenis
+   krijgen, en daarmee de enige plek die mee moet als een paneel verhuist.
+
+   HET TIJDEILAND STAAT NIET IN `panels`, en dat is een bestaand besluit met een
+   eigen noot: het heeft geen groepsgenoten en geen knop die een `.active` hoort
+   te krijgen. Vandaar zijn eigen open/dicht hieronder in plaats van een sleutel.
+
+   `mode-switch` ontbreekt met opzet: twee knoppen zonder lade. */
+const RONDLEIDING_PANELEN = {
+  layers:   { el: () => document.querySelector('.panel'),
+              open: () => panels.open('layers'),   dicht: () => panels.close('layers') },
+  details:  { el: () => document.getElementById('details-panel'),
+              open: () => panels.open('details'),  dicht: () => panels.close('details') },
+  nav:      { el: () => document.getElementById('nav-panel'),
+              open: () => panels.open('nav'),      dicht: () => panels.close('nav') },
+  settings: { el: () => document.getElementById('settings-panel'),
+              open: () => panels.open('settings'), dicht: () => panels.close('settings') },
+  time:     { el: () => document.getElementById('ti-panel'),
+              open: () => setTimePanelOpen(true),  dicht: () => setTimePanelOpen(false) }
+};
+
+/* De stand waarin de app stond toen de rondleiding begon. Wordt gevuld bij de
+   eerste stap en teruggezet bij élke uitgang — zie de noot bij finish(). */
+let rondleidingStand = null;
+
+function rondleidingToon(naam) {
+  if (!rondleidingStand) {
+    rondleidingStand = {};
+    for (const [k, p] of Object.entries(RONDLEIDING_PANELEN)) {
+      rondleidingStand[k] = k === 'time' ? timePanelIsOpen() : panels.isOpen(k);
+    }
+  }
+  /* EERST ALLES DICHT DAT NIET GEVRAAGD IS. De panelen sluiten elkaar per
+     GROEP, en Layers (links) en Settings (boven) zitten in verschillende
+     groepen — die zouden dus samen open blijven staan. Eén stap, één paneel. */
+  for (const [k, p] of Object.entries(RONDLEIDING_PANELEN)) {
+    if (k !== naam) p.dicht();
+  }
+  const wil = RONDLEIDING_PANELEN[naam];
+  if (!wil) return null;
+  wil.open();
+  return wil.el();
+}
+
+function rondleidingHerstel() {
+  if (!rondleidingStand) return;
+  for (const [k, p] of Object.entries(RONDLEIDING_PANELEN)) {
+    if (rondleidingStand[k]) p.open(); else p.dicht();
+  }
+  rondleidingStand = null;
+}
 
 function toonWelkomstscherm() {
   if (welkomstscherm) return;
-  rondleiding = createHints({ prefs: Prefs });
+  rondleiding = createHints({
+    prefs: Prefs,
+    reveal: rondleidingToon,
+    restore: rondleidingHerstel
+  });
   welkomstscherm = createOnboarding({
     prefs: Prefs,
     imageryMeta,
@@ -11782,6 +11886,7 @@ function toonWelkomstscherm() {
        trekt beide bestaande schakelaars gelijk. Zie de noot bij utcToggles. */
     currentUtc: () => useUTC,
     setUtc: (on) => zetUTC(on),
+    reopen: welkomstHeropend,
     onClose: startRondleiding
   });
   if (welkomstscherm.due()) { setTimeout(() => welkomstscherm.open(), 500); return; }

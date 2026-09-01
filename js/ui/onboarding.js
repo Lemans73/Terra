@@ -52,7 +52,11 @@
 const TIERS = [
   { id: '2k',    name: 'Standard',        note: 'One world map. Works offline afterwards.' },
   { id: '8k',    name: 'High resolution', note: 'A sharper world map. Still a single download.' },
-  { id: 'tiles', name: 'Satellite',       note: 'Real imagery for the place you are looking at, fetched as you go. The only tier that zooms in further.' }
+  /* WIFI IS HET SCHARNIER, niet de hoeveelheid (Terry, sessie 44). Achttien
+     megabyte is niets op een vaste lijn en een merkbaar deel van een bundel op
+     een telefoon — dezelfde tegel, een heel ander bedrag. De metaregel noemt de
+     hoeveelheid; deze zin noemt wanneer die hoeveelheid ertoe doet. */
+  { id: 'tiles', name: 'Satellite',       note: 'Real imagery for the place you are looking at, fetched as you go — best on wifi. The only tier that zooms in further.' }
 ];
 
 /* WHAT THE SYSTEM ALREADY TOLD US, and the sentence that goes with it.
@@ -126,7 +130,7 @@ function readCaps() {
 
 export function createOnboarding(opts) {
   const { prefs, imageryMeta, currentImagery, setImagery,
-          currentUtc, setUtc, version = 1, onClose } = opts;
+          currentUtc, setUtc, version = 1, reopen = false, onClose } = opts;
 
   let root = null;
   let lastFocus = null;
@@ -157,6 +161,19 @@ export function createOnboarding(opts) {
   }
 
   function build() {
+    /* WHICH TIER STARTS LIT, decided before anything is drawn because two
+       things downstream depend on it: the button that gets the accent and
+       the line that explains why.
+
+       ON A REOPEN THAT IS THE VISITOR'S OWN CHOICE, not ours. They have
+       been here before and set this deliberately; showing the detection
+       instead would read as the app having forgotten. On a first visit
+       there is no choice yet, so the detection stands. Either way the
+       recommended button keeps pointing at the detection — that is what
+       it is for, and it stays there for someone who wants to go back. */
+    const gekozenStart = reopen ? (currentImagery() || suggestion.tier) : suggestion.tier;
+    const start = unavailableReason(gekozenStart, caps) ? suggestion.tier : gekozenStart;
+
     root = el('div', 'ob');
     root.id = 'onboarding';
     root.setAttribute('role', 'dialog');
@@ -201,7 +218,18 @@ export function createOnboarding(opts) {
     }
     card.appendChild(row);
 
-    card.appendChild(el('p', 'ob-reason', suggestion.reason));
+    /* THE LINE HAS TO MATCH THE BUTTON THAT IS LIT. On a first visit the
+       pre-selection IS the detection, so the detection's reason explains
+       it. On a reopen the pre-selection is the visitor's own choice, and
+       the same sentence would then claim we picked something we did not
+       light up — so it says whose choice it is, and what the recommended
+       button would do instead. */
+    const anders = reopen && start !== suggestion.tier;
+    const aanbevolen = (TIERS.find((t) => t.id === suggestion.tier) || {}).name;
+    card.appendChild(el('p', 'ob-reason', anders
+      ? 'This is your current setting. Use recommended settings would switch to '
+        + aanbevolen + '.'
+      : suggestion.reason));
 
     /* ---- Times ----
        One row and not a question, because there are only two answers and
@@ -248,7 +276,7 @@ export function createOnboarding(opts) {
     root.appendChild(card);
     document.body.appendChild(root);
 
-    markTier(suggestion.tier);
+    markTier(start);
     markUtc(currentUtc ? !!currentUtc() : !!prefs.get('pref.utc'));
   }
 
