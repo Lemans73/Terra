@@ -1738,6 +1738,7 @@
       <div class="acc-body">
       <div class="elayer" data-overlay="plates"><span class="edot"></span>Tectonic plates<span class="estat" id="es-plates">off</span></div>
       <div class="elayer" data-overlay="borders"><span class="edot"></span>Country borders<span class="estat" id="es-borders">off</span></div>
+      <div class="elayer" data-overlay="regions"><span class="edot"></span>Regions &amp; states<span class="estat" id="es-regions">off</span></div>
       <div class="elayer" data-overlay="names"><span class="edot"></span>Country names<span class="estat" id="es-names">off</span></div>
       </div>
       </section>
@@ -2257,6 +2258,7 @@ import { createOrbitsLayer } from './js/layers/orbits-layer.js';
 import { createAuroraLayer } from './js/layers/aurora-layer.js';
 import { createAntipodeLayer, antipodeOf } from './js/layers/antipode-layer.js';
 import { graticuleGeometry } from './js/core/graticule.js';
+import { regionLinesGeometry } from './js/core/region-lines.js';
 import { createSpaceState } from './js/states/space.js';
 // De magnetosfeer (sessie 29). De fysica komt uit de klassieke scripts
 // hierboven (globalThis.TerraCore) en niet uit een import: zie
@@ -3707,16 +3709,26 @@ fetch(asset('assets/geo/ne_110m_land.geojson'))
 const OVERLAY_SOURCES = {
   plates:  asset('assets/geo/PB2002_boundaries.json'),
   borders: asset('assets/geo/ne_110m_admin_0_countries.geojson'),
-  names:   asset('assets/geo/ne_110m_admin_0_countries.geojson') // zelfde bestand als borders
+  names:   asset('assets/geo/ne_110m_admin_0_countries.geojson'), // zelfde bestand als borders
+  /* DE ONDERVERDELING BINNEN EEN LAND — provincies, staten, oblasten. Veruit het
+     zwaarste bestand hier (5,1 MB ruw, 1,06 MB brotli over de lijn), en daarom
+     telt het lui laden hierboven voor deze laag dubbel: wie hem niet aanzet
+     betaalt hem niet. Vereenvoudigd door tools/simplify-admin1.mjs; de
+     afwegingen staan daar. */
+  regions: asset('assets/geo/ne_10m_admin_1_states_provinces.geojson')
 };
 /* Ook deze drie komen uit het register. Ze stonden hier op `false` terwijl de
    markup ze aan had staan — precies de drieslag die prefs.js opruimt. */
 const OVERLAY_SLEUTEL = { plates: 'overlay.plates', borders: 'overlay.borders',
-                          names: 'overlay.names' };
+                          names: 'overlay.names', regions: 'overlay.regions' };
 const overlayOn = Object.fromEntries(
   Object.entries(OVERLAY_SLEUTEL).map(([k, s]) => [k, Prefs.get(s)]));
 const overlayPaths = { plates: null, borders: null };   // lijn-overlays
 let countryLabels = null;                                // punt-overlay (landnamen)
+/* REGIO'S ZIJN GEEN PADEN-LAAG, en dat is een meetuitkomst — zie de kop van
+   js/core/region-lines.js. 8646 losse `Line2`-objecten kostten 78 ms per frame;
+   dezelfde lijnen als één `LineSegments` kosten één draw call. */
+let regionMesh = null;
 const overlayLoading = {};
 // Landgrenzen en landnamen delen één bestand; deze cache voorkomt een tweede fetch.
 const geoCache = {};
@@ -3751,9 +3763,14 @@ function buildOverlayPaths(kind, geo) {
   for (const f of (geo.features || [])) {
     // PB2002 markeert alleen subductie expliciet; de rest heeft een leeg Type-veld.
     const sub = kind === 'plates' && (f.properties || {}).Type === 'subduction';
-    const label = kind === 'plates'
-      ? ((f.properties || {}).Name || 'plaatgrens')
-      : ((f.properties || {}).NAME || (f.properties || {}).name || '');
+    const eig = f.properties || {};
+    const naam = eig.NAME || eig.name || '';
+    /* EEN REGIONAAM DRAAGT ZIJN LAND MEE, en dat is geen opsmuk: "Limburg"
+       bestaat in Nederland én in België, "Georgia" is een staat en een land.
+       Zonder het land erbij wijst het label naar twee plekken tegelijk. */
+    const label = kind === 'plates' ? (eig.Name || 'plaatgrens')
+                : (kind === 'regions' && naam && eig.admin) ? naam + ', ' + eig.admin
+                : naam;
     for (const coords of featureToLines(f)) {
       if (coords && coords.length > 1) lines.push({ kind, sub, label, coords });
     }
@@ -4050,6 +4067,35 @@ function renderOverlays(force) {
   world.pathsData(out);
 }
 
+/* DE REGIOLAAG ALS ÉÉN MESH. Naast globe.gl in de scene, net als de graticule
+   en de tegelschil: globe.gl's paden-laag is hier gemeten te duur.
+
+   `depthWrite` uit en een renderOrder onder de rest: deze lijnen horen achter
+   alles wat erop staat, en ze horen niets af te dekken. */
+function buildRegionMesh(geo) {
+  const g = regionLinesGeometry(THREE, (lat, lng) => world.getCoords(lat, lng, 0), geo);
+  const mesh = new THREE.LineSegments(g, new THREE.LineBasicMaterial({
+    color: PARAMS.regionColor, transparent: true, opacity: 1, depthWrite: false
+  }));
+  mesh.renderOrder = -1;
+  mesh.frustumCulled = false;   // de schaal verandert per frame; een vaste bol liegt
+  world.scene().add(mesh);
+  return mesh;
+}
+
+/* Kleur, dekking en HOOGTE per frame. De hoogte komt uit `overlayAlt()`, dus de
+   laag zakt in de schematische weergave mee naar het oppervlak zoals de
+   kaartlijnen dat doen — één regel voor de hele laag, want het is één mesh. */
+function syncRegionMesh() {
+  if (!regionMesh) return;
+  regionMesh.visible = !!overlayOn.regions;
+  if (!regionMesh.visible) return;
+  const basis = globeMode === 'expert' ? PARAMS.overlayOpacityExpert : PARAMS.overlayOpacityRealistic;
+  regionMesh.material.opacity = basis * PARAMS.regionOpacityFactor;
+  regionMesh.material.color.set(PARAMS.regionColor);
+  regionMesh.scale.setScalar(1 + overlayAlt({ kind: 'regions' }));
+}
+
 async function setOverlay(kind, on) {
   overlayOn[kind] = on;
   // De enige schrijver van `overlayOn`, dus ook de enige plek die bewaart.
@@ -4058,13 +4104,16 @@ async function setOverlay(kind, on) {
   const row = document.querySelector('.elayer[data-overlay="' + kind + '"]');
   if (row) row.classList.toggle('on', on);
 
-  const nogLaden = kind === 'names' ? !countryLabels : !overlayPaths[kind];
+  const nogLaden = kind === 'names' ? !countryLabels
+                 : kind === 'regions' ? !regionMesh
+                 : !overlayPaths[kind];
   if (on && nogLaden && !overlayLoading[kind]) {
     overlayLoading[kind] = true;
     if (stat) stat.textContent = 'loading…';
     try {
       const geo = await fetchGeo(OVERLAY_SOURCES[kind]);
       if (kind === 'names') countryLabels = buildCountryLabels(geo);
+      else if (kind === 'regions') regionMesh = buildRegionMesh(geo);
       else overlayPaths[kind] = buildOverlayPaths(kind, geo);
     } catch (e) {
       console.warn('[overlay] could not load ' + kind + ':', e);
@@ -4078,6 +4127,7 @@ async function setOverlay(kind, on) {
   }
   if (stat) stat.textContent = overlayOn[kind] ? 'on' : 'off';
   if (kind === 'names') renderCountryLabels();
+  else if (kind === 'regions') syncRegionMesh();
   else renderOverlays();
 }
 
@@ -4097,6 +4147,7 @@ function paintOverlayDots() {
       PARAMS.plateOtherColor + ' 50% 100%)',
       PARAMS.plateSubductionColor + '99');
   set('borders', PARAMS.borderColor, PARAMS.borderColor + '99');
+  set('regions', PARAMS.regionColor, PARAMS.regionColor + '99');
   set('names', PARAMS.countryLabelColor, PARAMS.countryLabelColor + '99');
 }
 paintOverlayDots();
@@ -6191,6 +6242,8 @@ function animateShader() {
   const _cam = world.camera();
   const _camLen = _cam.position.length() || 1;
   const _horizon = 100 / _camLen; // globe-straal = 100; dot > horizon = voorzijde
+  // De regiolaag hangt aan de camera (hoogte) en aan de weergave (dekking).
+  syncRegionMesh();
   /* DE DRAAISNELHEID VOLGT DE ZOOM. Zie de noot bij `autoRotateSpeedRefDist`:
      wat dichtbij te snel oogt is de SCHERMsnelheid, niet de grondsnelheid, en
      die schaalt met de hoogte boven het oppervlak. Hier en niet bij het opzetten,

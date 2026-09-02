@@ -912,6 +912,11 @@ export const PARAMS = {
   plateSubductionColor: '#ff3355',  // convergent/subductie — waar de zware bevingen zitten
   plateOtherColor:      '#3d6cff',  // overige grenzen (divergent/transform)
   borderColor:          '#ffd66b',  // landgrenzen — gelig, los van de tektoniek-kleuren
+  /* REGIONS SHARE THE COUNTRY HUE, one step back. They are a subdivision of the
+     same thing, so a second colour would suggest a second kind of border; what
+     has to differ is WEIGHT, and that is the stroke and opacity factors below.
+     Slightly cooler so the two are still told apart where they touch. */
+  regionColor:          '#e8c98a',
   overlayAltitude:      0.006,      // realistisch: net boven het oppervlak
   // Deskundig tekent land-polygons op 0.01 (zie modes/expert.js). Blijven de overlays
   // daaronder, dan bedekt het land ze en zie je alleen de grenzen in de oceaan.
@@ -956,6 +961,7 @@ export const PARAMS = {
   overlayOpacityRealistic: 0.92,    // mag hoog nu de casing voor contrast zorgt
   overlayOpacityExpert:    0.95,
   borderOpacityFactor:     0.72,    // landgrenzen wat ingetogener dan de platen
+  regionOpacityFactor:     0.45,    // regiogrenzen nog ingetogener dan de landgrenzen
 
   // Landnamen. Natural Earth levert LABEL_X/LABEL_Y (door cartografen geplaatste
   // labelpunten) en LABELRANK (1 = belangrijkst). Die rang gebruiken we als

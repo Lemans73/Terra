@@ -145,6 +145,7 @@ export const PREFS_DEFAULTS = {
   /* ---- Wat er op de bol getekend wordt ---- */
   'overlay.plates':  true,
   'overlay.borders': false,
+  'overlay.regions': false,
   'overlay.names':   true,
 
   /* ---- Assen en polen ---- */

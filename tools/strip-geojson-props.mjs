@@ -31,6 +31,10 @@ const BESTANDEN = [
   { pad: 'assets/geo/ne_110m_admin_0_countries.geojson',
     houden: ['ADMIN', 'NAME', 'LABELRANK', 'LABEL_X', 'LABEL_Y'] },
   { pad: 'assets/geo/ne_110m_land.geojson', houden: [] },
+  /* Dit bestand komt al uitgekleed uit tools/simplify-admin1.mjs; hier staat het
+     voor de tweede controle van dat gereedschap — dat elk overgebleven veld ook
+     echt in index.html gelezen wordt. Een veld dat niemand leest is gewicht. */
+  { pad: 'assets/geo/ne_10m_admin_1_states_provinces.geojson', houden: ['name', 'admin'] },
   { pad: 'assets/geo/PB2002_boundaries.json', houden: ['Name', 'Type'] }
 ];
 
