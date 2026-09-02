@@ -1468,10 +1468,34 @@ export const DEFAULT_QUALITY = '2k';
    terwijl je kijkt. Die twee zijn niet in hetzelfde getal uit te drukken, dus
    staat er `once` bij de eerste twee en `per visit` bij de derde.
 
-   WAT SATELLITE EENMALIG KOST zijn de 2K-hulpkaarten (nacht, wolken, specular,
-   reliëf — 1,76 MB) plus de acht worteltegels. GEMETEN op 2026-08-30: die acht
-   wegen samen 63 kB, tegen 540 kB voor de 2K-dagkaart die ze vervangen. De start
-   is daarmee LICHTER dan Standard.
+   WAT SATELLITE EENMALIG KOST is de complete 2K-set plus de acht worteltegels,
+   met de nachtkaart uit de 8K-set. GEMETEN in de app op 2026-09-02, uit
+   `performance.getEntriesByType('resource')`:
+
+     terra-bluemarble-2048.webp     540.388
+     terra-blackmarble-8192.webp  2.098.756   (8K: de nachtzijde is wat je ziet)
+     2k_earth_clouds.jpg            965.676
+     2k_earth_normal_map.png        465.948
+     2k_earth_specular_map.png      134.381
+     acht worteltegels               ~63.000
+     terra-blackmarble-2048.webp    197.038   (opstartkaart, daarna vervangen)
+                                  ---------
+                                  4.465.187
+
+   DE OPSTARTKAART TELT MEE. De aarde wordt altijd met de kleine set gebouwd en
+   de zwaardere schuift er daarna in; de 2K-nachtkaart gaat dus wél over de lijn
+   voordat de 8K hem vervangt. Dat is wat een eerste bezoek kost, en dit veld
+   heet `bytesOnce`. De twee set-trappen hierboven noemen alleen hún set en
+   laten diezelfde opstartkosten buiten beschouwing — daar is het getal een
+   setgrootte, hier een bezoekkost.
+
+   DE DAGKAART ZIT ERBIJ, en dat is geen keuze maar wat er gebeurt: `laadSet()`
+   haalt alle vijf de sleuven op, ook wanneer de tegelschil de dagzijde afdekt.
+   Zij is daarmee de terugval als de tegels niet komen. Wie die 540 kB wil
+   besparen, moet de sleuf overslaan én beslissen wat er dan onder een lege
+   schil ligt; dat is een andere ingreep dan een getal.
+
+   DE START IS DAARMEE ZWAARDER DAN STANDARD (2,30 MB), niet lichter.
 
    WAT HIJ PER BEZOEK KOST is gemeten in Terra zelf: één keer diep inzoomen op één
    plek gaf 215 tegels en 1,9 MB. Bovenin komt uit de POC-berekening voor
@@ -1480,7 +1504,7 @@ export const DEFAULT_QUALITY = '2k';
 export const IMAGERY_TILES = {
   label: 'Satellite',
   detail: '10 m',
-  bytesOnce: 1_826_000,
+  bytesOnce: 4_465_000,
   perVisitLowBytes: 2_000_000,
   perVisitHighBytes: 18_000_000
 };

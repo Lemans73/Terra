@@ -88,11 +88,25 @@ export function createEarthTextures(THREE, opts = {}) {
   const IMAGERY_TRAPPEN = ['2k', '8k', 'tiles'];
   const setVoorTrap = (t) => (t === 'tiles' ? DEFAULT_QUALITY : t);
 
+  /* THE NIGHT MAP DOES NOT FOLLOW THE SET. Every other slot in the satellite
+     tier comes from the small set: the tile shell covers the day side, and
+     clouds, specular and normal are shader inputs at globe scale where 2K is
+     enough. The night side is the exception — it IS what you look at, at the
+     same zoom the tiles serve, and a 2K black marble beside 10 m per pixel
+     reads as a smear.
+
+     So this tier resolves to TWO sets, one for the night slot and one for the
+     rest, and every place that loads or compares a set carries both. That is
+     the price of the exception, and the reason this is a named function rather
+     than a ternary inlined at each call. */
+  const nachtSetVoor = (t) => (t === 'tiles' ? '8k' : setVoorTrap(t));
+
   let imagery = (() => {
     const bewaard = Prefs.get('pref.texQuality');
     return IMAGERY_TRAPPEN.includes(bewaard) ? bewaard : DEFAULT_QUALITY;
   })();
   let texQuality = setVoorTrap(imagery);
+  let nightQuality = nachtSetVoor(imagery);
 
   // ---- Eigen texturen -------------------------------------------------------
   //
@@ -163,11 +177,11 @@ export function createEarthTextures(THREE, opts = {}) {
        de schematische kaart. De bewaarde VOORKEUR blijft staan: een haperende
        verbinding is geen keuze van de bezoeker, en de volgende keer kan het weer
        gewoon lukken. Wat er wél gebeurt is dat het paneel het zegt. */
-    const laadSet = (q) => {
+    const laadSet = (q, nachtQ) => {
       const A = assetsFor(q);
       return Promise.all([
         load(dayUrlFor(q)),
-        load(nightUrlFor(q)),
+        load(nightUrlFor(nachtQ)),
         load(A.clouds).catch(() => null),
         load(A.specular).catch(() => null),
         load(A.normal).catch(() => null)
@@ -187,11 +201,17 @@ export function createEarthTextures(THREE, opts = {}) {
        attempt, so a failing 8K leaves a working earth behind instead of a black
        ball. Only the small set failing is fatal, and then the caller falls back
        to the schematic map. */
-    if (texQuality !== DEFAULT_QUALITY) {
-      wachtendeUpgrade = texQuality;
+    /* PARK THE TIER, NOT THE SET. upgradeIfNeeded() hands this straight to
+       setTextureQuality(), which takes a tier. The satellite tier is the case
+       that forces it: there a heavier map is waiting while the day set is
+       already the small one, so parking the set would let the upgrade fall out
+       without a sound. */
+    if (texQuality !== DEFAULT_QUALITY || nightQuality !== DEFAULT_QUALITY) {
+      wachtendeUpgrade = imagery;
       texQuality = DEFAULT_QUALITY;
+      nightQuality = DEFAULT_QUALITY;
     }
-    return laadSet(DEFAULT_QUALITY)
+    return laadSet(DEFAULT_QUALITY, DEFAULT_QUALITY)
       .catch(() => null)
       .then((texturen) => {
         // Mislukt: de aanroeper ziet `null` en valt terug op de kaart.
@@ -344,7 +364,8 @@ export function createEarthTextures(THREE, opts = {}) {
        waarop upgradeIfNeeded() de zwaardere set komt halen. Alleen op de trap
        toetsen liet die upgrade er stil uit vallen. */
     const doelSetVooraf = setVoorTrap(q);
-    if (q === imagery && doelSetVooraf === texQuality) return;
+    const doelNachtVooraf = nachtSetVoor(q);
+    if (q === imagery && doelSetVooraf === texQuality && doelNachtVooraf === nightQuality) return;
     /* ZONDER SHADERMATERIAAL VALT ER NIETS TE WISSELEN, maar stil niets doen is
        wat de bezoeker opsloot: hij drukt op 2K om zich uit een zwarte bol te
        redden en er gebeurt niets. Nu zegt de knop tenminste waarom. */
@@ -354,9 +375,12 @@ export function createEarthTextures(THREE, opts = {}) {
     }
 
     const doelSet = doelSetVooraf;
+    const doelNacht = doelNachtVooraf;
 
-    /* Zelfde set: alleen de trap verschuift. Geen netwerk, geen knoppen op slot. */
-    if (doelSet === texQuality) {
+    /* Zelfde set: alleen de trap verschuift. Geen netwerk, geen knoppen op slot.
+       DE NACHTSET HOORT IN DEZE TOETS: tussen `2k` en `tiles` is de dagset
+       gelijk en de nachtset niet, en dan valt er wél iets te downloaden. */
+    if (doelSet === texQuality && doelNacht === nightQuality) {
       imagery = q;
       texQualityFallback = null;
       Prefs.set('pref.texQuality', q);
@@ -368,7 +392,9 @@ export function createEarthTextures(THREE, opts = {}) {
     texqBusy = true;
     texqBtns.forEach(b => b.disabled = true);
     texqNote.classList.add('busy');
-    texqNote.textContent = 'Loading… fetching ' + textureSetSize(doelSet);
+    /* HET GETAL VAN DE TRAP, niet van de set: bij `tiles` dekken die niet
+       dezelfde bestanden, en textureSetSize() kent de trap. */
+    texqNote.textContent = 'Loading… fetching ' + textureSetSize(q);
 
     const A = assetsFor(doelSet);
     const loader = new THREE.TextureLoader();
@@ -390,7 +416,7 @@ export function createEarthTextures(THREE, opts = {}) {
     ]);
     try {
       const [day, night, clouds, spec, normal] = await metGrens(Promise.all([
-        load(dayUrlFor(doelSet)), load(nightUrlFor(doelSet)),
+        load(dayUrlFor(doelSet)), load(nightUrlFor(doelNacht)),
         load(A.clouds).catch(() => null),
         load(A.specular).catch(() => null),
         load(A.normal).catch(() => null)
@@ -433,6 +459,7 @@ export function createEarthTextures(THREE, opts = {}) {
 
       imagery = q;
       texQuality = doelSet;
+      nightQuality = doelNacht;
       texQualityFallback = null;   // gelukt, dus de standing notice hoort weg
       Prefs.set('pref.texQuality', q);
       updateTexqUI();
@@ -606,7 +633,12 @@ export function createEarthTextures(THREE, opts = {}) {
     const wil = wachtendeUpgrade;
     wachtendeUpgrade = null;
     return setTextureQuality(wil).then(() => {
-      if (texQuality !== wil) { texQualityFallback = wil; meldTexqTerugval(); }
+      /* GELUKT = BEIDE SETS STAAN WAAR DE TRAP ZE WIL. Rechtstreeks op `wil`
+         toetsen kan niet: dat is een trap, en `tiles` draait per definitie op de
+         kleine dagset. Dat zou elke satellietstart als terugval melden. */
+      if (texQuality !== setVoorTrap(wil) || nightQuality !== nachtSetVoor(wil)) {
+        texQualityFallback = wil; meldTexqTerugval();
+      }
     });
   }
 
