@@ -813,7 +813,7 @@ export const PARAMS = {
   macroAmbient: 0.55,     // what the surface still carries without direct sun
   macroSun: 0.85,         // how much the sun angle adds on top of that
   normalStrength: 5,      // exaggeration of the normal-map slope
-  reliefStrength: 2.4,    // emboss gain → harder relief lines
+  reliefStrength: 1.0,    // emboss gain → harder relief lines
   waterRipple: 1,         // amplitude of the procedural water ripple
   // schermvaste icoongrootte (app-breed, beide modi): iconen schalen mee met de
   // camera-afstand. Power-curve (pow>1) = agressievere zoom-respons, vooral diep
