@@ -91,7 +91,30 @@ export function createTileShell(THREE, opts = {}) {
       uniforms: u,
       vertexShader: base.vertexShader,
       fragmentShader: base.fragmentShader,
-      defines: { TILE_MODE: 1 }
+      defines: { TILE_MODE: 1 },
+      /* DE SCHIL WINT HET VAN DE BOL IN DE DIEPTEBUFFER, en dat moet expliciet.
+
+         De schil ligt op LIFT boven de bol — 0,01 eenheid. De dieptebuffer kan
+         dat verschil op afstand niet zien: met `camera.near` op 0,05 gaat de
+         dieptestap als z²/(near·2²⁴), dus 0,012 vlakbij en 0,241 op afstand 450.
+         Op 450 is de stap vierentwintig keer de afstand tussen de twee vlakken
+         en wint willekeurig wie, per pixel — het beeld dat als vlekken leest en
+         wegtrekt zodra je inzoomt.
+
+         POLYGONOFFSET EN NIET MEER LIFT. Optillen kost parallax, en die is
+         precies bij diepe zoom het duurst: op camera-afstand 100,25 sta je 0,25
+         eenheid boven de grond, dus elke lift die de dieptestap zou halen zet de
+         beelden zichtbaar naast hun coördinaten. polygonOffset verschuift alleen
+         de DIEPTEWAARDE, evenredig met de werkelijke bufferresolutie, en laat de
+         tegel staan waar hij hoort.
+
+         GEMETEN op afstand 450: het aantal pixels dat verandert als je `near`
+         van 0,05 naar 0,5 zet — de maat voor hoeveel er aan dieptebufferprecisie
+         hangt — gaat van 20.980 naar 3.189. Sterker afstellen (-4/-8) gaf 3.140
+         en dus niets extra's. */
+      polygonOffset: true,
+      polygonOffsetFactor: -2,
+      polygonOffsetUnits: -2
     });
     m.wireframe = wireframe;      // een tegel die er later bij komt erft de stand
     materials.push(m);
