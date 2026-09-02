@@ -5159,6 +5159,36 @@ function quakeRingLiftNu() {
   return PARAMS.quakeRingLift;
 }
 
+/* WHAT CAN PASS IN FRONT OF THE EARTH. The indicator layer draws without a
+   depth test and cannot be hidden by the moon or the sun on its own; it takes
+   the occluders from here and tests them analytically. See the note in
+   quake-indicator-shaders.js.
+
+   ONLY THE BODIES, not their glow sprites: those are additive halos with no
+   surface to hide behind. The layer reads the world frame and the visibility
+   of each object itself; this hands it nothing but which object and how big. */
+// Hergebruikt, want deze lijst wordt elk frame opgebouwd.
+const _occluders = [];
+
+function quakeOccluders() {
+  _occluders.length = 0;
+  if (sunMoon) {
+    _occluders.push({ object: sunMoon.meshes.moonGroup, radius: sunMoon.config.moonRadius },
+                    { object: sunMoon.meshes.sunGroup,  radius: sunMoon.config.sunRadius });
+  }
+  /* AND THE PLANETS. They are spheres of one shared radius, drawn on their own
+     shell; which of them ends up in front of the earth is decided by the layer,
+     on geometry. Handing over all of them is cheaper than deciding here, and it
+     keeps this function a list rather than a rule. */
+  if (planets && planets.lichamen) {
+    for (const k of Object.keys(planets.lichamen)) {
+      const L = planets.lichamen[k];
+      if (L && L.bol) _occluders.push({ object: L.bol, radius: planets.config.bolStraal });
+    }
+  }
+  return _occluders;
+}
+
 /* DE ZOOMGRENS HANGT AAN DE WEERGAVE (sessie 38, Terry). Zie de noot bij
    `zoomMinDistanceExpert` in js/config.js: de grens van 120 is er voor de textuur, en
    die is er in de schematische weergave niet.
@@ -6228,7 +6258,10 @@ function animateShader() {
   const _qi = setupQuakeIndicator();
   // De camerapositie gaat mee: de beam keert zich naar de kijker en heeft die
   // richting nodig in de ruimte van de laag zelf. Zie de noot bij uCamLocal.
-  if (_qi) _qi.update(_camLen, motionReduced ? 0 : gt, quakeRingLiftNu(), _cam.position);
+  if (_qi) {
+    _qi.setOccluders(quakeOccluders(), _cam.position);
+    _qi.update(_camLen, motionReduced ? 0 : gt, quakeRingLiftNu(), _cam.position);
+  }
 
   // indicatoren animeren; verwijderde objecten (uit scene) opruimen
   for (let i = glyphList.length - 1; i >= 0; i--) {

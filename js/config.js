@@ -463,6 +463,11 @@ export const PARAMS = {
   quakeIconNearPerUnit: 0.0138,
   quakeIconNearFloor: 100,
 
+  /* HOW SOFT AN OCCLUDER'S EDGE IS, as a fraction of its radius. The moon's limb
+     sweeping across an indicator should dim it over a few pixels rather than
+     switch it off between two frames. 0 gives the hard edge back. */
+  quakeOccluderSoft: 0.02,
+
   // ---- het magnitude-bereik van de AFBEELDING ----
   /* NIET HET FILTER. `magMin`/`magMax` in index.html bepalen welke bevingen je
      te zien krijgt en staan onder de bediening van de bezoeker; deze twee

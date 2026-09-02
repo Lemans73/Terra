@@ -107,6 +107,17 @@ export function createQuakeIndicator(THREE, opts = {}) {
        Doing it here rather than in the shader keeps acos() out of the fragment
        stage and leaves one place to clamp against NaN. */
     uHorizonBand: { value: new THREE.Vector2(1, 1) },
+    /* DE OCCLUDERS — bollen die voor de aarde langs kunnen. Eén keer per frame
+       gevuld door setOccluders(); een lege sleuf heeft straal 0.
+
+       EXPLICIET (0,0,0,0), want `new THREE.Vector4()` geeft w = 1 en dat zou een
+       occluder van straal 1 in de oorsprong zijn — precies waar de aarde staat.
+
+       Zie de noot in de fragment-shader voor waarom dit niet de dieptebuffer
+       kan zijn. */
+    uOccluders:   { value: [new THREE.Vector4(0, 0, 0, 0), new THREE.Vector4(0, 0, 0, 0),
+                            new THREE.Vector4(0, 0, 0, 0), new THREE.Vector4(0, 0, 0, 0)] },
+    uOccSoft:     { value: P.quakeOccluderSoft },
     uScaleRef:    { value: P.quakeIconScaleRef },
     uScalePow:    { value: P.quakeIconScalePow },
     uScaleMin:    { value: P.quakeIconScaleMin },
@@ -529,6 +540,71 @@ export function createQuakeIndicator(THREE, opts = {}) {
     for (const uni of [ringUniforms, shockUniforms, beamUniforms]) uni.uHorizonBand.value.copy(_band);
   }
 
+  /* DE OCCLUDERS VULLEN. De aanroeper levert de objecten en hun straal; het
+     wereldframe en de schaal worden hier uitgelezen, want dat is matrixwerk en
+     dat hoort niet bij de aanroeper.
+
+     DE SCHAAL MOET MEE. De straal staat in de eenheden van het object zelf,
+     terwijl de positie uit matrixWorld komt — die twee moeten in hetzelfde
+     frame staan, anders klopt de schijf niet zodra er ergens boven een schaal
+     hangt.
+
+     ZICHTBAARHEID LOOPT DOOR DE HELE KETEN: een zichtbare maan onder een
+     verborgen groep is niet zichtbaar, en zou anders alsnog schaduw werpen op
+     iets wat er niet is. */
+  const _occ = [new THREE.Vector4(0, 0, 0, 0), new THREE.Vector4(0, 0, 0, 0),
+                new THREE.Vector4(0, 0, 0, 0), new THREE.Vector4(0, 0, 0, 0)];
+  const _occPos = new THREE.Vector3();
+  const _occQuat = new THREE.Quaternion();
+  const _occSchaal = new THREE.Vector3();
+  const _naarAarde = new THREE.Vector3();
+  const _naarBol = new THREE.Vector3();
+  const _gekozen = [];
+  const _zichtbaar = (o) => { for (let k = o; k; k = k.parent) if (!k.visible) return false; return true; };
+
+  /* WIE ER IN DE VIER SLEUVEN KOMT, en waarom er geselecteerd wordt.
+
+     De aanroeper levert alles wat een bol is — maan, zon, planeten. Dat zijn er
+     meer dan er sleuven zijn, en bijna nooit staat er meer dan één werkelijk
+     voor de aarde. Elke sleuf kost een straal-bolsnijding PER FRAGMENT op een
+     laag die additief over het halve scherm ligt, dus wat er niet toe doet hoort
+     er niet in.
+
+     DE TOETS IS GEOMETRISCH, niet naar naam: staat het lichaam tussen de camera
+     en de achterkant van de aarde, en kan zijn schijf die van de aarde
+     overlappen? Wat overblijft gaat op HOEKGROOTTE, want dat is precies hoeveel
+     het kan verbergen. */
+  function setOccluders(lijst, camWereld) {
+    _gekozen.length = 0;
+    if (camWereld) {
+      const camLen = camWereld.length();
+      _naarAarde.copy(camWereld).multiplyScalar(-1 / Math.max(camLen, 1e-6));
+      for (const o of lijst || []) {
+        if (!o || !o.object || !(o.radius > 0) || !_zichtbaar(o.object)) continue;
+        o.object.updateWorldMatrix(true, false);
+        o.object.matrixWorld.decompose(_occPos, _occQuat, _occSchaal);
+        const straal = o.radius * Math.max(_occSchaal.x, _occSchaal.y, _occSchaal.z);
+        if (!(straal > 0)) continue;
+        _naarBol.copy(_occPos).sub(camWereld);
+        const langs = _naarBol.dot(_naarAarde);
+        if (langs <= 0 || langs >= camLen + GLOBE_R) continue;         // achter de camera of voorbij de aarde
+        const dwars = Math.sqrt(Math.max(0, _naarBol.lengthSq() - langs * langs));
+        if (dwars > GLOBE_R + straal) continue;                        // schijf raakt de aarde niet
+        _gekozen.push({ x: _occPos.x, y: _occPos.y, z: _occPos.z, r: straal, hoek: straal / langs });
+      }
+      _gekozen.sort((a, b) => b.hoek - a.hoek);
+    }
+    for (let i = 0; i < _occ.length; i++) {
+      const g = _gekozen[i];
+      if (g) _occ[i].set(g.x, g.y, g.z, g.r); else _occ[i].set(0, 0, 0, 0);
+    }
+    for (const uni of [ringUniforms, shockUniforms, beamUniforms]) {
+      for (let i = 0; i < _occ.length; i++) uni.uOccluders.value[i].copy(_occ[i]);
+      uni.uOccSoft.value = P.quakeOccluderSoft;
+    }
+    return _gekozen.length;
+  }
+
   function update(camDist, timeSec, lift, camWereld) {
     ringUniforms.uCamDist.value = camDist;
     shockUniforms.uCamDist.value = camDist;
@@ -717,6 +793,7 @@ export function createQuakeIndicator(THREE, opts = {}) {
     // Measurement hooks and shared maths — the labels and the picking go
     // through here so they never end up with a formula of their own beside the
     // shader.
+    setOccluders,
     iconScaleJS, ringWorldRadius, stackedNormalJS, ringAltitude,
     get events() { return events; }
   };

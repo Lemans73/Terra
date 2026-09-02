@@ -296,6 +296,42 @@ varying float vDemp;
    partly behind the horizon; a test per event would make it jump all at once. */
 uniform vec2 uHorizonBand;
 
+/* WHAT PASSES IN FRONT OF THE EARTH, as spheres.
+
+   This layer runs without a depth test — see the note at the material — so the
+   depth buffer cannot hide it behind the moon or the sun. renderOrder cannot
+   either: a transparent pass always draws after the opaque one, whatever the
+   order within it. The test therefore lives here, in the same place and the
+   same shape as limbFade, which already hides the back of the globe.
+
+   xyz is the centre in world space, w the radius; w <= 0 is an empty slot. The
+   result is a FACTOR and not a yes-or-no, for limbFade's reason: a hard edge
+   makes an indicator blink as the moon's limb sweeps across it. */
+#define OCC_MAX 4
+uniform vec4  uOccluders[OCC_MAX];
+uniform float uOccSoft;
+
+float occludeOne(vec3 worldPoint, vec4 occ) {
+  if (occ.w <= 0.0) return 1.0;
+  vec3 d = worldPoint - cameraPosition;
+  float L = length(d);
+  if (L < 1e-4) return 1.0;
+  vec3 dir = d / L;
+  vec3 m = occ.xyz - cameraPosition;
+  float tc = dot(m, dir);            // where the ray passes closest to the centre
+  // Behind the camera, or further off than the fragment itself: not in the way.
+  if (tc <= 0.0 || tc >= L) return 1.0;
+  float perp = sqrt(max(0.0, dot(m, m) - tc * tc));
+  float edge = max(1e-4, occ.w * uOccSoft);
+  return smoothstep(occ.w - edge, occ.w + edge, perp);
+}
+
+float occludeFade(vec3 worldPoint) {
+  float f = 1.0;
+  for (int i = 0; i < OCC_MAX; i++) f = min(f, occludeOne(worldPoint, uOccluders[i]));
+  return f;
+}
+
 /* THE LIMB AS A BAND, NOT A CUT-OFF (session 42, Terry). An indicator turning
    around the globe used to vanish in a single frame; it is now full until a few
    degrees before the horizon and gone a few degrees past it.
@@ -303,9 +339,9 @@ uniform vec2 uHorizonBand;
    uHorizonBand is computed in JS once per frame: x = the cosine where the fade
    ends (gone), y = where it begins (still full). That keeps acos() out of the
    fragment shader and puts the clamp against NaN in one place instead of three. */
-float limbFade(vec3 wereldPunt) {
+float limbFade(vec3 worldPoint) {
   return smoothstep(uHorizonBand.x, uHorizonBand.y,
-                    dot(normalize(wereldPunt), normalize(cameraPosition)));
+                    dot(normalize(worldPoint), normalize(cameraPosition)));
 }
 
 uniform float uRingOn;
@@ -319,7 +355,8 @@ void main() {
   if (r > 1.0) discard;
   // The limb, as a factor. discard only once nothing is left, so a fragment in
   // the band still draws — that is the whole point of the band.
-  float limb = limbFade(vWorld);
+  // De limb en de occlusie zijn allebei zichtbaarheid; ze vermenigvuldigen.
+  float limb = limbFade(vWorld) * occludeFade(vWorld);
   if (limb <= 0.0) discard;
 
   float mf = clamp(vMagFrac, 0.0, 1.0);
@@ -587,6 +624,42 @@ varying vec3  vWorld;
    partly behind the horizon; a test per event would make it jump all at once. */
 uniform vec2 uHorizonBand;
 
+/* WHAT PASSES IN FRONT OF THE EARTH, as spheres.
+
+   This layer runs without a depth test — see the note at the material — so the
+   depth buffer cannot hide it behind the moon or the sun. renderOrder cannot
+   either: a transparent pass always draws after the opaque one, whatever the
+   order within it. The test therefore lives here, in the same place and the
+   same shape as limbFade, which already hides the back of the globe.
+
+   xyz is the centre in world space, w the radius; w <= 0 is an empty slot. The
+   result is a FACTOR and not a yes-or-no, for limbFade's reason: a hard edge
+   makes an indicator blink as the moon's limb sweeps across it. */
+#define OCC_MAX 4
+uniform vec4  uOccluders[OCC_MAX];
+uniform float uOccSoft;
+
+float occludeOne(vec3 worldPoint, vec4 occ) {
+  if (occ.w <= 0.0) return 1.0;
+  vec3 d = worldPoint - cameraPosition;
+  float L = length(d);
+  if (L < 1e-4) return 1.0;
+  vec3 dir = d / L;
+  vec3 m = occ.xyz - cameraPosition;
+  float tc = dot(m, dir);            // where the ray passes closest to the centre
+  // Behind the camera, or further off than the fragment itself: not in the way.
+  if (tc <= 0.0 || tc >= L) return 1.0;
+  float perp = sqrt(max(0.0, dot(m, m) - tc * tc));
+  float edge = max(1e-4, occ.w * uOccSoft);
+  return smoothstep(occ.w - edge, occ.w + edge, perp);
+}
+
+float occludeFade(vec3 worldPoint) {
+  float f = 1.0;
+  for (int i = 0; i < OCC_MAX; i++) f = min(f, occludeOne(worldPoint, uOccluders[i]));
+  return f;
+}
+
 /* THE LIMB AS A BAND, NOT A CUT-OFF (session 42, Terry). An indicator turning
    around the globe used to vanish in a single frame; it is now full until a few
    degrees before the horizon and gone a few degrees past it.
@@ -594,14 +667,15 @@ uniform vec2 uHorizonBand;
    uHorizonBand is computed in JS once per frame: x = the cosine where the fade
    ends (gone), y = where it begins (still full). That keeps acos() out of the
    fragment shader and puts the clamp against NaN in one place instead of three. */
-float limbFade(vec3 wereldPunt) {
+float limbFade(vec3 worldPoint) {
   return smoothstep(uHorizonBand.x, uHorizonBand.y,
-                    dot(normalize(wereldPunt), normalize(cameraPosition)));
+                    dot(normalize(worldPoint), normalize(cameraPosition)));
 }
 
 void main() {
   if (vFresh <= 0.002) discard;
-  float limb = limbFade(vWorld);
+  // De limb en de occlusie zijn allebei zichtbaarheid; ze vermenigvuldigen.
+  float limb = limbFade(vWorld) * occludeFade(vWorld);
   if (limb <= 0.0) discard;
 
   float d = length(vUv * 2.0 - 1.0);      // 0 = heart, 1 = edge
@@ -763,6 +837,42 @@ uniform float uOpacity;
 uniform float uBeamCore;
 uniform float uBeamFalloff;
 uniform vec2 uHorizonBand;
+
+/* WHAT PASSES IN FRONT OF THE EARTH, as spheres.
+
+   This layer runs without a depth test — see the note at the material — so the
+   depth buffer cannot hide it behind the moon or the sun. renderOrder cannot
+   either: a transparent pass always draws after the opaque one, whatever the
+   order within it. The test therefore lives here, in the same place and the
+   same shape as limbFade, which already hides the back of the globe.
+
+   xyz is the centre in world space, w the radius; w <= 0 is an empty slot. The
+   result is a FACTOR and not a yes-or-no, for limbFade's reason: a hard edge
+   makes an indicator blink as the moon's limb sweeps across it. */
+#define OCC_MAX 4
+uniform vec4  uOccluders[OCC_MAX];
+uniform float uOccSoft;
+
+float occludeOne(vec3 worldPoint, vec4 occ) {
+  if (occ.w <= 0.0) return 1.0;
+  vec3 d = worldPoint - cameraPosition;
+  float L = length(d);
+  if (L < 1e-4) return 1.0;
+  vec3 dir = d / L;
+  vec3 m = occ.xyz - cameraPosition;
+  float tc = dot(m, dir);            // where the ray passes closest to the centre
+  // Behind the camera, or further off than the fragment itself: not in the way.
+  if (tc <= 0.0 || tc >= L) return 1.0;
+  float perp = sqrt(max(0.0, dot(m, m) - tc * tc));
+  float edge = max(1e-4, occ.w * uOccSoft);
+  return smoothstep(occ.w - edge, occ.w + edge, perp);
+}
+
+float occludeFade(vec3 worldPoint) {
+  float f = 1.0;
+  for (int i = 0; i < OCC_MAX; i++) f = min(f, occludeOne(worldPoint, uOccluders[i]));
+  return f;
+}
 uniform float uBeamOn;
 uniform float uHoverIdx;
 uniform float uHoverBoost;
@@ -780,9 +890,9 @@ varying float vDemp;
 /* The same limb band as the ring and the shockwave. Repeated here and not
    shared, because every shader is its own program; the shape has to stay equal
    to the one in QUAKE_RING_FRAG. */
-float limbFade(vec3 wereldPunt) {
+float limbFade(vec3 worldPoint) {
   return smoothstep(uHorizonBand.x, uHorizonBand.y,
-                    dot(normalize(wereldPunt), normalize(cameraPosition)));
+                    dot(normalize(worldPoint), normalize(cameraPosition)));
 }
 
 void main() {
@@ -791,7 +901,8 @@ void main() {
      the globe sticks outwards and should stay visible there — that is exactly
      where it reads best. Only what stands BEHIND the globe disappears, and we
      test that on the point itself. */
-  float limb = limbFade(vWorld);
+  // De limb en de occlusie zijn allebei zichtbaarheid; ze vermenigvuldigen.
+  float limb = limbFade(vWorld) * occludeFade(vWorld);
   if (limb <= 0.0) discard;
 
   // cross profile: bright heart, soft flanks
