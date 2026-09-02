@@ -444,12 +444,24 @@ export const PARAMS = {
   quakeIconScalePow: 0.5,      // steilheid
   quakeIconScaleMin: 0.18,     // ondergrens (sterk ingezoomd)
   quakeIconScaleMax: 3,      // bovengrens (ver uitgezoomd)
-  /* DE NABIJHEIDSKLEM. Zonder deze groeit de hoekgrootte onder de ondergrens
-     ongeremd; met een vloer op 100 — de bolstraal zelf — is de hoekstraal exact
-     constant, en dat is gemeten en niet afgeleid. Terra's gedeelde variant meet
-     tot 101,5 (de glyphschil); deze laag ligt op het oppervlak. */
+  /* THE NEAR CLAMP. Without it the angular size grows unchecked once the power
+     curve hits its lower bound.
+
+     THE FLOOR IS THE GLOBE RADIUS ITSELF, and that is what makes the clamp
+     work. It turns `camDist - floor` into the HEIGHT ABOVE THE SURFACE, so the
+     ring's world radius becomes R * perUnit * h while the distance to it is h
+     — and the h cancels. The angular radius is then exactly constant at every
+     camera distance, per magnitude, instead of merely bounded.
+
+     A floor ABOVE the surface breaks that at the bottom of the range: it drives
+     the height term to zero while the camera is still outside the globe, and
+     the markers shrink away to nothing. The camera reaches 100.25 with tiles,
+     so there is real range below 101.
+
+     `perUnit` is therefore the only size knob here. Raising the floor to buy a
+     smaller marker costs the constancy the clamp exists for. */
   quakeIconNearPerUnit: 0.0138,
-  quakeIconNearFloor: 101,
+  quakeIconNearFloor: 100,
 
   // ---- het magnitude-bereik van de AFBEELDING ----
   /* NIET HET FILTER. `magMin`/`magMax` in index.html bepalen welke bevingen je
