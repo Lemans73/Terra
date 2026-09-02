@@ -5484,9 +5484,20 @@ function pauseAutoRotate() {
   world.controls().autoRotate = false;
   clearTimeout(autoRotateTimer);
   if (!autoRotateWanted) return;
-  autoRotateTimer = setTimeout(() => {
-    if (autoRotateWanted) world.controls().autoRotate = true;
-  }, PARAMS.autoRotateResumeMs);
+  /* BLIJVEN KIJKEN IN PLAATS VAN OPGEVEN. Zie de noot bij
+     `autoRotateResumeMinDist`: diep ingezoomd hoort de bol niet vanzelf weg te
+     draaien van wat je bekijkt. Eén keer opgeven zou betekenen dat de rotatie
+     ook niet terugkomt als je daarna weer uitzoomt, dus de timer gaat opnieuw
+     staan zolang de camera te dichtbij is. */
+  const hervatAlsHetMag = () => {
+    if (!autoRotateWanted) return;
+    if (world.camera().position.length() < PARAMS.autoRotateResumeMinDist) {
+      autoRotateTimer = setTimeout(hervatAlsHetMag, PARAMS.autoRotateResumeMs);
+      return;
+    }
+    world.controls().autoRotate = true;
+  };
+  autoRotateTimer = setTimeout(hervatAlsHetMag, PARAMS.autoRotateResumeMs);
 }
 
 function setAutoRotate(on) {
@@ -6180,6 +6191,13 @@ function animateShader() {
   const _cam = world.camera();
   const _camLen = _cam.position.length() || 1;
   const _horizon = 100 / _camLen; // globe-straal = 100; dot > horizon = voorzijde
+  /* DE DRAAISNELHEID VOLGT DE ZOOM. Zie de noot bij `autoRotateSpeedRefDist`:
+     wat dichtbij te snel oogt is de SCHERMsnelheid, niet de grondsnelheid, en
+     die schaalt met de hoogte boven het oppervlak. Hier en niet bij het opzetten,
+     want hij hangt aan de camera en die beweegt. */
+  world.controls().autoRotateSpeed = PARAMS.autoRotateSpeed *
+    Math.min(PARAMS.autoRotateSpeedMax,
+             Math.max(0, _camLen - 100) / Math.max(1, PARAMS.autoRotateSpeedRefDist - 100));
   // schermvaste icoonschaal (app-breed): grootte ∝ camera-afstand → ~constante
   // schermgrootte ongeacht zoom. Geklemd tegen extreme groottes.
   let _iconScale = Math.min(PARAMS.iconScaleMax, Math.max(PARAMS.iconScaleMin,

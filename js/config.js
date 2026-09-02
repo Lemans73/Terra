@@ -1060,7 +1060,40 @@ export const PARAMS = {
   // op als het deze tijd stil is gebleven. Voorheen stopte hij bij de eerste interactie
   // en kwam hij nooit meer terug.
   autoRotateSpeed: 0.32,
+  /* THE SPIN FOLLOWS THE ZOOM, and this is the distance where `autoRotateSpeed`
+     is taken literally.
+
+     WHAT IS TOO FAST CLOSE IN IS NOT THE GROUND SPEED. OrbitControls turns the
+     camera at a fixed number of degrees per second, so the point under it always
+     crosses the same number of kilometres — that part never changed. What
+     changes is how much ground fits on the screen: zoomed in, the same degree
+     sweeps a fraction of the width, so the image races.
+
+     Keeping the SCREEN speed constant means the angular rate has to follow the
+     visible width, and that is proportional to the height above the surface.
+     Hence a rate that scales with `camDist - 100`, taken as 1 at this distance.
+
+     The cap is there because the same rule would keep speeding up on the way
+     out, and past a point a slowly turning globe reads better than a fast one. */
+  autoRotateSpeedRefDist: 350,
+  autoRotateSpeedMax: 1.5,
   autoRotateResumeMs: 10000,
+  /* AND IT DOES NOT COME BACK WHILE YOU ARE LOOKING AT SOMETHING.
+
+     Resuming after ten seconds is right for a globe you are watching turn. It is
+     wrong for a place you zoomed into: you went there to look, and the spin
+     carries you off it.
+
+     THERE IS A SECOND ARGUMENT AND IT IS NOT MEASURED. The tile shell only asks
+     for imagery once the camera has been still for `settleMs`, and a globe that
+     turns by itself is never still — so on paper it should also strand the
+     shell on whatever it already had. That reading is from `vraagTegels()` in
+     js/layers/tile-shell/shell.js; an attempt to measure it did not separate the
+     two cases, so it is written down here as a reading and not as a result.
+
+     Below this distance the timer keeps checking rather than giving up, so
+     zooming back out still brings the rotation back. */
+  autoRotateResumeMinDist: 130,
   // ===== ZOOMGRENZEN ============================================================
   // Camera-afstand tot het middelpunt van de aarde. De bol zelf heeft straal 100, dus
   // dit zijn absolute afstanden en geen factoren: 100 is precies het oppervlak.
