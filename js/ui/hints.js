@@ -84,8 +84,12 @@ export const HINT_STEPS = [
   {
     anchor: 'mode-switch',
     label: 'View',
-    title: 'Two views',
-    text: 'Realistic shows the planet as it looks from space. Schematic strips it back to the map underneath, where the data reads more clearly.'
+    /* GEEN AANTAL IN DE TITEL (Terry, sessie 46). Op de aarde zijn het er twee,
+       in de magnetosfeer drie en in Space vier. Een titel die "twee" zegt leert
+       de bezoeker een regel die elders niet klopt, en de rondleiding draait
+       juist op de aarde waar hij dat niet kan zien. */
+    title: 'Switching views',
+    text: 'This changes how the globe is drawn. Realistic shows the planet as it looks from space. Schematic strips it back to the map underneath, where the data reads more clearly. Other views bring their own options here.'
   },
   {
     anchor: 'settings-open',
