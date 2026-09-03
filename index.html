@@ -522,6 +522,7 @@
 
            GEEN HERLAADBEURT, anders dan bij de rij hierboven. Wat hier opnieuw
            begint is een scherm, en de app eronder hoeft nergens heen. -->
+      <div class="elayer" id="hints-toggle"><span class="edot"></span>Guided hints<span class="estat" id="es-hints">on</span></div>
       <div class="elayer" id="prefs-tour" data-prefs="none">
       <span class="edot"></span>Show the welcome screen again
       <span class="estat" id="es-prefs-tour">&#8212;</span>
@@ -4190,7 +4191,7 @@ const prefsToepassers = [];
    ============================================================ */
 const PREFS_RIJEN = {
   'sound-toggle': 'pref.sound', 'label-toggle': 'pref.quakeLabels',
-  'rotate-toggle': 'pref.autoRotate',
+  'rotate-toggle': 'pref.autoRotate', 'hints-toggle': 'pref.hintsOn',
   'wave-toggle': 'tex.wave', 'wire-toggle': 'tex.wire',
   'polarmotion-toggle': 'axes.polarmotion', 'eclipse-toggle': 'sunmoon.eclipse',
   'sunspots-toggle': 'sunmoon.sunspots', 'lagrange-toggle': 'space.lagrange',
@@ -11996,6 +11997,11 @@ function toonWelkomstscherm() {
        trekt beide bestaande schakelaars gelijk. Zie de noot bij utcToggles. */
     currentUtc: () => useUTC,
     setUtc: (on) => zetUTC(on),
+    /* De rondleiding is een voorkeur en geen toestand, dus hier mag het wél
+       rechtstreeks langs het register: er is niets om bij te werken behalve de
+       rij in Preferences, en die leest bij het openen. */
+    currentHints: () => Prefs.get('pref.hintsOn'),
+    setHints: (on) => { Prefs.set('pref.hintsOn', on); zetHintsRij(on); },
     reopen: welkomstHeropend,
     onClose: startRondleiding
   });
@@ -12015,7 +12021,20 @@ function toonWelkomstscherm() {
    overheen ligt. */
 function startRondleiding() {
   if (!rondleiding || !rondleiding.due()) return;
+  /* EN ALLEEN ALS HIJ GEVRAAGD IS. `due()` zegt "nog niet gezien"; deze regel
+     zegt "nog steeds gewenst". Twee uitspraken, twee sleutels — zie de noot bij
+     `pref.hintsOn` in js/core/prefs.js. */
+  if (!Prefs.get('pref.hintsOn')) return;
   setTimeout(() => rondleiding.open(), 450);
+}
+
+/* De rij in Preferences en de rij op het welkomstscherm tonen dezelfde waarde,
+   dus wie de een verzet moet de ander bijwerken. */
+function zetHintsRij(on) {
+  const rij = document.getElementById('hints-toggle');
+  if (rij) rij.classList.toggle('on', !!on);
+  const stat = document.getElementById('es-hints');
+  if (stat) stat.textContent = on ? 'on' : 'off';
 }
 
 function dismissBoot() {

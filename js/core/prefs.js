@@ -146,6 +146,11 @@ export const PREFS_DEFAULTS = {
   'overlay.plates':  true,
   'overlay.borders': false,
   'overlay.regions': false,
+  /* TWEE UITSPRAKEN, TWEE SLEUTELS (Terry, sessie 46). `hintsVersion` zegt of
+     de rondleiding GEZIEN is; deze zegt of hij GEWENST is. Op één sleutel zou
+     "ik heb hem gezien" en "ik wil hem niet" hetzelfde worden, en dan kan wie
+     hem terugzet niet meer zeggen dat hij hem wél wil. */
+  'pref.hintsOn': true,
   'overlay.names':   true,
 
   /* ---- Assen en polen ---- */

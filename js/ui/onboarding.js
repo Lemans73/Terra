@@ -151,7 +151,8 @@ function readCaps() {
 
 export function createOnboarding(opts) {
   const { prefs, imageryMeta, currentImagery, setImagery,
-          currentUtc, setUtc, version = 1, reopen = false, onClose } = opts;
+          currentUtc, setUtc, currentHints, setHints,
+          version = 1, reopen = false, onClose } = opts;
 
   let root = null;
   let lastFocus = null;
@@ -289,6 +290,30 @@ export function createOnboarding(opts) {
     times.appendChild(seg);
     card.appendChild(times);
 
+    /* ---- De rondleiding ----
+
+       DIT WAS HET ENIGE OP DIT SCHERM WAAR DE BEZOEKER NIETS OVER TE ZEGGEN HAD
+       (Terry, sessie 46): de rondleiding startte vanzelf zodra dit scherm
+       dichtging. Nu staat hij er als derde rij, in dezelfde vorm als Times.
+
+       VOORGESELECTEERD OP JA, en actief uit te zetten. Wie hier voor het eerst
+       is heeft de rondleiding waarschijnlijk nodig, en wie hem niet wil ziet in
+       één oogopslag waar hij dat zegt. */
+    const tour = el('div', 'ob-row');
+    tour.appendChild(el('span', 'ob-row-label', 'Show me around'));
+    const tseg = el('div', 'ob-seg');
+    tseg.setAttribute('role', 'group');
+    tseg.setAttribute('aria-label', 'Guided hints');
+    for (const o of [{ v: true, t: 'Yes' }, { v: false, t: 'No' }]) {
+      const b = el('button', 'ob-seg-opt', o.t);
+      b.type = 'button';
+      b.dataset.hints = o.v ? '1' : '0';
+      b.addEventListener('click', () => markHints(o.v));
+      tseg.appendChild(b);
+    }
+    tour.appendChild(tseg);
+    card.appendChild(tour);
+
     /* ---- De twee knoppen ----
 
        DE KNOP NOEMT WAT HIJ GAAT DOEN (Terry, sessie 46). Hij heette `Use
@@ -323,10 +348,22 @@ export function createOnboarding(opts) {
 
     markTier(start);
     markUtc(currentUtc ? !!currentUtc() : !!prefs.get('pref.utc'));
+    markHints(currentHints ? !!currentHints() : !!prefs.get('pref.hintsOn'));
+  }
+
+  /* Zelfde vorm als markUtc: de stand gaat in het dataset-attribuut en wordt
+     pas bij `finish()` toegepast. Klikken is nog geen antwoord. */
+  function markHints(on) {
+    root.querySelectorAll('.ob-seg-opt[data-hints]').forEach((b) => {
+      const hit = (b.dataset.hints === '1') === on;
+      b.classList.toggle('on', hit);
+      b.setAttribute('aria-pressed', hit ? 'true' : 'false');
+    });
+    root.dataset.hints = on ? '1' : '0';
   }
 
   function markUtc(on) {
-    root.querySelectorAll('.ob-seg-opt').forEach((b) => {
+    root.querySelectorAll('.ob-seg-opt[data-utc]').forEach((b) => {
       const hit = (b.dataset.utc === '1') === on;
       b.classList.toggle('on', hit);
       b.setAttribute('aria-pressed', hit ? 'true' : 'false');
@@ -366,6 +403,13 @@ export function createOnboarding(opts) {
        Only on an actual change. Calling the setter with the value it
        already has drags a full ephemeris refresh through startup for
        nothing. */
+    /* De rondleiding gaat langs dezelfde weg: de app past hem toe, niet wij.
+       Ook hier alleen bij een echte wijziging. */
+    const hints = root.dataset.hints !== '0';
+    if (setHints && currentHints && hints !== currentHints()) {
+      try { setHints(hints); } catch { /* de aanroeper meldt zijn eigen fouten */ }
+    }
+
     const utc = root.dataset.utc === '1';
     if (setUtc && currentUtc && utc !== currentUtc()) {
       try { setUtc(utc); } catch { /* the time path reports its own failures */ }
