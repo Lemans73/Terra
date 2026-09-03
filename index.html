@@ -13322,6 +13322,9 @@ if (IS_LOCAL) {
     // tuning-paneel nodig te hebben (dat zit niet in de repo).
     PARAMS,
     quakeIndicator: () => quakeIndicator,
+    /* De rondleiding, voor de plaatsingsmeting. `hints().meet()` geeft de
+       overlap tussen kaart en uitsnede in pixels; nul is de eis. */
+    hints: () => rondleiding,
     /* Redraw the scene after a change to `store`. Needed for the storm
        placeholder in the tuning panel, which adds an event no source
        delivers. */

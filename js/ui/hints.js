@@ -154,37 +154,74 @@ export function createHints(opts) {
     };
   }
 
-  /* Above or below the frame, whichever side it is not on, and clamped so
-     the card never leaves the viewport. Terra puts controls hard against
-     all four edges, so a card centred on its anchor would otherwise hang
-     off the screen at four of the six stops.
+  /* VIER KANTEN EN NIET TWEE, en de volgorde hangt af van waar het paneel staat
+     (Terry, sessie 46).
 
-     WITH A PANEL OPEN THE FRAME CAN FILL THE SCREEN, and then there is no
-     side left to stand on. The clamp still holds the card in view, and
-     it lands over the panel rather than off the edge — the lesser of the
-     two, since a card outside the viewport is not a card at all. */
+     Hier stonden alleen boven en onder, en dat werkt zolang de uitsnede klein
+     is. Met een paneel open is de uitsnede 296 bij 774 op een scherm van 812
+     hoog: er is dan geen kant meer over, de klem hield de kaart in beeld, en
+     hij landde bovenop het ding waar hij naar wijst. Een kaart die bedekt wat
+     hij uitlegt, legt niets uit.
+
+     DE VOLGORDE VOLGT DE PLEK. Terra's panelen staan tegen een rand: een paneel
+     links laat rechts ruimte over, een paneel rechts laat links ruimte over, en
+     iets in het midden heeft boven en onder. Vandaar drie volgordes in plaats
+     van één regel.
+
+     EN ALS NIETS PAST, wint de kant met de MINSTE overlap. Dat is nog steeds
+     niet mooi, maar het is een keuze in plaats van een bijwerking van de klem —
+     en `meet()` hieronder maakt hem telbaar. */
+  let laatsteOverlap = 0;
+
+  const OVERLAP = (a, b) =>
+    Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left)) *
+    Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
+
   function place() {
     const step = live[at];
     if (!step || !root) return;
     const r = frame();
 
-    hole.style.left = (r.left - HINT_PAD) + 'px';
-    hole.style.top = (r.top - HINT_PAD) + 'px';
-    hole.style.width = (r.width + HINT_PAD * 2) + 'px';
-    hole.style.height = (r.height + HINT_PAD * 2) + 'px';
+    const gat = { left: r.left - HINT_PAD, top: r.top - HINT_PAD,
+                  right: r.right + HINT_PAD, bottom: r.bottom + HINT_PAD };
+    hole.style.left = gat.left + 'px';
+    hole.style.top = gat.top + 'px';
+    hole.style.width = (gat.right - gat.left) + 'px';
+    hole.style.height = (gat.bottom - gat.top) + 'px';
 
     const cw = card.offsetWidth, ch = card.offsetHeight;
-    const onder = r.top + r.height / 2 < innerHeight / 2;
-    let top = onder ? r.bottom + HINT_PAD + HINT_GAP : r.top - HINT_PAD - HINT_GAP - ch;
-    let left = r.left + r.width / 2 - cw / 2;
+    const klemX = (v) => Math.max(HINT_EDGE, Math.min(v, innerWidth - cw - HINT_EDGE));
+    const klemY = (v) => Math.max(HINT_EDGE, Math.min(v, innerHeight - ch - HINT_EDGE));
 
-    left = Math.max(HINT_EDGE, Math.min(left, innerWidth - cw - HINT_EDGE));
-    top = Math.max(HINT_EDGE, Math.min(top, innerHeight - ch - HINT_EDGE));
+    const midX = (gat.left + gat.right) / 2;
+    const links = midX < innerWidth / 3;
+    const rechts = midX > innerWidth * 2 / 3;
+    const volgorde = links  ? ['right', 'below', 'above', 'left']
+                   : rechts ? ['left', 'below', 'above', 'right']
+                            : ['below', 'above', 'right', 'left'];
 
-    card.style.left = left + 'px';
-    card.style.top = top + 'px';
-    card.dataset.side = onder ? 'below' : 'above';
+    const kandidaat = (zijde) => {
+      if (zijde === 'right')  return { left: klemX(gat.right + HINT_GAP), top: klemY(gat.top + (gat.bottom - gat.top) / 2 - ch / 2) };
+      if (zijde === 'left')   return { left: klemX(gat.left - HINT_GAP - cw), top: klemY(gat.top + (gat.bottom - gat.top) / 2 - ch / 2) };
+      if (zijde === 'below')  return { left: klemX(midX - cw / 2), top: klemY(gat.bottom + HINT_GAP) };
+      return { left: klemX(midX - cw / 2), top: klemY(gat.top - HINT_GAP - ch) };
+    };
+
+    let beste = null;
+    for (const zijde of volgorde) {
+      const p = kandidaat(zijde);
+      const vak = { left: p.left, top: p.top, right: p.left + cw, bottom: p.top + ch };
+      const ov = OVERLAP(vak, gat);
+      if (ov === 0) { beste = { ...p, zijde, overlap: 0 }; break; }
+      if (!beste || ov < beste.overlap) beste = { ...p, zijde, overlap: ov };
+    }
+
+    card.style.left = beste.left + 'px';
+    card.style.top = beste.top + 'px';
+    card.dataset.side = beste.zijde;
+    laatsteOverlap = beste.overlap;
   }
+
 
   /* A PANEL SLIDES; ITS FINAL SIZE IS NOT THERE ON THE FRAME IT OPENS.
      Measuring once gives a cut-out around whatever width it had halfway
@@ -334,5 +371,24 @@ export function createHints(opts) {
     return (prefs.get('pref.hintsVersion') || 0) < version;
   }
 
-  return { open, due, close: finish, steps: () => live.map((s) => s.anchor) };
+  /* WAT DE LAATSTE PLAATSING KOSTTE, en de rechthoeken erbij. Nul overlap is de
+     eis; alles daarboven is een stop waar de kaart zijn eigen onderwerp bedekt.
+     Naar buiten omdat dit alleen in een ECHTE layout te meten is: een verborgen
+     browserpane geeft een viewport van 0 bij 0, en dan is elke rechthoek onzin.
+     Lees daarom altijd `viewport` mee voordat je `overlap` gelooft. */
+  function meet() {
+    const k = card && card.getBoundingClientRect();
+    const g = hole && hole.getBoundingClientRect();
+    return {
+      viewport: [innerWidth, innerHeight],
+      stap: at + 1, van: live.length,
+      anker: live[at] && live[at].anchor,
+      zijde: card && card.dataset.side,
+      overlap: laatsteOverlap,
+      kaart: k && [Math.round(k.left), Math.round(k.top), Math.round(k.width), Math.round(k.height)],
+      gat: g && [Math.round(g.left), Math.round(g.top), Math.round(g.width), Math.round(g.height)]
+    };
+  }
+
+  return { open, due, close: finish, meet, steps: () => live.map((s) => s.anchor) };
 }
