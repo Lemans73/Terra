@@ -58,7 +58,7 @@ export const HINT_STEPS = [
     reveal: 'layers',
     label: 'Layers',
     title: 'Layers & filters',
-    text: 'Everything drawn on the globe is switched on and off here — earthquakes, storms, wildfires, the magnetic field. Filters for magnitude and time sit in the same panel.'
+    text: 'Everything drawn on the globe is switched on and off here: earthquakes, storms, wildfires, the magnetic field. Filters for magnitude and time sit in the same panel.'
   },
   {
     anchor: 'details-open',
