@@ -4683,7 +4683,7 @@ function wolkenSchilAan() {
    `setupCloudSphere()` is zelf-borgend: zonder materiaal, zonder aarde-mesh of
    zonder wolkentextuur keert hij terug zonder iets aan te raken. Hem hier
    aanroepen kan dus nooit kwaad en herstelt de schil zodra dat wél kan. */
-function borgWolkenschil() {
+function syncCloudShell() {
   const wil = wolkenSchilAan();
   if (!cloudMesh || !cloudMesh.parent) {
     if (wil) setupCloudSphere();
@@ -4701,7 +4701,7 @@ function applyLayerToggles() {
   u.hasSpecular.value = (earthLayerStatus.specular && earthLayerEnabled.specular) ? 1 : 0;
   u.hasNormal.value   = (earthLayerStatus.normal   && earthLayerEnabled.normal)   ? 1 : 0;
   // de losse wolkenschil volgt dezelfde aan/uit-keuze als de schaduw
-  borgWolkenschil();
+  syncCloudShell();
   // day/night kunnen we niet "uitzetten" zonder zwart; we mengen ze i.p.v. weglaten.
   // dayBlend 0 = alleen nacht, 1 = alleen dag, anders normale terminator-mix.
   u.dayEnabled.value   = earthLayerEnabled.day   ? 1 : 0;
@@ -5061,7 +5061,7 @@ function applyWireframe() {
   // hieronder is er voor het geval de wolkenschil ooit een zusje wordt (zoals de
   // aurora dat is), en kost verder niets.
   // `wolkenSchilAan()` kent de wireframe-stand zelf, dus hier geen tak meer.
-  borgWolkenschil();
+  syncCloudShell();
   if (!wireframeOn) applyLayerToggles();   // en de uniforms erbij
   syncLandPolygons();
   syncWireToggle();
@@ -5338,7 +5338,7 @@ function applyGlobeMode() {
       /* HIER STOND `!wireframeOn` EN VERDER NIETS, en dat was de bug die de
          wolken terugbracht na een herstart: deze regel draait ná het toepassen
          van de bewaarde voorkeuren en wist de keuze van de bezoeker. */
-      borgWolkenschil();
+      syncCloudShell();
     } else {
       // bouw eenmalig, daarna hergebruiken
       const built = earthTex.buildMaterial();
@@ -5370,7 +5370,7 @@ function applyGlobeMode() {
     }
   } else { // expert — schematische vector-kaart
     realisticActive = false;
-    borgWolkenschil(); // in expert per definitie uit
+    syncCloudShell(); // in expert per definitie uit
     enterExpertMode({ world, THREE, bloomPass, gradePass, PARAMS });
   }
   // NA beide takken, want de stand hangt van `globeMode` én `wireframeOn` af en
@@ -13486,7 +13486,7 @@ if (IS_LOCAL) {
        oorzaak; zonder dit onderscheid is er niets te meten. `losgekoppeld` is de
        derde vorm: de mesh bestaat, hangt nergens, en elke `visible`-zetter treft
        hem dan zonder effect. */
-    wolkenschil: () => ({
+    cloudShell: () => ({
       bestaat: !!cloudMesh,
       inScene: !!(cloudMesh && cloudMesh.parent),
       zichtbaar: !!(cloudMesh && cloudMesh.visible),
@@ -13497,7 +13497,7 @@ if (IS_LOCAL) {
         ? earthTex.cloudsTexture().image.width + 'x' + earthTex.cloudsTexture().image.height : null,
       schaduw: shaderMaterial ? shaderMaterial.uniforms.hasClouds.value : null
     }),
-    borgWolkenschil: () => { borgWolkenschil(); return 'geborgd'; },
+    syncCloudShell: () => { syncCloudShell(); return 'gesynchroniseerd'; },
     /* Redraw the scene after a change to `store`. Needed for the storm
        placeholder in the tuning panel, which adds an event no source
        delivers. */
