@@ -45,7 +45,15 @@ const BROKEN = {
   exportSize: (ratio, longEdge) => ({
     frameW: longEdge, frameH: longEdge, frames: ratio.frames,
     width: longEdge * ratio.frames + 1, height: longEdge
-  })
+  }),
+  /* The caption spread across the three frames of a set. It reads well while
+     swiping and leaves two of the three files unattributed the moment one is
+     taken out of the row, so it has to stay caught. */
+  captionSlots: (parts, frames) => (frames < 3
+    ? [{ brand: true, title: parts.title, credit: parts.credit }]
+    : [{ brand: true, title: '', credit: '' },
+       { brand: false, title: parts.title, credit: '' },
+       { brand: false, title: '', credit: parts.credit }])
 };
 
 async function run() {
@@ -72,6 +80,10 @@ async function run() {
   if (onBrokenSize.length > 0) say('ok', 'a broken exportSize is caught (' + onBrokenSize.length + ' complaints)');
   else { say('fail', 'a broken exportSize passes — the suite tests nothing'); failed++; }
 
+  const onSpread = cap.selftest({ captionSlots: BROKEN.captionSlots });
+  if (onSpread.length > 0) say('ok', 'a caption spread across the set is caught (' + onSpread.length + ' complaints)');
+  else { say('fail', 'a spread caption passes — a lone frame would carry no credit'); failed++; }
+
   const keys = cap.RATIOS.map((r) => r.key);
   if (new Set(keys).size === keys.length) say('ok', 'every ratio key is unique');
   else { say('fail', 'duplicate ratio key', keys.join(', ')); failed++; }
@@ -91,6 +103,10 @@ async function proveItCanFail() {
   const breaks = [
     ['a frame that fills the viewport', () => cap.selftest({ frameRect: BROKEN.frameRect }).length > 0],
     ['a wide render one pixel too wide', () => cap.selftest({ exportSize: BROKEN.exportSize }).length > 0],
+    ['a caption spread across three frames', () => cap.selftest({ captionSlots: BROKEN.captionSlots }).length > 0],
+    ['a frame that loses the wordmark', () => cap.selftest({
+      captionSlots: (p, n) => Array.from({ length: n }, (_, i) => ({ brand: i === 0, title: p.title, credit: p.credit }))
+    }).length > 0],
     ['a frame of the wrong aspect', () => cap.selftest({
       frameRect: (a, w, h) => { const r = cap.frameRect(a, w, h); return { ...r, w: r.w * 1.1 }; }
     }).length > 0],

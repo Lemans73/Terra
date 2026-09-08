@@ -105,50 +105,65 @@ export function fileName(parts) {
 }
 
 /* ---- The caption ---------------------------------------------------------
-   Three parts, and for a set they land on three different frames: the
-   wordmark on the first, what and when on the second, the credit on the
-   third. Same height, same gradient, so swiping through the carousel
-   reads as one bar under one picture. Repeating the full credit on every
-   frame would break the very illusion the set is built for. */
+   EVERY FRAME CARRIES THE WHOLE LINE, sets included. A frame from a set does
+   not only exist beside its neighbours: it is opened on its own, saved on its
+   own and reposted on its own, and at that moment it has to say what it shows
+   and whose imagery it is. Spreading the three parts across three frames reads
+   beautifully while you swipe and leaves two of the three files unattributed
+   the moment anyone takes one out of the row.
+
+   The sizes are deliberately restrained. A caption is a signature, not a
+   headline: at 3800 px across, type that looks modest in a 1600 px preview is
+   a banner. Everything scales from `base`, so one number moves them all. */
+const CAPTION = {
+  base: 1600,   // the width these sizes are drawn for; k scales from here
+  pad: 38,
+  band: 150,
+  gap: 21,
+  title: 13,
+  credit: 11,
+  brand: 14
+};
+
 export function captionSlots(parts, frames) {
-  if (frames < 3) return [{ brand: true, title: parts.title, credit: parts.credit }];
-  return [
-    { brand: true, title: '', credit: '' },
-    { brand: false, title: parts.title, credit: '' },
-    { brand: false, title: '', credit: parts.credit }
-  ];
+  return defaultCaptionSlots(parts, frames);
+}
+
+function defaultCaptionSlots(parts, frames) {
+  const whole = { brand: true, title: parts.title, credit: parts.credit };
+  return Array.from({ length: Math.max(1, frames) }, () => ({ ...whole }));
 }
 
 export function drawCaption(ctx, W, H, slot) {
-  const k = Math.max(W, H) / 1600;
-  const pad = Math.round(44 * k);
+  const k = Math.max(W, H) / CAPTION.base;
+  const pad = Math.round(CAPTION.pad * k);
   const base = H - pad;
-  const band = Math.round(180 * k);
+  const band = Math.round(CAPTION.band * k);
 
   const grad = ctx.createLinearGradient(0, H - band, 0, H);
   grad.addColorStop(0, 'rgba(5,7,13,0)');
-  grad.addColorStop(1, 'rgba(5,7,13,0.86)');
+  grad.addColorStop(1, 'rgba(5,7,13,0.82)');
   ctx.fillStyle = grad;
   ctx.fillRect(0, H - band, W, band);
 
   ctx.textAlign = 'left';
   if (slot.credit) {
-    ctx.fillStyle = 'rgba(125,138,160,1)';
-    ctx.font = Math.round(15 * k) + 'px Inter, Helvetica, Arial, sans-serif';
+    ctx.fillStyle = 'rgba(125,138,160,0.92)';
+    ctx.font = Math.round(CAPTION.credit * k) + 'px Inter, Helvetica, Arial, sans-serif';
     ctx.fillText(slot.credit, pad, base);
   }
   if (slot.title) {
-    ctx.fillStyle = 'rgba(232,238,247,1)';
-    ctx.font = '600 ' + Math.round(18 * k) + 'px Inter, Helvetica, Arial, sans-serif';
-    ctx.fillText(slot.title, pad, slot.credit ? base - Math.round(26 * k) : base);
+    ctx.fillStyle = 'rgba(232,238,247,0.95)';
+    ctx.font = '600 ' + Math.round(CAPTION.title * k) + 'px Inter, Helvetica, Arial, sans-serif';
+    ctx.fillText(slot.title, pad, slot.credit ? base - Math.round(CAPTION.gap * k) : base);
   }
   if (slot.brand) {
     ctx.textAlign = 'right';
-    ctx.font = '700 ' + Math.round(19 * k) + 'px Inter, Helvetica, Arial, sans-serif';
+    ctx.font = '700 ' + Math.round(CAPTION.brand * k) + 'px Inter, Helvetica, Arial, sans-serif';
     const dot = ctx.measureText('.').width;
     ctx.fillStyle = '#ff6b3d';
     ctx.fillText('.', W - pad, base);
-    ctx.fillStyle = 'rgba(232,238,247,0.95)';
+    ctx.fillStyle = 'rgba(232,238,247,0.9)';
     ctx.fillText('TERRA', W - pad - dot, base);
   }
 }
@@ -164,6 +179,7 @@ export function drawCaption(ctx, W, H, slot) {
 export function selftest(impl) {
   const frameRect = (impl && impl.frameRect) || defaultFrameRect;
   const exportSize = (impl && impl.exportSize) || defaultExportSize;
+  const captionSlots = (impl && impl.captionSlots) || defaultCaptionSlots;
   const bad = [];
   const near = (a, b, eps) => Math.abs(a - b) <= (eps || 1e-9);
 
@@ -197,10 +213,13 @@ export function selftest(impl) {
     if (Math.max(s.width, s.height) > 8192) bad.push(r.key + ': render exceeds 8192 px');
   }
 
+  /* A frame taken out of a set must still say whose imagery it is, so all
+     three parts belong on all three frames — see the note at CAPTION. */
   const slots = captionSlots({ title: 'T', credit: 'C' }, 3);
   if (slots.length !== 3) bad.push('a set needs three caption slots');
-  if (slots.filter((s) => s.brand).length !== 1) bad.push('the wordmark belongs on exactly one frame');
-  if (slots.filter((s) => s.credit).length !== 1) bad.push('the credit belongs on exactly one frame');
+  if (slots.some((s) => !s.brand)) bad.push('a frame without the wordmark');
+  if (slots.some((s) => s.credit !== 'C')) bad.push('a frame without the credit');
+  if (slots.some((s) => s.title !== 'T')) bad.push('a frame without the title');
 
   return bad;
 }
