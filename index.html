@@ -809,6 +809,13 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polygon points="15.5 8.5 10.5 10.5 8.5 15.5 13.5 13.5 15.5 8.5" fill="currentColor" stroke="none"/></svg>
       <span class="dock-label">Navigate</span>
     </button>
+    <!-- Present staat als laatste: de twee ervoor brengen je ergens heen, deze
+         verandert alleen hoe je naar dezelfde plek kijkt. -->
+    <button class="dock-btn" id="present-open" type="button" aria-pressed="false"
+            title="Presentation mode (F)" aria-label="Presentation mode">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8V4h4"/><path d="M21 8V4h-4"/><path d="M3 16v4h4"/><path d="M21 16v4h-4"/></svg>
+      <span class="dock-label">Present</span>
+    </button>
   </div>
 
   <!-- Start DICHT, en dat regelt dit `hidden` als enige — er is geen enkele
@@ -2210,7 +2217,7 @@ import {
   FILE_LINK_TYPES, DEAD_LINK_HOSTS, FILE_LINK_NOTES,
   AQI_BANDS, aqiBand, aqiHex, magHex,
   PARAMS, WINDOW_MS, MODE_LABELS, MODE_ICONS, EXPERT_LAYER_SCALE,
-  TEXTURE_SETS, DEFAULT_QUALITY, assetsFor, textureSetSize, imageryMeta,
+  TEXTURE_SETS, TEXTURE_CREDITS, DEFAULT_QUALITY, assetsFor, textureSetSize, imageryMeta,
   RELAY_URL, REPO_URL,
   ANALYTICS_HOSTS, LOCK_DETAILS, ASSET_BASE, asset
 } from './js/config.js';
@@ -2291,6 +2298,8 @@ import { createPanelManager } from './js/ui/panels.js';
 import { createDetailPanel } from './js/ui/detail.js';
 import { createOnboarding } from './js/ui/onboarding.js';
 import { createHints } from './js/ui/hints.js';
+import { createPresentMode } from './js/ui/present.js';
+import { createCapture, RATIOS, QUALITY } from './js/core/capture.js';
 import { limbThreshold } from './js/core/label-sprite.js';
 import { PLANETS, PLANET_INFO, nextConjunction,
          previousConjunction, heliocentricState } from './js/compute/planets.js';
@@ -12875,6 +12884,118 @@ navPanel.onClose(() => panels.close('nav'));
    die het Navigate-paneel op deze plek zet. */
 createViewSwitch({ viewStates, host: document.getElementById('view-switch') });
 
+/* ---- Presentation mode (session 47) ---------------------------------------
+   HERE, alongside Navigate and the view switch: the credit line asks the
+   register which state is on screen, and that register is only complete once
+   every state has signed up.
+
+   THE CREDIT IS ASSEMBLED FROM WHAT IS ON SCREEN and never from a fixed
+   string. The satellite tier and the two local sets have different owners, and
+   Sentinel-2 cloudless carries a non-commercial licence — a caption reading
+   "NASA" over EOX imagery would be wrong in the direction that matters. */
+function presentStamp() {
+  return momentNow().toLocaleString('en-GB', {
+    timeZone: 'UTC', day: 'numeric', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', hour12: false
+  }).replace(',', '') + ' UTC';
+}
+
+function presentWhere() {
+  const pov = world.pointOfView();
+  if (!pov || !isFinite(pov.lat) || !isFinite(pov.lng)) return '';
+  const ns = pov.lat >= 0 ? 'N' : 'S';
+  const ew = pov.lng >= 0 ? 'E' : 'W';
+  return Math.abs(pov.lat).toFixed(1) + '\u00b0' + ns + ' ' +
+         Math.abs(pov.lng).toFixed(1) + '\u00b0' + ew;
+}
+
+function presentCredits() {
+  const stamp = presentStamp();
+  const active = viewStates.activeState();
+
+  if (active) {
+    /* Away from the globe there is no ground point to name, so the state says
+       what you are looking at instead of a latitude that means nothing here. */
+    const entry = viewStates.list().find((v) => v.key === active);
+    return {
+      title: (entry ? entry.label : active) + '   \u00b7   ' + stamp,
+      credit: 'Terra   \u00b7   terra.terryelemans.nl'
+    };
+  }
+
+  const parts = [];
+  let what = '';
+  if (tileShell && tileShell.isVisible()) {
+    const src = tileShell.attribution()[0];
+    if (src) {
+      what = src.name;
+      parts.push('Imagery: ' + src.name + ', ' + src.by +
+                 (src.licence ? ' (' + src.licence + ')' : ''));
+      if (src.note) parts.push(src.note);
+    }
+  } else {
+    what = TEXTURE_CREDITS.day.name;
+    parts.push('Imagery: ' + TEXTURE_CREDITS.day.name + ' and ' +
+               TEXTURE_CREDITS.night.name + ', ' + TEXTURE_CREDITS.day.by);
+  }
+  /* The clouds are a separate source and a visible one, so they are named only
+     when the shell is actually up. */
+  if (wolkenSchilAan()) {
+    parts.push(TEXTURE_CREDITS.clouds.by + ' (' + TEXTURE_CREDITS.clouds.licence + ')');
+  }
+
+  const where = presentWhere();
+  return {
+    title: [what, where, stamp].filter(Boolean).join('   \u00b7   '),
+    credit: parts.join('   \u00b7   ')
+  };
+}
+
+const presentCapture = createCapture({
+  renderer: () => world.renderer(),
+  composer: () => world.postProcessingComposer(),
+  camera: () => world.camera(),
+  /* The canvas's CSS size, not globe.gl's idea of it: during an export the
+     drawing buffer is resized while the style is left alone, so this stays the
+     screen the frame was measured against. */
+  viewSize: () => {
+    const el = world.renderer().domElement;
+    return { w: el.clientWidth || window.innerWidth, h: el.clientHeight || window.innerHeight };
+  },
+  viewName: () => viewStates.activeState() || 'earth',
+  credits: presentCredits,
+  onStatus: (kind, text) => { if (presentMode) presentMode.say(kind, text); }
+});
+
+/* Pull back until what the frame holds fills the view. The earth subtends
+   2*asin(R/d) from distance d, so shrinking that angle by k is not d*k but
+   the line below — at close range the two differ by a lot. */
+function presentFitFrame(p) {
+  const k = Math.min(p.view.w / p.rect.w, p.view.h / p.rect.h);
+  if (!(k > 1.0001)) return;
+  const cam = world.camera(), ctl = world.controls();
+  const d = cam.position.length();
+  const R = GLOBE_R;
+  const half = Math.asin(Math.min(1, R / Math.max(d, R + 1e-6)));
+  const want = R / Math.sin(Math.min(Math.PI / 2 - 1e-6, half / k));
+  const next = Math.min(ctl.maxDistance || Infinity,
+                        Math.max(ctl.minDistance || 0, want));
+  cam.position.setLength(next);
+  ctl.update();
+}
+
+const presentMode = createPresentMode({
+  capture: presentCapture,
+  ratios: RATIOS,
+  quality: QUALITY,
+  button: document.getElementById('present-open'),
+  fitFrame: presentFitFrame,
+  /* A tour or the welcome screen owns the screen and the keyboard while it is
+     up, and both point at panels this mode would hide. */
+  blocked: () => !!document.getElementById('hints') || !!document.getElementById('onboarding')
+});
+document.getElementById('present-open').addEventListener('click', () => presentMode.toggle());
+
 /* De Back to Earth-knop hangt aan het REGISTER en niet aan een state: er is
    maar één uitgang, en die kent het register al. Hij verschijnt alleen wanneer
    er iets is om uit terug te keren — buiten een state is er geen aarde om naar
@@ -13325,6 +13446,14 @@ if (IS_LOCAL) {
     /* De rondleiding, voor de plaatsingsmeting. `hints().meet()` geeft de
        overlap tussen kaart en uitsnede in pixels; nul is de eis. */
     hints: () => rondleiding,
+
+    /* PRESENTATIEMODUS EN EXPORT (sessie 47). `capture().renderWide(plan)` geeft
+       het brede beeld terug ZONDER op te slaan — anders is de enige manier om de
+       exportketen te meten een echte download per meting, en dan meet je vooral
+       de downloadmap. `capture().plan(key, longEdge)` geeft de uitsnede en de
+       pixelmaat die daarbij horen. */
+    capture: () => presentCapture,
+    present: () => presentMode,
     /* Redraw the scene after a change to `store`. Needed for the storm
        placeholder in the tuning panel, which adds an event no source
        delivers. */

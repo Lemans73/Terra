@@ -3598,3 +3598,135 @@
   @media (prefers-reduced-motion: reduce) {
     .ht, .ht-hole, .ht-card, .ht-dot, .ht-step { transition: none; }
   }
+
+  /* ---- Presentation mode (session 47) -------------------------------------
+     ONE LIST HIDES THE INTERFACE, and `tools/check-present-chrome.mjs` holds
+     it against the markup: add a panel without adding it here and the guard
+     rail falls over instead of the panel turning up on someone's wallpaper.
+
+     `body.presenting` alone hides everything; `chrome-on` puts the panels
+     back for a look around. What it does not put back are the DOM labels —
+     those cannot land in the file, and a frame that shows what the file will
+     not hold is the one thing this mode may not do. */
+  body.presenting:not(.chrome-on) #mode-switch,
+  body.presenting:not(.chrome-on) #view-switch,
+  body.presenting:not(.chrome-on) #time-island,
+  body.presenting:not(.chrome-on) #msphere-time,
+  body.presenting:not(.chrome-on) #msphere-scale,
+  body.presenting:not(.chrome-on) #msphere-craft,
+  body.presenting:not(.chrome-on) #antipode-exit,
+  body.presenting:not(.chrome-on) .masthead,
+  body.presenting:not(.chrome-on) #notif-panel,
+  body.presenting:not(.chrome-on) #settings-panel,
+  body.presenting:not(.chrome-on) #dock,
+  body.presenting:not(.chrome-on) #dock-right,
+  body.presenting:not(.chrome-on) #nav-panel,
+  body.presenting:not(.chrome-on) #details-panel,
+  body.presenting:not(.chrome-on) .panel,
+  body.presenting:not(.chrome-on) #qlist,
+  body.presenting:not(.chrome-on) #readout {
+    display: none !important;
+  }
+  /* SKETCH:START — this one selector names a layer the standalone build cuts
+     out, so it lives in its own rule rather than in the list above: a name
+     removed from the middle of a selector list would leave a dangling comma
+     and take the whole rule down with it. */
+  body.presenting:not(.chrome-on) #sketch-editor { display: none !important; }
+  /* SKETCH:END */
+
+  /* The label layers go in both states: see the note above. */
+  body.presenting #quake-labels,
+  body.presenting #label-lines {
+    display: none !important;
+  }
+
+  /* ---- The frame ---------------------------------------------------------
+     The dim is one box-shadow rather than four panels around the frame:
+     four would need four sets of coordinates that have to agree, and any
+     disagreement shows up as a bright seam exactly where the eye is. */
+  .pm-crop { position: fixed; inset: 0; z-index: 60; pointer-events: none; display: none; }
+  .pm-crop.on { display: block; }
+  .pm-box {
+    position: absolute;
+    border: 1px solid rgba(255,255,255,0.34);
+    box-shadow: 0 0 0 100vmax rgba(5,7,13,0.58);
+  }
+  .pm-cut {
+    position: absolute; top: 0; bottom: 0; width: 1px;
+    background: rgba(255,255,255,0.24);
+  }
+
+  /* ---- The bar ----------------------------------------------------------- */
+  .pm-bar {
+    position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%);
+    z-index: 62;
+    display: none;
+    flex-direction: column; align-items: center; gap: 8px;
+  }
+  body.presenting .pm-bar { display: flex; }
+  .pm-row {
+    display: flex; align-items: center; gap: 10px;
+    background: rgba(11,16,24,0.82);
+    backdrop-filter: blur(14px);
+    border: 1px solid var(--hair);
+    border-radius: 12px;
+    padding: 9px 12px;
+  }
+  .pm-field { display: flex; align-items: center; gap: 6px; }
+  .pm-field > span {
+    font-size: 10px; font-weight: 600; letter-spacing: 0.16em;
+    text-transform: uppercase; color: var(--ink-faint);
+  }
+  .pm-bar select {
+    background: rgba(5,7,13,0.6);
+    border: 1px solid var(--hair);
+    border-radius: 8px;
+    color: var(--ink);
+    font-family: inherit; font-size: 12px;
+    padding: 5px 7px;
+    cursor: pointer;
+  }
+  .pm-bar select:hover { border-color: var(--ink-dim); }
+  .pm-px { font-size: 11.5px; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
+  .pm-px.warn { color: var(--volcano); }
+  .pm-sep { width: 1px; align-self: stretch; background: var(--hair); }
+  .pm-btn {
+    background: none;
+    border: 1px solid var(--hair);
+    border-radius: 9px;
+    color: var(--ink);
+    font-family: inherit; font-size: 12px; font-weight: 500;
+    padding: 7px 12px;
+    cursor: pointer;
+    transition: border-color 0.18s, color 0.18s, background 0.18s;
+  }
+  .pm-btn:hover { border-color: var(--ink-dim); }
+  .pm-btn:disabled { color: var(--ink-faint); cursor: default; border-color: var(--hair); }
+  .pm-go { border-color: var(--accent); color: var(--accent); }
+  .pm-go:hover:not(:disabled) { background: rgba(255,107,61,0.12); border-color: var(--accent); }
+  .pm-exit { color: var(--ink-dim); }
+  .pm-check { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--ink-dim); cursor: pointer; }
+  .pm-check input { accent-color: var(--accent); cursor: pointer; }
+  .pm-check:hover { color: var(--ink); }
+
+  /* The message sits ABOVE the bar and not inside it: a line appearing inside
+     would widen the row and shift every control under the pointer. */
+  .pm-msg {
+    max-width: min(560px, 88vw);
+    padding: 0 12px;
+    font-size: 11.5px;
+    text-align: center;
+    color: var(--ink-dim);
+    opacity: 0; transition: opacity 0.2s;
+  }
+  .pm-msg.on { opacity: 1; }
+  .pm-msg.bad { color: var(--wildfire); }
+
+  @media (max-width: 640px) {
+    .pm-row { flex-wrap: wrap; justify-content: center; max-width: 94vw; }
+    .pm-field > span { display: none; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pm-msg, .pm-btn { transition: none; }
+  }

@@ -1555,6 +1555,25 @@ export const DEFAULT_QUALITY = '2k';
    plek gaf 215 tegels en 1,9 MB. Bovenin komt uit de POC-berekening voor
    intensief rondvliegen. Een tweede bezoek aan dezelfde plek kostte 20 kB — de
    schijfcache doet daar het werk. */
+/* WHERE THE LOCAL EARTH MAPS COME FROM (session 47).
+   The picture that leaves Terra as a file carries a credit line, and that line
+   is assembled from what is actually on screen rather than typed once and left
+   to rot. It belongs beside TEXTURE_SETS because that is where the files it
+   describes are named: one truth, one place.
+
+   NOTE THAT A SET IS NOT ONE SOURCE. The day and night maps are NASA; the
+   clouds, the specular map and the stars are Solar System Scope. "2K or 8K =
+   NASA" is true of the half you look at and wrong about the rest, which is
+   exactly the sort of shorthand a credit line must not inherit.
+   See ATTRIBUTION.md for the full text and the licences. */
+export const TEXTURE_CREDITS = {
+  day:      { name: 'Blue Marble Next Generation', by: 'NASA Earth Observatory' },
+  night:    { name: 'Black Marble', by: 'NASA Earth Observatory' },
+  clouds:   { name: 'Cloud map', by: 'Solar System Scope', licence: 'CC BY 4.0' },
+  stars:    { name: 'Starfield', by: 'Solar System Scope', licence: 'CC BY 4.0' },
+  relief:   { name: 'ETOPO 2022 relief', by: 'NOAA NCEI' }
+};
+
 export const IMAGERY_TILES = {
   label: 'Satellite',
   detail: '10 m',
