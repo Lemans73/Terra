@@ -1524,15 +1524,18 @@ export const DEFAULT_QUALITY = '2k';
    met de nachtkaart uit de 8K-set. GEMETEN in de app op 2026-09-02, uit
    `performance.getEntriesByType('resource')`:
 
-     terra-bluemarble-2048.webp     540.388
+     terra-bluemarble-2048.webp     540.388   (vangnet, geen kaart om te lezen)
      terra-blackmarble-8192.webp  2.098.756   (8K: de nachtzijde is wat je ziet)
      2k_earth_clouds.jpg            965.676
-     2k_earth_normal_map.png        465.948
-     2k_earth_specular_map.png      134.381
      acht worteltegels               ~63.000
      terra-blackmarble-2048.webp    197.038   (opstartkaart, daarna vervangen)
                                   ---------
-                                  4.465.187
+                                  3.864.858
+
+   RELIËF EN SPECULAR ZITTEN ER NIET IN, en dat scheelt 600 kB. Zie de noot bij
+   `magerVoor()` in js/core/earth-textures.js: satellietbeeld draagt zijn eigen
+   belichting, en een tweede reliëfbron erbovenop is een lichtbron die het oneens
+   is met de eerste.
 
    DE OPSTARTKAART TELT MEE. De aarde wordt altijd met de kleine set gebouwd en
    de zwaardere schuift er daarna in; de 2K-nachtkaart gaat dus wél over de lijn
@@ -1541,11 +1544,10 @@ export const DEFAULT_QUALITY = '2k';
    laten diezelfde opstartkosten buiten beschouwing — daar is het getal een
    setgrootte, hier een bezoekkost.
 
-   DE DAGKAART ZIT ERBIJ, en dat is geen keuze maar wat er gebeurt: `laadSet()`
-   haalt alle vijf de sleuven op, ook wanneer de tegelschil de dagzijde afdekt.
-   Zij is daarmee de terugval als de tegels niet komen. Wie die 540 kB wil
-   besparen, moet de sleuf overslaan én beslissen wat er dan onder een lege
-   schil ligt; dat is een andere ingreep dan een getal.
+   DE DAGKAART ZIT ERBIJ ALS VANGNET. Komen de tegels niet, dan is zij wat er te
+   zien is. Pas bij een storing ophalen kan niet: het bootscherm verdwijnt zodra
+   het materiaal staat, en de eerste tegels zijn dan nog onderweg. In dat gat zou
+   de aarde verkeerd staan.
 
    DE START IS DAARMEE ZWAARDER DAN STANDARD (2,30 MB), niet lichter.
 
@@ -1556,7 +1558,7 @@ export const DEFAULT_QUALITY = '2k';
 export const IMAGERY_TILES = {
   label: 'Satellite',
   detail: '10 m',
-  bytesOnce: 4_465_000,
+  bytesOnce: 3_865_000,
   perVisitLowBytes: 2_000_000,
   perVisitHighBytes: 18_000_000
 };

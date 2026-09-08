@@ -101,6 +101,29 @@ export function createEarthTextures(THREE, opts = {}) {
      than a ternary inlined at each call. */
   const nachtSetVoor = (t) => (t === 'tiles' ? '8k' : setVoorTrap(t));
 
+  /* WAT DE SATELLIETTRAP NIET NODIG HEEFT (Terry, sessie 46).
+
+     De reliëf- en specularkaart zijn er om een PLATTE wereldtextuur diepte en
+     glans te geven. Satellietbeeld brengt zijn eigen belichting mee: de schaduw
+     van een bergrug staat al ín de opname. Een tweede reliëfbron erbovenop is
+     dan geen verbetering maar een tweede lichtbron die het oneens is met de
+     eerste. Samen 600 kB die niets toevoegt.
+
+     De shader kan hier tegen: `hasNormal` en `hasSpecular` zijn er precies voor,
+     en op 0 valt hij terug op de bolnormaal zonder glans.
+
+     DE DAGKAART BLIJFT WÉL. Die is in deze trap geen kaart maar een VANGNET:
+     komen de tegels niet, dan is zij wat er te zien is. Hem pas bij een storing
+     ophalen kan niet, want het bootscherm verdwijnt zodra het materiaal staat en
+     de eerste tegels zijn dan nog onderweg. In dat gat zou de aarde verkeerd
+     staan, en een aarde die even verkeerd staat is erger dan 540 kB.
+
+     ALTIJD 2K, ook voor wie van 8K kwam. Deze kaart is nooit wat je bekijkt: de
+     tegels dekken hem af zodra ze er zijn. 5,9 MB uitgeven aan pixels die
+     onzichtbaar blijven is de verkeerde ruil. Wie hem groter wil, zet hier
+     `setVoorTrap(t)` neer. */
+  const magerVoor = (t) => t === 'tiles';
+
   let imagery = (() => {
     const bewaard = Prefs.get('pref.texQuality');
     return IMAGERY_TRAPPEN.includes(bewaard) ? bewaard : DEFAULT_QUALITY;
@@ -177,14 +200,15 @@ export function createEarthTextures(THREE, opts = {}) {
        de schematische kaart. De bewaarde VOORKEUR blijft staan: een haperende
        verbinding is geen keuze van de bezoeker, en de volgende keer kan het weer
        gewoon lukken. Wat er wél gebeurt is dat het paneel het zegt. */
-    const laadSet = (q, nachtQ) => {
+    const laadSet = (q, nachtQ, mager) => {
       const A = assetsFor(q);
+      const leeg = Promise.resolve(null);
       return Promise.all([
         load(dayUrlFor(q)),
         load(nightUrlFor(nachtQ)),
         load(A.clouds).catch(() => null),
-        load(A.specular).catch(() => null),
-        load(A.normal).catch(() => null)
+        mager ? leeg : load(A.specular).catch(() => null),
+        mager ? leeg : load(A.normal).catch(() => null)
       ]);
     };
     /* THE EARTH IS ALWAYS BUILT WITH THE SMALL SET, whatever quality is stored,
@@ -211,7 +235,7 @@ export function createEarthTextures(THREE, opts = {}) {
       texQuality = DEFAULT_QUALITY;
       nightQuality = DEFAULT_QUALITY;
     }
-    return laadSet(DEFAULT_QUALITY, DEFAULT_QUALITY)
+    return laadSet(DEFAULT_QUALITY, DEFAULT_QUALITY, magerVoor(imagery))
       .catch(() => null)
       .then((texturen) => {
         // Mislukt: de aanroeper ziet `null` en valt terug op de kaart.
@@ -418,8 +442,8 @@ export function createEarthTextures(THREE, opts = {}) {
       const [day, night, clouds, spec, normal] = await metGrens(Promise.all([
         load(dayUrlFor(doelSet)), load(nightUrlFor(doelNacht)),
         load(A.clouds).catch(() => null),
-        load(A.specular).catch(() => null),
-        load(A.normal).catch(() => null)
+        magerVoor(q) ? Promise.resolve(null) : load(A.specular).catch(() => null),
+        magerVoor(q) ? Promise.resolve(null) : load(A.normal).catch(() => null)
       ]));
       // kleurtexturen naar sRGB; normal/specular zijn datamaps en blijven lineair
       [day, night, clouds].forEach(t => { if (t) t.colorSpace = THREE.SRGBColorSpace; });
@@ -454,6 +478,16 @@ export function createEarthTextures(THREE, opts = {}) {
         swap(uniform, tex);
         await volgendFrame();
       }
+      /* DE VLAGGEN MOETEN MEE, en dit is precies waar `swap()` niet volstaat.
+         Die slaat een null over, en terecht: een textuur die niet binnenkwam mag
+         de vorige niet wissen. Maar in de magere trap is null geen mislukking
+         maar een keuze, en dan hoort de shader die kaart ook echt niet meer te
+         gebruiken. Zonder deze twee regels bleef de reliëfkaart van 8K hangen na
+         een wissel naar Satellite. */
+      const mager = magerVoor(q);
+      u.hasSpecular.value = (!mager && spec) ? 1 : 0;
+      u.hasNormal.value = (!mager && normal) ? 1 : 0;
+
       if (clouds) cloudsTexture = clouds;
       getWorld().backgroundImageUrl(A.stars);
 
