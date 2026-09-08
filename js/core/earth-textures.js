@@ -451,12 +451,24 @@ export function createEarthTextures(THREE, opts = {}) {
       zetAniso(day, night, clouds, spec, normal);
 
       const u = getMaterial().uniforms;
+      /* ALLEEN WEGGOOIEN ALS DE OUDE TEXTUUR NERGENS ANDERS MEER HANGT — en dat
+         stond hier als belofte terwijl de code het niet toetste. Eén textuur kan
+         in twee sleuven zitten: `cloudsTexture` valt bij het bouwen terug op de
+         dagkaart wanneer er geen wolkenkaart is (`cloudsTex || dayTex`), en de
+         zwevende wolkenschil leest diezelfde sleuf. Een dagkaart die bij een
+         wissel werd vrijgegeven nam dan de wolken mee: de schaduw op het
+         oppervlak bleef staan, de heldere wolken verdwenen.
+
+         Dezelfde toets als in setCustomTexture hieronder, en om dezelfde reden. */
       const swap = (uniform, tex) => {
         if (!tex) return;
         const old = uniform.value;
         uniform.value = tex;
-        // alleen weggooien als de oude textuur nergens anders meer hangt
-        if (old && old !== tex && old.dispose) old.dispose();
+        if (!old || old === tex || !old.dispose) return;
+        const nogInGebruik = [u.dayTexture, u.nightTexture, u.cloudsTexture,
+                              u.specularTexture, u.normalTexture]
+          .some((sleuf) => sleuf.value === old);
+        if (!nogInGebruik) old.dispose();
       };
       /* ONE MAP PER FRAME, and that is the whole point of this loop.
          Setting a uniform costs nothing; the cost lands on the next render, when
