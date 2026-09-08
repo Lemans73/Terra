@@ -28,24 +28,28 @@
    ============================================================ */
 
 /* ---- The catalogue -------------------------------------------------------
-   Ratios, not platform names. Platform specs age inside your code and a
-   ratio does not. `frames: 3` means the set is cut into three files that
-   sit side by side as one continuous picture. */
+   Ratios, not platform names. Platform specs age inside your code and a ratio
+   does not.
+
+   THE FRAME COUNT IS NOT IN THIS LIST, and that is the whole point. Format and
+   number of frames are two independent choices, so they are two controls; put
+   them in one list and you get every combination as its own row, which is five
+   formats times three counts of noise for two decisions. A set of one is
+   already the plain format, so the list below covers `x1` without saying so. */
 export const RATIOS = [
-  { key: 'win',   label: 'Window',  aspect: null, frames: 1 },
-  { key: '16x9',  label: '16:9',    aspect: 16 / 9, frames: 1 },
-  { key: '9x16',  label: '9:16',    aspect: 9 / 16, frames: 1 },
-  { key: '1x1',   label: '1:1',     aspect: 1,      frames: 1 },
-  { key: '4x5',   label: '4:5',     aspect: 4 / 5,  frames: 1 },
-  { key: '4x3',   label: '4:3',     aspect: 4 / 3,  frames: 1 },
-  { key: '1x1x3', label: '1:1 ×3',  aspect: 1,      frames: 3, note: 'seamless set' },
-  { key: '4x5x3', label: '4:5 ×3',  aspect: 4 / 5,  frames: 3, note: 'seamless set' },
-  { key: '9x16x3', label: '9:16 ×3', aspect: 9 / 16, frames: 3, note: 'seamless set' }
+  { key: 'win',   label: 'Window', aspect: null },
+  { key: '16x9',  label: '16:9',   aspect: 16 / 9 },
+  { key: '9x16',  label: '9:16',   aspect: 9 / 16 },
+  { key: '1x1',   label: '1:1',    aspect: 1 },
+  { key: '4x5',   label: '4:5',    aspect: 4 / 5 },
+  { key: '4x3',   label: '4:3',    aspect: 4 / 3 }
 ];
 
-/* Long edge of a single frame. A set stays at STANDARD even when the
-   picker says LARGE: three LARGE frames would ask for one render of
-   11520 px, and that is over the buffer limit of plenty of hardware. */
+export const MAX_FRAMES = 3;
+
+/* Long edge of a single frame. A set drops to SET_LONG_EDGE even when the
+   picker says LARGE: three LARGE frames would ask for one render of 11520 px,
+   over the buffer limit of plenty of hardware. */
 export const QUALITY = { standard: 2560, large: 3840 };
 export const SET_LONG_EDGE = 2048;
 
@@ -92,37 +96,54 @@ export function availableRatios(viewW, viewH, all) {
 function defaultAvailableRatios(viewW, viewH, all) {
   const list = all || RATIOS;
   if (!(viewW > 0) || !(viewH > 0)) return list;
-  return list.filter((r) => {
-    if (r.aspect === null) return true;   // Window always fits its own window
-    /* A set has a second condition: the window has to be landscape. Upright, a
-       row of three is a sliver however generous the height rule is, and it is
-       the shape you would be composing in rather than the one you get. */
-    if (r.frames > 1 && viewW <= viewH) return false;
-    return frameRect(totalAspect(r, viewW, viewH), viewW, viewH).h >= viewH * MIN_FRAME_HEIGHT;
-  });
+  return list.filter((r) => r.aspect === null || fits(r, 1, viewW, viewH));
 }
 
-/* Total aspect of a ratio entry, frames included. */
-export function totalAspect(ratio, viewW, viewH) {
+/* How many frames this format can hold in this window. Always at least one —
+   a single frame is the format itself and can never not fit.
+
+   A ROW OF MORE THAN ONE ALSO NEEDS A LANDSCAPE WINDOW. Upright, a row is a
+   sliver however generous the height rule is: it is the shape you would be
+   composing in rather than the one you get. */
+export function availableFrames(ratio, viewW, viewH) {
+  return defaultAvailableFrames(ratio, viewW, viewH);
+}
+
+function defaultAvailableFrames(ratio, viewW, viewH) {
+  const out = [1];
+  if (!ratio || ratio.aspect === null) return out;      // Window is one picture
+  if (!(viewW > viewH)) return out;
+  for (let n = 2; n <= MAX_FRAMES; n++) {
+    if (fits(ratio, n, viewW, viewH)) out.push(n);
+  }
+  return out;
+}
+
+function fits(ratio, frames, viewW, viewH) {
+  return frameRect(totalAspect(ratio, frames, viewW, viewH), viewW, viewH).h
+         >= viewH * MIN_FRAME_HEIGHT;
+}
+
+/* Aspect of the WHOLE picture: a row of three 1:1 frames is 3, not 1. */
+export function totalAspect(ratio, frames, viewW, viewH) {
+  const n = Math.max(1, frames || 1);
   if (ratio.aspect === null) return viewW / viewH;
-  return ratio.aspect * ratio.frames;
+  return ratio.aspect * n;
 }
 
 /* Pixel sizes: one frame, and the wide render the frames are cut from.
    The wide render is an exact multiple of the frame width, otherwise the
    cut would land between pixels and the seam would blur. */
-export function exportSize(ratio, longEdge) {
-  return defaultExportSize(ratio, longEdge);
+export function exportSize(ratio, longEdge, frames) {
+  return defaultExportSize(ratio, longEdge, frames);
 }
 
-function defaultExportSize(ratio, longEdge) {
+function defaultExportSize(ratio, longEdge, frames) {
+  const n = Math.max(1, frames || 1);
   const a = ratio.aspect === null ? 1 : ratio.aspect;
   const frameW = a >= 1 ? longEdge : Math.round(longEdge * a);
   const frameH = a >= 1 ? Math.round(longEdge / a) : longEdge;
-  return {
-    frameW, frameH, frames: ratio.frames,
-    width: frameW * ratio.frames, height: frameH
-  };
+  return { frameW, frameH, frames: n, width: frameW * n, height: frameH };
 }
 
 /* A file name that sorts by time and says which slice it is. */
@@ -210,51 +231,51 @@ export function selftest(impl) {
   const exportSize = (impl && impl.exportSize) || defaultExportSize;
   const captionSlots = (impl && impl.captionSlots) || defaultCaptionSlots;
   const availableRatios = (impl && impl.availableRatios) || defaultAvailableRatios;
+  const availableFrames = (impl && impl.availableFrames) || defaultAvailableFrames;
   const bad = [];
   const near = (a, b, eps) => Math.abs(a - b) <= (eps || 1e-9);
+  const WINDOWS = [[1600, 900], [900, 1600], [1200, 1200], [2560, 1080]];
 
+  /* The frame, for every format at every frame count on four windows. */
   for (const r of RATIOS) {
     if (r.aspect === null) continue;
-    for (const [vw, vh] of [[1600, 900], [900, 1600], [1200, 1200], [2560, 1080]]) {
-      const a = totalAspect(r, vw, vh);
-      const f = frameRect(a, vw, vh);
-      if (f.w > vw + 1e-9 || f.h > vh + 1e-9) {
-        bad.push(r.key + ' at ' + vw + 'x' + vh + ': frame leaves the viewport');
-      }
-      if (!near(f.w / f.h, a, 1e-9)) {
-        bad.push(r.key + ' at ' + vw + 'x' + vh + ': frame is not that aspect');
-      }
-      if (!near(f.x * 2 + f.w, vw, 1e-6) || !near(f.y * 2 + f.h, vh, 1e-6)) {
-        bad.push(r.key + ' at ' + vw + 'x' + vh + ': frame is not centred');
-      }
-      /* The frame has to touch at least one pair of edges, or it is not the
-         LARGEST rectangle that fits and we are throwing away resolution. */
-      if (!near(f.w, vw, 1e-6) && !near(f.h, vh, 1e-6)) {
-        bad.push(r.key + ' at ' + vw + 'x' + vh + ': frame touches no edge');
+    for (const [vw, vh] of WINDOWS) {
+      for (let n = 1; n <= MAX_FRAMES; n++) {
+        const a = totalAspect(r, n, vw, vh);
+        const f = frameRect(a, vw, vh);
+        const at = r.key + ' x' + n + ' at ' + vw + 'x' + vh + ': ';
+        if (f.w > vw + 1e-9 || f.h > vh + 1e-9) bad.push(at + 'frame leaves the viewport');
+        if (!near(f.w / f.h, a, 1e-9)) bad.push(at + 'frame is not that aspect');
+        if (!near(f.x * 2 + f.w, vw, 1e-6) || !near(f.y * 2 + f.h, vh, 1e-6)) {
+          bad.push(at + 'frame is not centred');
+        }
+        /* It has to touch at least one pair of edges, or it is not the LARGEST
+           rectangle that fits and we are throwing away resolution. */
+        if (!near(f.w, vw, 1e-6) && !near(f.h, vh, 1e-6)) bad.push(at + 'frame touches no edge');
       }
     }
   }
 
+  /* The pixels. A row must be a whole number of frames, or the cut lands
+     between pixels and the seam blurs. */
   for (const r of RATIOS) {
     if (r.aspect === null) continue;
-    const s = exportSize(r, r.frames > 1 ? SET_LONG_EDGE : QUALITY.large);
-    if (s.width !== s.frameW * s.frames) bad.push(r.key + ': wide render is not a whole number of frames');
-    if (!near(s.frameW / s.frameH, r.aspect, 0.002)) bad.push(r.key + ': frame pixels are not that aspect');
-    if (Math.max(s.width, s.height) > 8192) bad.push(r.key + ': render exceeds 8192 px');
+    for (let n = 1; n <= MAX_FRAMES; n++) {
+      const size = exportSize(r, n > 1 ? SET_LONG_EDGE : QUALITY.large, n);
+      const at = r.key + ' x' + n + ': ';
+      if (size.frames !== n) bad.push(at + 'asked for ' + n + ' frames, got ' + size.frames);
+      if (size.width !== size.frameW * n) bad.push(at + 'row is not a whole number of frames');
+      if (!near(size.frameW / size.frameH, r.aspect, 0.002)) bad.push(at + 'frame pixels are not that aspect');
+      if (Math.max(size.width, size.height) > 8192) bad.push(at + 'render exceeds 8192 px');
+    }
   }
 
-  /* The format list on the two windows that matter. A phone upright must not
-     be offered a set; a desktop must not lose one. Both numbers are stated so
-     a change to MIN_FRAME_HEIGHT that breaks either one shows up here. */
-  /* A set is `frames > 1`, never a name that looks like one: '4x3' ends in
-     'x3' as surely as '1x1x3' does, and testing the label instead of the
-     property is how a check ends up reporting a fault that is its own. */
-  const phone = availableRatios(390, 844);
-  const tablet = availableRatios(768, 1024);
-  const desk = availableRatios(1440, 900);
+  /* WHICH FORMATS, on the windows that decide the rule. A single frame always
+     fits — it is the format itself — so a format that a window offers at all
+     must offer at least one. */
   const keys = (list) => list.map((r) => r.key);
-  if (phone.some((r) => r.frames > 1)) bad.push('a phone is offered a three-frame set');
-  if (tablet.some((r) => r.frames > 1)) bad.push('an upright window is offered a three-frame set');
+  const phone = availableRatios(390, 844);
+  const desk = availableRatios(1440, 900);
   if (keys(phone).includes('16x9') || keys(phone).includes('4x3')) {
     bad.push('a phone is offered a landscape format');
   }
@@ -263,10 +284,29 @@ export function selftest(impl) {
   }
   if (desk.length !== RATIOS.length) bad.push('a desktop lost a format: ' + keys(desk).join(','));
 
-  /* A frame taken out of a set must still say whose imagery it is, so all
-     three parts belong on all three frames — see the note at CAPTION. */
+  /* HOW MANY FRAMES. Upright windows get one and only one; a laptop gets a
+     row of three out of a square. And the list is always a run starting at 1,
+     because a control that offers 1 and 3 but not 2 has no honest reading. */
+  const square = ratioByKey('1x1');
+  const upright = availableFrames(square, 390, 844);
+  const laptop = availableFrames(square, 1440, 900);
+  const window = availableFrames(ratioByKey('win'), 1440, 900);
+  if (upright.length !== 1) bad.push('an upright window is offered a row of frames');
+  if (laptop.length !== MAX_FRAMES) bad.push('a laptop cannot make a row of three squares');
+  if (window.length !== 1) bad.push('the window format is offered more than one frame');
+  for (const [r, vw, vh] of [[square, 1440, 900], [square, 390, 844],
+                             [ratioByKey('16x9'), 1440, 900], [ratioByKey('9x16'), 2560, 1080]]) {
+    const list = availableFrames(r, vw, vh);
+    if (list[0] !== 1) bad.push(r.key + ' at ' + vw + 'x' + vh + ': the list must start at one frame');
+    for (let i = 1; i < list.length; i++) {
+      if (list[i] !== list[i - 1] + 1) bad.push(r.key + ' at ' + vw + 'x' + vh + ': the frame counts skip a step');
+    }
+  }
+
+  /* A frame taken out of a row must still say whose imagery it is, so all
+     three parts belong on every frame — see the note at CAPTION. */
   const slots = captionSlots({ title: 'T', credit: 'C' }, 3);
-  if (slots.length !== 3) bad.push('a set needs three caption slots');
+  if (slots.length !== 3) bad.push('a row of three needs three caption slots');
   if (slots.some((s) => !s.brand)) bad.push('a frame without the wordmark');
   if (slots.some((s) => s.credit !== 'C')) bad.push('a frame without the credit');
   if (slots.some((s) => s.title !== 'T')) bad.push('a frame without the title');
@@ -311,27 +351,28 @@ export function createCapture(opts) {
   /* The plan for one save: which rectangle on screen, how many pixels, and
      whether the hardware forced the size down. The bar shows this before you
      press anything, so the number on screen is the number in the file. */
-  function plan(ratioKey, longEdge) {
+  function plan(ratioKey, longEdge, frames) {
     const ratio = ratioByKey(ratioKey);
     const view = viewSize();
-    const whole = totalAspect(ratio, view.w, view.h);
+    const n = ratio.aspect === null ? 1 : Math.max(1, Math.min(MAX_FRAMES, frames || 1));
+    const whole = totalAspect(ratio, n, view.w, view.h);
     const rect = frameRect(ratio.aspect === null ? null : whole, view.w, view.h);
 
-    let edge = ratio.frames > 1 ? SET_LONG_EDGE : longEdge;
+    let edge = n > 1 ? SET_LONG_EDGE : longEdge;
     let size = ratio.aspect === null
       ? { frameW: Math.round(view.w), frameH: Math.round(view.h), frames: 1,
           width: Math.round(view.w), height: Math.round(view.h) }
-      : exportSize(ratio, edge);
+      : exportSize(ratio, edge, n);
 
     let capped = false;
     const cap = limit();
     if (Math.max(size.width, size.height) > cap) {
       const k = cap / Math.max(size.width, size.height);
       edge = Math.max(512, Math.floor(edge * k));
-      size = exportSize(ratio, edge);
+      size = exportSize(ratio, edge, n);
       capped = true;
     }
-    return { ratio, rect, size, longEdge: edge, capped, view };
+    return { ratio, frames: n, rect, size, longEdge: edge, capped, view };
   }
 
   /* One render, at the requested pixel size, through the same composer the
@@ -395,15 +436,15 @@ export function createCapture(opts) {
     setTimeout(() => URL.revokeObjectURL(url), 4000);
   }
 
-  async function save(ratioKey, longEdge) {
-    const p = plan(ratioKey, longEdge);
+  async function save(ratioKey, longEdge, frames) {
+    const p = plan(ratioKey, longEdge, frames);
     const text = credits();
-    const slots = captionSlots(text, p.ratio.frames);
+    const slots = captionSlots(text, p.frames);
     const stamp = new Date();
     const wide = renderWide(p);
     const names = [];
 
-    for (let i = 0; i < p.ratio.frames; i++) {
+    for (let i = 0; i < p.frames; i++) {
       const frame = document.createElement('canvas');
       frame.width = p.size.frameW;
       frame.height = p.size.frameH;
@@ -419,18 +460,18 @@ export function createCapture(opts) {
       }
       const name = fileName({
         view: viewName(), date: stamp, key: p.ratio.key,
-        index: i + 1, frames: p.ratio.frames
+        index: i + 1, frames: p.frames
       });
       download(blob, name);
       names.push(name);
       /* A browser asks before letting a page save more than one file. Spacing
          the clicks keeps that to a single prompt instead of three. */
-      if (i < p.ratio.frames - 1) await new Promise((r) => setTimeout(r, 350));
+      if (i < p.frames - 1) await new Promise((r) => setTimeout(r, 350));
     }
 
     const size = p.size.frameW + '×' + p.size.frameH;
-    onStatus('ok', p.ratio.frames > 1
-      ? 'Saved ' + p.ratio.frames + ' frames of ' + size + ', in order.'
+    onStatus('ok', p.frames > 1
+      ? 'Saved ' + p.frames + ' frames of ' + size + ', in order.'
       : 'Saved ' + names[0] + ' (' + size + ').');
     return names;
   }

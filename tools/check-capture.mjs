@@ -42,10 +42,13 @@ function say(outcome, text, extra) {
    make the suite fail, so they must not be something the app can reach. */
 const BROKEN = {
   frameRect: (aspect, viewW, viewH) => ({ x: 0, y: 0, w: viewW, h: viewH }),
-  exportSize: (ratio, longEdge) => ({
-    frameW: longEdge, frameH: longEdge, frames: ratio.frames,
-    width: longEdge * ratio.frames + 1, height: longEdge
+  exportSize: (ratio, longEdge, frames) => ({
+    frameW: longEdge, frameH: longEdge, frames: frames || 1,
+    width: longEdge * (frames || 1) + 1, height: longEdge
   }),
+  /* Frame counts that skip a step: a control offering 1 and 3 but not 2 has
+     no honest reading, and the arithmetic behind it is wrong somewhere. */
+  availableFrames: () => [1, 3],
   /* The caption spread across the three frames of a set. It reads well while
      swiping and leaves two of the three files unattributed the moment one is
      taken out of the row, so it has to stay caught. */
@@ -89,6 +92,10 @@ async function run() {
   if (onEveryFormat.length > 0) say('ok', 'an unfiltered format list is caught (' + onEveryFormat.length + ' complaints)');
   else { say('fail', 'every window offered every format and nothing complained'); failed++; }
 
+  const onGap = cap.selftest({ availableFrames: BROKEN.availableFrames });
+  if (onGap.length > 0) say('ok', 'a gap in the frame counts is caught (' + onGap.length + ' complaints)');
+  else { say('fail', 'frame counts 1 and 3 without 2 passed'); failed++; }
+
   const onSpread = cap.selftest({ captionSlots: BROKEN.captionSlots });
   if (onSpread.length > 0) say('ok', 'a caption spread across the set is caught (' + onSpread.length + ' complaints)');
   else { say('fail', 'a spread caption passes — a lone frame would carry no credit'); failed++; }
@@ -97,10 +104,18 @@ async function run() {
   if (new Set(keys).size === keys.length) say('ok', 'every ratio key is unique');
   else { say('fail', 'duplicate ratio key', keys.join(', ')); failed++; }
 
-  const sets = cap.RATIOS.filter((r) => r.frames > 1);
-  if (!sets.length) say('na', 'no sets in the catalogue');
-  else if (sets.every((r) => r.frames === 3 && r.note)) say('ok', sets.length + ' sets, all of three frames and labelled');
-  else { say('fail', 'a set is not three frames, or carries no note'); failed++; }
+  /* THE CATALOGUE MUST NOT CARRY FRAME COUNTS. Format and frame count are two
+     controls; the moment a row like '1:1 x3' appears in this list they are one
+     again, and the list starts growing by the product of two choices. */
+  const carriers = cap.RATIOS.filter((r) => 'frames' in r || /[x×]\s*[23]\s*$/.test(r.label));
+  if (!carriers.length) say('ok', 'the catalogue holds formats only, no frame counts');
+  else { say('fail', 'a format row carries a frame count', carriers.map((r) => r.key)); failed++; }
+
+  const desk = cap.availableFrames(cap.ratioByKey('1x1'), 1440, 900);
+  const phone = cap.availableFrames(cap.ratioByKey('1x1'), 390, 844);
+  say(desk.length === 3 && phone.length === 1 ? 'ok' : 'fail',
+      'a laptop offers ' + desk.join('/') + ' frames of 1:1, a phone offers ' + phone.join('/'));
+  if (!(desk.length === 3 && phone.length === 1)) failed++;
 
   return failed;
 }
@@ -113,6 +128,10 @@ async function proveItCanFail() {
     ['a frame that fills the viewport', () => cap.selftest({ frameRect: BROKEN.frameRect }).length > 0],
     ['a wide render one pixel too wide', () => cap.selftest({ exportSize: BROKEN.exportSize }).length > 0],
     ['a caption spread across three frames', () => cap.selftest({ captionSlots: BROKEN.captionSlots }).length > 0],
+    ['frame counts that skip a step', () => cap.selftest({ availableFrames: BROKEN.availableFrames }).length > 0],
+    ['an upright window offered a row of three', () => cap.selftest({
+      availableFrames: () => [1, 2, 3]
+    }).length > 0],
     ['every window offered every format', () => cap.selftest({
       availableRatios: (w, h, all) => (all || cap.RATIOS).slice()
     }).length > 0],

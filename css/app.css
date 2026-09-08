@@ -3730,3 +3730,25 @@
   @media (prefers-reduced-motion: reduce) {
     .pm-msg, .pm-btn { transition: none; }
   }
+
+  /* The frame-count control. A segmented row rather than a third dropdown:
+     there are at most three values, they are ordered, and seeing all of them
+     at once is what makes the choice legible. */
+  .pm-seg { display: flex; border: 1px solid var(--hair); border-radius: 8px; overflow: hidden; }
+  .pm-seg button {
+    background: rgba(5,7,13,0.6);
+    border: none;
+    border-left: 1px solid var(--hair);
+    color: var(--ink-dim);
+    font-family: inherit; font-size: 12px;
+    padding: 5px 11px;
+    cursor: pointer;
+    transition: color 0.16s, background 0.16s;
+  }
+  .pm-seg button:first-child { border-left: none; }
+  .pm-seg button:hover { color: var(--ink); }
+  .pm-seg button.on { background: rgba(255,107,61,0.16); color: var(--accent); }
+  /* `hidden` needs its own rule here: .pm-field sets an explicit display and
+     that beats the attribute. Same trap as .dock-btn and .time-reset. */
+  .pm-field[hidden] { display: none; }
+  .pm-bar select:disabled { color: var(--ink-faint); cursor: default; opacity: 0.7; }

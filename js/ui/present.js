@@ -31,6 +31,11 @@ export function createPresentMode(opts) {
   /* A function and not a list: which formats fit depends on the window, and the
      window changes — on rotation, on a resize, on the way into fullscreen. */
   const ratios = opts.ratios;
+  /* Which frame counts this format can hold in this window, and the lookup that
+     turns the chosen key back into a format. Both come from the same module
+     that renders, so the bar can never offer something the render cannot make. */
+  const frameOptions = opts.frameOptions;
+  const ratioByKey = opts.ratioByKey;
   const quality = opts.quality;
   const button = opts.button || null;
   const blocked = opts.blocked || (() => false);
@@ -42,6 +47,7 @@ export function createPresentMode(opts) {
   let open = false;
   let ratioKey = '16x9';
   let sizeKey = 'large';
+  let frames = 1;
   let msgTimer = null;
 
   /* ---- the strip of DOM ------------------------------------------------ */
@@ -61,6 +67,8 @@ export function createPresentMode(opts) {
     '<div class="pm-row">' +
       '<label class="pm-field"><span>Format</span>' +
         '<select id="pm-ratio" aria-label="Image format"></select></label>' +
+      '<div class="pm-field" id="pm-frames-field" hidden><span>Frames</span>' +
+        '<div class="pm-seg" id="pm-frames" role="group" aria-label="Number of frames"></div></div>' +
       '<label class="pm-field"><span>Size</span>' +
         '<select id="pm-size" aria-label="Image size"></select></label>' +
       '<span class="pm-px" id="pm-px"></span>' +
@@ -79,6 +87,8 @@ export function createPresentMode(opts) {
   const ratioSel = el('pm-ratio');
   const sizeSel = el('pm-size');
   const pxLabel = el('pm-px');
+  const framesField = el('pm-frames-field');
+  const framesSeg = el('pm-frames');
   const msg = el('pm-msg');
   const chromeBox = el('pm-chrome');
 
@@ -98,7 +108,7 @@ export function createPresentMode(opts) {
     if (signature === listSignature) return list;
     listSignature = signature;
     ratioSel.innerHTML = list
-      .map((r) => '<option value="' + r.key + '">' + r.label + (r.note ? ' — ' + r.note : '') + '</option>')
+      .map((r) => '<option value="' + r.key + '">' + r.label + '</option>')
       .join('');
     /* The chosen format can stop fitting — turn a phone upright and the sets
        go. Fall back to the first real format rather than leaving a select
@@ -110,13 +120,62 @@ export function createPresentMode(opts) {
     ratioSel.value = ratioKey;
     return list;
   }
+  /* ---- how many frames -------------------------------------------------
+     THE ROW DISAPPEARS WHEN THERE IS NOTHING TO CHOOSE. On a phone, and on any
+     upright window, a row of more than one frame cannot fit — and three buttons
+     of which two are dead teach the visitor to ignore the control rather than
+     to read it. */
+  let framesSignature = '';
+  function fillFrames(view) {
+    const list = frameOptions(ratioByKey(ratioKey), view.w, view.h);
+    const signature = list.join(',');
+    if (signature !== framesSignature) {
+      framesSignature = signature;
+      framesSeg.innerHTML = list
+        .map((n) => '<button type="button" data-n="' + n + '">' + n + '</button>')
+        .join('');
+    }
+    /* The chosen count can stop fitting — switch from 1:1 to 16:9 in a laptop
+       window and three no longer go in. Step down to the widest that does. */
+    if (!list.includes(frames)) frames = list[list.length - 1];
+    for (const b of framesSeg.children) {
+      b.classList.toggle('on', Number(b.dataset.n) === frames);
+      b.setAttribute('aria-pressed', Number(b.dataset.n) === frames ? 'true' : 'false');
+    }
+    framesField.hidden = list.length < 2;
+    return list;
+  }
+
+  framesSeg.addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-n]');
+    if (!b) return;
+    frames = Number(b.dataset.n);
+    refresh();
+  });
+
   fillRatios(capture.viewSize());
+  fillFrames(capture.viewSize());
 
   /* ---- the frame ------------------------------------------------------- */
   function refresh() {
     if (!open) return;
-    fillRatios(capture.viewSize());
-    const p = capture.plan(ratioKey, quality[sizeKey]);
+    const view = capture.viewSize();
+    fillRatios(view);
+    fillFrames(view);
+    const p = capture.plan(ratioKey, quality[sizeKey], frames);
+
+    /* A CONTROL THAT DOES NOTHING SAYS SO. Size sets the long edge of one
+       frame, which leaves two cases where it has no effect: Window takes the
+       size of the window, and a row drops to a fixed edge so the frames stay
+       inside one render. Leaving it live there is a switch that lies.
+
+       BEFORE the early return below, not after — that return is taken for
+       exactly one of the two cases it has to describe. */
+    const sizeApplies = p.ratio.aspect !== null && p.frames === 1;
+    sizeSel.disabled = !sizeApplies;
+    sizeSel.title = sizeApplies ? ''
+      : (p.ratio.aspect === null ? 'Window takes the size of your window'
+                                 : 'A row uses a fixed frame size so it fits one render');
 
     if (p.ratio.aspect === null) {
       crop.classList.remove('on');
@@ -132,17 +191,16 @@ export function createPresentMode(opts) {
     /* The cut lines sit on the frame, not on the screen: they are where the
        files will be split, so they have to move with it. */
     box.querySelectorAll('.pm-cut').forEach((n) => n.remove());
-    for (let i = 1; i < p.ratio.frames; i++) {
+    for (let i = 1; i < p.frames; i++) {
       const cut = document.createElement('div');
       cut.className = 'pm-cut';
-      cut.style.left = (i * 100 / p.ratio.frames) + '%';
+      cut.style.left = (i * 100 / p.frames) + '%';
       box.appendChild(cut);
     }
 
     const each = p.size.frameW + ' × ' + p.size.frameH;
-    pxLabel.textContent = p.ratio.frames > 1
-      ? p.ratio.frames + ' × ' + each + ' px' + (p.capped ? ' (capped)' : '')
-      : each + ' px' + (p.capped ? ' (capped)' : '');
+    pxLabel.textContent = (p.frames > 1 ? p.frames + ' × ' + each + ' px, seamless' : each + ' px')
+                          + (p.capped ? ' (capped)' : '');
     /* A size the picker offers but the hardware cannot render would be a
        number that lies, so say it plainly rather than only in the file. */
     pxLabel.classList.toggle('warn', !!p.capped);
@@ -195,7 +253,7 @@ export function createPresentMode(opts) {
   el('pm-exit').addEventListener('click', () => setOpen(false));
   el('pm-fit').addEventListener('click', () => {
     if (!fitFrame) return;
-    const p = capture.plan(ratioKey, quality[sizeKey]);
+    const p = capture.plan(ratioKey, quality[sizeKey], frames);
     if (p.ratio.aspect === null) return;
     fitFrame(p);
     setTimeout(refresh, 60);
@@ -205,7 +263,7 @@ export function createPresentMode(opts) {
     btn.disabled = true;
     btn.textContent = 'Saving…';
     try {
-      await capture.save(ratioKey, quality[sizeKey]);
+      await capture.save(ratioKey, quality[sizeKey], frames);
     } catch (err) {
       say('bad', 'Saving failed: ' + (err && err.message ? err.message : err));
     }
