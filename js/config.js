@@ -1183,16 +1183,29 @@ export const PARAMS = {
      één wereldtextuur aankan; de tegels halen beeld bij naarmate je nadert, dus
      daar geldt die grens niet.
 
-     100,25 is 16 km hoogte, en dat is waar de BRON ophoudt: EOX levert tot level
-     13, ongeveer 10 meter per pixel. Dieper zou de shader alleen nog vergroten.
+     100,15 IS 9,6 KM HOOGTE, EN DAT IS VOORBIJ DE BRON. Deze grens stond op
+     100,25 (16 km), precies waar EOX ophoudt: level 13 is ongeveer 9,55 meter
+     per pixel. Daaronder rekt de shader op.
 
-     WAT ER OP DEZE HOOGTE TE ZIEN IS: straten, stadsblokken, start- en
-     landingsbanen, rivieren met hun zandbanken. Geen losse huizen — bij 10 m per
-     pixel ligt de herkenningsgrens rond 20 tot 30 meter.
+     DAT IS EEN KIJKKEUZE EN GEEN VERGISSING (Terry, sessie 46). Op 16 km beslaat
+     het beeld 14,9 km en verdwijnt een dorp van een kilometer in 6 % van het
+     scherm; op 9,6 km is dat 8,9 km breed en 11 %. Een stad vult dan het beeld,
+     en dat was de eis: tot je stad kunnen inzoomen, niet tot je woning.
 
-     DE ICOONSCHAAL KAN MEE. Gemeten: zodra de nabijheidsklem bijt (onder ~123)
-     staat de hoekstraal van een marker constant op 0,46 graden, en dat blijft zo
-     tot 101,6. Er hoefde dus niets aan bij.
+     WAT HET KOST, gemeten tegen een retina-canvas van 1770 px hoog:
+
+         grens     hoogte    beeldbreedte   m/px scherm   vergroting
+         100,25    15,9 km      14,9 km        8,4 m         1,1x
+         100,15     9,6 km       8,9 km        5,0 m         1,9x
+         100,10     6,4 km       5,9 km        3,4 m         2,8x
+
+     Op 1,9x is de korrel er, maar hij leest nog als beeld. Op 2,8x niet meer.
+     Dieper gaan is dus een knop met een bodem, en die bodem is de bron.
+
+     DE ICOONSCHAAL RAAKT DIT NIET. Sinds `quakeIconNearFloor` op 100 staat — de
+     bolstraal zelf — is de hoekstraal van een indicator EXACT constant: gemeten
+     0,791 graden voor M2,5 op elke afstand van 200 tot aan de grens, waar die
+     grens ook ligt. Deze waarde verlagen kan dus niet aan de indicatoren komen.
 
      JE GAAT WEL DOOR DE WOLKENSCHIL (103,5) EN DE MISTSCHIL. Dat is voorbereid:
      de wolkenschil is DoubleSide en CLOUD_FRAG heeft een onderzijde, en de fade
@@ -1201,7 +1214,7 @@ export const PARAMS = {
 
      `zoomFloorRadius` gaat mee omlaag; die is er om de camera BUITEN de bol te
      houden, niet om de beeldkwaliteit te bewaken. */
-  zoomMinDistanceTiles: 100.25,
+  zoomMinDistanceTiles: 100.15,
   zoomMinDistance: 120,
   /* DE SCHEMATISCHE WEERGAVE MAG VERDER (sessie 38, Terry). De grens hierboven is
      gezet op de TEXTUUR, en die bestaat in de schematische weergave niet: daar is de
