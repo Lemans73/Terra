@@ -28,11 +28,15 @@ const RESOLUTIONS = [
 
 export function createPresentMode(opts) {
   const capture = opts.capture;
+  /* A function and not a list: which formats fit depends on the window, and the
+     window changes — on rotation, on a resize, on the way into fullscreen. */
   const ratios = opts.ratios;
   const quality = opts.quality;
   const button = opts.button || null;
   const blocked = opts.blocked || (() => false);
   const fitFrame = opts.fitFrame || null;
+  /* The drawing surface, so its real size can be watched rather than guessed. */
+  const surface = opts.surface || null;
   const onToggle = opts.onToggle || (() => {});
 
   let open = false;
@@ -78,18 +82,40 @@ export function createPresentMode(opts) {
   const msg = el('pm-msg');
   const chromeBox = el('pm-chrome');
 
-  ratioSel.innerHTML = ratios
-    .map((r) => '<option value="' + r.key + '">' + r.label + (r.note ? ' — ' + r.note : '') + '</option>')
-    .join('');
   sizeSel.innerHTML = RESOLUTIONS
     .map((r) => '<option value="' + r.key + '">' + r.label + '</option>')
     .join('');
-  ratioSel.value = ratioKey;
   sizeSel.value = sizeKey;
+
+  /* ---- the format list -------------------------------------------------
+     Rebuilt only when it actually changed: replacing the options on every
+     refresh would close the dropdown under the pointer of anyone browsing it
+     while the window animates into fullscreen. */
+  let listSignature = '';
+  function fillRatios(view) {
+    const list = ratios(view.w, view.h);
+    const signature = list.map((r) => r.key).join(',');
+    if (signature === listSignature) return list;
+    listSignature = signature;
+    ratioSel.innerHTML = list
+      .map((r) => '<option value="' + r.key + '">' + r.label + (r.note ? ' — ' + r.note : '') + '</option>')
+      .join('');
+    /* The chosen format can stop fitting — turn a phone upright and the sets
+       go. Fall back to the first real format rather than leaving a select
+       showing a value it no longer holds. */
+    if (!list.some((r) => r.key === ratioKey)) {
+      const first = list.find((r) => r.aspect !== null) || list[0];
+      ratioKey = first.key;
+    }
+    ratioSel.value = ratioKey;
+    return list;
+  }
+  fillRatios(capture.viewSize());
 
   /* ---- the frame ------------------------------------------------------- */
   function refresh() {
     if (!open) return;
+    fillRatios(capture.viewSize());
     const p = capture.plan(ratioKey, quality[sizeKey]);
 
     if (p.ratio.aspect === null) {
@@ -191,21 +217,44 @@ export function createPresentMode(opts) {
     setTimeout(refresh, 60);
   });
 
-  addEventListener('resize', refresh);
+  /* NOT `addEventListener('resize', refresh)` DIRECTLY, and this is measured.
+     Listeners run in the order they were registered, and this module is built
+     well before the app's own resize handler at the bottom of index.html — the
+     one that resizes the canvas. Refreshing straight from the event therefore
+     always reads the size the canvas is about to stop having, and the frame
+     stays behind by exactly one resize. A zero timeout puts this after every
+     synchronous listener of the same event, which is the earliest moment the
+     canvas is right. */
+  addEventListener('resize', () => setTimeout(refresh, 0));
+
+  /* And a second route, because a resize event is not guaranteed: going
+     fullscreen changes the surface in steps that do not all raise one. A
+     ResizeObserver fires when the canvas has actually changed size, which is
+     the only moment the frame can be redrawn correctly. */
+  if (surface && typeof ResizeObserver === 'function') {
+    const watcher = new ResizeObserver(() => { if (open) refresh(); });
+    try { watcher.observe(surface()); } catch { /* no surface yet; the event above still covers it */ }
+  }
   addEventListener('fullscreenchange', () => {
     if (!document.fullscreenElement && open) setOpen(false);
     else setTimeout(refresh, 80);
   });
 
-  /* F opens, Esc closes. Typing in a field is typing, never a shortcut, and
-     a modal that owns the keyboard is checked by `blocked()` above. */
+  /* F TOGGLES, Esc only closes. One key for one intention — you press F to
+     get the clean view and F again to get your workspace back, without having
+     to remember a second key. Escape stays because it is what every full-screen
+     thing on the web answers to, and because the browser raises it anyway when
+     it leaves fullscreen on its own.
+
+     Typing in a field is typing and never a shortcut, and a tour or the welcome
+     screen that owns the keyboard is caught by `blocked()` above. */
   document.addEventListener('keydown', (e) => {
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     const t = e.target;
     const typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' ||
                          t.tagName === 'SELECT' || t.isContentEditable);
     if (typing) return;
-    if (!open && (e.key === 'f' || e.key === 'F')) { e.preventDefault(); setOpen(true); }
+    if (e.key === 'f' || e.key === 'F') { e.preventDefault(); setOpen(!open); }
     else if (open && e.key === 'Escape') { e.preventDefault(); setOpen(false); }
   });
 

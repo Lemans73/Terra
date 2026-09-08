@@ -73,6 +73,35 @@ function defaultFrameRect(aspect, viewW, viewH) {
   return { x: (viewW - w) / 2, y: (viewH - h) / 2, w, h };
 }
 
+/* ---- Which formats a window can actually hold ----------------------------
+   A format is offered only when its frame keeps at least this much of the
+   window's HEIGHT. Height and not area: on any screen it is the height a
+   landscape crop eats, and a set of three eats the most of all.
+
+   ONE MEASURABLE RULE, NOT A DEVICE TEST. A phone held upright drops 16:9,
+   4:3 and every set on its own, because a 3:1 frame there is a 15% sliver you
+   cannot compose in. A desktop keeps all nine. A narrow desktop window drops
+   the sets too, which a user-agent check would have got wrong. Nothing here
+   asks what the device is, so nothing here can be wrong about it. */
+export const MIN_FRAME_HEIGHT = 0.4;
+
+export function availableRatios(viewW, viewH, all) {
+  return defaultAvailableRatios(viewW, viewH, all);
+}
+
+function defaultAvailableRatios(viewW, viewH, all) {
+  const list = all || RATIOS;
+  if (!(viewW > 0) || !(viewH > 0)) return list;
+  return list.filter((r) => {
+    if (r.aspect === null) return true;   // Window always fits its own window
+    /* A set has a second condition: the window has to be landscape. Upright, a
+       row of three is a sliver however generous the height rule is, and it is
+       the shape you would be composing in rather than the one you get. */
+    if (r.frames > 1 && viewW <= viewH) return false;
+    return frameRect(totalAspect(r, viewW, viewH), viewW, viewH).h >= viewH * MIN_FRAME_HEIGHT;
+  });
+}
+
 /* Total aspect of a ratio entry, frames included. */
 export function totalAspect(ratio, viewW, viewH) {
   if (ratio.aspect === null) return viewW / viewH;
@@ -180,6 +209,7 @@ export function selftest(impl) {
   const frameRect = (impl && impl.frameRect) || defaultFrameRect;
   const exportSize = (impl && impl.exportSize) || defaultExportSize;
   const captionSlots = (impl && impl.captionSlots) || defaultCaptionSlots;
+  const availableRatios = (impl && impl.availableRatios) || defaultAvailableRatios;
   const bad = [];
   const near = (a, b, eps) => Math.abs(a - b) <= (eps || 1e-9);
 
@@ -212,6 +242,26 @@ export function selftest(impl) {
     if (!near(s.frameW / s.frameH, r.aspect, 0.002)) bad.push(r.key + ': frame pixels are not that aspect');
     if (Math.max(s.width, s.height) > 8192) bad.push(r.key + ': render exceeds 8192 px');
   }
+
+  /* The format list on the two windows that matter. A phone upright must not
+     be offered a set; a desktop must not lose one. Both numbers are stated so
+     a change to MIN_FRAME_HEIGHT that breaks either one shows up here. */
+  /* A set is `frames > 1`, never a name that looks like one: '4x3' ends in
+     'x3' as surely as '1x1x3' does, and testing the label instead of the
+     property is how a check ends up reporting a fault that is its own. */
+  const phone = availableRatios(390, 844);
+  const tablet = availableRatios(768, 1024);
+  const desk = availableRatios(1440, 900);
+  const keys = (list) => list.map((r) => r.key);
+  if (phone.some((r) => r.frames > 1)) bad.push('a phone is offered a three-frame set');
+  if (tablet.some((r) => r.frames > 1)) bad.push('an upright window is offered a three-frame set');
+  if (keys(phone).includes('16x9') || keys(phone).includes('4x3')) {
+    bad.push('a phone is offered a landscape format');
+  }
+  for (const want of ['1x1', '4x5', '9x16']) {
+    if (!keys(phone).includes(want)) bad.push('a phone lost ' + want + ', which it can hold');
+  }
+  if (desk.length !== RATIOS.length) bad.push('a desktop lost a format: ' + keys(desk).join(','));
 
   /* A frame taken out of a set must still say whose imagery it is, so all
      three parts belong on all three frames — see the note at CAPTION. */
@@ -385,5 +435,5 @@ export function createCapture(opts) {
     return names;
   }
 
-  return { plan, save, limit, renderWide };
+  return { plan, save, limit, renderWide, viewSize };
 }

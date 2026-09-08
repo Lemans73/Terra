@@ -49,6 +49,9 @@ const BROKEN = {
   /* The caption spread across the three frames of a set. It reads well while
      swiping and leaves two of the three files unattributed the moment one is
      taken out of the row, so it has to stay caught. */
+  /* No filter at all: every window is offered every format, which is what the
+     rule existed to prevent. */
+  availableRatios: (viewW, viewH, all) => (all || []).slice(),
   captionSlots: (parts, frames) => (frames < 3
     ? [{ brand: true, title: parts.title, credit: parts.credit }]
     : [{ brand: true, title: '', credit: '' },
@@ -80,6 +83,12 @@ async function run() {
   if (onBrokenSize.length > 0) say('ok', 'a broken exportSize is caught (' + onBrokenSize.length + ' complaints)');
   else { say('fail', 'a broken exportSize passes — the suite tests nothing'); failed++; }
 
+  const onEveryFormat = cap.selftest({
+    availableRatios: (w, h, all) => (all || cap.RATIOS).slice()
+  });
+  if (onEveryFormat.length > 0) say('ok', 'an unfiltered format list is caught (' + onEveryFormat.length + ' complaints)');
+  else { say('fail', 'every window offered every format and nothing complained'); failed++; }
+
   const onSpread = cap.selftest({ captionSlots: BROKEN.captionSlots });
   if (onSpread.length > 0) say('ok', 'a caption spread across the set is caught (' + onSpread.length + ' complaints)');
   else { say('fail', 'a spread caption passes — a lone frame would carry no credit'); failed++; }
@@ -104,6 +113,12 @@ async function proveItCanFail() {
     ['a frame that fills the viewport', () => cap.selftest({ frameRect: BROKEN.frameRect }).length > 0],
     ['a wide render one pixel too wide', () => cap.selftest({ exportSize: BROKEN.exportSize }).length > 0],
     ['a caption spread across three frames', () => cap.selftest({ captionSlots: BROKEN.captionSlots }).length > 0],
+    ['every window offered every format', () => cap.selftest({
+      availableRatios: (w, h, all) => (all || cap.RATIOS).slice()
+    }).length > 0],
+    ['a phone stripped of its portrait formats', () => cap.selftest({
+      availableRatios: (w, h, all) => (all || cap.RATIOS).filter((r) => r.aspect === null)
+    }).length > 0],
     ['a frame that loses the wordmark', () => cap.selftest({
       captionSlots: (p, n) => Array.from({ length: n }, (_, i) => ({ brand: i === 0, title: p.title, credit: p.credit }))
     }).length > 0],
