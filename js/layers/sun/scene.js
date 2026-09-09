@@ -87,6 +87,28 @@ export function createSunScene(THREE) {
   const layers = [];
   for (let i = 0; i < SLOT_COUNT; i++) layers.push(makeLayer(i));
 
+  /* ---- The bare sun ------------------------------------------------------
+     WHAT YOU SEE BEFORE YOU HAVE ASKED FOR ANYTHING.
+
+     Instrument frames have to be fetched, and fetching costs seconds and
+     megabytes, so a visitor who has just arrived is looking at an empty view.
+     Terra already had a sun for that — the body at radius 420 in the ordinary
+     earth view, carrying the NOAA regions — and this is that same sun in these
+     coordinates: one colour, above 1 per channel so the bloom has something to
+     take hold of, exactly as sunmoon-layer.js sets it.
+
+     ITS VISIBILITY IS DERIVED, NEVER STORED. It is on precisely when no slot
+     holds a texture. A flag of its own would be a second thing that has to say
+     the same as the first, and the two would disagree the first time a fetch
+     failed halfway — leaving either two suns or none. */
+  const bare = new THREE.Mesh(
+    new THREE.SphereGeometry(1, 64, 48),
+    new THREE.MeshBasicMaterial()
+  );
+  bare.material.color.setRGB(2.6, 2.25, 1.85);
+  bare.renderOrder = -50;
+  group.add(bare);
+
   /* ---- Glow -------------------------------------------------------------
      So the limb fades into something rather than into black. Automatic, and
      off as soon as a coronagraph is active: a coronagraph already carries its
@@ -184,6 +206,7 @@ export function createSunScene(THREE) {
       mesh.material.blending = additive ? THREE.AdditiveBlending : THREE.NormalBlending;
       mesh.material.needsUpdate = true;
     }
+    syncBare();
   }
 
   function clearLayer(layer) {
@@ -192,9 +215,17 @@ export function createSunScene(THREE) {
     layer.sphereUniforms.uHasMap.value = 0;
     layer.planeUniforms.uHasMap.value = 0;
     layer.meta = null;
+    syncBare();
   }
 
   function setGlowVisible(on) { glow.visible = on; }
+
+  /* The single place that decides whether the bare sun shows. Called after every
+     change to the slots, so there is one rule and no flag to keep in step. */
+  function syncBare() {
+    bare.visible = !layers.some(l => !!l.texture);
+    return bare.visible;
+  }
 
   function setVisible(on) { group.visible = on; }
 
@@ -217,12 +248,13 @@ export function createSunScene(THREE) {
         opacity: l.sphereUniforms.uOpacity.value
       })),
       glow: glow.visible,
+      bare: bare.visible,
       earth: earth.visible
     };
   }
 
   return {
-    group, layers, earth,
-    setLayerTexture, clearLayer, setGlowVisible, setVisible, state
+    group, layers, earth, bare,
+    setLayerTexture, clearLayer, setGlowVisible, setVisible, syncBare, state
   };
 }

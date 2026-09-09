@@ -462,6 +462,9 @@ export function createSunState(THREE, env) {
       layers.eventsOff();
       layers.environmentOff();
       scene.setVisible(true);
+      // Derived, not assumed: re-entering with slots still loaded must not put a
+      // bare sun behind an instrument frame.
+      scene.syncBare();
       holdProjection();
       bindDrag(true);
     },

@@ -13434,8 +13434,31 @@ function fitDistance(S) {
   return S / Math.sin(Math.min(halfV, halfH));
 }
 function applyZoomRange() {
+  /* NIET TERWIJL EEN STATE ZIJN EIGEN GRENZEN HEEFT (sessie 48).
+
+     Deze functie rekent de zoomgrens uit voor DE AARDWEERGAVE: hij zorgt dat de
+     zon op straal 420 in beeld past bij de huidige beeldverhouding. Elke
+     view-state zet bij binnenkomst zijn eigen `min`/`max` — view-state.js
+     kopieert ze uit de definitie — en die horen bij een heel ander onderwerp.
+
+     GEMETEN: de resize-handler onderaan roept dit onvoorwaardelijk aan. In de
+     zon-state zette dat `maxDistance` van 12800 terug naar de aardse waarde, en
+     wanneer `cam.aspect` op dat moment NaN was (een pane die nog geen maat
+     heeft) werd `far` NaN. OrbitControls klemt de positie dan tegen een NaN en
+     de camerapositie is weg — zwart scherm, en geen enkele uniform die er nog
+     iets aan verandert. Zelfde oorzaak als in sessie 47, andere weg ernaartoe.
+
+     De poort staat op WAT ER GELDT en niet op wie er aanroept: is er een state
+     actief, dan zijn zijn grenzen de geldende. */
+  if (typeof viewStates !== 'undefined' && viewStates && viewStates.isActive
+      && ['sun', 'solar', 'space', 'msphere'].some(k => viewStates.isActive(k))) {
+    return world.controls().maxDistance;
+  }
   // Marge van 6% zodat het lichaam niet exact op de beeldrand plakt.
   const far = Math.max(PARAMS.zoomMaxDistance, fitDistance(PARAMS.sunDistance) * 1.06);
+  // Een NaN hier is niet te herstellen: OrbitControls klemt ermee en de
+  // camerapositie gaat mee. Liever de vorige grens houden dan de camera slopen.
+  if (!Number.isFinite(far)) return world.controls().maxDistance;
   world.controls().maxDistance = far;
   return far;
 }
