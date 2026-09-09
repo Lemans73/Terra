@@ -233,11 +233,37 @@ async function assertParses(html) {
   }
 }
 
-const html = await readFile(join(ROOT, 'index.html'), 'utf8');
+const htmlRaw = await readFile(join(ROOT, 'index.html'), 'utf8');
+/* ---- 0. Cut the solar imagery state out -----------------------------------
+
+   The sun in instrument frames does not work in a downloaded file and cannot be
+   made to. Every frame comes from Helioviewer, which answers only origins on its
+   own allowlist, so the browser needs a same-origin proxy — and a single HTML
+   file has no server behind it to be that proxy. Shipping the modules anyway
+   would mean a Navigate entry that fails on every click.
+
+   BEFORE collectModules(), and that is the whole reason this step is numbered
+   zero. The sketch layer stays out because index.html reaches it through
+   `await import()`, which the import scanner cannot see. These modules are
+   imported normally, so the only way to keep them out of the bundle is to remove
+   the import statements before anything looks for them. Cut afterwards and the
+   modules are inlined while their call sites are gone — or worse, the reverse.
+
+   Terry's call, session 48, same standing as the sketch layer: terra.html stays
+   deliberately small. */
+const html = cutMarked(htmlRaw, 'SOLAR');
+/* Gemeten op het moment van de snede zelf, en niet later tegen `out`: die is
+   tegen die tijd door het inlijnen en strippen gegaan, en dan vergelijk je twee
+   verschillende dingen. Een eerdere versie deed dat en sloeg vals alarm. */
+const solarKnip = Buffer.byteLength(htmlRaw, 'utf8') - Buffer.byteLength(html, 'utf8');
+console.log(`solar imagery state cut — ${Math.round(solarKnip / 1024)} KB removed`);
+
 let out = html;
 
 // ---- 1. CSS inline --------------------------------------------------------
-const css = await read('./css/app.css');
+// Dezelfde snede in de stylesheet: hij wordt apart ingelezen en zou anders
+// regels meebrengen voor markup die er niet meer is.
+const css = cutMarked(await read('./css/app.css'), 'SOLAR');
 out = out.replace(
   '<link rel="stylesheet" href="./css/app.css">',
   '<style>\n' + css + '\n</style>'
@@ -490,7 +516,7 @@ out = out.replace(
 //
 // So: find the markers, insist they alternate, and only then cut. A missing or
 // doubled marker is a build failure, which is the whole point of having them.
-function cutMarked(src) {
+function cutMarked(src, WORD = 'SKETCH') {
   const regelVan = (i) => src.slice(0, i).split('\n').length;
 
   // Find the word, then grow outwards to the comment that holds it. Matching the
@@ -498,7 +524,7 @@ function cutMarked(src) {
   // block comment that runs for many lines before its `*/`, and a pattern that
   // demands the closer on the same line silently finds neither.
   const marks = [];
-  const WOORD = /SKETCH:(START|END)/g;
+  const WOORD = new RegExp(WORD + ':(START|END)', 'g');
   let m;
   while ((m = WOORD.exec(src)) !== null) {
     const i = m.index;
@@ -507,9 +533,9 @@ function cutMarked(src) {
     const isHtml   = htmlOpen > jsOpen;
     const open     = isHtml ? htmlOpen : jsOpen;
     const sluiter  = isHtml ? '-->' : '*/';
-    if (open === -1) throw new Error(`build failed: SKETCH:${m[1]} on line ${regelVan(i)} is not inside a comment`);
+    if (open === -1) throw new Error(`build failed: ${WORD}:${m[1]} on line ${regelVan(i)} is not inside a comment`);
     const eind = src.indexOf(sluiter, i);
-    if (eind === -1) throw new Error(`build failed: the comment holding SKETCH:${m[1]} on line ${regelVan(i)} is never closed`);
+    if (eind === -1) throw new Error(`build failed: the comment holding ${WORD}:${m[1]} on line ${regelVan(i)} is never closed`);
     // Voorloopwitruimte en de afsluitende newline mee, anders blijven er lege
     // regels en losse inspringingen achter.
     let van = open;
@@ -520,7 +546,7 @@ function cutMarked(src) {
     marks.push({ soort: m[1], van, tot, regel: regelVan(i) });
     WOORD.lastIndex = eind;   // niet nog eens binnen dezelfde commentaar zoeken
   }
-  if (!marks.length) throw new Error('build failed: no SKETCH markers found — did they move or get renamed?');
+  if (!marks.length) throw new Error(`build failed: no ${WORD} markers found — did they move or get renamed?`);
 
   // Strikt om en om. Ontbreekt er één, dan zou een naïeve knip alles tussen twee
   // blokken opslokken — echte, niet-sketch code — en omdat het woord daarna toch
@@ -531,14 +557,14 @@ function cutMarked(src) {
   for (let i = 0; i < marks.length; i += 2) {
     const open = marks[i], sluit = marks[i + 1];
     if (open.soort !== 'START') {
-      throw new Error(`build failed: SKETCH:END without a matching START on line ${open.regel}`);
+      throw new Error(`build failed: ${WORD}:END without a matching START on line ${open.regel}`);
     }
     if (!sluit) {
-      throw new Error(`build failed: SKETCH:START on line ${open.regel} is never closed`);
+      throw new Error(`build failed: ${WORD}:START on line ${open.regel} is never closed`);
     }
     if (sluit.soort !== 'END') {
       throw new Error(
-        `build failed: SKETCH:START on line ${open.regel} is followed by another START on line ${sluit.regel} ` +
+        `build failed: ${WORD}:START on line ${open.regel} is followed by another START on line ${sluit.regel} ` +
         '— the END in between is missing, and cutting anyway would swallow everything between the two blocks'
       );
     }
@@ -562,6 +588,36 @@ if (/sketch/i.test(out)) {
     `build failed: the sketch layer survived into the standalone (first hit on line ${regel}). ` +
     'Check that every block is wrapped in SKETCH:START/SKETCH:END and that the modules ' +
     'are only ever reached through await import().'
+  );
+}
+
+/* The same check for the solar imagery state, and it has to be narrower than the
+   sketch one. "sketch" appears nowhere else in Terra, so a bare word search is
+   safe there; "solar" is all over the ordinary earth view — solarState with the
+   NOAA feed, solarPhysical, the solar wind in the magnetosphere. So this looks
+   for the names that belong only to the state that was cut. */
+const SOLAR_NAMES = [
+  'solarImageryState', 'createSunState', 'createSolarPanel',
+  'solar-only', 'solar-slots', 'solar-presets', 'js/states/sun.js'
+];
+for (const name of SOLAR_NAMES) {
+  if (!out.includes(name)) continue;
+  const regel = out.split('\n').findIndex(l => l.includes(name)) + 1;
+  throw new Error(
+    `build failed: the solar imagery state survived into the standalone — ` +
+    `"${name}" on line ${regel}. Every block that touches it needs SOLAR:START/SOLAR:END, ` +
+    'and the cut has to run before collectModules() or the modules come along anyway.'
+  );
+}
+
+/* And the reverse: a cut that removed nothing is a cut that is not working. The
+   markers could have been renamed, or the block could have been moved out from
+   between them, and either way the build would report success while shipping a
+   state that cannot run. */
+if (solarKnip < 1000) {
+  throw new Error(
+    'build failed: cutting the solar imagery state removed less than 1 KB. ' +
+    'The SOLAR markers are probably no longer around the code they name.'
   );
 }
 

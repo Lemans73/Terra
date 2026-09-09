@@ -2538,6 +2538,7 @@
   .msphere-only { display: none; }
   body.msphere-on .msphere-only { display: block; }
 
+/* SOLAR:START */
   /* ---- De zon in instrumentbeelden (sessie 48) ----
      Zelfde patroon, en dezelfde val: een expliciete `display` in een klasse
      verslaat het `hidden`-attribuut, dus dit staat op de klasse en niet op
@@ -2590,6 +2591,7 @@
   }
   .solar-status:empty { margin: 0; }
   .solar-status.warn { color: #ffb347; }
+/* SOLAR:END */
 
   /* ---- De Details-tabs in deze state (sessie 34, Terry) ----
 
