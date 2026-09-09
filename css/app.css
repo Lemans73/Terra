@@ -2538,6 +2538,59 @@
   .msphere-only { display: none; }
   body.msphere-on .msphere-only { display: block; }
 
+  /* ---- De zon in instrumentbeelden (sessie 48) ----
+     Zelfde patroon, en dezelfde val: een expliciete `display` in een klasse
+     verslaat het `hidden`-attribuut, dus dit staat op de klasse en niet op
+     `hidden`. */
+  .solar-only { display: none; }
+  body.solar-on .solar-only { display: block; }
+
+  /* De vier voorinstellingen. Twee kolommen: vier knoppen naast elkaar passen
+     niet in 280px, en vier onder elkaar maken van de snelste ingang een lijst
+     om doorheen te lezen. */
+  .solar-presets {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 8px 0 10px;
+  }
+  .solar-presets button {
+    font: inherit; font-size: 11px; letter-spacing: .02em; text-align: left;
+    padding: 7px 8px; border-radius: 7px; cursor: pointer;
+    background: rgba(255,255,255,.04); color: var(--ink-2, #b9c2cf);
+    border: 1px solid rgba(255,255,255,.09);
+  }
+  .solar-presets button:hover { background: rgba(255,255,255,.08); }
+  .solar-presets button.on {
+    background: rgba(255,179,71,.16); border-color: rgba(255,179,71,.5);
+    color: #ffd9a8;
+  }
+
+  /* Een sleuf: bron links, dekking rechts. De dekking is een schuif en geen
+     getal — de waarde zelf zegt niets, het beeld wel. */
+  .solar-slot { display: grid; grid-template-columns: 1fr auto; gap: 6px;
+                align-items: center; margin-bottom: 6px; }
+  .solar-slot select {
+    font: inherit; font-size: 11px; padding: 5px 6px; border-radius: 6px;
+    background: rgba(255,255,255,.05); color: var(--ink-1, #e7ecf3);
+    border: 1px solid rgba(255,255,255,.1); max-width: 100%;
+  }
+  .solar-slot input[type=range] { width: 68px; }
+  .solar-slot.blocked select { opacity: .45; }
+
+  .solar-fetch {
+    width: 100%; font: inherit; font-size: 12px; font-weight: 600;
+    padding: 8px; margin-top: 4px; border-radius: 7px; cursor: pointer;
+    background: rgba(255,179,71,.18); color: #ffd9a8;
+    border: 1px solid rgba(255,179,71,.45);
+  }
+  .solar-fetch:hover { background: rgba(255,179,71,.26); }
+  .solar-fetch[disabled] { opacity: .5; cursor: default; }
+
+  .solar-note, .solar-status {
+    font-size: 10.5px; line-height: 1.45; color: var(--ink-3, #8b95a4);
+    margin: 8px 0;
+  }
+  .solar-status:empty { margin: 0; }
+  .solar-status.warn { color: #ffb347; }
+
   /* ---- De Details-tabs in deze state (sessie 34, Terry) ----
 
      Alleen Earth geldt hier: `environmentOff()` zet zon en maan uit en de
