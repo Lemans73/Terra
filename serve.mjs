@@ -13,6 +13,8 @@
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
+import { Readable } from 'node:stream';
+import { planRequest } from './api/_helioviewer-policy.mjs';
 
 const ROOT = process.cwd();
 const PORT = Number(process.env.PORT) || 8771;
@@ -92,10 +94,59 @@ async function waqiHandler(req, res) {
   }
 }
 
+// ---- /api/helioviewer -----------------------------------------------------
+// Local counterpart of api/helioviewer.js. Unlike the WAQI pair, these two share
+// their rules instead of restating them: both import planRequest from
+// api/_helioviewer-policy.mjs, so a parameter allowed here is allowed there by
+// construction.
+//
+// This mirror is the reason Terra keeps running on port 8771. Helioviewer's CORS
+// allowlist happens to include localhost:8000, so moving the dev server there
+// would also work — but then local testing would exercise a route that does not
+// exist in production, which is how a proxy bug survives until the preview.
+async function helioviewerHandler(req, res) {
+  const url = new URL(req.url, 'http://localhost');
+  const params = url.searchParams;
+
+  const plan = planRequest(
+    params.get('endpoint'),
+    key => params.get(key),
+    params.keys()
+  );
+  if (!plan.ok) {
+    res.writeHead(plan.status, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ status: 'error', data: plan.error }));
+  }
+
+  try {
+    const upstream = await fetch(plan.url);
+    if (!upstream.ok) {
+      res.writeHead(502, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({
+        status: 'error', data: 'upstream error ' + upstream.status
+      }));
+    }
+    res.writeHead(200, {
+      'Content-Type': upstream.headers.get('content-type') || 'application/octet-stream',
+      // The same header the edge function sets. It does nothing here — there is
+      // no cache in front of this server — but a value that differs between the
+      // two would be a difference you only discover in production.
+      'Cache-Control': plan.cacheControl
+    });
+    // Streamed rather than buffered, for the same reason as in production: a
+    // solar frame is megabytes, and holding it whole serves no purpose.
+    Readable.fromWeb(upstream.body).pipe(res);
+  } catch {
+    res.writeHead(502, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ status: 'error', data: 'upstream unreachable' }));
+  }
+}
+
 createServer(async (req, res) => {
   try {
     let p = decodeURIComponent(req.url.split('?')[0]);
     if (p === '/api/waqi') return waqiHandler(req, res);
+    if (p === '/api/helioviewer') return helioviewerHandler(req, res);
     if (p === '/') p = '/index.html';
 
     const full = normalize(join(ROOT, p));

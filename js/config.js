@@ -62,6 +62,51 @@ export const LOCK_DETAILS = false;
 // horen niet in de cijfers.
 export const ANALYTICS_HOSTS = ['terra.terryelemans.nl'];
 
+// ---- Sun state: where the full set stays on -----------------------------
+// The solar layer is the first one that costs megabytes per visitor: one image
+// per layer, 4 MB at 2048 px and 1.2 MB at 1024 px. Measured, same field of
+// view, only the resolution differing:
+//
+//     2048 px -> 4.08 MB, 6.6 s      1024 px -> 1.22 MB, 3.0 s
+//      512 px -> 0.34 MB, 1.6 s
+//
+// Against a 100 GB monthly transfer budget that is roughly 8,300 sessions at
+// three layers on 2048 px, or 27,000 at three layers on 1024 px.
+//
+// A LIST OF HOSTNAMES, not a switch, for the same reason ANALYTICS_HOSTS is one:
+// a repository clone must keep everything. Only a host named here is limited, so
+// localhost, file:// and anyone else's deployment are unaffected.
+//
+// EMPTY ON PURPOSE. The mechanism is built and tested; nothing is limited yet,
+// because nothing needs to be. Put 'terra.terryelemans.nl' in this list on the
+// day the transfer budget starts to bite.
+//
+// The order to give things up is not the intuitive one. Blend mode, opacity and
+// the luma threshold are shader uniforms on textures already fetched, so
+// changing them costs nothing at all — they are never what you take away. What
+// costs is resolution first, then the number of layers, then the flipbook.
+export const SUN_LIMITED_HOSTS = [];
+
+// What a limited host gets. `maxImagePx` is the strongest lever by far: bytes
+// scale with area, so halving it is a factor of three.
+export const SUN_LIMITS = {
+  maxImagePx: 1024,
+  maxLayers: 2,
+  flipbook: false
+};
+
+// The ceiling everywhere else. Also enforced server-side in
+// api/_helioviewer-policy.mjs, because a limit only the client applies is not a
+// limit.
+export const SUN_MAX_IMAGE_PX = 2048;
+
+// A limit must say so. Hiding a control that a repository clone would show is
+// the same silent switch as a disabled button with no reason attached: the
+// visitor sees a gap where there is in fact an invitation.
+export const SUN_LIMIT_NOTE =
+  'This demo renders at reduced resolution to stay within its hosting budget. ' +
+  'A local copy from the repository has no such limit.';
+
 // ---- Per-dataset visuele identiteit ----
 export const COLORS = {
   quake:    '#ff6b3d',
