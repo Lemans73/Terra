@@ -246,8 +246,8 @@ const BREAKS = [
   },
   {
     n: 3, what: 'stop negating the longitude on the way back',
-    edit: s => s.replace('const lon = -Math.atan2(dWest, dCm) / DEG;',
-                         'const lon = Math.atan2(dWest, dCm) / DEG;')
+    edit: s => s.replace('const lon = -Math.atan2(dWest, dCm) / SOLAR_DEG;',
+                         'const lon = Math.atan2(dWest, dCm) / SOLAR_DEG;')
   },
   {
     n: 2, what: 'put B0 into the wrong component',

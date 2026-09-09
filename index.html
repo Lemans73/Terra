@@ -2234,7 +2234,8 @@ import {
 } from './js/shaders.js';
 // Efemeriden voor zon en maan (Meeus). Puur JS, geen netwerk, geen sleutel.
 import { ephemeris, latLonToUnit, eclipseShadow, dayLength, meanObliquity,
-         nextSolarEclipse, previousSolarEclipse, eclipsePath } from './js/sunmoon.js';
+         nextSolarEclipse, previousSolarEclipse, eclipsePath,
+         solarPhysical } from './js/sunmoon.js';
 import { createSunMoonLayer } from './js/sunmoon-layer.js';
 // De geomagnetische dipool (IGRF-14). Ook puur JS, ook geen netwerk: de
 // coëfficiënten staan in de module. STATISCHE import, want het buildscript voor de
@@ -8972,6 +8973,10 @@ function applySolarState() {
   updateSolarReadout();
   if (!sunMoon) return;
   sunMoon.setSunspots(s.regions);
+  // En de zon-state, die dezelfde gegevens in zijn eigen frame plaatst. Hier en
+  // niet in de state zelf: dit is het moment waarop er nieuwe data IS, en een
+  // laag die daarop wacht met een eigen timer zou een tweede klok zijn.
+  if (solarImageryState) solarImageryState.refreshSpots();
   // Zonder dit verschijnen verse vlekken pas bij de volgende tick — zie dezelfde
   // reden bij bindCosmosToggle.
   updateSunUniform();
@@ -12816,6 +12821,21 @@ viewStates.register('sun', {
 solarImageryState = createSunState(THREE, {
   world,
   viewStates,
+
+  /* DE NOAA-GEGEVENS KOMEN UIT DEZELFDE BRON als de aardweergave, en niet uit een
+     eigen ophaalactie. `solarState` is de toestand die de vier SWPC-adapters
+     vullen; twee lezers van één feed kunnen niet uit de pas lopen, twee feeds
+     wel. Als getter en niet als waarde doorgegeven, om dezelfde reden als in
+     view-state.js: een geïmporteerde waarde is een momentopname. */
+  solar: () => solarState,
+
+  /* B0 uit Terra's eigen efemeriden. Geen tweede hemelmechanica, en daarmee ook
+     geen tweede antwoord op dezelfde vraag. */
+  b0: (when) => {
+    try { return solarPhysical(ephemeris(when || momentNow())).B0; }
+    catch { return null; }
+  },
+
   layers: {
     ...gebeurtenisLagen,
     environmentOff() {

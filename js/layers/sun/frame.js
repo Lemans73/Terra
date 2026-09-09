@@ -66,7 +66,9 @@
    another source may not, but its default is now a finding.
    ============================================================ */
 
-const DEG = Math.PI / 180;
+/* Prefixed: js/sunmoon.js:33 already has a bare `DEG`, and the standalone build
+   pours every module into one scope. Same rule the AU_KM constants follow. */
+const SOLAR_DEG = Math.PI / 180;
 
 /**
  * The heliographic basis as seen by an observer on +z.
@@ -75,7 +77,7 @@ const DEG = Math.PI / 180;
  * @param {number} pDeg   position angle of the rotation axis in the image
  */
 export function solarFrame(b0Deg, pDeg = 0) {
-  const b0 = b0Deg * DEG, p = pDeg * DEG;
+  const b0 = b0Deg * SOLAR_DEG, p = pDeg * SOLAR_DEG;
   const cb = Math.cos(b0), sb = Math.sin(b0);
   const cp = Math.cos(p), sp = Math.sin(p);
 
@@ -112,7 +114,7 @@ export function solarFrame(b0Deg, pDeg = 0) {
  * negated exactly once, here, the way the layer negates it exactly once there.
  */
 export function spotDirection(frame, latDeg, lonDeg) {
-  const B = latDeg * DEG, L = -lonDeg * DEG;
+  const B = latDeg * SOLAR_DEG, L = -lonDeg * SOLAR_DEG;
   const cB = Math.cos(B), sB = Math.sin(B), cL = Math.cos(L), sL = Math.sin(L);
   const { cm, west, axis } = frame;
   return {
@@ -132,9 +134,9 @@ export function directionToHeliographic(frame, v) {
   const dCm = v.x * cm.x + v.y * cm.y + v.z * cm.z;
   const dWest = v.x * west.x + v.y * west.y + v.z * west.z;
   const dAxis = v.x * axis.x + v.y * axis.y + v.z * axis.z;
-  const lat = Math.asin(Math.max(-1, Math.min(1, dAxis))) / DEG;
+  const lat = Math.asin(Math.max(-1, Math.min(1, dAxis))) / SOLAR_DEG;
   // Negated back, mirroring the single negation in spotDirection.
-  const lon = -Math.atan2(dWest, dCm) / DEG;
+  const lon = -Math.atan2(dWest, dCm) / SOLAR_DEG;
   return { lat, lon };
 }
 
@@ -148,7 +150,7 @@ export const isFacing = v => v.z > 0;
  */
 export function angleBetween(a, b) {
   const dot = a.x * b.x + a.y * b.y + a.z * b.z;
-  return Math.acos(Math.max(-1, Math.min(1, dot))) / DEG;
+  return Math.acos(Math.max(-1, Math.min(1, dot))) / SOLAR_DEG;
 }
 
 /**
@@ -186,6 +188,6 @@ export function frameFromVectors(axisIn, toEarth) {
   };
   // B0 falls out rather than being passed in: it is the heliographic latitude
   // of the direction we are looking from.
-  const b0 = Math.asin(Math.max(-1, Math.min(1, d))) / DEG;
+  const b0 = Math.asin(Math.max(-1, Math.min(1, d))) / SOLAR_DEG;
   return { cm, axis, west, b0, p: null };
 }

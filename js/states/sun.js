@@ -43,6 +43,7 @@
 
 import { createSunScene, SUN_WORLD_R } from '../layers/sun/scene.js';
 import { createSunFetch, imageScaleFor } from '../layers/sun/fetch.js';
+import { createSpotLayer } from '../layers/sun/spots.js';
 import {
   SOURCE_BY_ID, isCoronagraph, deriveGeometry, textureSize, sharpness, earthInTexels
 } from '../layers/sun/source.js';
@@ -87,6 +88,12 @@ export function createSunState(THREE, env) {
   const scene = createSunScene(THREE);
   const api = createSunFetch(env.fetchOptions);
   const maxImagePx = env.maxImagePx || 2048;
+
+  /* The NOAA regions live in their own group inside the sun scene, so they
+     survive a texture swap: measured data does not disappear because an image
+     was loaded over it. That is the whole point of 3c. */
+  const spots = createSpotLayer(THREE, scene.group);
+  let spotsWanted = true;
   let viewR = VIEW_R_DEFAULT;
   let attached = false;
   let originalUpdate = null;
@@ -212,6 +219,39 @@ export function createSunState(THREE, env) {
     if (!parent) return;
     parent.add(scene.group);
     attached = true;
+  }
+
+  /* ----------------------------------------------------------------------
+     THE NOAA REGIONS.
+
+     `env.solar()` hands in whatever the app already fetched — the same feed the
+     ordinary earth view uses, so there is no second request and no second
+     truth. `env.b0(when)` gives the heliographic latitude of the disc centre
+     for a moment, out of solarPhysical().
+
+     P IS ZERO, and that is measured: Helioviewer serves solar north up. See the
+     header of js/layers/sun/frame.js for the numbers. It stays a parameter
+     because another source may orient differently.
+  ---------------------------------------------------------------------- */
+  function refreshSpots(when) {
+    if (!env.solar || !env.b0) return null;
+    const data = env.solar();
+    const list = (data && data.regions) || [];
+    spots.setRegions(list);
+    const b0 = env.b0(when || new Date());
+    if (b0 == null) return null;
+    // Rings over an instrument frame, filled caps on the bare sun. Derived from
+    // whether a slot holds a texture, so it cannot disagree with what is drawn.
+    spots.setOutline(scene.layers.some(l => !!l.texture));
+    const drawn = spots.place(b0, 0);
+    spots.setVisible(spotsWanted && drawn > 0);
+    return { regions: list.length, drawn, b0: +b0.toFixed(4) };
+  }
+
+  function setSpotsVisible(on) {
+    spotsWanted = !!on;
+    spots.setVisible(spotsWanted && spots.state().drawn > 0);
+    return spotsWanted;
   }
 
   /* ----------------------------------------------------------------------
@@ -369,6 +409,7 @@ export function createSunState(THREE, env) {
 
     // A coronagraph's occulter would be lit from behind by the glow.
     scene.setGlowVisible(!scene.layers.some(l => l.texture && l.coronagraph));
+    refreshSpots();
 
     return describeSlot(index);
   }
@@ -409,6 +450,7 @@ export function createSunState(THREE, env) {
     const layer = scene.layers[index];
     if (layer) scene.clearLayer(layer);
     scene.setGlowVisible(!scene.layers.some(l => l.texture && l.coronagraph));
+    refreshSpots();
   }
 
   /* THE KEY IS `solar`, NOT `sun`, AND THAT IS NOT A PREFERENCE.
@@ -465,6 +507,7 @@ export function createSunState(THREE, env) {
       // Derived, not assumed: re-entering with slots still loaded must not put a
       // bare sun behind an instrument frame.
       scene.syncBare();
+      refreshSpots();
       holdProjection();
       bindDrag(true);
     },
@@ -492,6 +535,9 @@ export function createSunState(THREE, env) {
     describeSlot,
     setViewR,
     viewR: () => viewR,
+    spots,
+    refreshSpots,
+    setSpotsVisible,
     /* Where the earth stands, and a way to put it back. Both in solar radii. */
     earthPosition: () => ({ x: scene.earth.position.x, y: scene.earth.position.y }),
     setEarthPosition: (x, y) => scene.earth.position.set(x, y, scene.earth.position.z),
@@ -500,6 +546,7 @@ export function createSunState(THREE, env) {
        the code meant it to be. */
     state: () => ({
       ...scene.state(),
+      spots: spots.state(),
       cameraDistance: (() => {
         const c = world.camera(), k = world.controls();
         return c && k ? +c.position.distanceTo(k.target).toFixed(1) : null;
