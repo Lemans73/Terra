@@ -215,6 +215,90 @@ export function createSunState(THREE, env) {
   }
 
   /* ----------------------------------------------------------------------
+     DRAGGING THE EARTH.
+
+     The earth to scale is the one thing in this view you want to put next to
+     something: beside an active region, inside a coronal hole, against a
+     prominence. A fixed corner makes the comparison you happen to get rather
+     than the one you want, and it is five pixels — nudging it is the whole
+     interaction.
+
+     GRAB RADIUS SCALES WITH THE ZOOM (VIEW_R * 0.045, from the proof of
+     concept). A radius in world units would be unmissable when zoomed out and
+     unhittable when zoomed in; this one stays about the same on screen.
+
+     ORBITCONTROLS GOES QUIET WHILE DRAGGING, and comes back on release. Without
+     that, one gesture both moves the earth and pans the camera, and the earth
+     appears to lag behind the pointer by exactly the pan.
+  ---------------------------------------------------------------------- */
+  let dragging = false;
+  let panWasEnabled = true;
+  let listenersOn = false;
+
+  /* Screen point to world point on the z = 0 plane. Uses unproject rather than
+     arithmetic on the extents, so it stays correct however OrbitControls has
+     panned or zoomed since. */
+  function pointerToWorld(ev) {
+    const cam = world.camera(), el = world.renderer().domElement;
+    const r = el.getBoundingClientRect();
+    const ndc = new THREE.Vector3(
+      ((ev.clientX - r.left) / r.width) * 2 - 1,
+      -((ev.clientY - r.top) / r.height) * 2 + 1,
+      0
+    );
+    ndc.unproject(cam);
+    return ndc;
+  }
+
+  function onPointerDown(ev) {
+    if (!scene.earth.visible) return;
+    const w = pointerToWorld(ev);
+    const grab = currentViewR() * 0.045 * SUN_WORLD_R;
+    const dx = w.x - scene.earth.position.x * SUN_WORLD_R;
+    const dy = w.y - scene.earth.position.y * SUN_WORLD_R;
+    if (Math.hypot(dx, dy) > grab) return;
+
+    dragging = true;
+    const ctl = world.controls();
+    panWasEnabled = ctl.enablePan;
+    ctl.enablePan = false;
+    world.renderer().domElement.setPointerCapture(ev.pointerId);
+    ev.stopPropagation();
+  }
+
+  function onPointerMove(ev) {
+    if (!dragging) return;
+    const w = pointerToWorld(ev);
+    // Back into the group's own units: the group is scaled by SUN_WORLD_R, so
+    // its children count in solar radii.
+    scene.earth.position.x = w.x / SUN_WORLD_R;
+    scene.earth.position.y = w.y / SUN_WORLD_R;
+    ev.stopPropagation();
+  }
+
+  function onPointerUp(ev) {
+    if (!dragging) return;
+    dragging = false;
+    world.controls().enablePan = panWasEnabled;
+    try { world.renderer().domElement.releasePointerCapture(ev.pointerId); } catch {}
+  }
+
+  /* Bound on entry and unbound on exit. A listener that outlives its state is a
+     listener that fires in a view it knows nothing about — and `capture: true`
+     means this one runs before OrbitControls sees the event, which is the only
+     way to keep a drag from also panning. */
+  function bindDrag(on) {
+    const el = world.renderer() && world.renderer().domElement;
+    if (!el || on === listenersOn) return;
+    const method = on ? 'addEventListener' : 'removeEventListener';
+    el[method]('pointerdown', onPointerDown, true);
+    el[method]('pointermove', onPointerMove, true);
+    el[method]('pointerup', onPointerUp, true);
+    el[method]('pointercancel', onPointerUp, true);
+    listenersOn = on;
+  }
+
+  /* ----------------------------------------------------------------------
      LOADING A SLOT: the whole chain, in the order it has to happen.
 
      1. getClosestImage at the requested moment. Cheap, and it answers with the
@@ -379,9 +463,11 @@ export function createSunState(THREE, env) {
       layers.environmentOff();
       scene.setVisible(true);
       holdProjection();
+      bindDrag(true);
     },
 
     exit() {
+      bindDrag(false);
       releaseProjection();
       scene.setVisible(false);
       layers.environmentRestore();
@@ -403,6 +489,9 @@ export function createSunState(THREE, env) {
     describeSlot,
     setViewR,
     viewR: () => viewR,
+    /* Where the earth stands, and a way to put it back. Both in solar radii. */
+    earthPosition: () => ({ x: scene.earth.position.x, y: scene.earth.position.y }),
+    setEarthPosition: (x, y) => scene.earth.position.set(x, y, scene.earth.position.z),
     extents,
     /* A measurement hook, not a control. It reports what the scene is, not what
        the code meant it to be. */

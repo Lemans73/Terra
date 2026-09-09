@@ -146,6 +146,22 @@ export function createSunScene(THREE) {
 
   function setLayerTexture(layer, texture, opts) {
     layer.texture = texture;
+
+    /* THE PLANE HAS TO COVER THE FIELD IT CARRIES.
+
+       PlaneGeometry(2, 2) spans -1 to +1, which is exactly one solar radius —
+       the disc and nothing beyond it. But the fetched crop runs out to
+       `field` radii (1.29 for AIA, 31 for LASCO C3), so at unit scale the
+       plane cuts the picture off at the limb and leaves a square edge around
+       the sun. Everything the plane exists for — prominences, the corona,
+       CME material — sits in the part being cut away.
+
+       Scaling is enough because the shader derives its UV from the WORLD
+       position, not from the plane's own coordinates: stretch the mesh and
+       every point still reads the texel that belongs to it. The z offset per
+       slot keeps three coincident planes from fighting for depth. */
+    layer.plane.scale.set(opts.field, opts.field, 1);
+    layer.plane.position.set(opts.centre.x, opts.centre.y, -0.001 * layer.index);
     for (const u of [layer.sphereUniforms, layer.planeUniforms]) {
       u.uMap.value = texture;
       u.uHasMap.value = texture ? 1 : 0;
