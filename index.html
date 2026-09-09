@@ -2268,6 +2268,9 @@ import { createAntipodeLayer, antipodeOf } from './js/layers/antipode-layer.js';
 import { graticuleGeometry } from './js/core/graticule.js';
 import { regionLinesGeometry } from './js/core/region-lines.js';
 import { createSpaceState } from './js/states/space.js';
+// De zon in instrumentbeelden (sessie 48). Eigen scene naast globe.gl, eigen
+// orthografische projectie; het beeld komt van Helioviewer via /api/helioviewer.
+import { createSunState } from './js/states/sun.js';
 // De magnetosfeer (sessie 29). De fysica komt uit de klassieke scripts
 // hierboven (globalThis.TerraCore) en niet uit een import: zie
 // js/compute/magnetosphere/SYNC.md voor waarom die byte-identiek blijven.
@@ -8278,6 +8281,9 @@ bindCosmosToggle('sunspots-toggle', 'es-sunspots',
 let viewStates = null, spaceState = null, planets = null;
 // De magnetosfeer. Zelfde TDZ-afspraak als de andere states.
 let msphereState = null, msphereBoundary = null, msphereTransport = null;
+// `solarState` was al bezet door de NOAA-zonnedata (regel ~2901), vandaar de
+// langere naam: dit is de STATE, dat zijn de MEETWAARDEN.
+let solarImageryState = null;
 let msphereGrid = null, msphereStrip = null, msphereLines = null, msphereScale = null;
 let msphereWind = null, msphereDipole = null, msphereCraft = null;
 let disks = null, lagrange = null, orbits = null, environment = null;
@@ -8751,6 +8757,20 @@ function houdCameraBovenDeAarde() {
   cam.position.multiplyScalar(PARAMS.zoomFloorRadius / r);
 }
 world.controls().addEventListener('change', houdCameraBovenDeAarde);
+
+/* DE ORTHOGRAFISCHE PROJECTIE VAN DE ZON-STATE VOLGT DE CAMERA-AFSTAND.
+
+   AAN 'change' EN NIET AAN DE TIK, om dezelfde reden als de regel hierboven:
+   de tik hangt aan de tijdkiezer en die staat stil terwijl je zoomt. En niet
+   aan de renderlus, want dan zou hij ook draaien wanneer er niets bewoog.
+
+   `tick()` poort ZELF op de afstand — hij vergelijkt één getal en keert terug
+   wanneer die gelijk is. Dat is de poort die telt: dit event vuurt ook bij
+   slepen en bij auto-rotate, en een projectie herbouwen op een pure rotatie is
+   werk waarvan de uitkomst niet kan veranderen. */
+world.controls().addEventListener('change', () => {
+  if (solarImageryState) solarImageryState.tick();
+});
 
 /* HET SNELHEIDSSLOT — dezelfde vorm als het slot hierboven, en om een verwante
    reden: globe.gl schrijft óók hier iets terug dat voor de aardweergave klopt
@@ -12784,6 +12804,32 @@ viewStates.register('sun', {
   }
 });
 
+/* ---- De zon in instrumentbeelden (sessie 48) ---------------------------
+   HIER, tussen `sun` en `space`: de volgorde van registreren is de volgorde in
+   de navigatie, en dit hoort naast de zon en niet naast het zonnestelsel.
+
+   Hij meldt zich onder de sleutel `solar` en niet `sun`, want die is al bezet
+   door de state hierboven — Terra's eigen zonbol met de NOAA-vlekken erop. Dat
+   zijn twee verschillende dingen en het is nog een open vraag of ze allebei
+   moeten blijven; tot die vraag beantwoord is neemt de nieuwe een eigen sleutel
+   en blijft de oude staan. */
+solarImageryState = createSunState(THREE, {
+  world,
+  viewStates,
+  layers: {
+    ...gebeurtenisLagen,
+    environmentOff() {
+      environment.hide([
+        sunMoon && sunMoon.group,
+        ...aardgebondenVersiering(),
+        typeof wireMesh !== 'undefined' ? wireMesh : null
+      ]);
+      verbergExtraLagen();
+    },
+    environmentRestore() { environment.restore(); herstelExtraLagen(); }
+  }
+});
+
 /* DE VOLGORDE VAN REGISTREREN IS DE VOLGORDE IN DE NAVIGATIE, en dat is de
    reden dat `space` hieronder staat en niet direct na `createSpaceState()`:
    van dichtbij naar ver, dezelfde ordening die het paneel sinds sessie 21
@@ -13480,6 +13526,21 @@ if (IS_LOCAL) {
        pixelmaat die daarbij horen. */
     capture: () => presentCapture,
     present: () => presentMode,
+
+    /* DE ZON IN INSTRUMENTBEELDEN (sessie 48).
+
+       `solarImagery()` leest de scene uit en niet de bedoeling: `inScene`
+       apart van `visible`, en per sleuf of de textuur er is naast of de mesh
+       zichtbaar is. Dat onderscheid is precies wat de wolkenschil-fout van
+       sessie 47 een sessie lang verborgen hield.
+
+       `solarProbe()` is de meting van blok 1: het legt dezelfde testtextuur op
+       de bol en op het vlak, rendert, en geeft de kanaalsommen terug. Onder een
+       orthografische projectie MOETEN die gelijk zijn — dat is de hele reden
+       dat er geen naad is. De tegenmeting zit erin: `shift` verschuift het
+       vlak, en dan moet het verschil juist groot zijn. */
+    solarImagery: () => solarImageryState && solarImageryState.state(),
+    solarState: () => solarImageryState,
 
     /* DE WOLKENSCHIL, om te kunnen zien WAAROM hij weg is. `visible: false` en
        `bestaat: false` geven hetzelfde beeld op het scherm en vragen een andere
