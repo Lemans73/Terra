@@ -9027,12 +9027,39 @@ function solarView() {
 function showSolarActivity() {
   const v = solarView();
   if (v) showDetail(v);
+  // Meldt of er werkelijk iets geopend is. De aankomst in de zon-state heeft dat
+  // antwoord nodig: zonder data valt er niets te tonen en gaat de wens hieronder
+  // in de wacht. De twee bestaande aanroepers negeren de teruggave.
+  return !!v;
 }
+
+/* DE UITLEZING DIE BIJ AANKOMST NOG GEEN DATA HAD (Terry, sessie 50).
+
+   `solarView()` geeft null zolang er van NOAA niets binnen is, en dan opent de
+   aankomst niets. Zonder wachtstand blijft het daarbij: `updateSolarReadout()`
+   keert hieronder vroeg terug omdat het venster de zonneactiviteit niet toont --
+   en dat is nu juist het geval dat hersteld hoort te worden.
+
+   Dezelfde vorm als `msphereWachtOpData` en om dezelfde reden. Hij vervalt op
+   drie momenten: zodra het venster alsnog opengaat, zodra de bezoeker zelf iets
+   anders opent, en zodra hij de state verlaat. */
+let solarReadoutPending = false;
 
 /* Vier NOAA-adapters vullen `solarState` op hun eigen ritme, en elk van de vier
    komt hier langs. Alleen hertekenen als dit venster de zonneactiviteit toont —
    anders overschrijft een poll het gebied dat je net opende. */
 function updateSolarReadout() {
+  /* SOLAR:START */
+  /* VOOR de guard hieronder, want dit is precies het geval waarin het venster de
+     zonneactiviteit NIET toont: bij aankomst was er nog niets om te tonen.
+     `detailForget()` erbij om dezelfde reden als bij de aankomst zelf -- wat
+     vanzelf opengaat is geen keuze van de bezoeker en hoort dus niets terug te
+     zetten zodra het weer sluit. */
+  if (solarReadoutPending && viewStates.isActive('solar') && detail.kind() !== 'solar') {
+    if (showSolarActivity()) detailForget();
+    return;
+  }
+  /* SOLAR:END */
   if (detail.kind() !== 'solar') return;
   const v = solarView();
   if (v) detail.refresh(v);
@@ -11064,10 +11091,10 @@ bindReadingsButton('msphere-open', 'msphere', showMsphereConditions);
 bindReadingsButton('solar-open', 'solar', showSolarActivity);
 
 /* Wie zélf iets opent of sluit, heeft de aankomst ingehaald: de wachtstand van
-   de magnetosfeer vervalt dan. Zonder dit springt het conditievenster alsnog
-   open op het moment dat de feed binnenvalt — over iets heen dat de bezoeker
-   intussen zelf gekozen heeft. */
-detail.onChange(() => { msphereWachtOpData = false; });
+   de magnetosfeer én die van de zon vervallen dan. Zonder dit springt het venster
+   alsnog open op het moment dat de feed binnenvalt — over iets heen dat de
+   bezoeker intussen zelf gekozen heeft. */
+detail.onChange(() => { msphereWachtOpData = false; solarReadoutPending = false; });
 
 /* ---- Een paneel wijkt voor het detailvenster, en komt terug (sessie 26) ----
    Het venster deelt een schermhoek met de panelen daar. Ze passen er niet
@@ -13274,13 +13301,38 @@ viewStates.onChange((actief) => {
   const dp = document.getElementById('details-panel');
   const huidig = dp && dp.querySelector('.tab.active');
   if (!huidig) return;
-  const naar = actief === 'msphere'
+  let naar = actief === 'msphere'
     ? 'd-legend'
     : (huidig.dataset.tab === 'd-legend' ? 'd-earth' : null);
+  /* SOLAR:START */
+  /* IN DE ZON-STATE GELDT ALLEEN `Sun & Moon` (Terry, sessie 50). Earth en
+     Planets zijn daar verborgen — de aarde staat er als schaalobject en niet als
+     onderwerp, en er is geen planeet te lezen. Wie op een van die twee stond zou
+     anders naar een kop zonder knop kijken boven een paneel over iets anders.
+     Zelfde tweeledige vorm als de legenda hierboven: de CSS verbergt, de JS
+     klikt. */
+  if (actief === 'solar') naar = 'd-sunmoon';
+  /* SOLAR:END */
   if (!naar || huidig.dataset.tab === naar) return;
   const knop = dp.querySelector('.tab[data-tab="' + naar + '"]');
   if (knop) knop.click();
 });
+/* SOLAR:START */
+/* EN DAARBINNEN BLIJFT ÉÉN SECTIE OVER, DUS DIE STAAT OPEN (Terry, sessie 50).
+
+   `Sun activity` is standaard dicht, want op de aarde staat hij onder twee
+   andere secties. Hier zijn die twee verborgen en vraagt een accordeon van één
+   een klik om niets te verbergen — zelfde redenering als bij de Space-sectie.
+
+   VIA EEN KLIK OP DE KOP en niet door de klasse zelf te zetten: dan loopt het
+   langs dezelfde weg als een echte klik, inclusief `aria-expanded`. Twee
+   schrijvers van dezelfde stand is er één te veel. */
+viewStates.onChange((actief) => {
+  if (actief !== 'solar') return;
+  const acc = document.querySelector('[data-acc="cosmos-activity"]');
+  if (acc && !acc.classList.contains('open')) acc.querySelector('.acc-head')?.click();
+});
+/* SOLAR:END */
 /* EEN ANDER AANZICHT IS EEN ANDER ONDERWERP (sessie 26, na Terry's test).
    Het detailvenster gaat over ÉÉN ding, en dat ding hoort bij waar je staat: de
    zonneactiviteit bij de zon, een planeet bij het zonnestelsel, een aardbeving bij
@@ -13323,6 +13375,21 @@ viewStates.onChange((actief) => {
      stand bewaren die de bezoeker nooit gevraagd heeft. */
   if (isNarrow()) { detailForget(); panels.close('nav'); }
   if (actief === 'sun') showSolarActivity();
+  /* SOLAR:START */
+  /* EN DE ZON IN INSTRUMENTBEELDEN OPENT DEZELFDE UITLEZING (Terry, sessie 50).
+
+     De mondiale meting is hier het uitgangspunt: je komt binnen op de zon als
+     geheel, en pas een klik op een actief gebied vervangt hem. Die terugweg
+     hangt aan `detail.kind() === 'solar'` — zie rebuildRegionLabels(), die de
+     `backTo` alleen meegeeft wanneer er ook werkelijk zonneactiviteit onder
+     ligt. LAAT JE DIT WEG, DAN VERDWIJNT DE TERUGKNOP STIL.
+
+     Twee regels en niet een tak erbij hierboven: die sleutel bestaat niet in de
+     standalone, en de knip loopt op deze markers. Blok B voegt de twee states
+     samen, en dan valt dit vanzelf terug tot één regel. */
+  solarReadoutPending = false;
+  if (actief === 'solar' && !showSolarActivity()) solarReadoutPending = true;
+  /* SOLAR:END */
   /* DE MAGNETOSFEER OPENT ZIJN CONDITIES ALLEEN OP EEN BREED SCHERM (Terry,
      sessie 32). De zon doet het overal en dat blijft voorlopig zo; hier ligt het
      anders, en het verschil is de tijdlijn. Onderin staat al een uitlezing over
@@ -14179,6 +14246,15 @@ viewStates.onChange((actief) => {
   if (viewStates.isActive('msphere')) {
     document.querySelector('.panel .tab[data-tab="layers"]')?.click();
   }
+  /* SOLAR:START */
+  /* De zon in instrumentbeelden doet hetzelfde: zijn enige sectie zit in het
+     Layers-panel, en de tabrij eronder gaat weg. Een eigen blok en geen tweede
+     tak in de conditie hierboven, zodat de knip naar de standalone precies dit
+     kan meenemen. */
+  if (viewStates.isActive('solar')) {
+    document.querySelector('.panel .tab[data-tab="layers"]')?.click();
+  }
+  /* SOLAR:END */
 });
 
 // responsive

@@ -233,6 +233,12 @@ export function createSpotLayer(THREE, parent) {
   const _anchor = new THREE.Vector3();
   function labelAnchors() {
     const out = [];
+    /* THE TOGGLE LIVES ON THE GROUP, NOT ON THE CAPS. `setVisible` hides the
+       group and leaves every mesh's own `visible` at true, so a loop over
+       `m.visible` alone reports nine regions while the sun shows none -- and the
+       labels would then float over a sun without a single spot under them. The
+       earth view answers the same question one level up, in regionLabelSource. */
+    if (!group.visible) return out;
     group.updateWorldMatrix(true, false);
     for (let i = 0; i < regions.length; i++) {
       const m = meshes[i];
