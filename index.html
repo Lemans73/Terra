@@ -339,7 +339,7 @@
 
   <!-- DE TRANSPORTBALK VAN DE MAGNETOSFEER (sessie 30).
        Staat op dezelfde plek als het tijd-eiland en nooit tegelijk ermee: in
-       die state gaat het eiland uit (css/app.css, naast body.sun-view) en komt
+       die state gaat het eiland uit (css/app.css, naast body.solar-on) en komt
        deze ervoor in de plaats. Hij hergebruikt de klassen van het eiland, dus
        alle rooster- en mobielcorrecties gelden hier ook — zie de kop van
        js/ui/magnetosphere-transport.js voor waarom het twee bedieningen zijn
@@ -6496,22 +6496,18 @@ function animateShader() {
   // altijd na die van globe.gl draait — zie de noot bij flyCamera().
   stepSunFlight(_cam, world.controls());
 
-  // Het draaipunt volgt de zon zolang je hem bekijkt — zie de noot bij setSunView().
-  if (inZonAanzicht() && !sunFlight.actief && sunMoon) {
-    ensureTargetLock();
-    const sp = sunMoon.meshes.sunGroup.position;
-    if (!sp.equals(_sunAnchor)) {
-      _sunDelta.subVectors(sp, _sunAnchor);
-      _cam.position.add(_sunDelta);
-      _sunAnchor.copy(sp);
-    }
-    // ELKE FRAME schrijven, niet alleen als de zon bewoog. Deze lus draait ná die
-    // van globe.gl, dus wat hier staat is wat er getekend wordt — ook als de reset
-    // van globe.gl er tussendoor overheen ging. Het slot is de tweede verdediging,
-    // niet de enige. x/y/z rechtstreeks, want `set()` is juist wat het slot blokkeert.
-    const tg = world.controls().target;
-    tg.x = sp.x; tg.y = sp.y; tg.z = sp.z;
-  }
+  /* HET SLOT OP HET DRAAIPUNT BLIJFT, DE MEEBEWEGING NIET (sessie 50).
+
+     Hier stond een lus die het draaipunt elke frame op `sunMoon.meshes.sunGroup`
+     zette: de zon liep langs zijn baan en de camera liep mee. Die zon staat in
+     de zon-state niet meer in beeld — hij ligt op de oorsprong met straal 1 en
+     beweegt niet — dus meebewegen zou de camera verschuiven met een bol die er
+     niet is.
+
+     `ensureTargetLock()` blijft wél nodig: globe.gl zet het draaipunt bij elke
+     'change' terug met `setScalar()`, en dat slot is de enige verdediging
+     daartegen sinds de lus weg is. Zie de noot bij ensureTargetLock(). */
+  if (inZonAanzicht()) ensureTargetLock();
 
   positionRegionLabels(_cam);   // labels bij de actieve gebieden op de zon
   positionAxisLabels(_cam);     // N en S bij de uiteinden van de assen
@@ -6981,13 +6977,15 @@ const regionLabels = [];
    labelen en zeggen de labels dat door weg te blijven. */
 function regionLabelSource() {
   /* SOLAR:START */
-  if (solarImageryState && viewStates && viewStates.isActive('solar')) {
+  if (solarImageryState && viewStates && viewStates.isActive('sun')) {
     return solarImageryState.labelAnchors();
   }
   /* SOLAR:END */
-  if (inZonAanzicht() && sunMoon && sunMoon.meshes.sunspotGroup.visible) {
-    return sunMoon.labelAnchors();
-  }
+  /* TERRA'S EIGEN ZONNEBOL STOND HIER OOK, en die tak is sinds sessie 50 niet
+     meer bereikbaar: de labels verschenen alléén in het zonaanzicht, en dat
+     aanzicht is nu de instrumentenscene hierboven. `sunMoon.labelAnchors()`
+     blijft bestaan — de laag mag antwoorden op de vraag waar zijn gebieden
+     staan — maar niemand stelt hem hier nog. */
   return null;
 }
 
@@ -8379,9 +8377,6 @@ function syncViewToggles() {
   if (r) { r.classList.toggle('on', autoRotateWanted);
            document.getElementById('es-rotate').textContent = autoRotateWanted ? 'on' : 'off'; }
 }
-const _sunAnchor = new THREE.Vector3();   // waar de zon stond bij de vorige frame
-const _sunShift = new THREE.Vector3();    // hulpvector bij het instappen
-const _sunDelta = new THREE.Vector3();    // verplaatsing per frame
 
 // `{ handedOver: true }` verlaat het zonaanzicht zónder de camera aan te raken.
 // Dat is nodig wanneer iets ánders hem al naar de aarde brengt — een klik op een
@@ -9049,17 +9044,15 @@ let solarReadoutPending = false;
    komt hier langs. Alleen hertekenen als dit venster de zonneactiviteit toont —
    anders overschrijft een poll het gebied dat je net opende. */
 function updateSolarReadout() {
-  /* SOLAR:START */
-  /* VOOR de guard hieronder, want dit is precies het geval waarin het venster de
+  /* VÓÓR de guard hieronder, want dit is precies het geval waarin het venster de
      zonneactiviteit NIET toont: bij aankomst was er nog niets om te tonen.
-     `detailForget()` erbij om dezelfde reden als bij de aankomst zelf -- wat
+     `detailForget()` erbij om dezelfde reden als bij de aankomst zelf — wat
      vanzelf opengaat is geen keuze van de bezoeker en hoort dus niets terug te
      zetten zodra het weer sluit. */
-  if (solarReadoutPending && viewStates.isActive('solar') && detail.kind() !== 'solar') {
+  if (solarReadoutPending && viewStates.isActive('sun') && detail.kind() !== 'solar') {
     if (showSolarActivity()) detailForget();
     return;
   }
-  /* SOLAR:END */
   if (detail.kind() !== 'solar') return;
   const v = solarView();
   if (v) detail.refresh(v);
@@ -12870,46 +12863,12 @@ if (globalThis.TerraCore) {
   catch (e) { console.error('[terra] legend:', e); }
 }
 
-viewStates.register('sun', {
-  body: 'sun-view',
-  label: 'Sun',
-  // Een schijf met stralen. Onderscheidt zich van Space (een baan om een
-  // middelpunt) zonder dat het een tweede cirkel wordt.
-  icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
-        'stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 ' +
-        '19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4L17 7M7 17l-1.6 1.6"/></svg>',
-  camera: () => {
-    const R = sunMoon.config.sunRadius;
-    const sunPos = sunMoon.meshes.sunGroup.position;
-    _sunShift.copy(sunPos).normalize().multiplyScalar(-R * 4.5);
-    return { pos: sunPos.clone().add(_sunShift), target: sunPos.clone(),
-             min: R * 1.6, max: R * 24 };
-  },
-  enter() {
-    // De corona is een billboard van 5,5 zonsstralen breed. Van 99 eenheden
-    // af beslaat hij het hele scherm en telt hij additief bij alles op,
-    // waardoor de bol verzadigt naar wit en de vlekken verdwijnen.
-    sunMoon.meshes.sunGlow.visible = false;
-    _sunAnchor.copy(sunMoon.meshes.sunGroup.position);
+/* DE SLEUTEL `sun` WORDT HIER NIET GEREGISTREERD, maar door de state hieronder.
 
-    /* DE AARDGEBONDEN VERSIERING GAAT UIT, maar de aarde zelf blijft staan —
-       `includeGlobe: false`. Gemeten wat er anders gebeurt: de planeetschillen
-       lopen tot straal 400 en de zon staat op 420, dus er hangt een planeet mét
-       label pal naast de zon alsof het een zonnevlek is. En de as-koorden
-       hebben `depthTest: false`, dus die tekenen dwars door alles heen.
-       Geen van beide betekent hier iets: dit beeld gaat over de zon. */
-    environment.hide(aardgebondenVersiering(), { includeGlobe: false });
-    // De aarde blijft staan maar is hier een stip op 420 eenheden, en de lagen
-    // die zichzelf hebben aangemeld hebben hun schakelaar in een tab die deze
-    // weergave niet toont. Zie de noot bij `stateVerbergHaken`.
-    verbergExtraLagen();
-  },
-  exit() {
-    sunMoon.meshes.sunGlow.visible = true;
-    environment.restore();
-    herstelExtraLagen();
-  }
-});
+   Er is één zon-ingang en die toont de instrumentenscene. Terra's eigen zonnebol
+   staat gewoon in de aardweergave, waar hij hoort; hij is geen aparte weergave.
+   Wie hier een tweede `register('sun', …)` neerzet, overschrijft de eerste
+   stilzwijgend — `definitions` is een Map. Zie tools/check-sun-states.mjs. */
 
 /* ---- De zon in instrumentbeelden (sessie 48) ---------------------------
    HIER, tussen `sun` en `space`: de volgorde van registreren is de volgorde in
@@ -13304,20 +13263,17 @@ viewStates.onChange((actief) => {
   let naar = actief === 'msphere'
     ? 'd-legend'
     : (huidig.dataset.tab === 'd-legend' ? 'd-earth' : null);
-  /* SOLAR:START */
   /* IN DE ZON-STATE GELDT ALLEEN `Sun & Moon` (Terry, sessie 50). Earth en
      Planets zijn daar verborgen — de aarde staat er als schaalobject en niet als
      onderwerp, en er is geen planeet te lezen. Wie op een van die twee stond zou
      anders naar een kop zonder knop kijken boven een paneel over iets anders.
      Zelfde tweeledige vorm als de legenda hierboven: de CSS verbergt, de JS
      klikt. */
-  if (actief === 'solar') naar = 'd-sunmoon';
-  /* SOLAR:END */
+  if (actief === 'sun') naar = 'd-sunmoon';
   if (!naar || huidig.dataset.tab === naar) return;
   const knop = dp.querySelector('.tab[data-tab="' + naar + '"]');
   if (knop) knop.click();
 });
-/* SOLAR:START */
 /* EN DAARBINNEN BLIJFT ÉÉN SECTIE OVER, DUS DIE STAAT OPEN (Terry, sessie 50).
 
    `Sun activity` is standaard dicht, want op de aarde staat hij onder twee
@@ -13328,11 +13284,10 @@ viewStates.onChange((actief) => {
    langs dezelfde weg als een echte klik, inclusief `aria-expanded`. Twee
    schrijvers van dezelfde stand is er één te veel. */
 viewStates.onChange((actief) => {
-  if (actief !== 'solar') return;
+  if (actief !== 'sun') return;
   const acc = document.querySelector('[data-acc="cosmos-activity"]');
   if (acc && !acc.classList.contains('open')) acc.querySelector('.acc-head')?.click();
 });
-/* SOLAR:END */
 /* EEN ANDER AANZICHT IS EEN ANDER ONDERWERP (sessie 26, na Terry's test).
    Het detailvenster gaat over ÉÉN ding, en dat ding hoort bij waar je staat: de
    zonneactiviteit bij de zon, een planeet bij het zonnestelsel, een aardbeving bij
@@ -13374,22 +13329,18 @@ viewStates.onChange((actief) => {
      zodra het detailvenster de volgende keer sluit — de herinnering zou dan een
      stand bewaren die de bezoeker nooit gevraagd heeft. */
   if (isNarrow()) { detailForget(); panels.close('nav'); }
-  if (actief === 'sun') showSolarActivity();
-  /* SOLAR:START */
-  /* EN DE ZON IN INSTRUMENTBEELDEN OPENT DEZELFDE UITLEZING (Terry, sessie 50).
+  /* NAAR DE ZON GAAN IS DE UITLEZING OPENEN.
 
-     De mondiale meting is hier het uitgangspunt: je komt binnen op de zon als
-     geheel, en pas een klik op een actief gebied vervangt hem. Die terugweg
-     hangt aan `detail.kind() === 'solar'` — zie rebuildRegionLabels(), die de
-     `backTo` alleen meegeeft wanneer er ook werkelijk zonneactiviteit onder
-     ligt. LAAT JE DIT WEG, DAN VERDWIJNT DE TERUGKNOP STIL.
+     De mondiale meting is het uitgangspunt: je komt binnen op de zon als geheel,
+     en pas een klik op een actief gebied vervangt hem. Die terugweg hangt aan
+     `detail.kind() === 'solar'` — zie rebuildRegionLabels(), die de `backTo`
+     alleen meegeeft wanneer er ook werkelijk zonneactiviteit onder ligt. LAAT JE
+     DIT WEG, DAN VERDWIJNT DE TERUGKNOP STIL.
 
-     Twee regels en niet een tak erbij hierboven: die sleutel bestaat niet in de
-     standalone, en de knip loopt op deze markers. Blok B voegt de twee states
-     samen, en dan valt dit vanzelf terug tot één regel. */
+     Is de NOAA-feed er nog niet, dan blijft de wens staan tot hij binnenvalt —
+     zie `solarReadoutPending`. */
   solarReadoutPending = false;
-  if (actief === 'solar' && !showSolarActivity()) solarReadoutPending = true;
-  /* SOLAR:END */
+  if (actief === 'sun' && !showSolarActivity()) solarReadoutPending = true;
   /* DE MAGNETOSFEER OPENT ZIJN CONDITIES ALLEEN OP EEN BREED SCHERM (Terry,
      sessie 32). De zon doet het overal en dat blijft voorlopig zo; hier ligt het
      anders, en het verschil is de tijdlijn. Onderin staat al een uitlezing over
@@ -13648,7 +13599,7 @@ function applyZoomRange() {
      De poort staat op WAT ER GELDT en niet op wie er aanroept: is er een state
      actief, dan zijn zijn grenzen de geldende. */
   if (typeof viewStates !== 'undefined' && viewStates && viewStates.isActive
-      && ['sun', 'solar', 'space', 'msphere'].some(k => viewStates.isActive(k))) {
+      && ['sun', 'space', 'msphere'].some(k => viewStates.isActive(k))) {
     return world.controls().maxDistance;
   }
   // Marge van 6% zodat het lichaam niet exact op de beeldrand plakt.
@@ -14243,18 +14194,11 @@ viewStates.onChange((actief) => {
   const was = vorigeStateVoorTabrij;
   vorigeStateVoorTabrij = actief;
   if (actief === was) return;
-  if (viewStates.isActive('msphere')) {
+  /* DE ZON DOET HETZELFDE als de magnetosfeer: zijn enige sectie zit in het
+     Layers-panel, en de tabrij eronder gaat weg. */
+  if (viewStates.isActive('msphere') || viewStates.isActive('sun')) {
     document.querySelector('.panel .tab[data-tab="layers"]')?.click();
   }
-  /* SOLAR:START */
-  /* De zon in instrumentbeelden doet hetzelfde: zijn enige sectie zit in het
-     Layers-panel, en de tabrij eronder gaat weg. Een eigen blok en geen tweede
-     tak in de conditie hierboven, zodat de knip naar de standalone precies dit
-     kan meenemen. */
-  if (viewStates.isActive('solar')) {
-    document.querySelector('.panel .tab[data-tab="layers"]')?.click();
-  }
-  /* SOLAR:END */
 });
 
 // responsive

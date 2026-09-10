@@ -525,21 +525,19 @@ export function createSunState(THREE, env) {
     refreshSpots();
   }
 
-  /* THE KEY IS `solar`, NOT `sun`, AND THAT IS NOT A PREFERENCE.
+  /* THE KEY IS `sun`, AND THIS IS THE ONLY STATE THAT ANSWERS TO IT.
 
-     Terra already registers a state under `sun`: it flies the camera to
-     Terra's own sun mesh at radius 420, the one carrying the NOAA sunspots
-     placed on their measured longitudes. That is a different thing from this
-     — a body in Terra's scene, versus instrument frames on a projection of
-     their own — and it is real measured data, so it does not get quietly
-     replaced by whichever module registers last.
+     Terra used to register a second state under that key: a flight to its own
+     sun mesh at radius 420, carrying the same NOAA regions. Two entries in
+     Navigate for one subject, and two answers to `isActive('sun')`. That state
+     is gone; this one took the key.
 
-     Whether the two should stay side by side, or one should absorb the other,
-     is a product decision and not a technical one. Until it is made, this
-     state takes a key of its own and breaks nothing. */
+     The body class stays `solar-on`. It names the module rather than the menu
+     entry, every rule in app.css hangs off it, and the standalone cut keys on
+     the same word. */
   const definition = {
     body: 'solar-on',
-    label: 'Solar imagery',
+    label: 'Sun',
     icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
           'stroke-linecap="round"><circle cx="12" cy="12" r="4.5" fill="currentColor" ' +
           'stroke="none"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2' +
@@ -593,7 +591,7 @@ export function createSunState(THREE, env) {
     }
   };
 
-  if (viewStates) viewStates.register('solar', definition);
+  if (viewStates) viewStates.register('sun', definition);
 
   return {
     definition,

@@ -958,10 +958,13 @@
      weg zonder dat de titel verscheen, dus was de paneelkop leeg op het kruisje
      na — terwijl de regel hierboven belooft dat hij er dan staat. Die belofte
      wordt hier waargemaakt, voor alle drie de weergaven tegelijk. */
-  /* IN SUN EN SPACE VERDWIJNT HET PANEEL HELEMAAL (sessie 38, Terry), inclusief de
-     dockknop waarmee je het weer zou openen. Daar valt niets te bedienen: in Space
-     is de aardbol zelf verborgen en in Sun staat hij op 420 eenheden met alle
-     aardgebonden versiering uit.
+  /* IN SPACE VERDWIJNT HET PANEEL HELEMAAL (sessie 38, Terry), inclusief de
+     dockknop waarmee je het weer zou openen. Daar valt niets te bedienen: de
+     aardbol zelf is verborgen.
+
+     SUN STOND HIER TOT SESSIE 50 BIJ. Die state had toen niets te bedienen; nu
+     draagt hij de bronnen, de voorinstellingen en de gebiedenschakelaar, en zijn
+     paneel staat gesnoeid onder `body.solar-on` verderop in dit bestand.
 
      ALLEEN VERBERGEN EN NIETS ONTHOUDEN. `panelOpenWanted` blijft staan wat het
      was, dus een paneel dat open stond komt bij terugkeer vanzelf terug en een
@@ -972,12 +975,10 @@
      `#panel-open` OP ZIJN ID: `.dock-btn[hidden]` zet elders een expliciete
      display, en een klasseselector zou daarvan verliezen. */
   body.space-on .panel,
-  body.sun-view .panel,
-  body.space-on #panel-open,
-  body.sun-view #panel-open { display: none; }
-  /* Alleen de magnetosfeer houdt het paneel en heeft dus een titel nodig waar de
-     tabrij stond. Sun en Space stonden hier tot sessie 38 ook bij; die regels zijn
-     dood sinds het paneel daar in zijn geheel weg is. */
+  body.space-on #panel-open { display: none; }
+  /* Wie het paneel houdt, houdt de tabrij niet — en heeft dus een titel nodig waar
+     die stond. De zon heeft zijn eigen regel bij het solar-blok verderop; hier
+     staat alleen de magnetosfeer, want Space houdt het paneel niet. */
   body.msphere-on .panel .panel-title { display: block; }
   .panel .tabs, .detail-panel .tabs {
     flex: 1 1 auto; min-width: 0;
@@ -2481,7 +2482,6 @@
      body.space-on, zodat een volgende state hier niets nieuws voor hoeft te bedenken.
      In het zonaanzicht zijn de zonnevlekken een momentopname van NOAA; een tijdslider
      erbij zou iets beloven wat er niet is. */
-  body.sun-view .time-island { display: none; }
 
   /* En om een verwante maar niet dezelfde reden ook in de magnetosfeer. Daar is
      er WEL een tijd om te kiezen, maar alleen binnen de zeven dagen waarin
@@ -3382,9 +3382,9 @@
   /* TEKENEN HOORT BIJ DE AARDE ALS KAART (sessie 36, Terry).
 
      Buiten de aarde is er geen kaart om op te tekenen: de magnetosfeer toont een
-     doorsnede door een veld, Space een stelsel op ware afstand, Sun een ster en
-     de instrumentbeelden een projectie van diezelfde ster. De tab verklaart daar
-     niets en is er dus niet — dezelfde redenering als de
+     doorsnede door een veld, Space een stelsel op ware afstand, en de zon een
+     projectie van instrumentbeelden. De tab verklaart daar niets en is er dus
+     niet — dezelfde redenering als de
      Legend-tab die alleen BINNEN de magnetosfeer staat.
 
      DIT IS DE HELFT DIE CSS DOET. De andere helft staat in index.html en klikt de
@@ -3401,18 +3401,15 @@
      klasse en stond de tab overal. */
   body.msphere-on .panel .tab[data-tab="sketch"],
   body.space-on .panel .tab[data-tab="sketch"],
-  body.sun-view .panel .tab[data-tab="sketch"],
   body.solar-on .panel .tab[data-tab="sketch"],
   body.msphere-on .panel .tabpanel[data-panel="sketch"],
   body.space-on .panel .tabpanel[data-panel="sketch"],
-  body.sun-view .panel .tabpanel[data-panel="sketch"],
   body.solar-on .panel .tabpanel[data-panel="sketch"],
   /* Het bewerkscherm gaat mee, net als in de mediaquery hierboven. De JS sluit hem
      netjes met behoud van werk; dit is de vangrail eronder voor het geval die weg
      een keer niet loopt. */
   body.msphere-on .sketch-editor,
   body.space-on .sketch-editor,
-  body.sun-view .sketch-editor,
   body.solar-on .sketch-editor { display: none; }
   /* SKETCH:END */
 

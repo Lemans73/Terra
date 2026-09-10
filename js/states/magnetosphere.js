@@ -33,7 +33,7 @@
    en onthoudt hij waar de bezoeker stond; bij vertrek geeft hij dat
    terug. Zo staan de schemerlijn, de zonrichting en de holte op
    hetzelfde moment — één klok, alleen begrensd tot waar er gemeten is.
-   Het tijd-eiland gaat daarom uit (css/app.css, naast body.sun-view).
+   Het tijd-eiland gaat daarom uit (css/app.css, naast body.solar-on).
 
    EN GEEN METING IS GEEN OPPERVLAK. `Series.derive` weigert een r0 waar
    de dichtheid ontbreekt, en deze state tekent dan niets. Een
