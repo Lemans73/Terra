@@ -476,5 +476,8 @@ export function createCapture(opts) {
     return names;
   }
 
-  return { plan, save, limit, renderWide, viewSize };
+  /* `credits` staat erbij om dezelfde reden als `renderWide`: anders is de enige
+     manier om te toetsen wat er onder een beeld komt, een echte download per
+     meting — en dan meet je vooral de downloadmap. Alleen lezen. */
+  return { plan, save, limit, renderWide, viewSize, credits: () => credits() };
 }

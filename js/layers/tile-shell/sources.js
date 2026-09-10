@@ -98,9 +98,25 @@ export const TILE_SOURCES = {
        allowed. Against GIBS it would not be — see rule 2 at the top. */
     fallback: 'eox-bluemarble', subdomains: null,
     url: 'https://tiles.maps.eox.at/wmts/1.0.0/{layer}/default/WGS84/{z}/{y}/{x}.jpg',
+    /* THE WORDING IS EOX'S OWN, from their reply of 10 September 2026. They
+       asked for it in this shape:
+
+         EOxCloudless https://cloudless.eox.at by EOX IT Services GmbH
+         (Contains modified Copernicus Sentinel data "year")
+
+       THE YEAR IS NOT DECORATION. Seven vintages sit in EOX_VINTAGES and the
+       visitor can move between them, so a credit with a fixed year would name a
+       different picture than the one on screen. `{year}` is filled in by
+       tileAttribution() from the vintage that is actually loading.
+
+       The URL belongs in the credits panel and in ATTRIBUTION.md, not in an
+       exported image: a link you cannot click is not a credit, it is noise on
+       somebody's wallpaper (Terry, session 50). presentCredits() reads name, by,
+       licence and note, and never url — that is why. */
     attribution: {
-      name: 'Sentinel-2 cloudless', by: 'EOX IT Services GmbH', url: 'https://s2maps.eu',
-      licence: 'CC BY-NC-SA 4.0', note: 'Contains modified Copernicus Sentinel data'
+      name: 'EOxCloudless', by: 'EOX IT Services GmbH', url: 'https://cloudless.eox.at',
+      licence: 'CC BY-NC-SA 4.0',
+      note: 'Contains modified Copernicus Sentinel data {year}'
     }
   },
 
@@ -172,11 +188,16 @@ export function tileUrl(src, z, x, y, opts = {}) {
 /* What the credits panel needs: the active source plus everything it can fall
    back to, deduplicated, in the order the visitor would meet them. Structured
    and not HTML — the panel decides how it looks. */
-export function tileAttribution(sourceId) {
+export function tileAttribution(sourceId, vintage) {
+  const year = vintage || EOX_DEFAULT_VINTAGE;
   const seen = new Map();
   let id = sourceId, guard = 0;
   while (id && TILE_SOURCES[id] && guard++ < 4) {
-    seen.set(id, { id, ...TILE_SOURCES[id].attribution });
+    const a = { id, ...TILE_SOURCES[id].attribution };
+    // Filled here and not at the call sites: three of them read this list, and
+    // three substitutions is three chances to name the wrong year.
+    if (a.note) a.note = a.note.replace('{year}', year);
+    seen.set(id, a);
     id = TILE_SOURCES[id].fallback;
   }
   return [...seen.values()];

@@ -357,7 +357,7 @@ export function createTileShell(THREE, opts = {}) {
     cache: schijf,
     isVisible: () => group.visible,
     checkFrame,
-    attribution: () => tileAttribution(sourceId),
+    attribution: () => tileAttribution(sourceId, opts.vintage),
     sourceId: () => sourceId,
     stats: () => ({
       ...quadtree.stats(), bron: sourceId, selected: selected.length,

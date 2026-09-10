@@ -5,7 +5,9 @@ source code only. The imagery, map data, live feeds and libraries listed below
 carry their own terms, and several of them require credit. This file is that
 credit.
 
-Verified on 2026-07-30.
+Verified on 2026-07-30. The satellite imagery and the solar instrument frames
+arrived after that date and were verified on 2026-09-10, the EOX entry against a
+written reply from EOX IT Services.
 
 ---
 
@@ -54,6 +56,58 @@ compositing: the best-fitting offset between the two sources is zero pixels at
 NASA imagery is free to use with attribution. The source images are not in this
 repository — they are 27 MB and 23 MB, and only the derived composites are ever
 loaded.
+
+### Satellite imagery
+
+**EOxCloudless** &nbsp;·&nbsp; [cloudless.eox.at](https://cloudless.eox.at)
+&nbsp;·&nbsp; **CC BY-NC-SA 4.0** (2018 and later) or **CC BY 4.0** (2016, 2017)
+
+> EOxCloudless https://cloudless.eox.at by EOX IT Services GmbH
+> (Contains modified Copernicus Sentinel data "year")
+
+That is the wording EOX asked for, and the year is not a placeholder to be
+ignored: Terra offers seven vintages of the layer and the credit shown in the
+application carries the year of the one actually loading. The default is 2025.
+
+Turning on **Satellite** in Settings replaces the world texture with Sentinel-2
+cloudless tiles fetched live from EOX's free WMTS endpoint at
+`tiles.maps.eox.at`, down to 10 m per pixel. Nothing is redistributed; the tiles
+are cached in the visitor's own browser and nowhere else.
+
+**Two conditions apply, and they are separate.** The licence on the imagery is
+per vintage — 2016 and 2017 are CC BY 4.0 and permit commercial use, 2018 onward
+are CC BY-NC-SA 4.0 and do not. The free WMTS endpoint carries its own condition:
+EOX permits it **as long as the application remains free of charge.** If Terra
+ever charges for anything, a licence is required for the endpoint as well as a
+different vintage for the imagery. There is no strict request rate or
+concurrency limit; a fair use policy applies.
+
+The fallback layer, used where the cloudless mosaic has no tile, is EOX's own
+**Blue Marble** service at `maps.eox.at`, which is NASA imagery served by EOX.
+
+### The Sun in instrument images
+
+**Helioviewer.org** &nbsp;·&nbsp; [helioviewer.org](https://helioviewer.org/)
+
+The Sun view composes projected, colour-coded frames served by the Helioviewer
+Project, an open-source effort of NASA GSFC and ESA. Terra reaches their API
+through a proxy of its own that forwards only the two endpoints it needs, and
+requests images at the moment and the field it is actually showing.
+
+Helioviewer serves imagery it does not own, so the instrument behind each frame
+is credited with it — in the application as well as here:
+
+| Instrument | Mission | Owner |
+|---|---|---|
+| AIA (94, 131, 171, 193, 211, 304, 335, 1600, 1700 Å) | Solar Dynamics Observatory | NASA/SDO and the AIA science team |
+| HMI (continuum, magnetogram) | Solar Dynamics Observatory | NASA/SDO and the HMI science team |
+| LASCO C2 and C3 | SOHO | ESA/NASA — SOHO is a project of international cooperation between ESA and NASA |
+
+NASA and ESA imagery of this kind is freely reusable with credit. **These are
+images and not measurements**, and the application says so on screen rather than
+leaving it to this file: the circled active regions drawn over them are NOAA
+measurement data, and that difference is the one thing a viewer must not get
+wrong.
 
 ---
 

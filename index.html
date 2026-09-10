@@ -2076,7 +2076,16 @@
       <a href="https://eonet.gsfc.nasa.gov" target="_blank" rel="noopener">NASA EONET</a> ·
       <a href="https://www.swpc.noaa.gov" target="_blank" rel="noopener">NOAA SWPC</a> ·
       <a href="https://aqicn.org" target="_blank" rel="noopener">WAQI</a> ·
-      <a href="https://www.blitzortung.org" target="_blank" rel="noopener">Blitzortung</a>
+      <a href="https://www.blitzortung.org" target="_blank" rel="noopener">Blitzortung</a><!--
+      DE BEELDBRON HOORT ER OOK BIJ ZODRA HIJ DRAAIT (Terry, sessie 50). Kort
+      hier, want deze rij is een opsomming en geen vermelding: de volle tekst
+      met de licentie staat onder Instellingen bij Sources & licenses, en de
+      letterlijke voorwaarde in ATTRIBUTION.md.
+
+      `hidden` tot toonBeeldbron() hem aanzet, langs dezelfde weg als het blok
+      in Instellingen — één schrijver, en hij verschijnt alleen wanneer die
+      tegels werkelijk in beeld staan. --><span id="imagery-footnote" hidden> ·
+      <a href="https://cloudless.eox.at" target="_blank" rel="noopener">EOX</a></span>
     </div>
 
     </div><!-- /.panel-body -->
@@ -4997,6 +5006,9 @@ function toonBeeldbron() {
   if (!dt || !dd) return;
   const aan = tileShell && tileShell.isVisible() && tileShell.sourceId() !== 'world-texture';
   dt.hidden = !aan; dd.hidden = !aan;
+  // Dezelfde vlag voor de korte vermelding in de bronnenrij van het lagenpaneel.
+  const kort = document.getElementById('imagery-footnote');
+  if (kort) kort.hidden = !aan;
   if (!aan) { dd.textContent = ''; return; }
   dd.replaceChildren();
   tileShell.attribution().forEach((a, i) => {
@@ -13137,6 +13149,39 @@ navPanel.onClose(() => panels.close('nav'));
    die het Navigate-paneel op deze plek zet. */
 createViewSwitch({ viewStates, host: document.getElementById('view-switch') });
 
+/* WAT ER ONDER EEN ZON-EXPORT KOMT.
+
+   Helioviewer levert de beelden en NASA of ESA bezit ze, dus alle drie horen er
+   te staan — maar alleen wanneer ze er ook zijn. Drie gevallen, en het verschil
+   ertussen is het hele punt:
+
+     instrumentbeeld   de namen, hun eigenaar, en Helioviewer als leverancier
+     gebieden getekend `Active regions: NOAA SWPC` erbij
+     de kale zon       niets van dit alles — dan is het beeld Terra's tekening
+
+   `layerVisible` EN `drawn`, en niet een van de twee (Terry, sessie 50). Staat
+   de schakelaar uit, dan is `group.visible` false terwijl elke losse kap zijn
+   eigen `visible` op true houdt: op `drawn` alleen zou de vermelding blijven
+   staan onder een beeld zonder een enkel gebied erin. Dezelfde val als bij
+   labelAnchors(), en dezelfde oplossing — vraag de laag wat hij TEKENT.
+
+   Uit `describeSlot()` en niet uit een lijst hier: dat is dezelfde bron als de
+   uitlezing in beeld en de regel in het paneel. */
+function solarCredit() {
+  if (!solarImageryState) return null;
+  const s = solarImageryState.state();
+  const shown = (s.slotDetail || []).filter(Boolean);
+  const delen = [];
+  if (shown.length) {
+    const namen = shown.map(d => d.name).join(', ');
+    const eigenaars = [...new Set(shown.map(d => d.owner).filter(Boolean))].join(' and ');
+    delen.push(namen + '   \u00b7   ' + (eigenaars ? eigenaars + ' via ' : 'via ') + 'Helioviewer.org');
+  }
+  const vlekken = s.spots || {};
+  if (vlekken.layerVisible && vlekken.drawn > 0) delen.push('Active regions: NOAA SWPC');
+  return delen.length ? delen.join('   \u00b7   ') : null;
+}
+
 /* ---- Presentation mode (session 47) ---------------------------------------
    HERE, alongside Navigate and the view switch: the credit line asks the
    register which state is on screen, and that register is only complete once
@@ -13170,9 +13215,19 @@ function presentCredits() {
     /* Away from the globe there is no ground point to name, so the state says
        what you are looking at instead of a latitude that means nothing here. */
     const entry = viewStates.list().find((v) => v.key === active);
+    const label = entry ? entry.label : active;
+    /* DE ZON TOONT BEELD VAN ANDEREN, en dan is `Terra` als enige regel te
+       weinig. Samengesteld uit de scene en niet uit een lijst hier: dezelfde
+       bron als de uitlezing in beeld en de regel in het paneel, zodat er geen
+       derde kans is om iets te noemen dat er niet staat.
+
+       GEEN URL. Een link die je niet kunt aanklikken is geen vermelding maar
+       ruis op iemands wallpaper (Terry, sessie 50); de adressen staan in
+       Instellingen en in ATTRIBUTION.md. */
+    const zonRegel = active === 'sun' ? solarCredit() : null;
     return {
-      title: (entry ? entry.label : active) + '   \u00b7   ' + stamp,
-      credit: 'Terra   \u00b7   terra.terryelemans.nl'
+      title: label + '   \u00b7   ' + stamp,
+      credit: zonRegel || ('Terra   \u00b7   terra.terryelemans.nl')
     };
   }
 

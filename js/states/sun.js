@@ -650,6 +650,8 @@ export function createSunState(THREE, env) {
          not the disc in front of it — and whoever reports a black centre needs
          to be able to say how big it is. */
       occulter: src.occulter || null,
+      // Wie het beeld bezit. Helioviewer levert het, deze naam maakte het.
+      owner: src.owner || null,
       sharpness: sharpness(layer.texPx, layer.field, screenPx, viewR, layer.geometry.rsun),
       earthTexels: +earthInTexels(layer.texPx, layer.field).toFixed(2)
     };

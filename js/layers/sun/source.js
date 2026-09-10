@@ -21,20 +21,25 @@
    `end` timestamp has passed draws a spacecraft that is no longer there, and
    the ones with a genuinely different vantage point (STEREO-A, Solar Orbiter)
    bring their own caveats that this state does not carry yet. */
+/* `owner` STAAT ER PER BRON EN WORDT NIET AFGELEID uit `coronagraph`. Dat die
+   twee vandaag samenvallen — de enige coronagrafen zijn SOHO's — is toeval, en
+   een bronvermelding die op toeval rust is er een die op een dag de verkeerde
+   naam onder iemands beeld zet. Helioviewer levert het beeld; deze naam bezit
+   het. Zie ATTRIBUTION.md. */
 export const SOURCES = [
   // SDO, near earth. Ordered by the height in the atmosphere they see, from
   // the photosphere upward — the same order the temperatures run in.
-  { id: 18, name: 'HMI continuum',  what: 'Photosphere in white light, sunspots' },
-  { id: 19, name: 'HMI magnetogram', what: 'Magnetic polarity' },
-  { id: 16, name: 'AIA 1700', what: 'Upper photosphere, about 4,500 K' },
-  { id: 15, name: 'AIA 1600', what: 'Transition region, about 10,000 K' },
-  { id: 13, name: 'AIA 304',  what: 'Chromosphere, 50,000 K, prominences at the limb' },
-  { id: 10, name: 'AIA 171',  what: 'Quiet corona, 600,000 K, coronal loops' },
-  { id: 11, name: 'AIA 193',  what: 'Corona plus flare plasma, coronal holes' },
-  { id: 12, name: 'AIA 211',  what: 'Active regions, about 2 MK' },
-  { id: 14, name: 'AIA 335',  what: 'Active regions, about 2.5 MK' },
-  { id: 8,  name: 'AIA 94',   what: 'Flaring regions, about 6 MK' },
-  { id: 9,  name: 'AIA 131',  what: 'Flares at 10 MK plus cool plasma' },
+  { id: 18, name: 'HMI continuum',  what: 'Photosphere in white light, sunspots' , owner: 'NASA/SDO' },
+  { id: 19, name: 'HMI magnetogram', what: 'Magnetic polarity' , owner: 'NASA/SDO' },
+  { id: 16, name: 'AIA 1700', what: 'Upper photosphere, about 4,500 K' , owner: 'NASA/SDO' },
+  { id: 15, name: 'AIA 1600', what: 'Transition region, about 10,000 K' , owner: 'NASA/SDO' },
+  { id: 13, name: 'AIA 304',  what: 'Chromosphere, 50,000 K, prominences at the limb' , owner: 'NASA/SDO' },
+  { id: 10, name: 'AIA 171',  what: 'Quiet corona, 600,000 K, coronal loops' , owner: 'NASA/SDO' },
+  { id: 11, name: 'AIA 193',  what: 'Corona plus flare plasma, coronal holes' , owner: 'NASA/SDO' },
+  { id: 12, name: 'AIA 211',  what: 'Active regions, about 2 MK' , owner: 'NASA/SDO' },
+  { id: 14, name: 'AIA 335',  what: 'Active regions, about 2.5 MK' , owner: 'NASA/SDO' },
+  { id: 8,  name: 'AIA 94',   what: 'Flaring regions, about 6 MK' , owner: 'NASA/SDO' },
+  { id: 9,  name: 'AIA 131',  what: 'Flares at 10 MK plus cool plasma' , owner: 'NASA/SDO' },
   /* Coronagraphs. They run solo — see isCoronagraph.
 
      `occulter` IS THE ONE NUMBER THAT CANNOT BE DERIVED, and leaving it out
@@ -51,9 +56,9 @@ export const SOURCES = [
      3.7-30 — so these agree with the instrument rather than merely with each
      other. See logs/MEETING-sessie-49-lasco-en-velden.md section 5. */
   { id: 4, name: 'LASCO C2', what: 'About 2.2 to 6 solar radii',
-    coronagraph: true, occulter: 2.40 },
+    coronagraph: true, occulter: 2.40, owner: 'ESA/NASA SOHO' },
   { id: 5, name: 'LASCO C3', what: 'About 3.7 to 30 solar radii',
-    coronagraph: true, occulter: 4.67 }
+    coronagraph: true, occulter: 4.67, owner: 'ESA/NASA SOHO' }
 ];
 
 export const SOURCE_BY_ID = new Map(SOURCES.map(s => [s.id, s]));
