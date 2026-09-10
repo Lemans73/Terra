@@ -349,6 +349,18 @@
        belofte dat er zo iets komt. -->
   <div class="solar-orient" id="solar-orient" hidden></div>
 
+  <!-- WAAR IN DE ZON JE KIJKT (Terry, sessie 50).
+
+       Verschijnt pas als er iets te zeggen valt: staat de hele bron in beeld,
+       dan valt het kader samen met de buitenrand en gaat hij weg. Hij kreeg zijn
+       functie toen slepen ging pannen — een uitsnede die overal kan liggen, is
+       een uitsnede waarvan je wilt weten wáár hij ligt.
+
+       DE MAAT STAAT IN CSS EN HET BUFFERATTRIBUUT IN JS, zelfde val als bij de
+       tijdlijn en de magnetosfeerschaal: zonder CSS-doos valt een canvas terug
+       op zijn intrinsieke breedte. -->
+  <canvas class="solar-map" id="solar-map" aria-hidden="true" hidden></canvas>
+
   <!-- DE TRANSPORTBALK VAN DE MAGNETOSFEER (sessie 30).
        Staat op dezelfde plek als het tijd-eiland en nooit tegelijk ermee: in
        die state gaat het eiland uit (css/app.css, naast body.solar-on) en komt
@@ -2324,6 +2336,7 @@ import { createSunState } from './js/states/sun.js';
 // De uitlezing in beeld. Hoort bij de GETEKENDE zon net zo goed als bij de
 // instrumentbeelden, dus buiten de knip: hij beschrijft de scene en niet de bouw.
 import { createSolarOrient } from './js/ui/solar-orient.js';
+import { createSolarMap } from './js/ui/solar-map.js';
 /* SOLAR:START — de INSTRUMENTBEELDEN, en alleen die. Zie tools/build-standalone.mjs
    stap 0: dit blok wordt uit terra.html geknipt, want de proxy is een Vercel Edge
    Function en die draait daar niet.
@@ -8375,7 +8388,7 @@ let msphereState = null, msphereBoundary = null, msphereTransport = null;
 // `solarState` was al bezet door de NOAA-zonnedata (regel ~2901), vandaar de
 // langere naam: dit is de STATE, dat zijn de MEETWAARDEN. `solarPanel` blijft
 // null wanneer de instrumenthelft is weggeknipt; niemand leest hem dan.
-let solarImageryState = null, solarPanel = null, solarOrient = null;
+let solarImageryState = null, solarPanel = null, solarOrient = null, solarMap = null;
 let msphereGrid = null, msphereStrip = null, msphereLines = null, msphereScale = null;
 let msphereWind = null, msphereDipole = null, msphereCraft = null;
 let disks = null, lagrange = null, orbits = null, environment = null;
@@ -8862,6 +8875,9 @@ world.controls().addEventListener('change', () => {
   // De scherpte hangt aan de zoom, dus deze uitlezing verandert mee. Hij schrijft
   // alleen bij een echte wijziging — zie de noot bij refresh().
   if (solarOrient) solarOrient.refresh();
+  // En het kader op het kaartje hangt aan de zoom én aan de pan, dus aan precies
+  // dit event: 'change' is het enige dat allebei dekt.
+  if (solarMap) solarMap.draw();
 });
 
 /* HET SNELHEIDSSLOT — dezelfde vorm als het slot hierboven, en om een verwante
@@ -12965,10 +12981,12 @@ solarImageryState = createSunState(THREE, {
    weet niets van bronnen of ophalen: staat er een instrumentbeeld, dan zegt hij
    dat; staat er de getekende zon, dan zegt hij dát. Daarom hoort hij hier en niet
    bij het paneel — hij geldt ook in de kale versie. */
-solarOrient = createSolarOrient({
-  state: () => (solarImageryState ? solarImageryState.state() : null),
-  active: () => !!(viewStates && viewStates.isActive('sun'))
-});
+const solarSceneState = () => (solarImageryState ? solarImageryState.state() : null);
+const inZon = () => !!(viewStates && viewStates.isActive('sun'));
+solarOrient = createSolarOrient({ state: solarSceneState, active: inZon });
+/* Het overzichtskaartje leest dezelfde toestand. Twee lezers van één antwoord,
+   en geen van beide rekent zelf iets uit. */
+solarMap = createSolarMap({ state: solarSceneState, active: inZon });
 
 /* SOLAR:START */
 /* Het lagenstapel-paneel. Het kent de state alleen via deze haken, zodat het
@@ -13393,6 +13411,7 @@ viewStates.onChange((actief) => {
   if (actief === 'sun' && !showSolarActivity()) solarReadoutPending = true;
   // Verschijnen én verdwijnen: de uitlezing hoort bij deze state en bij geen andere.
   if (solarOrient) solarOrient.refresh();
+  if (solarMap) solarMap.draw();
   /* DE MAGNETOSFEER OPENT ZIJN CONDITIES ALLEEN OP EEN BREED SCHERM (Terry,
      sessie 32). De zon doet het overal en dat blijft voorlopig zo; hier ligt het
      anders, en het verschil is de tijdlijn. Onderin staat al een uitlezing over

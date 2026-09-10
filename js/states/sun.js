@@ -738,6 +738,19 @@ export function createSunState(THREE, env) {
       slotDetail: scene.layers.map((l, i) => describeSlot(i)),
       queue: api ? api.stats() : null,
       viewR: currentViewR(),
+      /* WAAR HET VENSTER STAAT, IN ZONSSTRALEN. De uitsnede is niet meer per se
+         gecentreerd sinds er gepand kan worden, en een tekenaar die het midden
+         aanneemt tekent een kader dat altijd klopt en nooit iets zegt. Uit de
+         controls en de extents, dus het is wat er STAAT en niet wat er bedoeld
+         was. */
+      viewCentre: (() => {
+        const k = world.controls();
+        return k ? { x: k.target.x / SUN_WORLD_R, y: k.target.y / SUN_WORLD_R } : { x: 0, y: 0 };
+      })(),
+      viewHalf: (() => {
+        const e = extents();
+        return { w: e.hw / SUN_WORLD_R, h: e.hh / SUN_WORLD_R };
+      })(),
       projectionHeld: !!originalUpdate,
       aspect: safeAspect()
     })

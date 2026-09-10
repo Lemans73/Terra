@@ -2659,6 +2659,37 @@
     .solar-orient { display: none; }
   }
 
+  /* ---- HET OVERZICHTSKAARTJE (Terry, sessie 50) ----
+
+     Rechtsboven, onder de knoppenrij. Dat is de enige hoek die in deze state in
+     beide versies vrij is: links staat het lagenpaneel, rechtsonder de uitlezing
+     en onderin het tijd-eiland.
+
+     `hidden` doet het verbergen en niet een klasse: de tekenaar zet die vlag
+     zelf op grond van wat hij zou tekenen, en één schrijver is er precies één
+     genoeg. Vandaar ook geen `display` in een klasse hier — die zou het
+     hidden-attribuut verslaan, dezelfde val als bij de zon-secties verderop.
+
+     (Geen klassenaam uit dat blok in deze noot: dit staat buiten de
+     standalone-knip en de vangrail slaat aan op die namen.) */
+  .solar-map {
+    position: fixed;
+    top: 96px; right: 28px;
+    width: 104px; height: 104px;
+    z-index: var(--z-panel);
+    pointer-events: none;
+    border-radius: 10px;
+    background: rgba(11, 16, 24, 0.55);
+    border: 1px solid var(--hair);
+    backdrop-filter: blur(6px);
+  }
+
+  /* Op een smal scherm gaat hij weg, om dezelfde reden als de uitlezing
+     hierboven: daar is elke vierkante centimeter het beeld zelf. */
+  @media (max-width: 640px) {
+    .solar-map { display: none; }
+  }
+
   /* ---- DE KALE ZON (Terry, sessie 50) ----
 
      Zonder de instrumenthelft is deze state een TEKENING met gemeten gebieden
@@ -3841,6 +3872,7 @@
   body.presenting:not(.chrome-on) #details-panel,
   body.presenting:not(.chrome-on) .panel,
   body.presenting:not(.chrome-on) #qlist,
+  body.presenting:not(.chrome-on) #solar-map,
   body.presenting:not(.chrome-on) #solar-orient,
   body.presenting:not(.chrome-on) #readout {
     display: none !important;
