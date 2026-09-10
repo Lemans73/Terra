@@ -2305,12 +2305,22 @@ import { createAntipodeLayer, antipodeOf } from './js/layers/antipode-layer.js';
 import { graticuleGeometry } from './js/core/graticule.js';
 import { regionLinesGeometry } from './js/core/region-lines.js';
 import { createSpaceState } from './js/states/space.js';
-// De zon in instrumentbeelden (sessie 48). Eigen scene naast globe.gl, eigen
-// orthografische projectie; het beeld komt van Helioviewer via /api/helioviewer.
-/* SOLAR:START — de zon in instrumentbeelden. Zie tools/build-standalone.mjs
-   stap 0: dit blok wordt uit terra.html geknipt, want zonder proxy kan het daar
-   niet werken. */
+// De zon (sessie 48). Eigen scene naast globe.gl, eigen orthografische
+// projectie. De GETEKENDE zon — fotosfeer, NOAA-gebieden, de aarde op schaal —
+// heeft niets van het net nodig en gaat daarom gewoon mee naar de standalone.
 import { createSunState } from './js/states/sun.js';
+/* SOLAR:START — de INSTRUMENTBEELDEN, en alleen die. Zie tools/build-standalone.mjs
+   stap 0: dit blok wordt uit terra.html geknipt, want de proxy is een Vercel Edge
+   Function en die draait daar niet.
+
+   DE IMPORTS STAAN HIER EN NIET IN js/states/sun.js, en dat is de hele truc: de
+   build loopt de statische importgraaf af, dus een module die de state zelf
+   importeert komt hoe dan ook mee. Hier geknipt betekent nooit bezocht. */
+import { createSunFetch, imageScaleFor } from './js/layers/sun/fetch.js';
+import {
+  SOURCE_BY_ID, isCoronagraph, deriveGeometry, textureSize, sharpness, earthInTexels,
+  minimumField, fieldFor
+} from './js/layers/sun/source.js';
 import { createSolarPanel } from './js/ui/solar-panel.js';
 /* SOLAR:END */
 // De magnetosfeer (sessie 29). De fysica komt uit de klassieke scripts
@@ -6976,11 +6986,9 @@ const regionLabels = [];
    staat alleen nog de keuze. Levert geen van beide iets, dan is er niets te
    labelen en zeggen de labels dat door weg te blijven. */
 function regionLabelSource() {
-  /* SOLAR:START */
   if (solarImageryState && viewStates && viewStates.isActive('sun')) {
     return solarImageryState.labelAnchors();
   }
-  /* SOLAR:END */
   /* TERRA'S EIGEN ZONNEBOL STOND HIER OOK, en die tak is sinds sessie 50 niet
      meer bereikbaar: de labels verschenen alléén in het zonaanzicht, en dat
      aanzicht is nu de instrumentenscene hierboven. `sunMoon.labelAnchors()`
@@ -8349,11 +8357,10 @@ bindCosmosToggle('sunspots-toggle', 'es-sunspots',
 let viewStates = null, spaceState = null, planets = null;
 // De magnetosfeer. Zelfde TDZ-afspraak als de andere states.
 let msphereState = null, msphereBoundary = null, msphereTransport = null;
-/* SOLAR:START */
 // `solarState` was al bezet door de NOAA-zonnedata (regel ~2901), vandaar de
-// langere naam: dit is de STATE, dat zijn de MEETWAARDEN.
+// langere naam: dit is de STATE, dat zijn de MEETWAARDEN. `solarPanel` blijft
+// null wanneer de instrumenthelft is weggeknipt; niemand leest hem dan.
 let solarImageryState = null, solarPanel = null;
-/* SOLAR:END */
 let msphereGrid = null, msphereStrip = null, msphereLines = null, msphereScale = null;
 let msphereWind = null, msphereDipole = null, msphereCraft = null;
 let disks = null, lagrange = null, orbits = null, environment = null;
@@ -8835,11 +8842,9 @@ world.controls().addEventListener('change', houdCameraBovenDeAarde);
    wanneer die gelijk is. Dat is de poort die telt: dit event vuurt ook bij
    slepen en bij auto-rotate, en een projectie herbouwen op een pure rotatie is
    werk waarvan de uitkomst niet kan veranderen. */
-/* SOLAR:START */
 world.controls().addEventListener('change', () => {
   if (solarImageryState) solarImageryState.tick();
 });
-/* SOLAR:END */
 
 /* HET SNELHEIDSSLOT — dezelfde vorm als het slot hierboven, en om een verwante
    reden: globe.gl schrijft óók hier iets terug dat voor de aardweergave klopt
@@ -9066,12 +9071,10 @@ function applySolarState() {
   updateSolarReadout();
   if (!sunMoon) return;
   sunMoon.setSunspots(s.regions);
-  /* SOLAR:START */
   // En de zon-state, die dezelfde gegevens in zijn eigen frame plaatst. Hier en
   // niet in de state zelf: dit is het moment waarop er nieuwe data IS, en een
   // laag die daarop wacht met een eigen timer zou een tweede klok zijn.
   if (solarImageryState) solarImageryState.refreshSpots();
-  /* SOLAR:END */
   // Zonder dit verschijnen verse vlekken pas bij de volgende tick — zie dezelfde
   // reden bij bindCosmosToggle.
   updateSunUniform();
@@ -12870,19 +12873,28 @@ if (globalThis.TerraCore) {
    Wie hier een tweede `register('sun', …)` neerzet, overschrijft de eerste
    stilzwijgend — `definitions` is een Map. Zie tools/check-sun-states.mjs. */
 
-/* ---- De zon in instrumentbeelden (sessie 48) ---------------------------
-   HIER, tussen `sun` en `space`: de volgorde van registreren is de volgorde in
-   de navigatie, en dit hoort naast de zon en niet naast het zonnestelsel.
+/* ---- De zon --------------------------------------------------------------
+   HIER, tussen de magnetosfeer en `space`: de volgorde van registreren is de
+   volgorde in de navigatie, en de zon hoort tussen de holte om de aarde en het
+   stelsel eromheen.
 
-   Hij meldt zich onder de sleutel `solar` en niet `sun`, want die is al bezet
-   door de state hierboven — Terra's eigen zonbol met de NOAA-vlekken erop. Dat
-   zijn twee verschillende dingen en het is nog een open vraag of ze allebei
-   moeten blijven; tot die vraag beantwoord is neemt de nieuwe een eigen sleutel
-   en blijft de oude staan. */
-/* SOLAR:START */
+   DEZE AANROEP STAAT BUITEN DE KNIP. De getekende zon gaat mee naar de
+   standalone; alleen de instrumenthelft eronder wordt eruit geknipt, en dan
+   draait deze state kaal. */
 solarImageryState = createSunState(THREE, {
   world,
   viewStates,
+
+  /* SOLAR:START */
+  /* De instrumenthelft. Ontbreekt hij, dan draait de state kaal: een getekende
+     zon met de gemeten gebieden erop, en geen enkele knop die belooft dat er
+     beeld op te halen valt. Zie de kop van js/states/sun.js. */
+  imagery: {
+    createSunFetch, imageScaleFor,
+    SOURCE_BY_ID, isCoronagraph, deriveGeometry, textureSize, sharpness,
+    earthInTexels, minimumField, fieldFor
+  },
+  /* SOLAR:END */
 
   /* EEN LOPENDE VLUCHT SCHRIJFT DE CAMERA ELKE FRAME, en de zoom van deze state
      IS de camera-afstand. Zet een voorinstelling die afstand terwijl de
@@ -12925,10 +12937,15 @@ solarImageryState = createSunState(THREE, {
   }
 });
 
+/* SOLAR:START */
 /* Het lagenstapel-paneel. Het kent de state alleen via deze haken, zodat het
    zonder browser te toetsen is en de state niets van DOM weet. `setOpacity` gaat
    rechtstreeks naar de uniform: dekking veranderen kost geen verzoek, en een
-   schuif die op de ophaalknop wacht zou dat verbergen. */
+   schuif die op de ophaalknop wacht zou dat verbergen.
+
+   HOORT BIJ DE INSTRUMENTHELFT en gaat dus mee in de knip: zonder ophalen is
+   een paneel met bronnen, sleuven en een ophaalknop een beloftevolle rij
+   knoppen die niets doen. */
 solarPanel = createSolarPanel({
   state: () => solarImageryState.state(),
   loadSlot: (i, id, opts) => solarImageryState.loadSlot(i, id, momentNow(), opts),
@@ -13710,10 +13727,8 @@ if (IS_LOCAL) {
        orthografische projectie MOETEN die gelijk zijn — dat is de hele reden
        dat er geen naad is. De tegenmeting zit erin: `shift` verschuift het
        vlak, en dan moet het verschil juist groot zijn. */
-    /* SOLAR:START */
     solarImagery: () => solarImageryState && solarImageryState.state(),
     solarState: () => solarImageryState,
-    /* SOLAR:END */
 
     /* DE WOLKENSCHIL, om te kunnen zien WAAROM hij weg is. `visible: false` en
        `bestaat: false` geven hetzelfde beeld op het scherm en vragen een andere

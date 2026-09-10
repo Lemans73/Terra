@@ -42,13 +42,24 @@
    ============================================================ */
 
 import { createSunScene, SUN_WORLD_R } from '../layers/sun/scene.js';
-import { createSunFetch, imageScaleFor } from '../layers/sun/fetch.js';
 import { createSpotLayer } from '../layers/sun/spots.js';
 import { noaaReferenceTime } from '../layers/sun/frame.js';
-import {
-  SOURCE_BY_ID, isCoronagraph, deriveGeometry, textureSize, sharpness, earthInTexels,
-  minimumField, fieldFor
-} from '../layers/sun/source.js';
+
+/* THE INSTRUMENT HALF IS NOT IMPORTED HERE, IT IS HANDED IN.
+
+   What this file draws — a photosphere with limb darkening, the NOAA regions on
+   their measured longitudes, the earth to scale — needs nothing from the
+   network. What it FETCHES does: `fetch.js` talks to a proxy that is a Vercel
+   Edge Function, and `source.js` describes the instruments behind it.
+
+   The standalone has no proxy, so it gets the drawn sun and no fetching. That
+   split has to happen at the IMPORT, not behind a flag: tools/build-standalone
+   walks the static import graph, and a module that is imported here comes along
+   however carefully the call sites are guarded. The two imports therefore live
+   in index.html between SOLAR markers, and arrive as `env.imagery`.
+
+   A dynamic `import()` would do the same job and cost a 404 in the network tab
+   of exactly the file you hand to someone else. */
 
 /* The default view: 1.65 solar radii, which is SUVI's field. Wide enough that
    the corona has somewhere to go, tight enough that the disc still carries the
@@ -98,8 +109,26 @@ const DEPTH = distanceFor(VIEW_R_MAX) + SUN_WORLD_R * 40;
 export function createSunState(THREE, env) {
   const { world, layers, viewStates } = env;
 
+  /* Destructured with null defaults so every call site below reads the way it
+     did when these were imports. Absent means bare: `api` is null, loadSlot
+     refuses, and describeSlot never reaches them — it returns early on a slot
+     without metadata, and without fetching there is none. */
+  const {
+    createSunFetch = null, imageScaleFor = null,
+    SOURCE_BY_ID = null, isCoronagraph = null, deriveGeometry = null,
+    textureSize = null, sharpness = null, earthInTexels = null,
+    minimumField = null, fieldFor = null
+  } = env.imagery || {};
+
+  /* THE BARE SUN SAYS SO ON THE BODY, and it says it by looking at what arrived
+     rather than at where it is running. A `location.protocol` test would be a
+     second opinion about the same fact, and it would be wrong the moment
+     somebody serves the standalone over http. One writer, set once: the answer
+     cannot change during a session. */
+  document.body.classList.toggle('solar-bare', !createSunFetch);
+
   const scene = createSunScene(THREE);
-  const api = createSunFetch(env.fetchOptions);
+  const api = createSunFetch ? createSunFetch(env.fetchOptions) : null;
   const maxImagePx = env.maxImagePx || 2048;
 
   /* The NOAA regions live in their own group inside the sun scene, so they
@@ -398,6 +427,7 @@ export function createSunState(THREE, env) {
      produces a perfectly good image of the wrong half.
   ---------------------------------------------------------------------- */
   async function loadSlot(index, sourceId, when, opts = {}) {
+    if (!api) throw new Error('sun state: no imagery half, nothing to fetch');
     const layer = scene.layers[index];
     if (!layer) throw new Error('no slot ' + index);
 
@@ -627,7 +657,7 @@ export function createSunState(THREE, env) {
         return c && k ? +c.position.distanceTo(k.target).toFixed(1) : null;
       })(),
       slotDetail: scene.layers.map((l, i) => describeSlot(i)),
-      queue: api.stats(),
+      queue: api ? api.stats() : null,
       viewR: currentViewR(),
       projectionHeld: !!originalUpdate,
       aspect: safeAspect()

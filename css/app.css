@@ -2538,22 +2538,18 @@
   .msphere-only { display: none; }
   body.msphere-on .msphere-only { display: block; }
 
-/* SOLAR:START */
-  /* ---- De zon in instrumentbeelden (sessie 48) ----
-     Zelfde patroon, en dezelfde val: een expliciete `display` in een klasse
-     verslaat het `hidden`-attribuut, dus dit staat op de klasse en niet op
-     `hidden`. */
-  .solar-only { display: none; }
-  body.solar-on .solar-only { display: block; }
-
   /* ---- HET PANEEL TOONT HIER ALLEEN DE ZON (Terry, sessie 50) ----
 
-     Tot nu toe stond het paneel in deze state compleet open: Filters, Layers,
-     Sketch en de hele tabrij, terwijl er precies één sectie bij hoort. Dezelfde
-     vorm als `body.msphere-on` hierboven, en om dezelfde reden: wat hier niet
-     van toepassing is wordt niet getoond in plaats van uitgegrijsd. `enter()`
-     zet met eventsOff() en environmentOff() alle aardgebonden lagen uit, dus die
+     Er hoort precies één sectie bij deze state, en zonder deze regels staat het
+     paneel er compleet: alle tabpanelen en de hele tabrij. Dezelfde vorm als
+     `body.msphere-on` hierboven, en om dezelfde reden: wat hier niet van
+     toepassing is wordt niet getoond in plaats van uitgegrijsd. `enter()` zet
+     met eventsOff() en environmentOff() alle aardgebonden lagen uit, dus die
      schakelaars staan er als knoppen die niets doen.
+
+     (Geen laagnaam in deze noot: dit blok overleeft de standalone-knip, en de
+     vangrail in tools/build-standalone.mjs slaat aan op de naam van de
+     tekenlaag. Zelfde reden als bij de paneelkop in index.html.)
 
      `Axes & poles` gaat hier WÉL mee, anders dan in de magnetosfeer: daar is de
      dipoolas het onderwerp, hier staat de aarde niet eens in beeld.
@@ -2582,15 +2578,6 @@
      daarmee iets anders dan de titel van het paneel zelf. */
   body.solar-on .panel .panel-title { display: block; }
 
-  /* ---- HET TIJD-EILAND GAAT UIT (Terry, sessie 50) ----
-
-     Zelfde besluit als in de oude zon-state, en nu met een tweede reden: de
-     beelden komen uit het tijdvenster dat SWPC en Helioviewer dragen, niet uit
-     Terra's eigen klok. Een schuif die twintig jaar terug kan, boven een bron
-     die dat niet levert, belooft iets wat er niet is. Komt terug zodra de
-     rontgenflux-lane er is: dan IS er een tijd te kiezen die de bron kent. */
-  body.solar-on .time-island { display: none; }
-
   /* ---- DE DETAILS-TAB HOUDT HIER ÉÉN ONDERWERP OVER (Terry, sessie 50) ----
 
      `Earth` en `Planets` verklaren in deze state niets: de aarde staat er als
@@ -2615,6 +2602,47 @@
      erger dan één schakelaar op de goede plek. */
   body.solar-on #sunspots-toggle,
   body.solar-on #sunspots-note { display: none; }
+
+
+  /* ---- DE KALE ZON (Terry, sessie 50) ----
+
+     Zonder de instrumenthelft is deze state een TEKENING met gemeten gebieden
+     erop: geen bronnen, geen sleuven, geen ophaalknop. `js/states/sun.js` zet
+     deze klasse op grond van wat er werkelijk geladen is, niet op grond van het
+     protocol — zie de noot daar.
+
+     HET PANEEL GAAT DAN HELEMAAL DICHT. De regels hierboven snoeien het tot één
+     sectie, en die sectie is er in deze stand niet: wat overblijft is een lege
+     bak met een titel. Zelfde vorm als bij Space, en om dezelfde reden. */
+  body.solar-on.solar-bare .panel,
+  body.solar-on.solar-bare #panel-open { display: none; }
+
+  /* HET TIJD-EILAND STAAT ER WEL, EN DOET NIETS (Terry, sessie 50).
+
+     De volle versie verbergt hem: daar KUN je een moment kiezen — het gaat als
+     derde argument naar loadSlot — en een schuif die dat niet waarmaakt is een
+     loze belofte. Kaal ligt het andersom. Er valt niets op te halen, dus er valt
+     niets te beloven, en dan is de balk precies wat hij ook is: een grafiek
+     waarop je het moment AFLEEST.
+
+     `pointer-events: none` op het geheel en niet op de losse knoppen: één
+     eigenschap, en er is geen bediening die er per ongeluk buiten valt. De
+     verzwakking erbij, zodat de balk als uitlezing leest en niet als een
+     bediening die kapot is. */
+  body.solar-on .time-island { display: none; }
+  body.solar-on.solar-bare .time-island {
+    display: flex;
+    pointer-events: none;
+    opacity: 0.65;
+  }
+
+/* SOLAR:START */
+  /* ---- De zon in instrumentbeelden (sessie 48) ----
+     Zelfde patroon, en dezelfde val: een expliciete `display` in een klasse
+     verslaat het `hidden`-attribuut, dus dit staat op de klasse en niet op
+     `hidden`. */
+  .solar-only { display: none; }
+  body.solar-on .solar-only { display: block; }
 
   /* De vier voorinstellingen. Twee kolommen: vier knoppen naast elkaar passen
      niet in 280px, en vier onder elkaar maken van de snelste ingang een lijst

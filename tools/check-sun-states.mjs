@@ -25,6 +25,8 @@
  *   2  `solar` is no longer a state key      break: bring isActive('solar') back
  *   3  `sun-view` is gone from the stylesheet break: put a rule back
  *   4  the gate names the sun's own key     break: point the gate elsewhere
+ *   5  the drawn sun imports nothing that   break: import source.js there
+ *      reaches the proxy
  *
  * CHECK 2 DELIBERATELY IGNORES `detail.kind() === 'solar'`. That string is the
  * READOUT's kind, not a state key, and it is supposed to stay — a check that
@@ -108,6 +110,25 @@ function checkGate(html, state) {
              STATE + " registers '" + reg[1] + "'");
 }
 
+/* 5. THE SPLIT THAT KEEPS THE STANDALONE ALIVE. The drawn sun ships with
+   terra.html; the fetch client and the instrument table do not, because the
+   proxy is a Vercel Edge Function. tools/build-standalone walks the STATIC
+   import graph, so a single `import … from '../layers/sun/fetch.js'` here drags
+   the whole proxy side back in however carefully the call sites are guarded.
+   They arrive as `env.imagery` instead — see the head of js/states/sun.js.
+
+   The build has its own guard on the output, and this one says the same thing
+   at the place where the mistake gets made. */
+const PROXY_SIDE = /^import\s[\s\S]*?from\s*['"][^'"]*\/(fetch|source)\.js['"]/gm;
+
+function checkSplit(state) {
+  const hits = (state.match(PROXY_SIDE) || [])
+    .map(m => m.replace(/\s+/g, ' ').trim().slice(0, 60));
+  return hits.length
+    ? report('fail', STATE + ' imports the proxy side directly', hits.join(' | '))
+    : report('ok', STATE + ' leaves the proxy side to env.imagery');
+}
+
 async function run(markup = MARKUP, state = STATE, styles = STYLES) {
   const html = await readFile(join(ROOT, markup), 'utf8');
   const st = await readFile(join(ROOT, state), 'utf8');
@@ -117,6 +138,7 @@ async function run(markup = MARKUP, state = STATE, styles = STYLES) {
   bad += checkKeyGone({ name: markup, src: html }, { name: state, src: st });
   bad += checkStylesheet(css);
   bad += checkGate(html, st);
+  bad += checkSplit(st);
   return bad;
 }
 
@@ -153,6 +175,14 @@ async function selftestRun() {
       html: (s) => s.replace("const inZonAanzicht = () => !!(viewStates && viewStates.isActive('sun'))",
                              "const inZonAanzicht = () => !!(viewStates && viewStates.isActive('space'))"),
       state: (s) => s, css: (s) => s
+    },
+    {
+      name: 'the drawn sun importing the proxy side',
+      html: (s) => s,
+      state: (s) => s.replace("import { createSpotLayer } from '../layers/sun/spots.js';",
+                              "import { createSunFetch } from '../layers/sun/fetch.js';\n" +
+                              "import { createSpotLayer } from '../layers/sun/spots.js';"),
+      css: (s) => s
     },
     {
       name: 'the module registering under the old key',

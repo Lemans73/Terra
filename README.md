@@ -92,9 +92,16 @@ from the latest release. Double-click it. That is the whole procedure. No
 clone, no server, no install.
 
 It needs an internet connection: the map textures and the live feeds come over
-the network. Two layers are locked in this build and cannot be otherwise. Air
+the network. Three things are locked in this build and cannot be otherwise. Air
 quality needs a token behind a server route, and lightning needs a relay holding
 a WebSocket open. Neither of those exists in a file on your desktop.
+
+The third is the Sun. You get the drawn sun — limb darkening, the earth to
+scale, and NOAA's active regions on their measured heliographic positions, which
+is the measured half — but not the instrument frames from SDO, PROBA-2 and SOHO.
+Those come through a proxy that is a serverless function, so the time bar in that
+view is a readout rather than a control: you read the moment, you do not pick
+one. The live site and a local clone have the full view.
 
 ### 2. Clone and serve
 

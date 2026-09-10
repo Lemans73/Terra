@@ -256,7 +256,7 @@ const html = cutMarked(htmlRaw, 'SOLAR');
    tegen die tijd door het inlijnen en strippen gegaan, en dan vergelijk je twee
    verschillende dingen. Een eerdere versie deed dat en sloeg vals alarm. */
 const solarKnip = Buffer.byteLength(htmlRaw, 'utf8') - Buffer.byteLength(html, 'utf8');
-console.log(`solar imagery state cut — ${Math.round(solarKnip / 1024)} KB removed`);
+console.log(`solar instrument half cut — ${Math.round(solarKnip / 1024)} KB removed`);
 
 let out = html;
 
@@ -591,22 +591,42 @@ if (/sketch/i.test(out)) {
   );
 }
 
-/* The same check for the solar imagery state, and it has to be narrower than the
-   sketch one. "sketch" appears nowhere else in Terra, so a bare word search is
+/* The same check for the solar INSTRUMENT half, and it has to be narrower than
+   the sketch one in two ways.
+
+   First the word: "sketch" appears nowhere else in Terra, so a bare search is
    safe there; "solar" is all over the ordinary earth view — solarState with the
-   NOAA feed, solarPhysical, the solar wind in the magnetosphere. So this looks
-   for the names that belong only to the state that was cut. */
+   NOAA feed, solarPhysical, the solar wind in the magnetosphere.
+
+   Second the scope, and this changed in session 50. What gets cut is no longer
+   the whole sun state. The DRAWN sun — photosphere, NOAA regions, the earth to
+   scale — needs nothing from the network and ships with the standalone, so
+   `createSunState`, `solarImageryState` and js/states/sun.js are all expected to
+   survive. Only what talks to the proxy goes: the fetch client, the instrument
+   table, and the panel that drives them. */
+/* NOT the names the state destructures. `createSunFetch`, `SOURCE_BY_ID` and
+   the rest arrive as `env.imagery` and are therefore written out in
+   js/states/sun.js, which is meant to survive — a check on those would fail on
+   the very file it is supposed to allow. What is listed here exists ONLY inside
+   the modules that get cut:
+
+     /api/helioviewer  the proxy endpoint. If this string is in the standalone,
+                       the file can reach for a server it does not have.
+     PRESETS           the instrument presets table, source.js only.
+     createSolarPanel  the panel factory.
+     solar-only/-slots/-presets  the markup and styling that drive it. */
 const SOLAR_NAMES = [
-  'solarImageryState', 'createSunState', 'createSolarPanel',
-  'solar-only', 'solar-slots', 'solar-presets', 'js/states/sun.js'
+  '/api/helioviewer', 'PRESETS', 'createSolarPanel',
+  'solar-only', 'solar-slots', 'solar-presets'
 ];
 for (const name of SOLAR_NAMES) {
   if (!out.includes(name)) continue;
   const regel = out.split('\n').findIndex(l => l.includes(name)) + 1;
   throw new Error(
-    `build failed: the solar imagery state survived into the standalone — ` +
+    `build failed: the solar instrument half survived into the standalone — ` +
     `"${name}" on line ${regel}. Every block that touches it needs SOLAR:START/SOLAR:END, ` +
-    'and the cut has to run before collectModules() or the modules come along anyway.'
+    'and the cut has to run before collectModules() or the modules come along anyway. ' +
+    'The DRAWN sun is meant to survive; only what reaches the proxy is cut.'
   );
 }
 
