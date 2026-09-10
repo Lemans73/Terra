@@ -187,10 +187,45 @@ export function createSunState(THREE, env) {
      rotation is work that cannot change its outcome. */
   let lastDistance = null;
 
+  /* THE CONTROLS PAN IN A PROJECTION WE DO NOT USE.
+
+     OrbitControls turns pixels into world units with its own perspective
+     formula — `2 · d · tan(fov/2) / height` — because the camera IS a
+     PerspectiveCamera; only its matrix is orthographic, and a matrix built by
+     hand is not something it can read. Measured at rest, VIEW_R 1.65: our own
+     half-height is 165 world units where its formula gives 307.76. The image
+     would slide 1.865 times as far as the cursor, which is exactly the kind of
+     wrong that looks deliberate.
+
+     `panSpeed` scales its pixel delta, so this makes the conversion equal to our
+     extent instead of arguing with it. DERIVED and not typed in: fov, zoom and
+     window shape all sit in the two terms, so it follows all three.
+
+     ONE SCALAR IS ENOUGH FOR BOTH AXES, and that is a result rather than luck.
+     OrbitControls uses `clientHeight` for x as well as y; our extents put the
+     aspect on whichever side is wider. Both come out at the same world-per-pixel
+     either way.
+
+     CAMERA_K could have been changed instead — at 1/tan(fov/2) the two would
+     coincide — but that constant also carries the zoom limits and the depth
+     slab, and this is a problem about panning alone. */
+  function syncPan() {
+    const cam = world.camera(), ctl = world.controls();
+    if (!cam || !ctl || !cam.fov) return;
+    const d = cam.position.distanceTo(ctl.target);
+    const persp = d * Math.tan((cam.fov / 2) * Math.PI / 180);
+    if (!(persp > 0)) return;
+    ctl.panSpeed = extents().hh / persp;
+  }
+
   function syncProjection() {
     if (!originalUpdate) return false;
     const cam = world.camera(), ctl = world.controls();
     if (!cam || !ctl) return false;
+    /* VOOR de afstandspoort hieronder: die slaat een pan juist over — daar
+       verandert de afstand niet — en dan zou de snelheid nooit bijgewerkt worden
+       na een venstermaat die wél veranderde. */
+    syncPan();
     const d = cam.position.distanceTo(ctl.target);
     if (!Number.isFinite(d)) return false;
     if (lastDistance !== null && Math.abs(d - lastDistance) < 1e-6) return false;
@@ -210,6 +245,7 @@ export function createSunState(THREE, env) {
     };
     lastDistance = null;
     cam.updateProjectionMatrix();
+    syncPan();
   }
 
   function releaseProjection() {
@@ -346,6 +382,42 @@ export function createSunState(THREE, env) {
   let dragging = false;
   let panWasEnabled = true;
   let listenersOn = false;
+  /* Wat de bediening deed voordat deze state hem verzette. Bewaren en teruggeven,
+     dezelfde vorm als `panWasEnabled` hieronder — de aardweergave draait om de
+     bol en heeft links op ROTATE nodig. */
+  let mouseWas = null, touchWas = null, panSpeedWas = null;
+
+  /* SLEPEN MOET PANNEN, WANT DRAAIEN BESTAAT HIER NIET.
+
+     OrbitControls bindt links en één vinger standaard aan ROTATE, en die tak
+     staat in deze state uit: de kijkrichting ís het instrument. Gemeten gevolg:
+     `enablePan` stond op true, rechtsslepen pande netjes, en het gebaar dat
+     iedereen als eerste probeert deed niets.
+
+     Het slepen van de aarde blijft voorgaan. `onPointerDown` vangt met
+     `capture: true` af vóór OrbitControls en zet `enablePan` uit zolang je
+     vasthoudt — precies het conflict waar die regel al voor bestond. */
+  function bindPanGesture(on) {
+    const ctl = world.controls();
+    if (!ctl) return;
+    if (on) {
+      if (mouseWas) return;
+      mouseWas = { ...ctl.mouseButtons };
+      touchWas = { ...ctl.touches };
+      /* OOK DE SNELHEID TERUGGEVEN. `syncPan()` zet hem op onze eigen maat, en
+         die maat geldt alleen hier — de aardweergave pant met een echte
+         perspectiefprojectie en zou anders 46 % te traag schuiven. Gemeten:
+         0,536 bleef staan na vertrek. */
+      panSpeedWas = ctl.panSpeed;
+      ctl.mouseButtons = { ...ctl.mouseButtons, LEFT: THREE.MOUSE.PAN };
+      ctl.touches = { ...ctl.touches, ONE: THREE.TOUCH.PAN };
+    } else {
+      if (mouseWas) ctl.mouseButtons = mouseWas;
+      if (touchWas) ctl.touches = touchWas;
+      if (panSpeedWas != null) ctl.panSpeed = panSpeedWas;
+      mouseWas = touchWas = panSpeedWas = null;
+    }
+  }
 
   /* Screen point to world point on the z = 0 plane. Uses unproject rather than
      arithmetic on the extents, so it stays correct however OrbitControls has
@@ -606,6 +678,7 @@ export function createSunState(THREE, env) {
 
     enter() {
       attach();
+      bindPanGesture(true);
       layers.eventsOff();
       layers.environmentOff();
       scene.setVisible(true);
@@ -618,6 +691,7 @@ export function createSunState(THREE, env) {
     },
 
     exit() {
+      bindPanGesture(false);
       bindDrag(false);
       releaseProjection();
       scene.setVisible(false);
