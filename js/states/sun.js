@@ -44,8 +44,10 @@
 import { createSunScene, SUN_WORLD_R } from '../layers/sun/scene.js';
 import { createSunFetch, imageScaleFor } from '../layers/sun/fetch.js';
 import { createSpotLayer } from '../layers/sun/spots.js';
+import { noaaReferenceTime } from '../layers/sun/frame.js';
 import {
-  SOURCE_BY_ID, isCoronagraph, deriveGeometry, textureSize, sharpness, earthInTexels
+  SOURCE_BY_ID, isCoronagraph, deriveGeometry, textureSize, sharpness, earthInTexels,
+  minimumField, fieldFor
 } from '../layers/sun/source.js';
 
 /* The default view: 1.65 solar radii, which is SUVI's field. Wide enough that
@@ -54,11 +56,6 @@ import {
 export const VIEW_R_DEFAULT = 1.65;
 const VIEW_R_MIN = 1.02;
 const VIEW_R_MAX = 32;
-
-/* Depth is linear under an orthographic projection, so a slab this generous
-   costs nothing. Under perspective the same range would be exactly the
-   z-fighting that keeps `near` small. */
-const DEPTH = SUN_WORLD_R * 40;
 
 /* ZOOM RIDES ON THE CAMERA DISTANCE, and that is not a detour.
 
@@ -81,6 +78,22 @@ const DEPTH = SUN_WORLD_R * 40;
    this, from the same cause. */
 const CAMERA_K = 4;
 const distanceFor = r => r * SUN_WORLD_R * CAMERA_K;
+
+/* Depth is linear under an orthographic projection, so a slab this generous
+   costs nothing. Under perspective the same range would be exactly the
+   z-fighting that keeps `near` small.
+
+   IT IS DERIVED FROM THE ZOOM RANGE, not from the sun. The camera distance IS
+   the zoom, so at VIEW_R_MAX the camera stands at distanceFor(32) = 12800 world
+   units while the layers stay at the origin. A fixed slab of SUN_WORLD_R * 40
+   covered only 4000 of that, so everything past VIEW_R 10 fell outside the
+   depth range and the screen went black — with every uniform, every texture and
+   every transform still reading correct. Measured on LASCO C3, whose preset
+   frames at 15: the plane drew six times per second and produced no pixel, and
+   a solid red test shader in its place produced none either.
+
+   The margin on top carries the meshes that do not sit at z = 0. */
+const DEPTH = distanceFor(VIEW_R_MAX) + SUN_WORLD_R * 40;
 
 export function createSunState(THREE, env) {
   const { world, layers, viewStates } = env;
@@ -199,6 +212,22 @@ export function createSunState(THREE, env) {
     viewR = Math.min(VIEW_R_MAX, Math.max(VIEW_R_MIN, r));
     const cam = world.camera(), ctl = world.controls();
     if (cam && ctl) {
+      /* A FLIGHT STILL RUNNING WRITES THE CAMERA EVERY FRAME, and this state's
+         zoom IS that distance — so a distance set here is overwritten on the
+         very next frame. Measured in session 49, from the entry flight: the
+         preset set 6000 and the flight walked it back to 660 over the following
+         second, in a smooth curve. The layers arrived, the zoom did not, and
+         LASCO framed at 15 then showed nothing but its own occulter.
+
+         An explicit choice by the visitor outranks an animation that is still
+         running, so the flight is cut rather than waited out. The limits come
+         back by hand: a flight opens them to 0.01 and Infinity and only
+         restores them on arrival, which is an arrival that no longer happens. */
+      if (env.stopFlight) {
+        env.stopFlight();
+        ctl.minDistance = distanceFor(VIEW_R_MIN);
+        ctl.maxDistance = distanceFor(VIEW_R_MAX);
+      }
       const dir = cam.position.clone().sub(ctl.target);
       // A zero vector has no direction, and setLength on one produces NaN —
       // which is how session 47's black screen started.
@@ -243,9 +272,23 @@ export function createSunState(THREE, env) {
     // Rings over an instrument frame, filled caps on the bare sun. Derived from
     // whether a slot holds a texture, so it cannot disagree with what is drawn.
     spots.setOutline(scene.layers.some(l => !!l.texture));
-    const drawn = spots.place(b0, 0);
+
+    /* WHICH MOMENT THE SPOTS BELONG TO. When a frame is loaded it is that
+       frame's observation time, so the measured positions and the photograph
+       are the same instant; with an empty view there is nothing to agree with
+       and the clock is the honest answer. The lowest loaded slot decides,
+       because that is the layer the disc itself comes from. */
+    const shown = scene.layers.find(l => l.texture && l.meta);
+    const target = shown
+      ? Date.parse(shown.meta.date.replace(' ', 'T') + 'Z')
+      : (when || new Date()).getTime();
+    const ref = noaaReferenceTime(data && data.date);
+
+    const drawn = spots.place(b0, 0, ref, target);
     spots.setVisible(spotsWanted && drawn > 0);
-    return { regions: list.length, drawn, b0: +b0.toFixed(4) };
+    return { regions: list.length, drawn, b0: +b0.toFixed(4),
+             noaaDate: (data && data.date) || null,
+             lonShift: spots.state().lonShift };
   }
 
   function setSpotsVisible(on) {
@@ -362,11 +405,40 @@ export function createSunState(THREE, env) {
     const meta = await api.closestImage(sourceId, when || new Date());
     const geom = deriveGeometry(meta, corona);
 
-    // What to fetch: the source's own field, unless the camera is zoomed in
-    // far enough that a tighter crop buys real detail.
+    /* What to fetch. The rule lives in fieldFor() so it can be checked without
+       a browser; what belongs here is when a load counts as the FIRST one.
+
+       That is per slot and per source, not per session: putting a different
+       instrument into a slot is a first look at that instrument, however many
+       frames came before it. `!layer.texture` covers the slot that was cleared
+       and refilled with the same source, which is a first look again.
+
+       Session 49, and neither half was found by measuring. The floor came from
+       Terry noticing that the presets worked and picking the same two sources
+       by hand did not — the presets set VIEW_R to 15 first, and that was the
+       only difference between the paths. At the default 1.65 the old formula
+       asked for 2.06 radii of LASCO C3, entirely inside a 4.67 occulter: every
+       pixel black, no error, and a request that reads as perfectly sensible.
+       The first-load rule came from him noticing what was left afterwards — a
+       crop narrower than what the instrument actually serves. */
+    const firstLoad = layer.sourceId !== sourceId || !layer.texture;
     const field = opts.field != null
       ? opts.field
-      : Math.min(geom.nativeField, Math.max(viewR * 1.25, 0.2));
+      : fieldFor(geom.nativeField, viewR, sourceId, firstLoad);
+
+    /* AND THE CAMERA HAS TO BE ABLE TO SEE IT. Fetching past the occulter is
+       half the job: with the camera still inside that hole the frame arrives,
+       costs its seconds and megabytes, and shows nothing at all.
+
+       THE TEST IS THE OCCULTER, NOT THE FETCH FLOOR. Those are different
+       numbers and using the wrong one overreaches: framed at 6 radii of LASCO
+       C3 you are looking at the ring from 4.67 outwards, which is real data
+       and a perfectly reasonable thing to want. Only a view that would show
+       nothing at all gets moved.
+
+       Raised only, never lowered — someone who has zoomed out stays there. */
+    const occulter = (SOURCE_BY_ID.get(sourceId) || {}).occulter;
+    if (occulter && viewR <= occulter * 1.05) setViewR(minimumField(sourceId));
 
     const px = textureSize(field, geom.rsun, maxImagePx);
     const scale = imageScaleFor(field, px, geom.radiusArcsec);

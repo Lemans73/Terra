@@ -215,6 +215,47 @@ async function run() {
     }
   }
 
+  /* 6 — NOAA's positions carry a time, and it is the END of observed_date.
+     Both halves are checked: the instant, and the direction the correction
+     moves a spot. A shift with the wrong sign doubles the error instead of
+     cancelling it, and still puts every spot on the disc at the right
+     latitude — so nothing about the picture would give it away. */
+  {
+    const ref = m.noaaReferenceTime('2026-09-10');
+    const wantRef = Date.parse('2026-09-11T00:00:00Z');
+    const refOk = ref === wantRef;
+
+    // Half a day on from NOAA's instant, a spot has moved WEST, and NOAA counts
+    // west negative — so the longitude must come out SMALLER.
+    const later = m.longitudeAt(0, 0, wantRef, wantRef + 43200000);
+    const earlier = m.longitudeAt(0, 0, wantRef, wantRef - 43200000);
+    const signOk = later < -5 && earlier > 5;
+
+    // Half a day at 13.7 deg/day is about 6.9 degrees.
+    const sizeOk = Math.abs(Math.abs(later) - 6.86) < 0.4;
+
+    // The equator laps the poles: same interval, smaller shift at latitude.
+    const atLat = m.longitudeAt(20, 0, wantRef, wantRef + 43200000);
+    const diffOk = Math.abs(atLat) < Math.abs(later);
+
+    // A missing observed_date must mean NO correction rather than a wrong one.
+    const nullOk = m.noaaReferenceTime(null) === null &&
+                   m.longitudeAt(0, 42, null, wantRef) === 42;
+
+    check(6, refOk && signOk && sizeOk && diffOk && nullOk,
+      [refOk ? null : `reference ${ref && new Date(ref).toISOString()}, want 2026-09-11T00:00:00Z`,
+       signOk ? null : `sign wrong: +12h gives ${later.toFixed(2)}, -12h gives ${earlier.toFixed(2)}`,
+       sizeOk ? null : `12h shift is ${Math.abs(later).toFixed(2)} deg, want about 6.86`,
+       diffOk ? null : 'no differential rotation: latitude 20 moves as fast as the equator',
+       nullOk ? null : 'a missing observed_date does not fall back to no correction'
+      ].filter(Boolean).join('; '));
+    if (!selftest && refOk && signOk) {
+      console.log('         NOAA 2026-09-10 -> ' + new Date(ref).toISOString() +
+                  ', +12h shifts the equator ' + later.toFixed(2) +
+                  ' deg and latitude 20 ' + atLat.toFixed(2));
+    }
+  }
+
   return results;
 }
 
@@ -223,7 +264,8 @@ const DESCRIPTIONS = {
   2: 'B0 comes back from the view direction, and cm is perpendicular',
   3: 'place then invert returns the same coordinates',
   4: 'both constructions agree, spot for spot',
-  5: 'P is a free parameter, and a wrong one is visible'
+  5: 'P is a free parameter, and a wrong one is visible',
+  6: 'NOAA positions are carried from 2400Z to the moment being drawn'
 };
 
 const BREAKS = [
@@ -255,6 +297,26 @@ const BREAKS = [
                          'const axis = { x: -sp * cb, y: sb, z: cp * cb };')
   },
   {
+    n: 6, what: 'take observed_date as the START of the day',
+    edit: s => s.replace('return Number.isFinite(t) ? t + 86400000 : null;',
+                         'return Number.isFinite(t) ? t : null;')
+  },
+  {
+    n: 6, what: 'carry the longitude the wrong way round',
+    edit: s => s.replace('return lonDeg - solarRotationRate(latDeg) * days;',
+                         'return lonDeg + solarRotationRate(latDeg) * days;')
+  },
+  {
+    n: 6, what: 'forget that the earth moves too, so use the sidereal rate',
+    edit: s => s.replace('const EARTH_ORBIT_DEG_PER_DAY = 0.9856;',
+                         'const EARTH_ORBIT_DEG_PER_DAY = 0;')
+  },
+  {
+    n: 6, what: 'drop differential rotation',
+    edit: s => s.replace('const SOLAR_ROT_B2 = -2.396;', 'const SOLAR_ROT_B2 = 0;')
+                .replace('const SOLAR_ROT_B4 = -1.787;', 'const SOLAR_ROT_B4 = 0;')
+  },
+  {
     n: 5, what: 'ignore P entirely',
     edit: s => s.replace('const cp = Math.cos(p), sp = Math.sin(p);',
                          'const cp = 1, sp = 0;')
@@ -280,10 +342,11 @@ const BREAKS = [
 async function main() {
   if (!selftest) {
     console.log('check-sun-frame — one sun, two constructions\n');
-    for (const r of await run()) {
+    const rows = await run();
+    for (const r of rows) {
       report(r.ok ? 'ok' : 'fail', 'check ' + r.n + ' — ' + DESCRIPTIONS[r.n], r.detail);
     }
-    console.log(failures ? '\n' + failures + ' failed' : '\nall five green');
+    console.log(failures ? '\n' + failures + ' failed' : '\nall ' + rows.length + ' green');
     process.exit(failures ? 1 : 0);
   }
 

@@ -21,6 +21,7 @@
  *   4  texture size and image scale invert each other
  *   5  sharpness classifies green / amber / red at the right boundaries
  *   6  the timestamp handoff between the two endpoints
+ *   7  a coronagraph clears its occulter, and a first look shows the whole source
  */
 
 import { readFile, writeFile } from 'node:fs/promises';
@@ -215,6 +216,61 @@ async function run() {
     check(6, wrong.length === 0, wrong.join('; '));
   }
 
+  /* 7 — THE ONE NUMBER THE METADATA DOES NOT CARRY.
+     Everything else in this layer is derived; the occulter cannot be, because
+     the response describes the detector and not the disc bolted in front of it.
+     A crop tighter than that disc is empty by construction — and at the default
+     VIEW_R of 1.65 the field formula asked for 2.06 radii of LASCO C3, whose
+     occulter starts at 4.67. Every pixel black, no error raised anywhere.
+
+     What is checked is the CONSEQUENCE, not the constant: whatever the formula
+     does, it must not put a coronagraph inside its own occulter. */
+  {
+    const wrong = [];
+    for (const id of [4, 5]) {
+      const meta = src.SOURCE_BY_ID.get(id) || {};
+      if (!meta.occulter) { wrong.push(`source ${id} carries no occulter`); continue; }
+
+      const floor = src.minimumField(id);
+      if (!(floor > meta.occulter)) {
+        wrong.push(`source ${id}: floor ${floor} does not clear its ${meta.occulter} occulter`);
+      }
+
+      // The field rule as loadSlot applies it, at the default view.
+      const VIEW_R_DEFAULT = 1.65;
+      const native = id === 5 ? 31.13 : 6.40;   // measured, session 49
+
+      const later = src.fieldFor(native, VIEW_R_DEFAULT, id, false);
+      if (later <= meta.occulter) {
+        wrong.push(`source ${id}: at VIEW_R ${VIEW_R_DEFAULT} the crop is ${later.toFixed(2)}, ` +
+                   `inside the ${meta.occulter} occulter — the frame comes back black`);
+      }
+
+      /* A FIRST LOOK SHOWS THE WHOLE SOURCE. Cropping it to the current zoom
+         answers a question nobody asked, and answers it invisibly: a tight crop
+         of C3 is a perfectly good picture of the wrong thing. */
+      const first = src.fieldFor(native, VIEW_R_DEFAULT, id, true);
+      if (Math.abs(first - native) > 1e-9) {
+        wrong.push(`source ${id}: a first load crops to ${first.toFixed(2)} ` +
+                   `instead of the full ${native}`);
+      }
+      if (!(first > later)) {
+        wrong.push(`source ${id}: a first load is no wider than a later one ` +
+                   `(${first.toFixed(2)} vs ${later.toFixed(2)})`);
+      }
+    }
+
+    /* And the zoom still leads AFTER that first look, or framing a detail and
+       fetching again would hand back the whole field and throw it away. */
+    const zoomed = src.fieldFor(31.13, 3, 5, false);
+    if (!(zoomed < 31.13)) wrong.push('a later load ignores the zoom entirely');
+    // A disc instrument must NOT get the coronagraph floor, or every fetch
+    // hauls in far more than the view needs.
+    if (src.minimumField(10) > 0.5) wrong.push('a disc source got a coronagraph floor');
+
+    check(7, wrong.length === 0, wrong.join('; '));
+  }
+
   return results;
 }
 
@@ -224,12 +280,38 @@ const DESCRIPTIONS = {
   3: 'the coronagraph rule keeps the outer field',
   4: 'texture size and image scale invert each other',
   5: 'sharpness classifies at the right boundaries',
-  6: 'the timestamp handoff, and the proxy accepts it'
+  6: 'the timestamp handoff, and the proxy accepts it',
+  7: 'a coronagraph clears its occulter, and a first look is never cropped'
 };
 
 /* Each break removes exactly one guarantee. An injection that changes nothing
    is the finding: it means the check never had teeth. */
 const BREAKS = [
+  {
+    n: 7, file: SOURCE, what: 'drop the occulter floor and let the view decide alone',
+    edit: s => s.replace("return src.occulter ? src.occulter * 1.6 : 0.2;",
+                         'return 0.2;')
+  },
+  {
+    n: 7, file: SOURCE, what: 'a floor that only just clears the occulter',
+    edit: s => s.replace("return src.occulter ? src.occulter * 1.6 : 0.2;",
+                         'return src.occulter ? src.occulter * 0.9 : 0.2;')
+  },
+  {
+    n: 7, file: SOURCE, what: 'crop the first look to the current zoom',
+    edit: s => s.replace('  if (firstLoad) return nativeField;', '')
+  },
+  {
+    n: 7, file: SOURCE, what: 'hand back the whole field on every load, zoom or not',
+    edit: s => s.replace(
+      '  return Math.min(nativeField, Math.max(viewR * 1.25, minimumField(sourceId)));',
+      '  return nativeField;')
+  },
+  {
+    n: 7, file: SOURCE, what: 'forget the occulter on C3',
+    edit: s => s.replace("coronagraph: true, occulter: 4.67 }",
+                         'coronagraph: true }')
+  },
   {
     n: 1, file: SOURCE, what: 'use the coronagraph rule for disc instruments',
     edit: s => s.replace(
@@ -276,7 +358,7 @@ async function main() {
       report(r.ok ? 'ok' : 'fail', 'check ' + r.n + ' — ' + DESCRIPTIONS[r.n], r.detail);
     }
     if (live) await liveCheck();
-    console.log(failures ? '\n' + failures + ' failed' : '\nall six green');
+    console.log(failures ? '\n' + failures + ' failed' : '\nall ' + results.length + ' green');
     process.exit(failures ? 1 : 0);
   }
 

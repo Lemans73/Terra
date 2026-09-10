@@ -35,14 +35,65 @@ export const SOURCES = [
   { id: 14, name: 'AIA 335',  what: 'Active regions, about 2.5 MK' },
   { id: 8,  name: 'AIA 94',   what: 'Flaring regions, about 6 MK' },
   { id: 9,  name: 'AIA 131',  what: 'Flares at 10 MK plus cool plasma' },
-  // Coronagraphs. They run solo — see isCoronagraph.
-  { id: 4, name: 'LASCO C2', what: 'About 2.2 to 6 solar radii', coronagraph: true },
-  { id: 5, name: 'LASCO C3', what: 'About 3.7 to 30 solar radii', coronagraph: true }
+  /* Coronagraphs. They run solo — see isCoronagraph.
+
+     `occulter` IS THE ONE NUMBER THAT CANNOT BE DERIVED, and leaving it out
+     cost session 49 a bug that looked like everything except what it was. The
+     metadata describes the detector; it says nothing about the disc bolted in
+     front of it. So a crop tighter than the occulter is empty by construction —
+     not dim, not low contrast: empty. Ask for 2.06 radii of LASCO C3 and every
+     pixel that comes back is black, and the request looks entirely reasonable.
+
+     MEASURED, not taken from a datasheet, session 49: a frame fetched at a
+     field well outside both instruments, then the first radius carrying data
+     read back from the pixels in eight directions, median taken. C2 came out at
+     2.40 and C3 at 4.67 solar radii, against published ranges of 2.2-6 and
+     3.7-30 — so these agree with the instrument rather than merely with each
+     other. See logs/MEETING-sessie-49-lasco-en-velden.md section 5. */
+  { id: 4, name: 'LASCO C2', what: 'About 2.2 to 6 solar radii',
+    coronagraph: true, occulter: 2.40 },
+  { id: 5, name: 'LASCO C3', what: 'About 3.7 to 30 solar radii',
+    coronagraph: true, occulter: 4.67 }
 ];
 
 export const SOURCE_BY_ID = new Map(SOURCES.map(s => [s.id, s]));
 
 export const isCoronagraph = id => !!(SOURCE_BY_ID.get(id) || {}).coronagraph;
+
+/**
+ * Which field to fetch, in solar radii.
+ *
+ * THE FIRST LOOK AT A SOURCE IS ALWAYS THE WHOLE SOURCE. Until someone has
+ * seen what an instrument covers, cropping to the current zoom answers a
+ * question nobody asked — and it answers it invisibly, because a tight crop of
+ * LASCO C3 is a perfectly good picture of the wrong thing. It also means the
+ * first zoom out has something to show: the texture already holds the full
+ * field, so widening the view costs no request at all.
+ *
+ * After that the zoom leads. Someone who has framed a detail and fetches again
+ * is asking for that detail at a better resolution, and handing back the whole
+ * field would throw their framing away.
+ *
+ * For a disc instrument the two branches mostly agree anyway — AIA's native
+ * field is 1.29 and the default view already asks for more than that.
+ */
+export function fieldFor(nativeField, viewR, sourceId, firstLoad) {
+  if (firstLoad) return nativeField;
+  return Math.min(nativeField, Math.max(viewR * 1.25, minimumField(sourceId)));
+}
+
+/**
+ * The smallest field worth fetching from a source, in solar radii.
+ *
+ * For a disc instrument that is a floor against a degenerate crop. For a
+ * coronagraph it is the occulter, with room to spare: a crop that only just
+ * clears the disc shows a ring of a few pixels, which reads as a failure just
+ * as much as black does.
+ */
+export function minimumField(sourceId) {
+  const src = SOURCE_BY_ID.get(sourceId) || {};
+  return src.occulter ? src.occulter * 1.6 : 0.2;
+}
 
 /* The four presets. Each carries its own framing, because the framing is part
    of what the preset means. */

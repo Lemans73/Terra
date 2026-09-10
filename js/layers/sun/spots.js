@@ -31,7 +31,7 @@
    the whole active region while `area` covers only the dark part.
    ============================================================ */
 
-import { solarFrame, spotDirection, isFacing } from './frame.js';
+import { solarFrame, spotDirection, isFacing, longitudeAt } from './frame.js';
 
 /* Same expression and the same bounds as sunmoon-layer.js. Duplicated rather
    than imported because that module is a three.js layer bound to the earth
@@ -76,8 +76,42 @@ export function createSpotLayer(THREE, parent) {
 
      Marking the caps transparent puts them in the same list as the disc, where
      renderOrder means what it says. */
-  const filled = new THREE.MeshBasicMaterial({
-    color: 0x2b1508, transparent: true, depthTest: false, depthWrite: false
+  /* UMBRA AND PENUMBRA, and that is not decoration.
+
+     A flat dark cap the size of a real spot group is a handful of pixels of one
+     colour, and against a bright photosphere it antialiases into the background
+     until it reads as a warm speck rather than as a spot. Terry's session 49
+     screenshot is exactly that: nine caps present, none of them legible.
+
+     A real spot is not flat either — a dark umbra inside a lighter penumbra —
+     so the shape that carries the meaning is also the shape that is true. The
+     gradient buys the legibility that a bigger cap would have bought by lying
+     about the size.
+
+     `vUv.y` runs from the pole of the cap to its edge, so it IS the radial
+     coordinate here; no second attribute is needed. The edge fades to nothing
+     rather than ending on a hard rim, which at this size would alias into a
+     ring and read as the annotation the outlined variant is for. */
+  const filled = new THREE.ShaderMaterial({
+    uniforms: {
+      uUmbra:    { value: new THREE.Color(0x180a03) },
+      uPenumbra: { value: new THREE.Color(0x6b3a15) }
+    },
+    vertexShader:
+      'varying vec2 vUv;' +
+      'void main(){ vUv = uv;' +
+      ' gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader:
+      'uniform vec3 uUmbra;' +
+      'uniform vec3 uPenumbra;' +
+      'varying vec2 vUv;' +
+      'void main(){' +
+      '  float r = clamp(vUv.y, 0.0, 1.0);' +
+      '  vec3 c = mix(uUmbra, uPenumbra, smoothstep(0.30, 0.92, r));' +
+      '  float a = 1.0 - smoothstep(0.86, 1.0, r);' +
+      '  gl_FragColor = vec4(c, a);' +
+      '}',
+    transparent: true, depthTest: false, depthWrite: false
   });
   /* The ring carries Terra's own region colour (COLORS.region, the warm orange
      of the photosphere) rather than the spot's near-black: over a bright
@@ -155,19 +189,26 @@ export function createSpotLayer(THREE, parent) {
    * spot in a place where there is no spot — the exact failure this layer exists
    * to make checkable.
    */
-  function place(b0Deg, pDeg) {
+  function place(b0Deg, pDeg, refMs, targetMs) {
     if (b0Deg != null) frame = solarFrame(b0Deg, pDeg || 0);
     if (!frame) return 0;
     let shown = 0;
     for (let i = 0; i < regions.length; i++) {
       const m = meshes[i];
       if (!m) continue;
-      const v = spotDirection(frame, regions[i].lat, regions[i].lon);
+      /* CARRIED FORWARD FROM NOAA'S OWN INSTANT to the one being drawn — see
+         longitudeAt() in frame.js for why that instant is the end of
+         observed_date and not its start. Without it every spot sits where it
+         was up to a day ago, which still lands on the disc at the right
+         latitude and so reads as correct. */
+      const lon = longitudeAt(regions[i].lat, regions[i].lon, refMs, targetMs);
+      const v = spotDirection(frame, regions[i].lat, lon);
       if (!isFacing(v)) { m.visible = false; continue; }
       m.visible = true;
       _dir.set(v.x, v.y, v.z).normalize();
       m.quaternion.setFromUnitVectors(_Y, _dir);
       m.userData.dir = { x: v.x, y: v.y, z: v.z };
+      m.userData.lonShift = lon - regions[i].lon;
       shown++;
     }
     return shown;
@@ -201,6 +242,12 @@ export function createSpotLayer(THREE, parent) {
       b0: frame ? +frame.b0.toFixed(4) : null,
       p: frame ? frame.p : null,
       outline,
+      /* The applied rotation, so it can be READ rather than inferred. A
+         correction nobody can see the size of is a correction nobody can check,
+         and this one moves every spot by nearly the same amount — which is
+         exactly the kind of error that still looks deliberate. */
+      lonShift: visible.length && visible[0].userData.lonShift != null
+        ? +visible[0].userData.lonShift.toFixed(2) : null,
       positions: visible.slice(0, 12).map(m => ({
         region: m.userData.region,
         x: +m.userData.dir.x.toFixed(4),

@@ -124,6 +124,72 @@ export function spotDirection(frame, latDeg, lonDeg) {
   };
 }
 
+/* NOAA'S POSITIONS CARRY A TIMESTAMP, AND IT IS NOT THE ONE YOU EXPECT.
+
+   The Solar Region Summary is issued once a day, and the positions in it are
+   "as of 2400Z" — the END of `observed_date`, not its start. Measured rather
+   than taken on faith, session 49: L0 (the Carrington longitude of the disc
+   centre) follows from NOAA's own two fields, since longitude + carrington
+   longitude is L0 for every region in the file. That came out at 198 degrees
+   for observed_date 2026-09-10, and 198 is where the ephemeris puts L0 at
+   2026-09-10 24:00 UT — 13.6 degrees away from where it puts it at 00:00.
+   Seven of the nine regions agreed exactly; the file rounds to whole degrees.
+
+   Between that instant and the frame being drawn the sun turns, so a position
+   drawn without this correction is a position from up to a day ago. Measured
+   against a real HMI continuum frame: the residual has a clean minimum at the
+   offset this function computes, and the fit improves from 0.101 to 0.075
+   solar radii — better than a quarter of what was left.
+
+   DIFFERENTIAL ROTATION IS INCLUDED because it is free and it is real: the
+   equator laps the poles. The synodic rate is the sidereal one (Snodgrass &
+   Ulrich 1990, from Doppler measurements) minus the earth's own motion around
+   the sun, because what we watch is the sun turning under a moving observer.
+   At the latitudes spots occur it is a small term — about 0.2 degrees a day
+   between the equator and 20 degrees — but over the span of a time series it
+   is the difference between spots that track and spots that drift. */
+const SOLAR_ROT_SIDEREAL = 14.713;   // degrees/day at the equator
+const SOLAR_ROT_B2 = -2.396;
+const SOLAR_ROT_B4 = -1.787;
+const EARTH_ORBIT_DEG_PER_DAY = 0.9856;
+
+/** Synodic rotation rate at a heliographic latitude, in degrees per day. */
+export function solarRotationRate(latDeg) {
+  const s = Math.sin(latDeg * SOLAR_DEG), s2 = s * s;
+  return SOLAR_ROT_SIDEREAL + SOLAR_ROT_B2 * s2 + SOLAR_ROT_B4 * s2 * s2
+         - EARTH_ORBIT_DEG_PER_DAY;
+}
+
+/**
+ * The instant NOAA's positions belong to, from the `observed_date` of the feed.
+ *
+ * Returns null for anything it cannot read, and every caller treats null as
+ * "apply no correction" — a wrong shift is worse than none, because it moves
+ * every spot by the same amount and so still looks entirely deliberate.
+ */
+export function noaaReferenceTime(observedDate) {
+  if (!observedDate) return null;
+  // Date-only ("2026-09-10") parses as UTC midnight; 2400Z is a day later.
+  const t = Date.parse(/^\d{4}-\d{2}-\d{2}$/.test(observedDate)
+    ? observedDate + 'T00:00:00Z'
+    : observedDate);
+  return Number.isFinite(t) ? t + 86400000 : null;
+}
+
+/**
+ * NOAA's longitude, carried forward to the moment actually being drawn.
+ *
+ * West is NEGATIVE in NOAA's convention, and a spot travels west as the sun
+ * turns, so time advancing makes the longitude smaller. That sign is the whole
+ * correction; get it backwards and the error doubles instead of cancelling.
+ */
+export function longitudeAt(latDeg, lonDeg, refMs, targetMs) {
+  if (refMs == null || targetMs == null || !Number.isFinite(refMs) ||
+      !Number.isFinite(targetMs)) return lonDeg;
+  const days = (targetMs - refMs) / 86400000;
+  return lonDeg - solarRotationRate(latDeg) * days;
+}
+
 /**
  * Back from a direction to heliographic coordinates. Exists so the round trip
  * can be measured: a placement that cannot be inverted is a placement nobody

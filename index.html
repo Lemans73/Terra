@@ -12870,6 +12870,19 @@ solarImageryState = createSunState(THREE, {
   world,
   viewStates,
 
+  /* EEN LOPENDE VLUCHT SCHRIJFT DE CAMERA ELKE FRAME, en de zoom van deze state
+     IS de camera-afstand. Zet een voorinstelling die afstand terwijl de
+     intredevlucht nog loopt, dan wint de vlucht bij het eerstvolgende frame.
+     Zonder deze haak kan de state daar niets tegen doen: `sunFlight` is van
+     index.html en de state kent hem niet.
+
+     Dezelfde afbreker als die van viewStates, en om dezelfde reden zonder de
+     haken: een afgebroken vlucht heeft geen `onDone` meer te melden. De
+     afstandsgrenzen horen er hier wél bij — die staan tijdens een vlucht op
+     0,01 en Infinity, en `stepSunFlight` zet ze pas bij aankomst terug. */
+  stopFlight: () => { sunFlight.actief = false;
+                      sunFlight.onStep = sunFlight.onDone = null; },
+
   /* DE NOAA-GEGEVENS KOMEN UIT DEZELFDE BRON als de aardweergave, en niet uit een
      eigen ophaalactie. `solarState` is de toestand die de vier SWPC-adapters
      vullen; twee lezers van één feed kunnen niet uit de pas lopen, twee feeds
