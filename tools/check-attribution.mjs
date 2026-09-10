@@ -38,12 +38,13 @@ const TILES = 'js/layers/tile-shell/sources.js';
 
 const selftest = process.argv.includes('--selftest');
 
-/* Their words, from the reply of 2026-09-10. Kept here as one string so that
-   changing it means changing it deliberately. */
+/* Their words, from the reply of 2026-09-10. As CONTIGUOUS phrases and not as
+   loose words: the first version of this check looked for the four pieces
+   anywhere in the file and passed while the url sat in a heading three lines
+   above the credit. Four true statements, and together they proved nothing.
+   The line break inside the blockquote falls where EOX's own wording has one. */
 const EOX_WORDING = [
-  'EOxCloudless',
-  'https://cloudless.eox.at',
-  'EOX IT Services GmbH',
+  'EOxCloudless https://cloudless.eox.at by EOX IT Services GmbH',
   'Contains modified Copernicus Sentinel data'
 ];
 
@@ -133,7 +134,11 @@ async function selftestRun() {
 
   const breaks = [
     { name: 'the EOX url dropped from the file',
-      doc: (s) => s.replace('https://cloudless.eox.at', 'https://s2maps.eu'),
+      doc: (s) => s.replace(/https:\/\/cloudless\.eox\.at/g, 'https://s2maps.eu'),
+      tiles: (s) => s },
+    { name: 'the credit line broken in the middle',
+      doc: (s) => s.replace('EOxCloudless https://cloudless.eox.at by EOX',
+                            'EOxCloudless\n> https://cloudless.eox.at by EOX'),
       tiles: (s) => s },
     { name: 'the year placeholder taken out of the note',
       doc: (s) => s,
