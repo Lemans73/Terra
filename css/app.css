@@ -2604,6 +2604,61 @@
   body.solar-on #sunspots-note { display: none; }
 
 
+  /* ---- WAT JE BEKIJKT, IN BEELD (Terry, sessie 50) ----
+
+     BOVEN HET BEELD EN NIET IN DE LINKERKOLOM. Daar stond hij eerst, en het
+     lagenpaneel loopt in deze state tot ongeveer 140px van de bovenrand: de
+     eerste twee regels waren zichtbaar en de scherpte-stip verdween er precies
+     achter. Gemeten, niet vermoed.
+
+     De gleuf waar de bolweergave staat is hier vrij — `#mode-switch` gaat uit
+     onder body.solar-on — en dit is bovendien de plek waar hij hoort: recht
+     boven het beeld dat hij beschrijft, als een onderschrift dat bovenaan staat.
+
+     `pointer-events: none` op het geheel. Er valt niets te bedienen, en zonder
+     dit ligt er een onzichtbare rechthoek over de scene waar je niet doorheen
+     kunt slepen. */
+  .solar-orient {
+    position: fixed;
+    top: 22px; left: 50%; transform: translateX(-50%);
+    z-index: var(--z-panel);
+    pointer-events: none;
+    max-width: min(420px, 46vw);
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    text-align: center;
+    font-size: 11px; line-height: 1.45;
+    color: var(--ink-3, #8b95a4);
+  }
+  /* De kwalificerende regel bovenaan, in de vorm die Terra elders voor een
+     kicker gebruikt: klein, gespatieerd, en niet de kleur van de rest. */
+  .solar-orient .so-kicker {
+    font-size: 9.5px; font-weight: 600;
+    letter-spacing: 0.09em; text-transform: uppercase;
+    color: var(--ink-dim, #6b7480);
+    margin-bottom: 2px;
+  }
+  .solar-orient .so-row { color: var(--ink-3, #8b95a4); }
+  .solar-orient .so-sharp { display: flex; align-items: center; gap: 6px; }
+  .solar-orient .so-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: currentColor; flex: 0 0 auto;
+  }
+  /* Drie standen, en ze horen NIET op elkaar te lijken. Groen en amber zijn
+     mededelingen — scherp genoeg, of haal opnieuw op. Rood is het enige dat een
+     waarschuwing is: voorbij het plafond van de bron zijn de extra pixels
+     verzonnen, en dat is een andere soort zin. */
+  .solar-orient .so-green { color: #7ec98f; }
+  .solar-orient .so-amber { color: #ffb347; }
+  .solar-orient .so-red   { color: #ff8a7a; font-weight: 600; }
+
+  /* Op een smal scherm staat de masthead dichter op de scene en is er geen
+     kolom om in te wonen. Hij gaat dan weg: op 375px is dit vijf regels over
+     precies het beeld dat je kwam bekijken. De uitlezing rechts draagt de
+     meting, en het paneel draagt de herkomst. */
+  @media (max-width: 640px) {
+    .solar-orient { display: none; }
+  }
+
   /* ---- DE KALE ZON (Terry, sessie 50) ----
 
      Zonder de instrumenthelft is deze state een TEKENING met gemeten gebieden
@@ -3786,6 +3841,7 @@
   body.presenting:not(.chrome-on) #details-panel,
   body.presenting:not(.chrome-on) .panel,
   body.presenting:not(.chrome-on) #qlist,
+  body.presenting:not(.chrome-on) #solar-orient,
   body.presenting:not(.chrome-on) #readout {
     display: none !important;
   }

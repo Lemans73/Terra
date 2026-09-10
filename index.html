@@ -337,6 +337,18 @@
     </div>
   </div>
 
+  <!-- WAT JE BEKIJKT, IN BEELD (Terry, sessie 50).
+
+       Drie dingen moeten waar zijn voor iemand die niets opent: dat de schijf
+       een OPNAME is en de omcirkelde gebieden niet, hoe oud die opname is, en
+       of de zoom voorbij de bron is gegaan. Een paneel beantwoordt dat aan wie
+       het vraagt, en niemand stelt een vraag die hij niet heeft.
+
+       Leeg in de markup: js/ui/solar-orient.js vult hem uit wat er werkelijk in
+       de scene staat. `hidden` tot dan, want een lege bak met een rand is een
+       belofte dat er zo iets komt. -->
+  <div class="solar-orient" id="solar-orient" hidden></div>
+
   <!-- DE TRANSPORTBALK VAN DE MAGNETOSFEER (sessie 30).
        Staat op dezelfde plek als het tijd-eiland en nooit tegelijk ermee: in
        die state gaat het eiland uit (css/app.css, naast body.solar-on) en komt
@@ -2309,6 +2321,9 @@ import { createSpaceState } from './js/states/space.js';
 // projectie. De GETEKENDE zon — fotosfeer, NOAA-gebieden, de aarde op schaal —
 // heeft niets van het net nodig en gaat daarom gewoon mee naar de standalone.
 import { createSunState } from './js/states/sun.js';
+// De uitlezing in beeld. Hoort bij de GETEKENDE zon net zo goed als bij de
+// instrumentbeelden, dus buiten de knip: hij beschrijft de scene en niet de bouw.
+import { createSolarOrient } from './js/ui/solar-orient.js';
 /* SOLAR:START — de INSTRUMENTBEELDEN, en alleen die. Zie tools/build-standalone.mjs
    stap 0: dit blok wordt uit terra.html geknipt, want de proxy is een Vercel Edge
    Function en die draait daar niet.
@@ -8360,7 +8375,7 @@ let msphereState = null, msphereBoundary = null, msphereTransport = null;
 // `solarState` was al bezet door de NOAA-zonnedata (regel ~2901), vandaar de
 // langere naam: dit is de STATE, dat zijn de MEETWAARDEN. `solarPanel` blijft
 // null wanneer de instrumenthelft is weggeknipt; niemand leest hem dan.
-let solarImageryState = null, solarPanel = null;
+let solarImageryState = null, solarPanel = null, solarOrient = null;
 let msphereGrid = null, msphereStrip = null, msphereLines = null, msphereScale = null;
 let msphereWind = null, msphereDipole = null, msphereCraft = null;
 let disks = null, lagrange = null, orbits = null, environment = null;
@@ -8844,6 +8859,9 @@ world.controls().addEventListener('change', houdCameraBovenDeAarde);
    werk waarvan de uitkomst niet kan veranderen. */
 world.controls().addEventListener('change', () => {
   if (solarImageryState) solarImageryState.tick();
+  // De scherpte hangt aan de zoom, dus deze uitlezing verandert mee. Hij schrijft
+  // alleen bij een echte wijziging — zie de noot bij refresh().
+  if (solarOrient) solarOrient.refresh();
 });
 
 /* HET SNELHEIDSSLOT — dezelfde vorm als het slot hierboven, en om een verwante
@@ -9075,6 +9093,8 @@ function applySolarState() {
   // niet in de state zelf: dit is het moment waarop er nieuwe data IS, en een
   // laag die daarop wacht met een eigen timer zou een tweede klok zijn.
   if (solarImageryState) solarImageryState.refreshSpots();
+  // De kale regel telt de gebieden, dus die verandert mee met de feed.
+  if (solarOrient) solarOrient.refresh();
   // Zonder dit verschijnen verse vlekken pas bij de volgende tick — zie dezelfde
   // reden bij bindCosmosToggle.
   updateSunUniform();
@@ -12030,6 +12050,10 @@ function utcOffsetLabel(d) {
 }
 
 function tick() {
+  /* De ouderdom van een beeld loopt door zonder dat er iets gebeurt, dus hij
+     hoort aan een klok en niet aan een gebeurtenis. Hier en niet in een eigen
+     interval: één klok in dit bestand is er precies één genoeg. */
+  if (solarOrient) solarOrient.refresh();
   // Eén Date voor beide helften: met drie losse aanroepen kon de klok rond
   // middernacht een tijd en een offset van verschillende momenten combineren.
   const nu = new Date();
@@ -12937,6 +12961,15 @@ solarImageryState = createSunState(THREE, {
   }
 });
 
+/* De uitlezing in beeld. Hij leest de scene via dezelfde meethaak als de rest en
+   weet niets van bronnen of ophalen: staat er een instrumentbeeld, dan zegt hij
+   dat; staat er de getekende zon, dan zegt hij dát. Daarom hoort hij hier en niet
+   bij het paneel — hij geldt ook in de kale versie. */
+solarOrient = createSolarOrient({
+  state: () => (solarImageryState ? solarImageryState.state() : null),
+  active: () => !!(viewStates && viewStates.isActive('sun'))
+});
+
 /* SOLAR:START */
 /* Het lagenstapel-paneel. Het kent de state alleen via deze haken, zodat het
    zonder browser te toetsen is en de state niets van DOM weet. `setOpacity` gaat
@@ -13358,6 +13391,8 @@ viewStates.onChange((actief) => {
      zie `solarReadoutPending`. */
   solarReadoutPending = false;
   if (actief === 'sun' && !showSolarActivity()) solarReadoutPending = true;
+  // Verschijnen én verdwijnen: de uitlezing hoort bij deze state en bij geen andere.
+  if (solarOrient) solarOrient.refresh();
   /* DE MAGNETOSFEER OPENT ZIJN CONDITIES ALLEEN OP EEN BREED SCHERM (Terry,
      sessie 32). De zon doet het overal en dat blijft voorlopig zo; hier ligt het
      anders, en het verschil is de tijdlijn. Onderin staat al een uitlezing over

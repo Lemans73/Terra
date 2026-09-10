@@ -543,6 +543,11 @@ export function createSunState(THREE, env) {
       radiusArcsec: +layer.geometry.radiusArcsec.toFixed(2),
       pxPerRadius: +layer.geometry.pxPerRadius.toFixed(1),
       coronagraph: layer.coronagraph,
+      /* The occulter belongs with the slot, not with the caller. It is the one
+         hardcoded number in this layer — the metadata describes the detector,
+         not the disc in front of it — and whoever reports a black centre needs
+         to be able to say how big it is. */
+      occulter: src.occulter || null,
       sharpness: sharpness(layer.texPx, layer.field, screenPx, viewR, layer.geometry.rsun),
       earthTexels: +earthInTexels(layer.texPx, layer.field).toFixed(2)
     };
