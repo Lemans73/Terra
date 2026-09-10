@@ -214,6 +214,46 @@ export function createSpotLayer(THREE, parent) {
     return shown;
   }
 
+  /* WHERE THE LABELS GO, asked rather than recomputed.
+
+     index.html draws the region labels — an HTML element with a leader line per
+     spot, and a click that opens the NOAA detail card. It used to derive their
+     positions itself from the earth view's sun: that sun's centre, that sun's
+     radius, that sun's basis. None of those exist here, where the sun sits at
+     the origin with radius 1 inside a group that is scaled to world units.
+
+     So the layer answers the question instead of the caller guessing at it.
+     WORLD coordinates via matrixWorld, because that is what a caller needs to
+     project, and it stays right if the group is ever moved or rescaled.
+
+     `facing` is the layer's own visibility test rather than a threshold the
+     caller picks. Under this orthographic view the observer looks down +z, so
+     it is a different test from the earth view's — and a borrowed threshold is
+     how session 48 lost an afternoon to spot radii from another scene. */
+  const _anchor = new THREE.Vector3();
+  function labelAnchors() {
+    const out = [];
+    group.updateWorldMatrix(true, false);
+    for (let i = 0; i < regions.length; i++) {
+      const m = meshes[i];
+      if (!m || !m.visible || !m.userData.dir) continue;
+      const d = m.userData.dir;
+      _anchor.set(d.x, d.y, d.z).normalize().multiplyScalar(SHELL)
+             .applyMatrix4(group.matrixWorld);
+      out.push({
+        region: regions[i].region,
+        data: regions[i],
+        world: { x: _anchor.x, y: _anchor.y, z: _anchor.z },
+        dir: { x: d.x, y: d.y, z: d.z },
+        // Een functie, zodat beide zonnen dezelfde vorm teruggeven. Hier hangt
+        // hij niet van de camera af: de waarnemer kijkt per constructie langs
+        // +z, dus de zichtbare helft is z > 0 en niets anders.
+        facing: () => d.z > 0
+      });
+    }
+    return out;
+  }
+
   function setVisible(on) { group.visible = !!on; }
 
   /** Filled caps on the bare sun, rings over an instrument frame. */
@@ -257,5 +297,6 @@ export function createSpotLayer(THREE, parent) {
     };
   }
 
-  return { group, setRegions, place, setVisible, setOutline, state, frame: () => frame };
+  return { group, setRegions, place, setVisible, setOutline, state,
+           labelAnchors, frame: () => frame };
 }

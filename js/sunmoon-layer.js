@@ -773,9 +773,49 @@ export function createSunMoonLayer(THREE, opts = {}) {
     eclipse: false, sunspots: true
   });
 
+  /* WAAR DE GEBIEDSLABELS HEEN MOETEN, in wereldcoordinaten.
+
+     index.html tekent per actief gebied een label met een leader-line en een
+     klik naar de NOAA-kaart. Het rekende die posities zelf uit deze laag: dit
+     middelpunt, deze straal, deze basis. De zon-state met de instrumentbeelden
+     heeft geen van drieen — daar staat de zon in de oorsprong met straal 1 —
+     en dus ontbraken de labels daar terwijl de ringen er wel stonden.
+
+     Beide lagen beantwoorden nu dezelfde vraag, zodat de tekencode er maar een
+     hoeft te stellen. `facing` komt mee als FUNCTIE en niet als vlag: hier
+     draai je om de zon heen, dus welke helft je ziet hangt aan de camera; in de
+     orthografische scene kijkt de waarnemer per constructie langs +z. Een van
+     de twee tests lenen voor de andere weergave geeft labels die aan de
+     verkeerde kant blijven hangen. */
+  const _labelPos = new THREE.Vector3();
+  const _labelNaar = new THREE.Vector3();
+  function labelAnchors() {
+    const out = [];
+    const R = cfg.sunRadius;
+    for (let i = 0; i < sunspotData.length; i++) {
+      const m = spotMeshes[i];
+      if (!m || !m.visible || !m.userData.dir) continue;
+      const d = m.userData.dir;
+      _labelPos.copy(d).multiplyScalar(R).add(sunGroup.position);
+      out.push({
+        region: sunspotData[i].region,
+        data: sunspotData[i],
+        world: { x: _labelPos.x, y: _labelPos.y, z: _labelPos.z },
+        dir: { x: d.x, y: d.y, z: d.z },
+        // Richting van de zon NAAR de camera, niet naar de aarde: in deze
+        // weergave draai je er omheen.
+        facing: (cam) => {
+          _labelNaar.subVectors(cam.position, sunGroup.position).normalize();
+          return d.dot(_labelNaar) > 0.12;
+        }
+      });
+    }
+    return out;
+  }
+
   return {
     group, update, setVisible, setTrackWindow, dispose,
-    setUmbra, setEclipsePath, setSunspots,
+    setUmbra, setEclipsePath, setSunspots, labelAnchors,
     sunDirection, moonDirection, config: cfg,
     // handig voor het aanroepende bestand en voor metingen
     meshes: { sunGroup, moonGroup, sunMarker, moonMarker, sunMaterial, moonMaterial,

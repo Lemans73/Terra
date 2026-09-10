@@ -608,6 +608,11 @@ export function createSunState(THREE, env) {
     setViewR,
     viewR: () => viewR,
     spots,
+    /* For the region labels in index.html: where each visible region sits, in
+       world coordinates. A getter and not a stored list — the spots move with
+       every refresh, and a list handed out once is a list that goes stale
+       without saying so. */
+    labelAnchors: () => spots.labelAnchors(),
     refreshSpots,
     setSpotsVisible,
     /* Where the earth stands, and a way to put it back. Both in solar radii. */

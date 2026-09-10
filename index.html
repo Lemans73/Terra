@@ -6968,6 +6968,29 @@ function flyTo(d) {
 // van een paar pixels; zeven labels eromheen zou ruis zijn, geen informatie.
 const regionLabels = [];
 
+/* WELKE ZON DE LABELS VOLGEN, op één plek beantwoord.
+
+   Er zijn er twee: Terra's eigen bol in de aardweergave, en de bol van de
+   zon-state met de instrumentbeelden. Ze staan ergens anders, hebben een andere
+   straal en een andere basis, en tot sessie 49 rekende deze code de posities
+   zelf uit ÉÉN daarvan — waardoor de labels in de andere weergave gewoon
+   ontbraken terwijl de ringen er wel stonden.
+
+   De laag antwoordt nu zelf met wereldcoördinaten (`labelAnchors`), dus hier
+   staat alleen nog de keuze. Levert geen van beide iets, dan is er niets te
+   labelen en zeggen de labels dat door weg te blijven. */
+function regionLabelSource() {
+  /* SOLAR:START */
+  if (solarImageryState && viewStates && viewStates.isActive('solar')) {
+    return solarImageryState.labelAnchors();
+  }
+  /* SOLAR:END */
+  if (inZonAanzicht() && sunMoon && sunMoon.meshes.sunspotGroup.visible) {
+    return sunMoon.labelAnchors();
+  }
+  return null;
+}
+
 // Een gebied als readout-item. Dezelfde vorm als een event uit de store, zodat
 // showDetail() er zonder uitzonderingen mee overweg kan — op `extra` na, dat de
 // vrije regels vult die een beving niet nodig heeft.
@@ -6993,14 +7016,18 @@ function regionItem(r) {
   };
 }
 
+/* OP REGIONUMMER GEKOPPELD EN NIET OP VOLGORDE.
+
+   Het label en de vlek kwamen uit twee arrays die op index werden uitgelijnd.
+   Zolang beide dezelfde lijst in dezelfde volgorde doorlopen klopt dat, en
+   zodra er ergens een gebied wordt overgeslagen — een gebied zonder positie,
+   een gebied achter de rand — wijst label 4498 naar de ring van 4500. Alles
+   ziet er dan nog steeds uit zoals het hoort, op het antwoord na. */
 function rebuildRegionLabels() {
   regionLabels.forEach(l => { l.el.remove(); l.line.remove(); });
   regionLabels.length = 0;
-  if (!sunMoon) return;
-  const meshes = sunMoon.meshes.spotMeshes;
-  solarState.regions.forEach((r, i) => {
-    const mesh = meshes[i];
-    if (!mesh || !mesh.userData.dir) return;
+  solarState.regions.forEach((r) => {
+    if (r.lat == null || r.lon == null) return;
     const el = document.createElement('div');
     el.className = 'rlabel';
     el.innerHTML = '<b>' + r.region + '</b><span>' +
@@ -7016,30 +7043,31 @@ function rebuildRegionLabels() {
     const line = document.createElementNS(SVG_NS, 'line');
     line.setAttribute('class', 'rline');
     labelSvg.appendChild(line);
-    regionLabels.push({ el, line, mesh });
+    regionLabels.push({ el, line, region: r.region });
   });
 }
 
 const _regionPos = new THREE.Vector3();
-const _regionNaar = new THREE.Vector3();
 function positionRegionLabels(cam) {
   if (!regionLabels.length) return;
-  const aan = inZonAanzicht() && sunMoon && sunMoon.meshes.sunspotGroup.visible;
-  const zon = sunMoon ? sunMoon.meshes.sunGroup.position : null;
-  const R = sunMoon ? sunMoon.config.sunRadius : 1;
-  // Richting van de zon naar de camera: dát bepaalt welke helft je ziet, niet de
-  // richting naar de aarde. In het zonaanzicht draai je er immers omheen.
-  if (aan) _regionNaar.subVectors(cam.position, zon).normalize();
+  /* De laag zegt WAAR de gebieden staan; deze functie doet alleen het scherm.
+     Welke zon dat is, staat in regionLabelSource() — en geen van beide levert
+     iets als er niets te labelen valt. */
+  const anchors = regionLabelSource();
+  const byRegion = new Map();
+  if (anchors) for (const a of anchors) byRegion.set(a.region, a);
+
   // Pass 1: zichtbaarheid en schermpositie.
   const items = [];
   for (const l of regionLabels) {
-    if (!aan) { l.el.style.display = 'none'; l.line.style.display = 'none'; continue; }
-    const dir = l.mesh.userData.dir;
-    const zichtbaar = dir.dot(_regionNaar) > 0.12;   // net binnen de rand blijven
+    const a = byRegion.get(l.region);
+    // Geen anker betekent: dit gebied wordt op dit moment niet getekend. Een
+    // label zonder vlek eronder is een label dat naar niets wijst.
+    const zichtbaar = !!a && a.facing(cam);
     l.el.style.display = zichtbaar ? 'block' : 'none';
     l.line.style.display = zichtbaar ? 'block' : 'none';
     if (!zichtbaar) continue;
-    _regionPos.copy(dir).multiplyScalar(R).add(zon).project(cam);
+    _regionPos.set(a.world.x, a.world.y, a.world.z).project(cam);
     const x = (_regionPos.x * 0.5 + 0.5) * window.innerWidth;
     const y = (-_regionPos.y * 0.5 + 0.5) * window.innerHeight;
     items.push({ l, x, y, ty: y - 34 });             // label boven de vlek
