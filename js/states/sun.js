@@ -65,7 +65,30 @@ import { noaaReferenceTime } from '../layers/sun/frame.js';
    the corona has somewhere to go, tight enough that the disc still carries the
    picture. */
 export const VIEW_R_DEFAULT = 1.65;
-const VIEW_R_MIN = 1.02;
+/* HOE DICHT JE MAG KOMEN, EN WAT DAT KOST (Terry, sessie 50).
+
+   Dit stond op 1.02: de zonneschijf vult dan precies de schermhoogte en verder
+   inzoomen kon niet. Dat is dichterbij dan de oude zon-state toeliet noch verder
+   — die kwam met een perspectiefcamera tot ongeveer 0,75 — en het knelde twee
+   dingen tegelijk af. Je kon geen gebied van dichtbij bekijken, en de
+   scherpte-indicator kon zijn eigen amberdrempel niet halen: de verhouding liep
+   tot 1,01 waar amber bij 1,25 begint.
+
+   DE LADDER, doorgerekend met fieldFor/textureSize/sharpness zelf, voor AIA
+   (rsun = 1589 bronpixels per zonsstraal, plafond 2048 texels):
+
+     schermbuffer 1994 px   groen tot 0,75 · rood vanaf ~0,63
+     schermbuffer 1080 px   groen tot 0,40 · rood vanaf ~0,25
+
+   Tot VIEW_R ≈ 0,52 blijft de verhouding na opnieuw ophalen constant, want het
+   texelplafond en het 1,25× ruimere veld schalen allebei mee met de zoom: elke
+   keer opnieuw ophalen levert dan echt meer detail. Daaronder haal je de bron op
+   ware resolutie en is 1589 wat er is; verder inzoomen vergroot texels.
+
+   0,25 IS BEWUST VOORBIJ DAT PUNT. Je mag van dichtbij kijken, en de indicator
+   zegt er eerlijk bij dat je voorbij de bron zit — zelfde regel als bij het
+   zwarte gat van de coronagraaf: liever waar en onprettig dan glad en onwaar. */
+const VIEW_R_MIN = 0.25;
 const VIEW_R_MAX = 32;
 
 /* ZOOM RIDES ON THE CAMERA DISTANCE, and that is not a detour.
