@@ -85,9 +85,16 @@ export const VIEW_R_DEFAULT = 1.65;
    keer opnieuw ophalen levert dan echt meer detail. Daaronder haal je de bron op
    ware resolutie en is 1589 wat er is; verder inzoomen vergroot texels.
 
-   0,25 IS BEWUST VOORBIJ DAT PUNT. Je mag van dichtbij kijken, en de indicator
+   0,25 IS BEWUST VOORBIJ DAT PUNT (Terry, sessie 50): op die stand breng je een
+   flare fatsoenlijk in kaart, en de zachtheid stoort daarbij niet. De indicator
    zegt er eerlijk bij dat je voorbij de bron zit — zelfde regel als bij het
-   zwarte gat van de coronagraaf: liever waar en onprettig dan glad en onwaar. */
+   zwarte gat van de coronagraaf: liever waar en onprettig dan glad en onwaar.
+
+   LET OP BIJ EEN CORONAGRAAF. Zo diep zit je ruim binnen de occulter — C3 blankt
+   tot 4,67 R☉ — en dan is elke pixel zwart. Dat was op 1,02 ook al zo; wat het
+   draaglijk maakt is dat js/ui/solar-orient.js het benoemt in plaats van je
+   ernaar te laten raden. Zonder die regel is dit het zwarte scherm dat sessie 49
+   een halve sessie kostte. */
 const VIEW_R_MIN = 0.25;
 const VIEW_R_MAX = 32;
 
