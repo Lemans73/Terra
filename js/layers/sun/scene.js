@@ -14,6 +14,7 @@
    ============================================================ */
 
 import { SUN_VERT, SUN_FRAG, sunUniforms } from './shader.js';
+import { PHOTOSPHERE_VERT, PHOTOSPHERE_FRAG, photosphereUniforms } from './photosphere.js';
 
 /* One solar radius in world units. Terra's globe has radius 100, and the
    camera distances, the zoom limits and the controls are all built around that
@@ -94,18 +95,23 @@ export function createSunScene(THREE) {
      megabytes, so a visitor who has just arrived is looking at an empty view.
      Terra already had a sun for that — the body at radius 420 in the ordinary
      earth view, carrying the NOAA regions — and this is that same sun in these
-     coordinates: one colour, above 1 per channel so the bloom has something to
-     take hold of, exactly as sunmoon-layer.js sets it.
+     coordinates. It carries a surface rather than a single colour: see
+     photosphere.js for what is modelled, what is drawn, and why those are not
+     the same thing. A flat colour at 2.6 per channel bloomed hard enough to
+     erase the region caps drawn on top of it.
 
      ITS VISIBILITY IS DERIVED, NEVER STORED. It is on precisely when no slot
      holds a texture. A flag of its own would be a second thing that has to say
      the same as the first, and the two would disagree the first time a fetch
      failed halfway — leaving either two suns or none. */
   const bare = new THREE.Mesh(
-    new THREE.SphereGeometry(1, 64, 48),
-    new THREE.MeshBasicMaterial()
+    new THREE.SphereGeometry(1, 128, 96),
+    new THREE.ShaderMaterial({
+      vertexShader: PHOTOSPHERE_VERT,
+      fragmentShader: PHOTOSPHERE_FRAG,
+      uniforms: photosphereUniforms(THREE)
+    })
   );
-  bare.material.color.setRGB(2.6, 2.25, 1.85);
   bare.renderOrder = -50;
   group.add(bare);
 
