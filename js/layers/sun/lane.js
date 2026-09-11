@@ -29,17 +29,16 @@ export const XRAY_LONG_BAND = '0.1-0.8nm';
  * inventing a letter. Null for anything the instrument cannot have said: zero
  * is GOES's outage marker, and a negative is a sentinel.
  *
- * The rounding happens BEFORE the decade test — 9.96e-7 rounds to 10.0 tenths
- * of a B, and "B10.0" is spelled "C1.0".
+ * THE DIGIT IS CUT, NOT ROUNDED, because that is what SWPC does: 1.2851e-6 is
+ * a C1.2 in their list, not a C1.3. Measured on the week to 2026-09-11 against
+ * all 34 flares with a peak: cutting agrees with every one of their classes,
+ * rounding disagrees with 13. The tiny addition keeps a value that is exactly
+ * on a tenth in decimal — and a hair below it in binary — from dropping one.
  */
 export function xrayClassOf(flux) {
   if (!Number.isFinite(flux) || flux <= 0) return null;
-  let e = Math.min(Math.max(Math.floor(Math.log10(flux)), -8), -4);
-  let digit = flux / Math.pow(10, e);
-  if (Number(digit.toFixed(1)) >= 10 && e < -4) {
-    e += 1;
-    digit = flux / Math.pow(10, e);
-  }
+  const e = Math.min(Math.max(Math.floor(Math.log10(flux)), -8), -4);
+  const digit = Math.floor(flux / Math.pow(10, e) * 10 + 1e-9) / 10;
   return 'ABCMX'[e + 8] + digit.toFixed(1);
 }
 
@@ -176,3 +175,89 @@ export function xraySampleAt(points, time, nearMs = 90000) {
   if (lo > 0 && Math.abs(points[lo - 1].time - time) < Math.abs(best.time - time)) best = points[lo - 1];
   return Math.abs(best.time - time) <= nearMs ? best : null;
 }
+
+/* ---- The flares ---------------------------------------------------------
+
+   SWPC's own reduction of the same curve: begin, peak and end of every flare,
+   with the class SWPC gave it. That class is what the lane writes. Ours
+   (xrayClassOf) only checks the parser — if the two disagree, the fault is
+   here, not in NOAA's list. */
+
+// Edited-event times come without a zone, and they are UTC.
+const utcOf = s => (s ? Date.parse(/[zZ]$|[+-]\d\d:?\d\d$/.test(s) ? s : s + 'Z') : NaN);
+
+/**
+ * `xray-flares-7-day.json` as flares, oldest first. A flare can be listed
+ * without a maximum — NOAA reported a begin and an end but no peak — and it
+ * stays in the list: it happened, and saying "no maximum reported" is a
+ * statement, where leaving it out would be a silence.
+ */
+export function parseFlareRows(json) {
+  const out = [];
+  for (const r of Array.isArray(json) ? json : []) {
+    const begin = utcOf(r && r.begin_time);
+    if (!Number.isFinite(begin)) continue;
+    const peak = utcOf(r.max_time);
+    const end = utcOf(r.end_time);
+    out.push({
+      begin,
+      peak: Number.isFinite(peak) ? peak : null,
+      end: Number.isFinite(end) ? end : null,
+      cls: r.max_class || null,
+      peakFlux: Number.isFinite(+r.max_xrlong) && r.max_xrlong != null ? +r.max_xrlong : null,
+      satellite: r.satellite != null ? r.satellite : null,
+      region: null
+    });
+  }
+  out.sort((a, b) => a.begin - b.begin);
+  return out;
+}
+
+/**
+ * The XRA entries of `edited_events.json`: GOES X-ray events, each with the
+ * region NOAA assigned it and the satellite that saw it ("G18", "G19"). Both
+ * satellites report the same flare, so most peaks appear twice.
+ */
+export function parseXraEvents(json) {
+  const out = [];
+  for (const r of Array.isArray(json) ? json : []) {
+    if (!r || r.type !== 'XRA') continue;
+    const peak = utcOf(r.max_datetime);
+    if (!Number.isFinite(peak)) continue;
+    const sat = /^G(\d+)$/.exec(r.observatory || '');
+    out.push({
+      peak,
+      satellite: sat ? +sat[1] : null,
+      region: Number.isFinite(+r.region) && r.region ? +r.region : null
+    });
+  }
+  return out;
+}
+
+/* How far apart two peaks may be and still be the same flare. Both lists come
+   from the same satellites on the same one-minute series; in the week measured
+   on 2026-09-11 all 34 peaks matched within a minute. */
+export const FLARE_MATCH_MS = 2 * 60000;
+
+/**
+ * Give each flare the region NOAA assigned it. The event from the same
+ * satellite as the flare list wins; the other satellite's record of the same
+ * peak is the fallback, because the region is NOAA's call either way. No match
+ * leaves `region` null, and the card says so.
+ */
+export function joinFlareRegions(flares, xra, tolMs = FLARE_MATCH_MS) {
+  return flares.map(f => {
+    if (f.peak == null) return f;
+    let same = null, other = null;
+    for (const e of xra) {
+      if (!e.region || Math.abs(e.peak - f.peak) > tolMs) continue;
+      if (e.satellite === f.satellite) { if (!same) same = e; }
+      else if (!other) other = e;
+    }
+    const hit = same || other;
+    return hit ? { ...f, region: hit.region } : f;
+  });
+}
+
+/** The letter of a class, for choosing its colour. */
+export const flareLetter = cls => (cls && /^[ABCMX]/.test(cls) ? cls[0] : null);

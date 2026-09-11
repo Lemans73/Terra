@@ -9117,6 +9117,49 @@ function showSolarActivity() {
   return !!v;
 }
 
+/* A FLARE, as SWPC reduced it from the GOES curve, with the region NOAA
+   assigned it (js/layers/sun/lane.js). Every value on this card was measured
+   or assigned by NOAA, so where they have nothing the card says so instead of
+   leaving the row out. The class is SWPC's own, never recomputed. */
+function flareView(f) {
+  const letter = f.cls && /^[ABCMX]/.test(f.cls) ? f.cls[0] : 'B';
+  const color = getComputedStyle(document.documentElement)
+    .getPropertyValue('--solar-flare-' + (letter === 'A' ? 'b' : letter.toLowerCase())).trim();
+  const when = t => (t == null ? { absent: true, text: 'not reported' } : eventTijd(t));
+  const actions = [];
+  /* Only with the imagery half, and only with a peak to fetch at. The moment is
+     set again here because the card can outlive a drag on the strip. */
+  if (solarPanel && f.peak != null) {
+    actions.push({ label: 'Fetch this moment', icon: ICON_MOMENT,
+      title: 'Fetch the images at the peak of this flare, with the sources chosen in the panel.',
+      run: () => { sceneClock.zet(new Date(f.peak)); if (solarTime) solarTime.refresh(); solarPanel.fetchAll(); } });
+  }
+  return {
+    kind: 'flare',
+    kicker: 'SOLAR FLARE',
+    color: color || COLORS.region,
+    headline: f.cls ? f.cls + ' flare' : 'Flare without a reported maximum',
+    rows: [
+      ['Class', f.cls ? f.cls + ' · SWPC' : { absent: true, text: 'no maximum reported' }],
+      ['Peak flux', f.peakFlux != null ? f.peakFlux.toExponential(2) + ' W/m²'
+                                       : { absent: true, text: 'no maximum reported' }],
+      ['Begin', when(f.begin)],
+      ['Peak', when(f.peak)],
+      ['End', when(f.end)],
+      ['Region', f.region ? f.region + ' · assigned by NOAA'
+                          : { absent: true, text: 'no region assigned by NOAA' }],
+      ['Measured by', 'GOES-' + f.satellite + ' · 0.1–0.8 nm']
+    ],
+    actions,
+    link: { href: 'https://www.swpc.noaa.gov/products/goes-x-ray-flux', label: 'GOES X-ray flux' }
+  };
+}
+
+// The same way back as a region: to the sun's activity, if that was what lay below.
+function showFlare(f) {
+  showDetail(flareView(f), detail.kind() === 'solar' ? { backTo: showSolarActivity } : null);
+}
+
 /* DE UITLEZING DIE BIJ AANKOMST NOG GEEN DATA HAD (Terry, sessie 50).
 
    `solarView()` geeft null zolang er van NOAA niets binnen is, en dan opent de
@@ -13097,7 +13140,8 @@ try {
       }
       return null;
     },
-    onFetch: solarPanel ? () => solarPanel.fetchAll() : null
+    onFetch: solarPanel ? () => solarPanel.fetchAll() : null,
+    onFlare: showFlare
   });
 } catch (e) {
   console.error('Terra: the solar time strip could not be set up.', e);

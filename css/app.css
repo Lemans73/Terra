@@ -140,6 +140,14 @@
     --solar-class: rgba(160,180,210,0.42);
     --solar-onscreen: #ffb347;
     --solar-flag: #d4564f;
+    /* The flare classes, weakest to strongest: a quiet grey for A and B, then
+       blue, orange and red. None of them is the dashed amber of the image on
+       screen, which is a different kind of mark. The flare card takes its colour
+       from here too, so a class looks the same on the lane and on the card. */
+    --solar-flare-b: #6b7a90;
+    --solar-flare-c: #6ea8ff;
+    --solar-flare-m: #ff8a3d;
+    --solar-flare-x: #ff4d5e;
     --dock-lift: calc(var(--dock-bottom) + var(--dock-h) + var(--dock-gap));
     --panel-lift: var(--dock-lift);
     /* VRIJE RUIMTE BOVEN EEN PANEEL, en dit getal is een BEGINWAARDE.

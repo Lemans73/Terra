@@ -30,7 +30,8 @@
    palette, a window, and the pointer.
    ============================================================ */
 
-import { xrayEnvelope, xrayWithGaps, xraySampleAt, xrayClassOf } from '../layers/sun/lane.js';
+import { xrayEnvelope, xrayWithGaps, xraySampleAt, xrayClassOf, flareLetter } from '../layers/sun/lane.js';
+import { CLICK_SLOP_PX } from './label-passthrough.js';
 
 /* The three windows, the same three the magnetosphere strip offers, and the
    first is the default: one habit for both strips. Each ends at the newest
@@ -65,8 +66,20 @@ const SOLAR_SCALE = { lo: -8, hi: -3, tick: 1, log: true };
 const SOLAR_PALETTE = {
   ink: '--ink', inkDim: '--ink-dim', inkFaint: '--ink-faint', hair: '--hair',
   measured: '--solar-measured', classLine: '--solar-class', onScreen: '--solar-onscreen',
-  flag: '--solar-flag'
+  flag: '--solar-flag',
+  A: '--solar-flare-b', B: '--solar-flare-b', C: '--solar-flare-c',
+  M: '--solar-flare-m', X: '--solar-flare-x'
 };
+
+/* FROM M UPWARD A FLARE GETS A LINE AND ITS CLASS. Below that the band at the
+   lane's foot is the mark: a quiet week has thirty-odd B and C flares, and as
+   many full-height lines would bury the curve they were read from. Hover and
+   the card say the rest. */
+const SOLAR_LABELLED = new Set(['M', 'X']);
+
+/* How far beside a flare's band a pointer may be and still mean that flare,
+   in CSS pixels. A C flare of ten minutes is two pixels wide on a week. */
+const SOLAR_FLARE_REACH_PX = 5;
 
 const SOLAR_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
                       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -93,6 +106,8 @@ export function createSolarTime(deps) {
      absent in the standalone, where there is nothing to fetch. */
   const onScreen = deps.onScreen || (() => null);
   const onFetch = deps.onFetch || null;
+  // Opens the flare's card; the strip has already put the moment on its peak.
+  const onFlare = deps.onFlare || null;
 
   const root = document.getElementById('solar-time');
   const canvas = document.getElementById('solar-lane');
@@ -194,6 +209,29 @@ export function createSolarTime(deps) {
     if (shown && Number.isFinite(shown.time)) {
       marks.push({ time: shown.time, label: shown.label, color: palette.onScreen, dash: [3, 3] });
     }
+
+    /* The flares in the window: a band from begin to end at the lane's foot for
+       every one, and from M upward a line at the peak with SWPC's class. A flare
+       still in progress has no end yet, so its band runs to its peak — or, with
+       neither, a minute past its begin: it happened, and it may not round to
+       nothing. */
+    const flares = feed.flares().filter(f => (f.end ?? f.peak ?? f.begin) >= from && f.begin <= to);
+    S.flares = flares;
+    const bands = flares.map(f => ({
+      from: f.begin,
+      to: f.end != null ? f.end : (f.peak != null ? f.peak : f.begin + 60000),
+      color: palette[flareLetter(f.cls)] || palette.A
+    }));
+    let labelled = 0;
+    for (const f of flares) {
+      const letter = flareLetter(f.cls);
+      if (f.peak == null || !SOLAR_LABELLED.has(letter)) continue;
+      marks.push({ time: f.peak, label: f.cls, color: palette[letter] });
+      labelled++;
+    }
+    S.bands = bands.length;
+    S.labelled = labelled;
+
     const state = feed.state();
     return {
       width: S.w, height: S.h, from, to, mono,
@@ -206,6 +244,7 @@ export function createSolarTime(deps) {
         color: palette.inkDim,
         series: [{ points, color: palette.measured, width: 1.3, flagColor: palette.flag }],
         marks: SOLAR_CLASS_MARKS.map(m => ({ ...m, color: palette.classLine })),
+        bands,
         beyond: state.error ? 'no answer from NOAA' : (state.points ? 'no measurement' : 'loading…')
       }],
       playhead: cursorTime(),
@@ -216,6 +255,31 @@ export function createSolarTime(deps) {
     };
   }
 
+  /* Which flare a pointer at `x` (CSS px in the canvas) means, if any: the one
+     whose band it is on, or within reach of, and of several the one whose peak
+     is nearest. A flare without a peak is only reachable at its begin — its band
+     can run for hours, and it may not swallow every click in between. */
+  function flareAt(x) {
+    if (!S.flares || !S.flares.length || !S.plotW) return null;
+    const xOf = Chart.xMapper(S.from, S.to, Chart.PAD, S.plotW);
+    let best = null, bestD = Infinity;
+    for (const f of S.flares) {
+      const anchor = f.peak != null ? f.peak : f.begin;
+      const x0 = xOf(f.begin) - SOLAR_FLARE_REACH_PX;
+      const x1 = (f.peak != null && f.end != null ? xOf(f.end) : xOf(anchor)) + SOLAR_FLARE_REACH_PX;
+      if (x < x0 || x > x1) continue;
+      const d = Math.abs(xOf(anchor) - x);
+      if (d < bestD) { bestD = d; best = f; }
+    }
+    return best;
+  }
+
+  function flareLine(f) {
+    const peak = f.peak != null ? ' · peak ' + fmtUtc(f.peak).slice(11, 16) : '';
+    return (f.cls ? f.cls + ' flare' : 'flare, no maximum reported') +
+      (f.region ? ' · region ' + f.region : '') + peak;
+  }
+
   function drawHoverBox(result) {
     if (hoverX === null || !result || result.hoverAt === null) return;
     const t = result.hoverAt;
@@ -224,6 +288,8 @@ export function createSolarTime(deps) {
       ? xrayClassOf(p.v) + '  ' + p.v.toExponential(1) + ' W/m²' + (p.flag ? '  !' : '')
       : 'no measurement';
     const lines = [fmtUtc(p ? p.time : t), value];
+    const f = flareAt(hoverX);
+    if (f) lines.push(flareLine(f));
     ctx.save();
     ctx.font = '10px ' + mono;
     let bw = 0;
@@ -314,33 +380,60 @@ export function createSolarTime(deps) {
     else setPending = setTimeout(() => { setPending = null; apply(); }, 50 - since);
   }
 
+  /* A flare chosen: the moment goes to its peak, and its card opens. The same
+     call serves a click on the lane and, later, a click on its label on the
+     sun, so both routes land in exactly the same place. */
+  function selectFlare(f) {
+    setMoment(f.peak != null ? f.peak : f.begin, true);
+    if (onFlare) onFlare(f);
+  }
+
+  /* CLICK OR DRAG, decided by how far the pointer travelled — the same number
+     as the labels and the globe use (CLICK_SLOP_PX). A drag scrubs and snaps to
+     nothing; a click on a flare means that flare, anywhere else that moment.
+     Nothing is written on the press itself, so a click is one write, not two. */
+  let press = null;
   function onDown(ev) {
     if (ev.button !== 0 && ev.pointerType === 'mouse') return;
-    dragging = true;
+    press = { id: ev.pointerId, x: ev.clientX, y: ev.clientY };
+    dragging = false;
     canvas.setPointerCapture(ev.pointerId);
     hoverX = null;
-    setMoment(timeAt(ev), true);
     ev.preventDefault();
   }
   function onMove(ev) {
-    if (dragging) { setMoment(timeAt(ev)); return; }
+    if (press && ev.pointerId === press.id) {
+      if (!dragging && Math.hypot(ev.clientX - press.x, ev.clientY - press.y) >= CLICK_SLOP_PX) {
+        dragging = true;
+      }
+      if (dragging) setMoment(timeAt(ev));
+      return;
+    }
     if (ev.pointerType !== 'mouse') return;
     const r = canvas.getBoundingClientRect();
     hoverX = ev.clientX - r.left;
     draw();
   }
   function onUp(ev) {
-    if (!dragging) return;
+    if (!press || ev.pointerId !== press.id) return;
+    const wasDrag = dragging;
+    press = null;
     dragging = false;
     try { canvas.releasePointerCapture(ev.pointerId); } catch {}
-    setMoment(timeAt(ev), true);
+    if (wasDrag) { setMoment(timeAt(ev), true); return; }
+    const f = flareAt(ev.clientX - canvas.getBoundingClientRect().left);
+    if (f) selectFlare(f);
+    else setMoment(timeAt(ev), true);
   }
-  function onLeave() { if (!dragging && hoverX !== null) { hoverX = null; draw(); } }
+  function onCancel(ev) {
+    if (press && ev.pointerId === press.id) { press = null; dragging = false; }
+  }
+  function onLeave() { if (!press && hoverX !== null) { hoverX = null; draw(); } }
 
   canvas.addEventListener('pointerdown', onDown);
   canvas.addEventListener('pointermove', onMove);
   canvas.addEventListener('pointerup', onUp);
-  canvas.addEventListener('pointercancel', onUp);
+  canvas.addEventListener('pointercancel', onCancel);
   canvas.addEventListener('pointerleave', onLeave);
 
   btnWindow?.addEventListener('click', () => setWindow((windowIndex + 1) % SOLAR_WINDOWS.length));
@@ -394,6 +487,7 @@ export function createSolarTime(deps) {
       if (!entered) return;
       entered = false;
       dragging = false;
+      press = null;
       hoverX = null;
       feed.stop();
       if (note) note.hidden = true;
@@ -402,6 +496,11 @@ export function createSolarTime(deps) {
 
     /* Something on screen changed — a fetch landed, a slot was cleared. */
     refresh: () => draw(true),
+
+    selectFlare,
+    /* The flares the strip is drawing, for the labels on the sun: the same list,
+       so the two can never show different flares for the same window. */
+    flares: () => (S.flares || []),
 
     /* A measurement hook: what the strip shows, read back from where it is. */
     state: () => ({
@@ -416,6 +515,10 @@ export function createSolarTime(deps) {
       drawn: S.drawn || 0,
       drawnMax: S.drawnMax || null,
       rawMax: S.rawMax || null,
+      flaresInWindow: (S.flares || []).length,
+      flaresWithPeakInWindow: (S.flares || []).filter(f => f.peak != null).length,
+      bands: S.bands || 0,
+      labelled: S.labelled || 0,
       moment: btnMoment ? btnMoment.textContent : null,
       fetch: btnFetch && onFetch ? btnFetch.textContent : null,
       feed: feed.state()
