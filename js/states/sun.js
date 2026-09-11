@@ -717,6 +717,11 @@ export function createSunState(THREE, env) {
          would keep moving the moment while the time island is hidden, and the
          next Fetch would ask for wherever it had drifted to. */
       if (env.stopPlayback) env.stopPlayback();
+      /* The strip takes over the clock here and not in a change listener: those
+         fire after the next state's enter, and a state that saves the clock on
+         the way in would save the sun's moment as the visitor's. */
+      const strip = env.timeStrip ? env.timeStrip() : null;
+      if (strip) strip.enter();
       attach();
       bindPanGesture(true);
       layers.eventsOff();
@@ -731,6 +736,9 @@ export function createSunState(THREE, env) {
     },
 
     exit() {
+      // First, so the visitor's moment is back before anything else reads it.
+      const strip = env.timeStrip ? env.timeStrip() : null;
+      if (strip) strip.exit();
       bindPanGesture(false);
       bindDrag(false);
       releaseProjection();

@@ -415,6 +415,35 @@
     </div>
   </div>
 
+  <!-- THE SUN'S TIME STRIP (js/ui/solar-time.js).
+       The same place as the time island and the magnetosphere's strip, and
+       never at the same time: body.solar-on switches it on and the island off
+       (css/app.css). It reuses the island's row classes, so every grid and
+       mobile rule written for those holds here as well.
+
+       The first column is empty for now; the flipbook's playback buttons go
+       there. The note above the lane says why a moment was not kept. -->
+  <div class="solar-time" id="solar-time">
+    <div class="sol-note" id="sol-note" hidden></div>
+    <canvas class="solar-lane" id="solar-lane"
+      aria-label="GOES X-ray flux over time; drag to choose a moment"></canvas>
+    <div class="ti-row">
+      <div class="ti-play"></div>
+      <div class="ti-slider sol-actions">
+        <button class="play-btn sol-fetch" id="sol-fetch" type="button"
+        title="Fetch the images at this moment">Fetch</button>
+      </div>
+      <div class="ti-now">
+        <button class="ti-val" id="sol-val" type="button"
+        title="Back to the newest measurement">now</button>
+      </div>
+      <div class="mspt-knoppen">
+        <button class="play-btn mspt-window" id="sol-window" type="button"
+        title="Time window" aria-label="Time window">24h</button>
+      </div>
+    </div>
+  </div>
+
   <!-- DE UITGANG UIT DE DOORKIJK, OP EEN SMAL SCHERM (sessie 31, Terry).
 
        Op een telefoon bedekt het detailvenster precies datgene wat het beschrijft.
@@ -2346,6 +2375,8 @@ import { createSunState } from './js/states/sun.js';
 // instrumentbeelden, dus buiten de knip: hij beschrijft de scene en niet de bouw.
 import { createSolarOrient } from './js/ui/solar-orient.js';
 import { createSolarMap } from './js/ui/solar-map.js';
+import { createXrayFeed } from './js/layers/sun/xray-feed.js';
+import { createSolarTime } from './js/ui/solar-time.js';
 /* SOLAR:START — de INSTRUMENTBEELDEN, en alleen die. Zie tools/build-standalone.mjs
    stap 0: dit blok wordt uit terra.html geknipt, want de proxy is een Vercel Edge
    Function en die draait daar niet.
@@ -8407,6 +8438,7 @@ let msphereState = null, msphereBoundary = null, msphereTransport = null;
 // langere naam: dit is de STATE, dat zijn de MEETWAARDEN. `solarPanel` blijft
 // null wanneer de instrumenthelft is weggeknipt; niemand leest hem dan.
 let solarImageryState = null, solarPanel = null, solarOrient = null, solarMap = null;
+let solarFeed = null, solarTime = null;
 let msphereGrid = null, msphereStrip = null, msphereLines = null, msphereScale = null;
 let msphereWind = null, msphereDipole = null, msphereCraft = null;
 let disks = null, lagrange = null, orbits = null, environment = null;
@@ -12518,6 +12550,57 @@ spaceState = createSpaceState(THREE, {
    is geweest maakt van een omweg een voorwaarde. */
 bouwPlanetenLijst();
 
+/* THE CLOCK, AS THREE HANDLES AND NOT AS A VARIABLE.
+
+   The magnetosphere and the sun each have a strip that picks a moment, and
+   neither has a time of its own: they BOUND the existing one to the stretch
+   that was measured. So no second clock, but these: read where the visitor
+   stood, set the moment, and hand it back.
+
+   Everything goes through refreshTimeUI(), deliberately. That is the one
+   funnel to another moment — the slider, the date field, the reset, the
+   eclipse jump and every step of playback all pass through it, and a way
+   around it would be a second path to the same state. */
+const sceneClock = {
+  lees: () => ({ basis: baseMoment, offset: timeOffsetMs }),
+
+  zet(d) {
+    // Terra's own playback would otherwise write against the strip every
+    // frame; two things setting the same time are guaranteed to drift apart.
+    stopPlay();
+    baseMoment = d;
+    timeOffsetMs = 0;
+    if (timeSliderEl) timeSliderEl.value = '0';
+    refreshTimeUI();
+  },
+
+  /* THE NEWEST SAMPLE IS "NOW", AND THE APP HAS TO AGREE.
+
+     `zet` writes `baseMoment`, and with that `bijNu()` is false by definition
+     — even on the newest sample. That is not cosmetic: borgTijdsloten() then
+     puts the layers that cannot travel in time (aqi, lightning, aurora) on a
+     time lock, and the aurora is exactly what the magnetosphere wants to show
+     at now. What this gives up is the time between the sample and the wall
+     clock: a minute or two, one row of the feed. */
+  zetNu() {
+    stopPlay();
+    baseMoment = null;
+    timeOffsetMs = 0;
+    if (timeSliderEl) timeSliderEl.value = '0';
+    refreshTimeUI();
+  },
+
+  herstel(s) {
+    baseMoment = s.basis;
+    timeOffsetMs = s.offset;
+    // The slider counts in STEPS, not milliseconds, so restoring it needs the
+    // same division its handler does. Without it the knob stays on 0 while the
+    // moment is shifted — a control pointing at something the scene is not.
+    if (timeSliderEl) timeSliderEl.value = String(Math.round(timeOffsetMs / stapMs()));
+    refreshTimeUI();
+  }
+};
+
 // De zon/maan-state migreert mee op dezelfde machine. Dit is de tweede
 // bewoner en daarmee het bewijs dat de abstractie klopt: zou hij alleen
 // door `space` gebruikt worden, dan was er een vierde variant bij in
@@ -12676,63 +12759,8 @@ if (globalThis.TerraCore) {
        moment dat de standoff ernaast al verlaten had. */
     onBuild: () => updateMsphereReadout(),
 
-    /* DE KLOK, ALS DRIE HANDELINGEN EN NIET ALS VARIABELE.
-
-       De magnetosfeer heeft geen eigen tijd; hij BEGRENST de bestaande tot het
-       venster waarin gemeten is. Daarom geen tweede klok in de state, maar deze
-       drie: lezen waar de bezoeker stond, het moment zetten, en teruggeven.
-
-       Alles loopt via refreshTimeUI(), en dat is met opzet: dat is de enige
-       trechter naar een ander moment — de slider, het datumveld, de reset, de
-       eclipssprong en elke stap van het afspelen komen daar allemaal langs.
-       Een vierde weg ernaast zou precies het soort tweede pad zijn dat elders
-       in dit bestand telkens is dichtgezet. */
-    clock: {
-      lees: () => ({ basis: baseMoment, offset: timeOffsetMs }),
-
-      zet(d) {
-        // Terra's eigen afspeellus zou anders elke seconde tegen de cursor in
-        // schrijven. Twee dingen die dezelfde tijd zetten lopen gegarandeerd uit
-        // de pas; de state brengt in B3c zijn eigen transport mee.
-        stopPlay();
-        baseMoment = d;
-        timeOffsetMs = 0;
-        if (timeSliderEl) timeSliderEl.value = '0';
-        refreshTimeUI();
-      },
-
-      /* HET NIEUWSTE MONSTER IS "NU", EN DAT MOET DE APP OOK VINDEN.
-
-         `zet` hierboven schrijft `baseMoment`, en daarmee is `bijNu()` per
-         definitie onwaar — ook op het laatste aangekomen monster. Dat is niet
-         cosmetisch: borgTijdsloten() zet de lagen uit TIJDREIS_ONMOGELIJK
-         (aqi, lightning, aurora) dan op een tijdslot, en de aurora-ovaal is
-         juist wat je in deze state bij nu wél wil zien.
-
-         Het verschil dat we daarmee opgeven is de tijd tussen het monster en de
-         wandklok, en dat is per constructie minder dan één minuut: het laatste
-         AANGEKOMEN monster is de nieuwste rij met een aankomsttijd die al
-         gepasseerd is, en de reeks staat op minuutrijen. Een kwart graad
-         aardrotatie, tegen een tijdslot dat het onderwerp wegneemt. */
-      zetNu() {
-        stopPlay();
-        baseMoment = null;
-        timeOffsetMs = 0;
-        if (timeSliderEl) timeSliderEl.value = '0';
-        refreshTimeUI();
-      },
-
-      herstel(s) {
-        baseMoment = s.basis;
-        timeOffsetMs = s.offset;
-        // De slider staat in STAPPEN en niet in milliseconden, dus terugzetten
-        // vraagt de deling die de handler ook doet. Zonder dit blijft de knop op
-        // 0 staan terwijl het moment verschoven is — een bediening die iets
-        // anders aanwijst dan de scene toont.
-        if (timeSliderEl) timeSliderEl.value = String(Math.round(timeOffsetMs / stapMs()));
-        refreshTimeUI();
-      }
-    },
+    // The clock is shared with the sun state's strip; see `sceneClock`.
+    clock: sceneClock,
     layers: {
       ...gebeurtenisLagen,
 
@@ -12971,6 +12999,11 @@ solarImageryState = createSunState(THREE, {
      moving a moment nobody can see. The state stops it on entry. */
   stopPlayback: stopPlay,
 
+  /* The time strip under the sun. A getter, because the strip is built after
+     this state — it needs the panel's fetch — and the state calls it from its
+     own enter and exit, before the next state reads the clock. */
+  timeStrip: () => solarTime,
+
   /* DE NOAA-GEGEVENS KOMEN UIT DEZELFDE BRON als de aardweergave, en niet uit een
      eigen ophaalactie. `solarState` is de toestand die de vier SWPC-adapters
      vullen; twee lezers van één feed kunnen niet uit de pas lopen, twee feeds
@@ -13021,8 +13054,10 @@ solarMap = createSolarMap({ state: solarSceneState, active: inZon });
    knoppen die niets doen. */
 solarPanel = createSolarPanel({
   state: () => solarImageryState.state(),
-  loadSlot: (i, id, opts) => solarImageryState.loadSlot(i, id, momentNow(), opts),
-  clearSlot: (i) => solarImageryState.clearSlot(i),
+  // The strip marks when the image on screen was taken, so it redraws after both.
+  loadSlot: (i, id, opts) => solarImageryState.loadSlot(i, id, momentNow(), opts)
+    .then(d => { if (solarTime) solarTime.refresh(); return d; }),
+  clearSlot: (i) => { solarImageryState.clearSlot(i); if (solarTime) solarTime.refresh(); },
   setViewR: (r) => solarImageryState.setViewR(r),
   setSpotsVisible: (on) => solarImageryState.setSpotsVisible(on),
   setOpacity: (i, v) => {
@@ -13035,6 +13070,39 @@ solarPanel = createSolarPanel({
 solarPanel.mount();
 
 /* SOLAR:END */
+
+/* THE TIME STRIP UNDER THE SUN (js/ui/solar-time.js).
+
+   OUTSIDE THE SOLAR CUT, and that is the point: its data comes from NOAA
+   without a proxy, so the standalone carries it too. Only the Fetch button
+   belongs to the imagery half, and it comes along as `onFetch` when the panel
+   exists.
+
+   In a try/catch for the same reason the magnetosphere strip is: the one error
+   the builder throws is an incomplete palette, and that has to be loud — a
+   lane that is there but draws in black is worse than a gap where it belongs. */
+solarFeed = createXrayFeed();
+try {
+  solarTime = createSolarTime({
+    feed: solarFeed, clock: sceneClock, moment: momentNow, isLive: bijNu,
+    Chart: globalThis.Chart, fmtStamp, formatOffset,
+    /* The image on screen: the lowest slot that holds one, which is the layer
+       the disc comes from. Its time in UTC, like the axis it stands on. */
+    onScreen: () => {
+      for (let i = 0; i < 3; i++) {
+        const d = solarImageryState.describeSlot(i);
+        if (!d) continue;
+        const t = Date.parse(d.observed);
+        return { time: t, label: d.name + ' · ' + new Date(t).toISOString().slice(11, 16) };
+      }
+      return null;
+    },
+    onFetch: solarPanel ? () => solarPanel.fetchAll() : null
+  });
+} catch (e) {
+  console.error('Terra: the solar time strip could not be set up.', e);
+  solarTime = null;
+}
 
 /* DE VOLGORDE VAN REGISTREREN IS DE VOLGORDE IN DE NAVIGATIE, en dat is de
    reden dat `space` hieronder staat en niet direct na `createSpaceState()`:
@@ -13851,6 +13919,7 @@ if (IS_LOCAL) {
     solarImagery: () => solarImageryState && solarImageryState.state(),
     solarState: () => solarImageryState,
     labelPassThrough: () => labelPassThrough.stats(),
+    solarTime: () => (solarTime ? solarTime.state() : null),
 
     /* DE WOLKENSCHIL, om te kunnen zien WAAROM hij weg is. `visible: false` en
        `bestaat: false` geven hetzelfde beeld op het scherm en vragen een andere

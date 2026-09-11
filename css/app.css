@@ -129,6 +129,17 @@
        deze inkt op zijn beurt donker-op-donker; daar tekent chart.js zijn eigen
        arcering met de zin "no Bx or Bt", dus die plek is niet stil. */
     --msphere-band-ink: #0a1220;
+    /* THE SUN'S TIME STRIP (js/ui/solar-time.js). One lane where the
+       magnetosphere has six, so it stands lower. The flux takes the
+       magnetosphere's measured teal on purpose: the same colour says the same
+       thing in both strips. The dashed mark for the image on screen takes the
+       warm tone of the sun state's own labels. */
+    --sols-h: 110px;
+    --sols-gap: 8px;
+    --solar-measured: var(--msphere-measured);
+    --solar-class: rgba(160,180,210,0.42);
+    --solar-onscreen: #ffb347;
+    --solar-flag: #d4564f;
     --dock-lift: calc(var(--dock-bottom) + var(--dock-h) + var(--dock-gap));
     --panel-lift: var(--dock-lift);
     /* VRIJE RUIMTE BOVEN EEN PANEEL, en dit getal is een BEGINWAARDE.
@@ -2308,7 +2319,7 @@
      de schakelregels verderop. Eén regel voor allebei, zodat een correctie aan
      de onderrand er niet één van de twee vergeet; dat is precies wat er in
      sessie 24 gebeurde toen deze maten uit elkaar liepen. */
-  .time-island, .msphere-time {
+  .time-island, .msphere-time, .solar-time {
     position: fixed;
     /* De variabele en niet de ingetikte 28 px: `@media (max-height: 480px)` zet
        `--dock-bottom` op 12 en schoof de knoppenrij mee, maar het eiland bleef op
@@ -2497,6 +2508,10 @@
      state we zijn, dus een tweede schakelaar in JS zou een tweede waarheid zijn. */
   .msphere-time { display: none; }
   body.msphere-on .msphere-time { display: flex; }
+
+  /* The sun's strip, the same way and for the same reason. */
+  .solar-time { display: none; }
+  body.solar-on .solar-time { display: flex; }
 
   /* WAT IN DEZE STATE NIET VAN TOEPASSING IS, WORDT NIET GETOOND — niet
      uitgegrijsd. Dezelfde vorm als .space-only hierboven, en om dezelfde reden
@@ -2703,23 +2718,45 @@
   body.solar-on.solar-bare .panel,
   body.solar-on.solar-bare #panel-open { display: none; }
 
-  /* HET TIJD-EILAND STAAT ER WEL, EN DOET NIETS (Terry, sessie 50).
-
-     De volle versie verbergt hem: daar KUN je een moment kiezen — het gaat als
-     derde argument naar loadSlot — en een schuif die dat niet waarmaakt is een
-     loze belofte. Kaal ligt het andersom. Er valt niets op te halen, dus er valt
-     niets te beloven, en dan is de balk precies wat hij ook is: een grafiek
-     waarop je het moment AFLEEST.
-
-     `pointer-events: none` op het geheel en niet op de losse knoppen: één
-     eigenschap, en er is geen bediening die er per ongeluk buiten valt. De
-     verzwakking erbij, zodat de balk als uitlezing leest en niet als een
-     bediening die kapot is. */
+  /* THE TIME ISLAND STAYS HIDDEN IN THIS STATE, in both builds. The strip
+     under the sun is the time axis here: it stands on measured flux, so it
+     only offers the moments that were measured, and it needs no server — the
+     standalone has it as well. Only its Fetch button belongs to the imagery
+     half, and without that half there is nothing to fetch. */
   body.solar-on .time-island { display: none; }
-  body.solar-on.solar-bare .time-island {
-    display: flex;
-    pointer-events: none;
-    opacity: 0.65;
+  body.solar-bare #sol-fetch { display: none; }
+
+  /* The lane. Same box as the magnetosphere strip, and for the same reasons:
+     the size lives here and the buffer in JS, the ring is an inset shadow so it
+     takes no room from the drawing, and the ground is the row's glass. */
+  .solar-lane {
+    display: block;
+    width: 100%;
+    height: var(--sols-h);
+    background: rgba(11,16,24,0.72);
+    backdrop-filter: blur(14px);
+    box-shadow: inset 0 0 0 1px var(--hair);
+    border-radius: 12px;
+    pointer-events: auto;
+    touch-action: none;
+    cursor: crosshair;
+  }
+  /* A week on 560 px is 18 minutes a pixel. Between the panels it has room. */
+  body.solar-on .solar-time { max-width: none; }
+  .sol-actions { justify-content: flex-start; }
+  .sol-fetch { font-variant-numeric: tabular-nums; }
+  /* Why a moment was not kept. It shows for a few seconds, above the lane. */
+  .sol-note {
+    align-self: flex-start;
+    max-width: 100%;
+    padding: 4px 9px;
+    font-size: 11px;
+    line-height: 1.35;
+    color: var(--ink-dim);
+    background: rgba(11,16,24,0.82);
+    backdrop-filter: blur(14px);
+    border: 1px solid var(--hair);
+    border-radius: 9px;
   }
 
 /* SOLAR:START */
@@ -2988,6 +3025,8 @@
          bijna een kwart van het scherm, en de scene is hier het onderwerp.
          `laneLayout` verdeelt naar gewicht, dus de verhoudingen blijven. */
       --msps-h: 132px;
+      /* The sun's single lane, lowered in the same proportion. */
+      --sols-h: 92px;
     }
     /* DE TIJDLIJN TELT WÉL MEE, en het moment staat er BOVEN (sessie 31, Terry).
 
@@ -3015,12 +3054,15 @@
     body.msphere-on .ti-now {
       bottom: calc(100% + 6px + var(--msps-gap) + var(--msps-h));
     }
+    body.solar-on .ti-now {
+      bottom: calc(100% + 6px + var(--sols-gap) + var(--sols-h));
+    }
     /* Volle breedte, en GEEN transform die opgeheven moet worden — zie de noot bij
        .time-island. `--dock-lift` en niet `--panel-lift`: het eiland stopt boven de
        KNOPPENRIJ, de panelen stoppen boven het eiland. Tot sessie 25 waren die twee
        hetzelfde getal, en dat kon alleen omdat het eiland verdween zodra er een
        paneel openging. */
-    .time-island, .msphere-time {
+    .time-island, .msphere-time, .solar-time {
       left: 10px; right: 10px; max-width: none;
       bottom: calc(var(--dock-lift) + env(safe-area-inset-bottom, 0px));
     }
@@ -3860,6 +3902,7 @@
   body.presenting:not(.chrome-on) #view-switch,
   body.presenting:not(.chrome-on) #time-island,
   body.presenting:not(.chrome-on) #msphere-time,
+  body.presenting:not(.chrome-on) #solar-time,
   body.presenting:not(.chrome-on) #msphere-scale,
   body.presenting:not(.chrome-on) #msphere-craft,
   body.presenting:not(.chrome-on) #antipode-exit,
