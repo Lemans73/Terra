@@ -13778,8 +13778,14 @@ viewStates.onChange((actief) => {
 
      Is de NOAA-feed er nog niet, dan blijft de wens staan tot hij binnenvalt —
      zie `solarReadoutPending`. */
+  /* AND ON A PHONE IT OPENS NOTHING (Terry, session 52). The same rule the
+     magnetosphere has had since session 32, and now for the same reason: at
+     375 px one sheet at a time fills the screen, so a window that opens by
+     itself covers exactly the sun you came to look at — and the strip along the
+     bottom already carries a week of measurement, so nobody arrives empty
+     handed. The button under the layers panel opens it whenever you want it. */
   solarReadoutPending = false;
-  if (actief === 'sun' && !showSolarActivity()) solarReadoutPending = true;
+  if (actief === 'sun' && !isNarrow() && !showSolarActivity()) solarReadoutPending = true;
   // Verschijnen én verdwijnen: de uitlezing hoort bij deze state en bij geen andere.
   if (solarOrient) solarOrient.refresh();
   if (solarMap) solarMap.draw();

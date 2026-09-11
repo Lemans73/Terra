@@ -55,6 +55,11 @@
        uiteen — dat is in sessie 24 al één keer gebeurd, toen `.time-island` en
        `.readout` op een eigen `bottom: 28px` bleven staan terwijl de rij naar
        12 px ging. */
+    /* De ruimte tussen de blokken in de masthead, en die tussen de knoppen
+       rechtsboven onderling. De tweede is kleiner: drie iconen horen als één
+       groep te lezen. Zie .qlist-open. */
+    --masthead-gap: 18px;
+    --icon-gap: 6px;
     --dock-bottom: 28px;
     --dock-h: 39px;
     --dock-gap: 14px;
@@ -273,7 +278,11 @@
     padding: 18px 28px;
     display: flex;
     align-items: flex-start;
-    gap: 18px;
+    /* AS A VARIABLE, because the two icon buttons on the right take this gap
+       back with a negative margin to stand as one group. Typed in twice, the
+       phone's smaller gap made that margin larger than the gap itself and the
+       icons overlapped by two pixels. */
+    gap: var(--masthead-gap);
     z-index: 10;
     pointer-events: none;
     background: linear-gradient(to bottom, rgba(5,7,13,0.85), transparent);
@@ -1609,11 +1618,12 @@
   .qlist-empty { padding: 26px 16px; text-align: center; font-size: 11px; color: var(--ink-faint); }
   /* Staat in de masthead, links van de notificatiebel. Zelfde maatvoering als
      .notif-btn, zodat het één rij knoppen blijft en niet twee losse dingen. */
-  /* De masthead heeft `gap: 18px` tussen zijn kinderen; deze twee knoppen horen
-     juist strak naast elkaar te staan als één groepje. Vandaar een negatieve marge
-     die de gap terugneemt en er 6px van overlaat. */
+  /* The masthead spaces its children by `--masthead-gap`; these two buttons
+     belong tight together as one group. So the margin takes that gap back and
+     leaves `--icon-gap` of it — derived, so a narrower gap on a phone cannot
+     turn into an overlap. */
   .qlist-open {
-    margin-left: -12px;
+    margin-left: calc(var(--icon-gap) - var(--masthead-gap));
     pointer-events: auto;
     display: flex; align-items: center;
     background: rgba(11,16,24,0.72);
@@ -1630,7 +1640,7 @@
   /* De derde knop in dezelfde hoek (sessie 25): zelfde vorm, zelfde negatieve marge,
      zodat de drie als één groepje lezen tegen de gap van 18 px in de masthead. */
   .settings-open {
-    margin-left: -12px;
+    margin-left: calc(var(--icon-gap) - var(--masthead-gap));
     pointer-events: auto;
     display: flex; align-items: center;
     background: rgba(11,16,24,0.72);
@@ -2705,8 +2715,20 @@
      kolom om in te wonen. Hij gaat dan weg: op 375px is dit vijf regels over
      precies het beeld dat je kwam bekijken. De uitlezing rechts draagt de
      meting, en het paneel draagt de herkomst. */
+  /* ON A PHONE IT STAYS, UNDER THE MASTHEAD (Terry, session 52).
+
+     It used to go away here, on the argument that every square centimetre is
+     the picture. But this line is what says the disc is a photograph, how old
+     it is, and whether the zoom has passed what the source holds — and a phone
+     is exactly where nobody can open a panel to ask. It moves down instead of
+     away: the masthead row ends around 55 px, so it starts below that. */
   @media (max-width: 640px) {
-    .solar-orient { display: none; }
+    .solar-orient {
+      top: 58px;
+      max-width: calc(100vw - 24px);
+      font-size: 10.5px;
+    }
+    .solar-orient .so-kicker { font-size: 9px; }
   }
 
   /* ---- HET OVERZICHTSKAARTJE (Terry, sessie 50) ----
@@ -2734,10 +2756,19 @@
     backdrop-filter: blur(6px);
   }
 
-  /* Op een smal scherm gaat hij weg, om dezelfde reden als de uitlezing
-     hierboven: daar is elke vierkante centimeter het beeld zelf. */
+  /* On a phone it stays too, but not in that corner: the line above is centred
+     and grows to four or five rows with an instrument loaded, and at 375 px the
+     two would sit on top of each other. So it moves to the other free corner,
+     just above the strip on the left — the floating moment uses the right. The
+     offset is derived from the strip's own height, so it follows if that
+     changes. */
   @media (max-width: 640px) {
-    .solar-map { display: none; }
+    .solar-map {
+      top: auto;
+      bottom: calc(var(--panel-lift) + var(--sols-gap) + var(--sols-h) + 8px);
+      left: 10px; right: auto;
+      width: 76px; height: 76px;
+    }
   }
 
   /* ---- DE KALE ZON (Terry, sessie 50) ----
@@ -3188,7 +3219,7 @@
        ruimte vrij. */
     .ti-close { top: 4px; right: 5px; width: 32px; height: 32px; }
     .ti-note { padding-right: 30px; }
-    .masthead { padding: 12px 14px; gap: 10px; }
+    .masthead { padding: 12px 14px; --masthead-gap: 10px; }
     .tagline { display: none; }
     /* Op smalle schermen alleen de iconen. Beide opties blijven zichtbaar; dat is juist
        de reden dat het een segmented toggle is. */
@@ -3239,6 +3270,25 @@
     .mode-switch { top: 12px; }
     .dock { left: 12px; }
     .dock-right { left: auto; right: 12px; }
+    /* BACK TO EARTH STAAT IN HET MIDDEN (Terry, sessie 52).
+
+       Hij is het eerste kind van de rechterhoek, en op een breed scherm valt dat
+       niemand op. Op 375 px raken de twee hoeken elkaar bijna en leest de rij als
+       één balk — dan staat de enige uitweg zichtbaar scheef: gemeten 195,5 tegen
+       een schermmidden van 187,5, doordat de gaten links en rechts van de knop
+       24 en 8 px zijn.
+
+       `left: 0; right: 0; margin: 0 auto` en GEEN transform: de noot bij .dock
+       waarschuwt daarvoor, en terecht — een transform die een media query
+       overleeft schuift het element een halve schermbreedte weg. Met `width:
+       max-content` blijft de doos zo breed als zijn label. */
+    .dock-back {
+      position: fixed;
+      left: 0; right: 0;
+      bottom: var(--dock-bottom);
+      margin: 0 auto;
+      width: max-content;
+    }
     /* GEMETEN op 375x812, slechtste stand (Space aan + Layers open): de rij werd
        363 px breed in een beeld van 375, en de knoppen werden daarbij al
        samengeknepen — 140 px viel terug naar 131. Op een 360 px scherm loopt hij
