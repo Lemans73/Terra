@@ -44,6 +44,7 @@
 import { createSunScene, SUN_WORLD_R } from '../layers/sun/scene.js';
 import { createSpotLayer } from '../layers/sun/spots.js';
 import { noaaReferenceTime } from '../layers/sun/frame.js';
+import { orthoBounds } from '../core/ortho-bounds.js';
 
 /* THE INSTRUMENT HALF IS NOT IMPORTED HERE, IT IS HANDED IN.
 
@@ -270,7 +271,10 @@ export function createSunState(THREE, env) {
     originalUpdate = cam.updateProjectionMatrix.bind(cam);
     cam.updateProjectionMatrix = function () {
       const { hw, hh } = extents();
-      this.projectionMatrix.makeOrthographic(-hw, hw, hh, -hh, -DEPTH, DEPTH);
+      /* Through orthoBounds, or an export frame (setViewOffset) is ignored and
+         the file holds the whole screen stretched into its shape. */
+      const b = orthoBounds(hw, hh, this.view);
+      this.projectionMatrix.makeOrthographic(b.left, b.right, b.top, b.bottom, -DEPTH, DEPTH);
       this.projectionMatrixInverse.copy(this.projectionMatrix).invert();
     };
     lastDistance = null;

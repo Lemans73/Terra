@@ -69,7 +69,9 @@ function readConstants(src) {
     cameraK:  num('CAMERA_K',   /const\s+CAMERA_K\s*=\s*([^;]+);/),
     worldR:   num('SUN_WORLD_R',/SUN_WORLD_R\s*=\s*([^;]+);/),
     depth:    num('DEPTH',      /const\s+DEPTH\s*=\s*([^;]+);/),
-    ortho:    /makeOrthographic\(\s*-hw,\s*hw,\s*hh,\s*-hh,\s*-DEPTH,\s*DEPTH\s*\)/.test(src)
+    /* The four sides come from orthoBounds() (see check-ortho-bounds.mjs);
+       this check owns the depth slab, the last two arguments. */
+    ortho:    /makeOrthographic\(\s*b\.left,\s*b\.right,\s*b\.top,\s*b\.bottom,\s*-DEPTH,\s*DEPTH\s*\)/.test(src)
   };
 }
 
@@ -93,7 +95,7 @@ async function run() {
     what: 'the constants and the makeOrthographic call are shaped as expected',
     extra: shapeOk ? null : 'missing: ' + [
       !c.viewRMax && 'VIEW_R_MAX', !c.cameraK && 'CAMERA_K', !c.depth && 'DEPTH',
-      !R && 'SUN_WORLD_R', !c.ortho && 'makeOrthographic(-hw,hw,hh,-hh,-DEPTH,DEPTH)'
+      !R && 'SUN_WORLD_R', !c.ortho && 'makeOrthographic(b.left,b.right,b.top,b.bottom,-DEPTH,DEPTH)'
     ].filter(Boolean).join(', ') });
   if (!shapeOk) return out;
 

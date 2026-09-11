@@ -44,6 +44,7 @@
 
 import { MSPHERE_RE, MSPHERE_DRAW_MAX, pocNaarTerra }
   from '../layers/magnetosphere/boundary-layer.js';
+import { orthoBounds } from '../core/ortho-bounds.js';
 
 /* De diepteplak van de orthografische projectie, in Terra-eenheden. Ruim om de
    getekende staart (60 Re = 6000) heen, en dat mag: orthografische diepte is
@@ -497,7 +498,10 @@ export function createMagnetosphereState(THREE, deps) {
          orthografische projectie is de dieptenauwkeurigheid LINEAIR, dus een
          groot bereik kost hier niets. Bij perspectief zou dat juist de
          z-fighting geven waar `near` normaal zo klein voor blijft. */
-      _mOrtho.makeOrthographic(-halfW, halfW, halfH, -halfH,
+      /* Through orthoBounds, or an export frame (setViewOffset) is ignored.
+         The perspective half below honours it by itself. */
+      const b = orthoBounds(halfW, halfH, cam.view);
+      _mOrtho.makeOrthographic(b.left, b.right, b.top, b.bottom,
                                -MSPHERE_ORTHO_DIEPTE, MSPHERE_ORTHO_DIEPTE);
 
       if (mengE >= 1) {
