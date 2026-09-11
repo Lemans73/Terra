@@ -13263,6 +13263,7 @@ const presentCapture = createCapture({
   renderer: () => world.renderer(),
   composer: () => world.postProcessingComposer(),
   camera: () => world.camera(),
+  renderTarget: (w, h) => new THREE.WebGLRenderTarget(w, h, { depthBuffer: false }),
   /* The canvas's CSS size, not globe.gl's idea of it: during an export the
      drawing buffer is resized while the style is left alone, so this stays the
      screen the frame was measured against. */

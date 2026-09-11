@@ -149,6 +149,17 @@ async function proveItCanFail() {
     }).length > 0],
     ['a frame smaller than it could be', () => cap.selftest({
       frameRect: (a, w, h) => { const r = cap.frameRect(a, w, h); return { x: r.x, y: r.y, w: r.w * 0.5, h: r.h * 0.5 }; }
+    }).length > 0],
+    /* The read-back. A render that is not a whole number of strips high is
+       every render, so the short strip at the top must not be dropped. */
+    ['the short strip at the top dropped', () => cap.selftest({
+      readbackStrips: (h, s) => cap.readbackStrips(h, s).filter((x) => x.rows === s)
+    }).length > 0],
+    ['strips that are not turned over', () => cap.selftest({
+      flipRows: (src, dst) => { dst.set(src); return dst; }
+    }).length > 0],
+    ['strips stacked from the top instead of mirrored', () => cap.selftest({
+      readbackStrips: (h, s) => cap.readbackStrips(h, s).map((x) => ({ ...x, canvasY: x.glY }))
     }).length > 0]
   ];
 

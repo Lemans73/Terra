@@ -146,6 +146,42 @@ function defaultExportSize(ratio, longEdge, frames) {
   return { frameW, frameH, frames: n, width: frameW * n, height: frameH };
 }
 
+/* ---- Reading the render back ---------------------------------------------
+   The finished picture comes back in strips rather than in one piece: a
+   3840 square read at once is a 59 MB array next to the 59 MB canvas it goes
+   into, and on a phone that second copy is the one too many.
+
+   GL COUNTS ROWS FROM THE BOTTOM, a canvas from the top. So every strip
+   arrives upside down and lands at the mirrored height: the strip that starts
+   at GL row y ends at canvas row H - y - rows. */
+export const STRIP_ROWS = 256;
+
+export function readbackStrips(height, rows) {
+  return defaultReadbackStrips(height, rows);
+}
+
+function defaultReadbackStrips(height, rows) {
+  const out = [];
+  for (let y = 0; y < height; y += rows) {
+    const n = Math.min(rows, height - y);
+    out.push({ glY: y, rows: n, canvasY: height - y - n });
+  }
+  return out;
+}
+
+/* Turn one strip over: row r of `src` becomes row (rows - 1 - r) of `dst`. */
+export function flipRows(src, dst, width, rows) {
+  return defaultFlipRows(src, dst, width, rows);
+}
+
+function defaultFlipRows(src, dst, width, rows) {
+  const stride = width * 4;
+  for (let r = 0; r < rows; r++) {
+    dst.set(src.subarray((rows - 1 - r) * stride, (rows - r) * stride), r * stride);
+  }
+  return dst;
+}
+
 /* A file name that sorts by time and says which slice it is. */
 export function fileName(parts) {
   const stamp = (parts.date || new Date()).toISOString().slice(0, 16).replace(/[:T-]/g, '');
@@ -311,6 +347,35 @@ export function selftest(impl) {
   if (slots.some((s) => s.credit !== 'C')) bad.push('a frame without the credit');
   if (slots.some((s) => s.title !== 'T')) bad.push('a frame without the title');
 
+  /* THE STRIPS. Every canvas row must hold exactly the GL row that belongs
+     there, and be written once. 1000 rows is not a multiple of the strip
+     height, so the short strip at the top is in the test too. */
+  const strips = (impl && impl.readbackStrips) || defaultReadbackStrips;
+  const flip = (impl && impl.flipRows) || defaultFlipRows;
+  const SW = 2, SH = 1000;
+  const glRows = new Uint8Array(SW * SH * 4);
+  for (let y = 0; y < SH; y++) {
+    for (let x = 0; x < SW; x++) glRows.set([y & 255, y >> 8, x, 255], (y * SW + x) * 4);
+  }
+  const canvasRows = new Uint8Array(SW * SH * 4);
+  const written = new Uint8Array(SH);
+  try {
+    for (const s of strips(SH, STRIP_ROWS)) {
+      const part = glRows.subarray(s.glY * SW * 4, (s.glY + s.rows) * SW * 4);
+      const turned = new Uint8Array(part.length);
+      flip(part, turned, SW, s.rows);
+      canvasRows.set(turned, s.canvasY * SW * 4);
+      for (let i = 0; i < s.rows; i++) written[s.canvasY + i]++;
+    }
+    for (let y = 0; y < SH; y++) {
+      const holds = canvasRows[y * SW * 4] | (canvasRows[y * SW * 4 + 1] << 8);
+      if (written[y] !== 1) { bad.push('canvas row ' + y + ' is written ' + written[y] + ' times'); break; }
+      if (holds !== SH - 1 - y) { bad.push('canvas row ' + y + ' holds GL row ' + holds + ', not ' + (SH - 1 - y)); break; }
+    }
+  } catch (err) {
+    bad.push('a strip lands outside the canvas: ' + (err && err.message));
+  }
+
   return bad;
 }
 
@@ -327,6 +392,9 @@ export function createCapture(opts) {
   const composer = opts.composer;
   const camera = opts.camera;
   const viewSize = opts.viewSize;
+  /* An 8-bit render target of a given size, without depth. Handed in like the
+     rest: this module does not import three. */
+  const makeTarget = opts.renderTarget;
   const credits = opts.credits || (() => ({ title: '', credit: '' }));
   const viewName = opts.viewName || (() => 'earth');
   const onStatus = opts.onStatus || (() => {});
@@ -379,52 +447,139 @@ export function createCapture(opts) {
      screen uses. A second render path would export a different picture than
      the one you are looking at.
 
-     Everything is put back inside this call, before the browser paints: the
-     canvas keeps its CSS size throughout (`setSize(w, h, false)`), so nothing
-     reflows and nothing flashes. */
+     THE SCREEN CANVAS IS NEVER RESIZED. Resizing it cost more than the export
+     itself: the canvas carries four samples per pixel and a depth buffer
+     (antialias is on), while the scene never draws into it with those samples.
+     Everything goes through the composer and only the last pass lands on the
+     canvas, so at 3840×3840 that is some 530 MB for one full-screen quad: more
+     than the composer and the bloom together.
+
+     So three is told the export size and the canvas is not. For the length of
+     the render, `width` and `height` on the canvas element are shadowed by
+     plain properties that three writes into and the browser never sees. Three
+     still has to hear the size, because points (`PointsMaterial`), fat lines
+     (`renderer.getSize()`) and the wind (`getPixelRatio()`) are sized from it.
+     The last pass then writes into an 8-bit target instead of the canvas, and
+     that target is read back in strips.
+
+     The shadow also closes the other trap. Three's `setPixelRatio()` calls
+     `setSize()` with the size that is still set, so putting the ratio back
+     before the size asks for the export size times the device ratio: a canvas
+     of 7680×7680 on a laptop, 11520×11520 on a phone, for no picture at all. */
   function renderWide(p) {
     const r = renderer(), c = composer(), cam = camera();
     const view = p.view;
+    const canvas = r.domElement;
     const prevRatio = r.getPixelRatio();
+    const prevTarget = r.getRenderTarget();
     const hasRatio = typeof c.setPixelRatio === 'function';
+    const W = p.size.width, H = p.size.height;
 
-    r.setPixelRatio(1);
-    r.setSize(p.size.width, p.size.height, false);
-    if (hasRatio) c.setPixelRatio(1);
-    c.setSize(p.size.width, p.size.height);
+    const passes = c.passes.filter((pass) => pass.enabled);
+    const last = passes[passes.length - 1];
+    /* The last pass is redirected into the target through its output buffer.
+       A pass that draws over its input instead (a render or bloom pass) would
+       leave the target empty and the export black. */
+    if (!last || !last.needsSwap) throw new Error('the last pass does not write into an output buffer');
+    const prevScreen = c.renderToScreen;
+    const prevLastScreen = last.renderToScreen;
 
-    /* The camera keeps the aspect of the SCREEN. setViewOffset then cuts the
-       frame out of that full picture, which is why the file matches the frame
-       instead of merely having the same shape. */
-    cam.aspect = view.w / view.h;
-    if (p.ratio.aspect !== null) {
-      cam.setViewOffset(view.w, view.h, p.rect.x, p.rect.y, p.rect.w, p.rect.h);
+    const target = makeTarget(W, H);
+    let shadowW = canvas.width, shadowH = canvas.height;
+    try {
+      Object.defineProperty(canvas, 'width',
+        { configurable: true, get: () => shadowW, set: (v) => { shadowW = v; } });
+      Object.defineProperty(canvas, 'height',
+        { configurable: true, get: () => shadowH, set: (v) => { shadowH = v; } });
+
+      r.setDrawingBufferSize(W, H, 1);
+      if (hasRatio) c.setPixelRatio(1);
+      c.setSize(W, H);
+
+      /* The camera keeps the aspect of the SCREEN. setViewOffset then cuts the
+         frame out of that full picture, which is why the file matches the frame
+         instead of merely having the same shape. */
+      cam.aspect = view.w / view.h;
+      if (p.ratio.aspect !== null) {
+        cam.setViewOffset(view.w, view.h, p.rect.x, p.rect.y, p.rect.w, p.rect.h);
+      }
+      cam.updateProjectionMatrix();
+
+      last.enabled = false;
+      c.renderToScreen = false;
+      c.render();
+      last.enabled = true;
+      last.renderToScreen = false;
+      last.render(r, target, c.readBuffer, 0, false);
+
+      return readBack(r, target, W, H);
+    } finally {
+      last.enabled = true;
+      last.renderToScreen = prevLastScreen;
+      c.renderToScreen = prevScreen;
+      /* Before the dispose, not after. The renderer remembers its last target,
+         and the next render would build a disposed one up again: 59 MB at
+         3840×3840, with the screen drawn into a texture nobody shows. */
+      r.setRenderTarget(prevTarget);
+      target.dispose();
+
+      cam.clearViewOffset();
+      cam.aspect = view.w / view.h;
+      cam.updateProjectionMatrix();
+      r.setDrawingBufferSize(view.w, view.h, prevRatio);
+      delete canvas.width;
+      delete canvas.height;
+      /* Three and the canvas agree again, unless they already disagreed. */
+      if (canvas.width !== shadowW) canvas.width = shadowW;
+      if (canvas.height !== shadowH) canvas.height = shadowH;
+      c.setSize(view.w, view.h);
+      if (hasRatio) c.setPixelRatio(prevRatio);
+      c.render();
     }
-    cam.updateProjectionMatrix();
-    c.render();
+  }
 
+  function readBack(r, target, W, H) {
     const wide = document.createElement('canvas');
-    wide.width = p.size.width;
-    wide.height = p.size.height;
+    wide.width = W;
+    wide.height = H;
     const g = wide.getContext('2d');
+    const rows = new Uint8Array(W * Math.min(STRIP_ROWS, H) * 4);
+    let strip = null;
+    for (const s of readbackStrips(H, STRIP_ROWS)) {
+      const part = rows.subarray(0, W * s.rows * 4);
+      r.readRenderTargetPixels(target, 0, s.glY, W, s.rows, part);
+      if (!strip || strip.height !== s.rows) strip = g.createImageData(W, s.rows);
+      flipRows(part, strip.data, W, s.rows);
+      g.putImageData(strip, 0, s.canvasY);
+    }
+    /* The render is opaque. Should a pass ever leave alpha below one, the
+       frame still has no holes: the backdrop goes behind, not over. */
+    g.globalCompositeOperation = 'destination-over';
     g.fillStyle = BACKDROP;
-    g.fillRect(0, 0, wide.width, wide.height);
-    g.drawImage(r.domElement, 0, 0, wide.width, wide.height);
-
-    cam.clearViewOffset();
-    cam.aspect = view.w / view.h;
-    cam.updateProjectionMatrix();
-    r.setPixelRatio(prevRatio);
-    r.setSize(view.w, view.h, false);
-    if (hasRatio) c.setPixelRatio(prevRatio);
-    c.setSize(view.w, view.h);
-    c.render();
-
+    g.fillRect(0, 0, W, H);
+    g.globalCompositeOperation = 'source-over';
     return wide;
   }
 
   function toBlob(canvas) {
     return new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+  }
+
+  /* iOS keeps a canvas's pixels until the garbage collector comes by, and
+     counts them against the page until then. A size of zero gives them back
+     at once. */
+  function release(canvas) {
+    canvas.width = 0;
+    canvas.height = 0;
+  }
+
+  function cutFrame(wide, p, i) {
+    const frame = document.createElement('canvas');
+    frame.width = p.size.frameW;
+    frame.height = p.size.frameH;
+    frame.getContext('2d').drawImage(wide, i * p.size.frameW, 0, p.size.frameW, p.size.frameH,
+                                     0, 0, p.size.frameW, p.size.frameH);
+    return frame;
   }
 
   function download(blob, name) {
@@ -444,29 +599,32 @@ export function createCapture(opts) {
     const wide = renderWide(p);
     const names = [];
 
-    for (let i = 0; i < p.frames; i++) {
-      const frame = document.createElement('canvas');
-      frame.width = p.size.frameW;
-      frame.height = p.size.frameH;
-      const g = frame.getContext('2d');
-      g.drawImage(wide, i * p.size.frameW, 0, p.size.frameW, p.size.frameH,
-                  0, 0, p.size.frameW, p.size.frameH);
-      drawCaption(g, frame.width, frame.height, slots[i] || slots[slots.length - 1]);
+    try {
+      for (let i = 0; i < p.frames; i++) {
+        /* A SINGLE FRAME IS THE WIDE RENDER ITSELF. A second canvas of the same
+           size would only be a copy, and at 3840×3840 a copy is 59 MB. */
+        const frame = p.frames === 1 ? wide : cutFrame(wide, p, i);
+        drawCaption(frame.getContext('2d'), frame.width, frame.height,
+                    slots[i] || slots[slots.length - 1]);
 
-      const blob = await toBlob(frame);
-      if (!blob) {
-        onStatus('bad', 'Saving failed — the canvas could not be read.');
-        return null;
+        const blob = await toBlob(frame);
+        if (frame !== wide) release(frame);
+        if (!blob) {
+          onStatus('bad', 'Saving failed — the canvas could not be read.');
+          return null;
+        }
+        const name = fileName({
+          view: viewName(), date: stamp, key: p.ratio.key,
+          index: i + 1, frames: p.frames
+        });
+        download(blob, name);
+        names.push(name);
+        /* A browser asks before letting a page save more than one file. Spacing
+           the clicks keeps that to a single prompt instead of three. */
+        if (i < p.frames - 1) await new Promise((r) => setTimeout(r, 350));
       }
-      const name = fileName({
-        view: viewName(), date: stamp, key: p.ratio.key,
-        index: i + 1, frames: p.frames
-      });
-      download(blob, name);
-      names.push(name);
-      /* A browser asks before letting a page save more than one file. Spacing
-         the clicks keeps that to a single prompt instead of three. */
-      if (i < p.frames - 1) await new Promise((r) => setTimeout(r, 350));
+    } finally {
+      release(wide);
     }
 
     const size = p.size.frameW + '×' + p.size.frameH;
