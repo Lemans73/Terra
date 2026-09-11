@@ -39,17 +39,30 @@ const VERDICT_TEXT = {
    sees one image and the weakest layer is the one that misleads. */
 const VERDICT_RANK = { green: 0, amber: 1, red: 2 };
 
+/* NOAA keeps a month of region lists. Past that edge the sun has no circles on
+   it, and the difference between "nothing was active" and "nobody wrote it
+   down" is the whole point of saying this. */
+const NO_REGION_LIST = 'no region list for this date · NOAA SWPC';
+
 function utcStamp(iso) {
   // "2026-09-10T14:47:29.000Z" → "14:47 UTC". The date lives in the readout; what
   // belongs here is the time of day, next to the age it produces.
   return iso.slice(11, 16) + ' UTC';
 }
 
-function ageText(minutes) {
+/* HOW OLD, IN A UNIT SOMEONE READS. Minutes up to an hour and a half, then
+   hours — and past two days, days, because a picture of last week said "168
+   hours old" and nobody counts that back. The strip can put the view a month
+   back, so the ladder has to reach that far. */
+export function ageText(minutes) {
   if (minutes < 1) return 'just now';
   if (minutes < 90) return minutes + ' min old';
-  const h = Math.round(minutes / 60);
-  return h + (h === 1 ? ' hour old' : ' hours old');
+  const h = minutes / 60;
+  if (h < 48) return Math.round(h) + (Math.round(h) === 1 ? ' hour old' : ' hours old');
+  const d = h / 24;
+  if (d < 365) return Math.round(d) + ' days old';
+  const y = d / 365.25;
+  return (y < 10 ? y.toFixed(1) : Math.round(y)) + (y < 2 ? ' year old' : ' years old');
 }
 
 /* THE RULE LIVES HERE SO IT CAN BE CHECKED WITHOUT A BROWSER, the same reason
@@ -68,6 +81,7 @@ export function orientLines(s) {
     out.push({ cls: 'so-kicker', text: 'DRAWN SUN — MEASURED REGIONS' });
     const drawn = s.spots && s.spots.drawn;
     if (drawn) out.push({ text: drawn + (drawn === 1 ? ' active region' : ' active regions') + ' · NOAA SWPC' });
+    else if (s.regionDay === null) out.push({ text: NO_REGION_LIST });
     return out;
   }
 
@@ -75,6 +89,10 @@ export function orientLines(s) {
   for (const d of shown) {
     out.push({ text: d.name + ' · ' + utcStamp(d.observed) + ' · ' + ageText(d.ageMinutes) });
   }
+
+  // A frame from before NOAA's month has no circles, and that needs saying here
+  // too: an empty disc otherwise reads as a sun without active regions.
+  if (s.regionDay === null) out.push({ text: NO_REGION_LIST });
 
   const worst = shown.reduce((a, d) =>
     (d.sharpness && VERDICT_RANK[d.sharpness.verdict] > VERDICT_RANK[a]) ? d.sharpness.verdict : a,

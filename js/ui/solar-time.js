@@ -108,6 +108,8 @@ export function createSolarTime(deps) {
   const onFetch = deps.onFetch || null;
   // Opens the flare's card; the strip has already put the moment on its peak.
   const onFlare = deps.onFlare || null;
+  // Told after every redraw, for the flare labels on the sun.
+  const onDrawn = deps.onDrawn || null;
 
   const root = document.getElementById('solar-time');
   const canvas = document.getElementById('solar-lane');
@@ -327,6 +329,9 @@ export function createSolarTime(deps) {
     const result = Chart.draw(ctx, spec());
     drawHoverBox(result);
     refreshRow();
+    // Which flares the window holds is decided here, so whoever draws them on
+    // the sun hears it from the same place rather than working it out again.
+    if (onDrawn) onDrawn();
   }
 
   /* ---- The row --------------------------------------------------------- */

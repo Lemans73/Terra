@@ -167,6 +167,10 @@ export function createSunState(THREE, env) {
      was loaded over it. That is the whole point of 3c. */
   const spots = createSpotLayer(THREE, scene.group);
   let spotsWanted = true;
+  /* Which day's NOAA list the spots are standing on, or null when the moment
+     falls outside the month NOAA keeps. The readout says so rather than showing
+     an empty sun without a reason. */
+  let regionDay = null;
   let viewR = VIEW_R_DEFAULT;
   let attached = false;
   let originalUpdate = null;
@@ -363,30 +367,41 @@ export function createSunState(THREE, env) {
   ---------------------------------------------------------------------- */
   function refreshSpots(when) {
     if (!env.solar || !env.b0) return null;
-    const data = env.solar();
-    const list = (data && data.regions) || [];
+
+    /* WHICH MOMENT THE SPOTS BELONG TO. When a frame is loaded it is that
+       frame's observation time, so the measured positions and the photograph
+       are the same instant; with an empty view it is the chosen moment. The
+       lowest loaded slot decides, because that is the layer the disc itself
+       comes from. */
+    const shown = scene.layers.find(l => l.texture && l.meta);
+    const target = shown
+      ? Date.parse(shown.meta.date.replace(' ', 'T') + 'Z')
+      : (when || (env.moment ? env.moment() : new Date())).getTime();
+
+    /* AND WHICH DAY'S LIST. NOAA publishes a list per day and keeps a month of
+       them; the day nearest the target is the one that describes this sun. The
+       old code took today's list and turned it back, which put a region that
+       emerged yesterday on a sun of five days ago. Outside the month there is
+       no list, and then there are no regions rather than the wrong ones. */
+    const day = env.solarAt ? env.solarAt(target) : env.solar();
+    const list = (day && day.regions) || [];
+    // Undefined means nothing has arrived from NOAA at all; null means lists
+    // arrived and none of them covers this moment. Only the second is a finding.
+    regionDay = day ? day.date : (day === undefined ? undefined : null);
     spots.setRegions(list);
-    const b0 = env.b0(when || new Date());
+
+    const b0 = env.b0(new Date(target));
     if (b0 == null) return null;
     // Rings over an instrument frame, filled caps on the bare sun. Derived from
     // whether a slot holds a texture, so it cannot disagree with what is drawn.
     spots.setOutline(scene.layers.some(l => !!l.texture));
 
-    /* WHICH MOMENT THE SPOTS BELONG TO. When a frame is loaded it is that
-       frame's observation time, so the measured positions and the photograph
-       are the same instant; with an empty view there is nothing to agree with
-       and the clock is the honest answer. The lowest loaded slot decides,
-       because that is the layer the disc itself comes from. */
-    const shown = scene.layers.find(l => l.texture && l.meta);
-    const target = shown
-      ? Date.parse(shown.meta.date.replace(' ', 'T') + 'Z')
-      : (when || new Date()).getTime();
-    const ref = noaaReferenceTime(data && data.date);
-
+    const ref = noaaReferenceTime(regionDay);
     const drawn = spots.place(b0, 0, ref, target);
     spots.setVisible(spotsWanted && drawn > 0);
     return { regions: list.length, drawn, b0: +b0.toFixed(4),
-             noaaDate: (data && data.date) || null,
+             noaaDate: regionDay,
+             target: new Date(target).toISOString(),
              lonShift: spots.state().lonShift };
   }
 
@@ -779,6 +794,7 @@ export function createSunState(THREE, env) {
     state: () => ({
       ...scene.state(),
       spots: spots.state(),
+      regionDay,
       cameraDistance: (() => {
         const c = world.camera(), k = world.controls();
         return c && k ? +c.position.distanceTo(k.target).toFixed(1) : null;

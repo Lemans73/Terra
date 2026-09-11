@@ -2284,6 +2284,33 @@
   .rlabel:hover { border-color: #ffb347; background: rgba(11,16,24,0.92); }
   .rline { stroke: #ffb347; stroke-width: 1; stroke-dasharray: 2 3; opacity: 0.55; }
 
+  /* A flare on the sun, under the spot its region sits on — the region label
+     hangs above it, so a region with a flare reads as one block. The colour is
+     the class colour from the lane, set per label, so the same flare looks the
+     same in both places. */
+  .flabel {
+    position: absolute;
+    top: 0; left: 0;
+    display: none;
+    white-space: nowrap;
+    background: rgba(5,7,13,0.82);
+    backdrop-filter: blur(6px);
+    border: 1px solid var(--flare-ink, var(--hair));
+    border-radius: 7px;
+    padding: 3px 8px;
+    font-size: 10px;
+    line-height: 1.3;
+    color: var(--ink);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+    pointer-events: auto;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .flabel b { color: var(--flare-ink, var(--ink)); font-weight: 700; letter-spacing: 0.04em; }
+  .flabel span { color: var(--ink-dim); margin-left: 6px; }
+  .flabel:hover { background: rgba(11,16,24,0.94); }
+  .fline { stroke: var(--flare-ink, var(--hair)); stroke-width: 1; stroke-dasharray: 2 3; opacity: 0.5; }
+
   /* N en S bij de uiteinden van de assen. Delen dezelfde overlay-laag als .rlabel
      en .rlabel, maar zonder kader, zonder leader-line en zonder muisinteractie:
      het is een aanduiding bij een lijn, geen kaartje met inhoud. De kleur komt

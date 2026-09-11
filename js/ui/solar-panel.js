@@ -25,6 +25,8 @@
    ============================================================ */
 
 import { SOURCES, PRESETS, isCoronagraph } from '../layers/sun/source.js';
+// One ladder for "how old", shared with the line above the image.
+import { ageText } from './solar-orient.js';
 
 const $ = id => document.getElementById(id);
 
@@ -165,7 +167,7 @@ export function createSolarPanel(env) {
     if (!shown.length) { el.innerHTML = ''; return; }
     const parts = shown.map(d =>
       d.name + ' &#183; ' + new Date(d.observed).toISOString().replace('T', ' ').slice(0, 16) +
-      ' UTC &#183; ' + d.ageMinutes + ' min old');
+      ' UTC &#183; ' + ageText(d.ageMinutes));
     el.innerHTML = parts.join('<br />') +
       '<br />Image data: Helioviewer.org &#183; NASA/SDO' +
       (shown.some(d => d.coronagraph) ? ' &#183; ESA/NASA SOHO' : '');

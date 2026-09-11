@@ -2377,6 +2377,8 @@ import { createSolarOrient } from './js/ui/solar-orient.js';
 import { createSolarMap } from './js/ui/solar-map.js';
 import { createXrayFeed } from './js/layers/sun/xray-feed.js';
 import { createSolarTime } from './js/ui/solar-time.js';
+// Eén definitie van "waar staat NOAA's lijst voor": 24:00 UT van die dag.
+import { noaaReferenceTime } from './js/layers/sun/frame.js';
 /* SOLAR:START — de INSTRUMENTBEELDEN, en alleen die. Zie tools/build-standalone.mjs
    stap 0: dit blok wordt uit terra.html geknipt, want de proxy is een Vercel Edge
    Function en die draait daar niet.
@@ -3307,23 +3309,36 @@ const Adapters = {
     url: 'https://services.swpc.noaa.gov/json/solar_regions.json',
     normalize(json) {
       const rows = Array.isArray(json) ? json : [];
-      // Het bestand draagt een maand historie; alleen de laatste dag telt.
       const last = rows.reduce((a, r) => (r.observed_date > a ? r.observed_date : a), '');
       solarState.date = last || null;
-      solarState.regions = rows.filter(r => r.observed_date === last).map(r => ({
-        region: r.region,
-        lat: r.latitude,
-        // NOAA telt west NEGATIEF ("N15W03" staat naast longitude -3). De laag
-        // rekent daarmee; hier blijft het getal onaangeroerd zodat er maar één
-        // plek is waar de afspraak vertaald wordt.
-        lon: r.longitude,
-        area: r.area,
-        spots: r.number_spots,
-        spotClass: r.spot_class,
-        magClass: r.mag_class,
-        pC: r.c_flare_probability, pM: r.m_flare_probability, pX: r.x_flare_probability,
-        firstDate: r.first_date
-      }));
+      /* HET BESTAND DRAAGT EEN MAAND, EN DIE MAAND IS DE TIJDAS VAN DE ZON
+         (sessie 52). Tot nu toe werd alleen de laatste dag bewaard, en dat gaf
+         bij een moment van vijf dagen terug de lijst van vandaag, teruggedraaid:
+         een gebied dat gisteren pas opkwam stond dan vijf dagen eerder al op de
+         zon. Nu blijft elke dag staan en kiest solarDayFor() er een bij het
+         moment. De uitlezing en de teller blijven de LAATSTE dag lezen — die
+         beschrijven "de zon vandaag" en niet het gekozen moment. */
+      const perDag = new Map();
+      for (const r of rows) {
+        if (!r.observed_date) continue;
+        if (!perDag.has(r.observed_date)) perDag.set(r.observed_date, []);
+        perDag.get(r.observed_date).push({
+          region: r.region,
+          lat: r.latitude,
+          // NOAA telt west NEGATIEF ("N15W03" staat naast longitude -3). De laag
+          // rekent daarmee; hier blijft het getal onaangeroerd zodat er maar één
+          // plek is waar de afspraak vertaald wordt.
+          lon: r.longitude,
+          area: r.area,
+          spots: r.number_spots,
+          spotClass: r.spot_class,
+          magClass: r.mag_class,
+          pC: r.c_flare_probability, pM: r.m_flare_probability, pX: r.x_flare_probability,
+          firstDate: r.first_date
+        });
+      }
+      solarState.byDate = perDag;
+      solarState.regions = perDag.get(last) || [];
       solarState.ssn = solarState.regions.reduce((n, r) => n + (r.spots || 0), 0);
       applySolarState();
       return [];
@@ -6592,6 +6607,7 @@ function animateShader() {
   if (inZonAanzicht()) ensureTargetLock();
 
   positionRegionLabels(_cam);   // labels bij de actieve gebieden op de zon
+  positionFlareLabels(_cam);    // en de flares die NOAA aan zo'n gebied toekende
   positionAxisLabels(_cam);     // N en S bij de uiteinden van de assen
   if (antipode) antipode.update(_cam); // schermvaste coördinaat op het tegenpunt
   // Het fijne rooster verschijnt zodra je op een gebied inzoomt. Hier en niet in
@@ -7062,6 +7078,33 @@ const regionLabels = [];
    De laag antwoordt nu zelf met wereldcoördinaten (`labelAnchors`), dus hier
    staat alleen nog de keuze. Levert geen van beide iets, dan is er niets te
    labelen en zeggen de labels dat door weg te blijven. */
+/* WELKE NOAA-DAG BIJ EEN MOMENT HOORT.
+
+   De lijst van een dag beschrijft de zon om 24:00 UT van die dag (zie
+   noaaReferenceTime), dus de dag die bij een moment hoort is de dag waarvan die
+   referentie er het dichtst bij ligt. De laag draait de posities vandaar naar
+   het moment; over anderhalve dag is dat ruim 20 graden en dan wordt het een
+   schatting in plaats van een meting — daarbuiten tekent de state liever geen
+   gebieden dan de verkeerde. */
+const SOLAR_DAY_REACH_MS = 36 * 3600e3;
+
+/* NIETS BINNEN is iets anders dan NIETS VOOR DEZE DATUM, en de uitlezing zegt
+   alleen dat tweede. Vandaar `undefined` zolang er geen enkele lijst is en
+   `null` zodra er lijsten zijn maar geen ervan dit moment dekt. */
+function solarDayFor(t) {
+  const perDag = solarState.byDate;
+  if (!perDag || !perDag.size || !Number.isFinite(t)) return undefined;
+  let best = null, bestD = Infinity;
+  for (const datum of perDag.keys()) {
+    const ref = noaaReferenceTime(datum);
+    if (ref == null) continue;
+    const d = Math.abs(ref - t);
+    if (d < bestD) { bestD = d; best = datum; }
+  }
+  if (best == null || bestD > SOLAR_DAY_REACH_MS) return null;
+  return { date: best, regions: perDag.get(best) || [] };
+}
+
 function regionLabelSource() {
   if (solarImageryState && viewStates && viewStates.isActive('sun')) {
     return solarImageryState.labelAnchors();
@@ -7106,10 +7149,32 @@ function regionItem(r) {
    zodra er ergens een gebied wordt overgeslagen — een gebied zonder positie,
    een gebied achter de rand — wijst label 4498 naar de ring van 4500. Alles
    ziet er dan nog steeds uit zoals het hoort, op het antwoord na. */
-function rebuildRegionLabels() {
+/* DE LABELS HOREN BIJ DEZELFDE DAG ALS DE VLEKKEN (sessie 52). De laag tekent de
+   lijst van de dag die bij het moment hoort; stond hier `solarState.regions`, dan
+   zou een label van vandaag naar een vlek van vorige week wijzen — of, vaker, naar
+   niets, want zonder anker blijft het onzichtbaar. Eén lijst, twee lezers. */
+function regionsForShownMoment() {
+  const day = solarDayFor(shownSolarMoment());
+  return day ? day.regions : [];
+}
+
+/* Alleen herbouwen als de lijst zelf verandert. Een sleep in de strook meldt
+   twintig keer per seconde dat er iets veranderd is, en de DOM per beweging
+   opnieuw opbouwen zou elke hover eronder weggooien. */
+let regionLabelKey = '';
+
+function syncRegionLabels() {
+  const list = regionsForShownMoment();
+  const key = list.map(r => r.region + ':' + r.lat + ':' + r.lon).join('|');
+  if (key === regionLabelKey) return;
+  regionLabelKey = key;
+  rebuildRegionLabels(list);
+}
+
+function rebuildRegionLabels(list) {
   regionLabels.forEach(l => { l.el.remove(); l.line.remove(); });
   regionLabels.length = 0;
-  solarState.regions.forEach((r) => {
+  (list || regionsForShownMoment()).forEach((r) => {
     if (r.lat == null || r.lon == null) return;
     const el = document.createElement('div');
     el.className = 'rlabel';
@@ -7169,6 +7234,112 @@ function positionRegionLabels(cam) {
   }
   for (const it of items) {
     it.l.el.style.transform = 'translate(' + it.x + 'px, ' + it.ty + 'px) translate(-50%, -100%)';
+    it.l.line.setAttribute('x1', it.x); it.l.line.setAttribute('y1', it.ty);
+    it.l.line.setAttribute('x2', it.x); it.l.line.setAttribute('y2', it.y);
+  }
+}
+
+/* ---- The flares on the sun ------------------------------------------------
+
+   A flare has no place of its own in NOAA's list. What it has is the REGION
+   NOAA assigned it, and that region has a measured latitude and longitude. So a
+   flare is drawn where its region stands — the same anchor its region label
+   hangs from — under the spot, where the region label sits above it.
+
+   AND ONLY NEAR THE MOMENT ON SCREEN. Three hours further the sun has turned
+   two degrees, and a flare from yesterday says nothing about the picture you
+   are looking at. The window is the same one the proof of concept settled on.
+
+   The flares come from the strip, so the lane and the disc can never disagree
+   about which flares a window holds. */
+const flareLabels = [];
+let flareLabelKey = '';
+const FLARE_NEAR_MS = 3 * 3600e3;
+
+// One place where a class becomes a colour, for the lane, the card and here.
+function flareColor(cls) {
+  const letter = cls && /^[ABCMX]/.test(cls) ? cls[0] : 'B';
+  return getComputedStyle(document.documentElement)
+    .getPropertyValue('--solar-flare-' + (letter === 'A' ? 'b' : letter.toLowerCase())).trim()
+    || COLORS.region;
+}
+
+/* The moment the picture is of: the observation time of the lowest loaded slot,
+   or the chosen moment when nothing is loaded. The same rule the spots use, so
+   the flares stand on the regions as they are drawn and not beside them. */
+function shownSolarMoment() {
+  for (let i = 0; i < 3; i++) {
+    const d = solarImageryState && solarImageryState.describeSlot(i);
+    if (d) return Date.parse(d.observed);
+  }
+  return momentNow().getTime();
+}
+
+function flaresOnScreen() {
+  if (!solarTime || !viewStates || !viewStates.isActive('sun')) return [];
+  const shown = shownSolarMoment();
+  return solarTime.flares()
+    .filter(f => f.region && f.peak != null && Math.abs(f.peak - shown) <= FLARE_NEAR_MS);
+}
+
+/* Rebuilt only when the set itself changes — a redraw of the strip runs twenty
+   times a second while the pointer moves, and rebuilding the DOM at that rate
+   would drop every hover it is meant to serve. */
+function syncFlareLabels() {
+  const wanted = flaresOnScreen();
+  const key = wanted.map(f => f.peak + ':' + f.region + ':' + f.cls).join('|');
+  if (key === flareLabelKey) return;
+  flareLabelKey = key;
+  flareLabels.forEach(l => { l.el.remove(); l.line.remove(); });
+  flareLabels.length = 0;
+  for (const f of wanted) {
+    const ink = flareColor(f.cls);
+    const el = document.createElement('div');
+    el.className = 'flabel';
+    el.style.setProperty('--flare-ink', ink);
+    el.innerHTML = '<b>' + (f.cls || 'flare') + '</b><span>' + f.region + '</span>';
+    // The same route as a click on the lane: the moment goes to the peak and
+    // the card opens. Two ways in, one place to end up.
+    el.addEventListener('click', () => solarTime.selectFlare(f));
+    labelLayer.appendChild(el);
+    const line = document.createElementNS(SVG_NS, 'line');
+    line.setAttribute('class', 'fline');
+    line.style.setProperty('--flare-ink', ink);
+    labelSvg.appendChild(line);
+    flareLabels.push({ el, line, region: f.region });
+  }
+}
+
+function positionFlareLabels(cam) {
+  if (!flareLabels.length) return;
+  const anchors = regionLabelSource();
+  const byRegion = new Map();
+  if (anchors) for (const a of anchors) byRegion.set(a.region, a);
+
+  const items = [];
+  for (const l of flareLabels) {
+    const a = byRegion.get(l.region);
+    const zichtbaar = !!a && a.facing(cam);
+    l.el.style.display = zichtbaar ? 'block' : 'none';
+    l.line.style.display = zichtbaar ? 'block' : 'none';
+    if (!zichtbaar) continue;
+    _regionPos.set(a.world.x, a.world.y, a.world.z).project(cam);
+    const x = (_regionPos.x * 0.5 + 0.5) * window.innerWidth;
+    const y = (-_regionPos.y * 0.5 + 0.5) * window.innerHeight;
+    items.push({ l, x, y, ty: y + 30 });            // label onder de vlek
+  }
+  // Stapelen naar BENEDEN, spiegelbeeld van de gebieden erboven: twee flares in
+  // hetzelfde gebied staan anders exact op elkaar.
+  items.sort((a, b) => a.y - b.y);
+  for (let i = 0; i < items.length; i++) {
+    for (let j = 0; j < i; j++) {
+      if (Math.abs(items[i].x - items[j].x) < 96 && Math.abs(items[i].ty - items[j].ty) < 24) {
+        items[i].ty = items[j].ty + 24;
+      }
+    }
+  }
+  for (const it of items) {
+    it.l.el.style.transform = 'translate(' + it.x + 'px, ' + it.ty + 'px) translate(-50%, 0)';
     it.l.line.setAttribute('x1', it.x); it.l.line.setAttribute('y1', it.ty);
     it.l.line.setAttribute('x2', it.x); it.l.line.setAttribute('y2', it.y);
   }
@@ -9122,9 +9293,6 @@ function showSolarActivity() {
    or assigned by NOAA, so where they have nothing the card says so instead of
    leaving the row out. The class is SWPC's own, never recomputed. */
 function flareView(f) {
-  const letter = f.cls && /^[ABCMX]/.test(f.cls) ? f.cls[0] : 'B';
-  const color = getComputedStyle(document.documentElement)
-    .getPropertyValue('--solar-flare-' + (letter === 'A' ? 'b' : letter.toLowerCase())).trim();
   const when = t => (t == null ? { absent: true, text: 'not reported' } : eventTijd(t));
   const actions = [];
   /* Only with the imagery half, and only with a peak to fetch at. The moment is
@@ -9137,7 +9305,7 @@ function flareView(f) {
   return {
     kind: 'flare',
     kicker: 'SOLAR FLARE',
-    color: color || COLORS.region,
+    color: flareColor(f.cls),
     headline: f.cls ? f.cls + ' flare' : 'Flare without a reported maximum',
     rows: [
       ['Class', f.cls ? f.cls + ' · SWPC' : { absent: true, text: 'no maximum reported' }],
@@ -9209,7 +9377,18 @@ function applySolarState() {
   updateSunUniform();
   // PAS HIERNA de labels: rebuildRegionLabels() leest `userData.dir`, en die wordt
   // gezet door placeSunspots() binnen update(). Andersom slaat hij elk gebied over.
-  rebuildRegionLabels();
+  regionLabelKey = '';        // verse feed: hoe dan ook opnieuw opbouwen
+  syncRegionLabels();
+}
+
+/* Het moment is verzet (de strook), of er is een beeld binnengekomen. Dan volgen
+   de vlekken, hun labels en de flares het nieuwe moment — in die volgorde, want
+   de labels hangen aan de ankers die refreshSpots() zet. */
+function solarMomentChanged() {
+  if (solarImageryState) solarImageryState.refreshSpots();
+  syncRegionLabels();
+  syncFlareLabels();
+  if (solarOrient) solarOrient.refresh();
 }
 
 // Zet de binnengekomen voorspelling in beeld. Kan met een lege schil overweg: de
@@ -13054,6 +13233,14 @@ solarImageryState = createSunState(THREE, {
      view-state.js: een geïmporteerde waarde is een momentopname. */
   solar: () => solarState,
 
+  /* De gebiedslijst die bij een moment hoort, uit de maand die NOAA meestuurt.
+     Als functie en niet als lijst: welke dag erbij hoort hangt af van het moment
+     dat de state zelf bepaalt — die kent de beeldtijd, deze kant niet. */
+  solarAt: (t) => solarDayFor(t),
+
+  // Het gekozen moment, voor als er geen beeld geladen is om zich naar te richten.
+  moment: () => momentNow(),
+
   /* B0 uit Terra's eigen efemeriden. Geen tweede hemelmechanica, en daarmee ook
      geen tweede antwoord op dezelfde vraag. */
   b0: (when) => {
@@ -13141,7 +13328,8 @@ try {
       return null;
     },
     onFetch: solarPanel ? () => solarPanel.fetchAll() : null,
-    onFlare: showFlare
+    onFlare: showFlare,
+    onDrawn: solarMomentChanged
   });
 } catch (e) {
   console.error('Terra: the solar time strip could not be set up.', e);
@@ -13465,6 +13653,10 @@ viewStates.onChange((actief, view) => {
     if (actief === 'msphere') msphereStrip.nieuweData();
     else msphereStrip.stop();
   }
+  /* De flarelabels hangen aan de zon-state. Bij vertrek meldt de strook niets
+     meer — hij tekent niet — dus wordt het opruimen hier gedaan: zonder deze
+     regel blijven ze staan boven de aarde. */
+  syncFlareLabels();
   /* WAT EEN STAND BETEKENT, WEET DE STATE — en sinds sessie 31 vertelt hij dat
      niet meer hierlangs. Deze haak vuurde ná `goToView()`, dus op frame 0: de
      projectie, de hemel, het raster en de omtrek klapten er allemaal om terwijl
