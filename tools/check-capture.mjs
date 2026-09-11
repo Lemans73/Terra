@@ -23,12 +23,26 @@
  *       node tools/check-capture.mjs --selftest (every break must show)
  */
 
+import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { pathToFileURL } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const MODULE = join(ROOT, 'js/core/capture.js');
+const CSS = join(ROOT, 'css/app.css');
+
+/* THE PHONE WINDOW IS THE PHONE LAYOUT. capture.js decides the phone offer
+   with two numbers; css/app.css gives the app its phone layout with two media
+   queries. Move one without the other and a window gets the phone layout
+   with the desktop offer, or the other way round. */
+function phoneQueriesMatch(css, phone) {
+  const bad = [];
+  for (const q of ['@media (max-width: ' + phone.maxWidth + 'px)', '@media (max-height: ' + phone.maxHeight + 'px)']) {
+    if (!css.includes(q)) bad.push('css/app.css has no ' + q);
+  }
+  return bad;
+}
 
 const wantSelftest = process.argv.includes('--selftest');
 
@@ -117,6 +131,10 @@ async function run() {
       'a laptop offers ' + desk.join('/') + ' frames of 1:1, a phone offers ' + phone.join('/'));
   if (!(desk.length === 3 && phone.length === 1)) failed++;
 
+  const queries = phoneQueriesMatch(readFileSync(CSS, 'utf8'), cap.PHONE_WINDOW);
+  if (!queries.length) say('ok', 'the phone window is the phone layout (' + cap.PHONE_WINDOW.maxWidth + ' wide, ' + cap.PHONE_WINDOW.maxHeight + ' high)');
+  else { say('fail', 'the phone window and the phone layout have drifted apart', queries); failed++; }
+
   return failed;
 }
 
@@ -166,6 +184,20 @@ async function proveItCanFail() {
     ['Window saved in CSS pixels', () => cap.selftest({
       planSize: (ratio, edge, n, view, pr, max) => cap.planSize(ratio, edge, n, view, 1, max)
     }).length > 0],
+    ['a phone window given the desktop size', () => cap.selftest({
+      planSize: (ratio, edge, n, view, pr, max) => cap.planSize(ratio, edge, n, { w: 1920, h: 1080 }, pr, max)
+    }).length > 0],
+    ['a phone window offered Large', () => cap.selftest({
+      availableSizes: () => ['large', 'standard']
+    }).length > 0],
+    ['a row on a phone that skips the budget', () => cap.selftest({
+      planSize: (ratio, edge, n, view, pr, max) => n > 1
+        ? cap.planSize(ratio, edge, n, { w: 1920, h: 1080 }, pr, max)
+        : cap.planSize(ratio, edge, n, view, pr, max)
+    }).length > 0],
+    ['the phone layout moved to 700 px and the offer stayed', () => phoneQueriesMatch(
+      readFileSync(CSS, 'utf8').split('@media (max-width: 640px)').join('@media (max-width: 700px)'), cap.PHONE_WINDOW
+    ).length > 0],
     ['Window rounded up instead of down', () => cap.selftest({
       planSize: (ratio, edge, n, view, pr, max) => {
         const s = cap.planSize(ratio, edge, n, view, pr, max);

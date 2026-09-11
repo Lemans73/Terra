@@ -146,6 +146,32 @@ function defaultExportSize(ratio, longEdge, frames) {
   return { frameW, frameH, frames: n, width: frameW * n, height: frameH };
 }
 
+/* ---- The phone window ----------------------------------------------------
+   A WINDOW THE APP LAYS OUT AS A PHONE gets a phone's offer: no render larger
+   than one Standard square, rows included. The frame on such a screen is a
+   few hundred pixels across, so a 3840 render of it is mostly enlargement,
+   and a phone's browser pays for every pixel of it in memory.
+
+   The numbers are the two media queries that give the app its phone layout
+   (css/app.css), so the offer follows the same window the layout does, and
+   check-capture.mjs fails the day one of them moves without the other.
+   Nothing here asks what the device is. */
+export const PHONE_WINDOW = { maxWidth: 640, maxHeight: 480 };
+export const PHONE_MAX_PIXELS = QUALITY.standard * QUALITY.standard;
+
+export function isPhoneWindow(viewW, viewH) {
+  return viewW <= PHONE_WINDOW.maxWidth || viewH <= PHONE_WINDOW.maxHeight;
+}
+
+/* Which sizes the picker offers in this window, as keys of QUALITY. */
+export function availableSizes(viewW, viewH) {
+  return defaultAvailableSizes(viewW, viewH);
+}
+
+function defaultAvailableSizes(viewW, viewH) {
+  return isPhoneWindow(viewW, viewH) ? ['standard'] : ['large', 'standard'];
+}
+
 /* ---- How many pixels -----------------------------------------------------
    The size of the file, for a format, a size and a frame count in a window.
 
@@ -170,7 +196,17 @@ function defaultPlanSize(ratio, longEdge, frames, view, pixelRatio, maxSide) {
   }
   const n = Math.max(1, Math.min(MAX_FRAMES, frames || 1));
   let edge = n > 1 ? SET_LONG_EDGE : longEdge;
+  const phone = isPhoneWindow(view.w, view.h);
+  if (phone && n === 1) edge = Math.min(edge, QUALITY.standard);
   let size = exportSize(ratio, edge, n);
+  /* A row shrinks until the whole render fits, and stays a whole number of
+     frames because exportSize makes it so. The square root is the jump; the
+     loop only mops up the rounding of the short side. */
+  if (phone && size.width * size.height > PHONE_MAX_PIXELS) {
+    edge = Math.floor(edge * Math.sqrt(PHONE_MAX_PIXELS / (size.width * size.height)));
+    size = exportSize(ratio, edge, n);
+    while (size.width * size.height > PHONE_MAX_PIXELS) size = exportSize(ratio, --edge, n);
+  }
   let capped = false;
   if (maxSide && Math.max(size.width, size.height) > maxSide) {
     const k = maxSide / Math.max(size.width, size.height);
@@ -394,6 +430,33 @@ export function selftest(impl) {
       bad.push('Window in ' + vw + 'x' + vh + ' at ' + pr + 'x saves ' + s.width + 'x' + s.height +
                ', the screen holds ' + want.join('x'));
     }
+  }
+
+  /* A WINDOW LAID OUT AS A PHONE: no render over one Standard square, rows
+     still whole numbers of frames, a single frame exactly Standard, and the
+     picker offering nothing the plan would not make. Wider windows keep Large. */
+  const sizes = (impl && impl.availableSizes) || defaultAvailableSizes;
+  for (const [vw, vh] of [[390, 844], [844, 390], [640, 1000], [1000, 480]]) {
+    if (!isPhoneWindow(vw, vh)) bad.push('a ' + vw + 'x' + vh + ' window is not laid out as a phone');
+    if (sizes(vw, vh).includes('large')) bad.push('a ' + vw + 'x' + vh + ' window is offered Large');
+    for (const r of RATIOS) {
+      if (r.aspect === null) continue;
+      for (let n = 1; n <= MAX_FRAMES; n++) {
+        const s = planSize(r, QUALITY.large, n, { w: vw, h: vh }, 3, 16384).size;
+        const at = r.key + ' x' + n + ' in ' + vw + 'x' + vh + ': ';
+        if (s.width * s.height > PHONE_MAX_PIXELS) {
+          bad.push(at + (s.width * s.height / 1e6).toFixed(1) + ' MP, over one Standard square');
+        }
+        if (s.width !== s.frameW * n) bad.push(at + 'the row is not a whole number of frames');
+        if (n === 1 && Math.max(s.width, s.height) !== QUALITY.standard) bad.push(at + 'a single frame is not Standard');
+      }
+    }
+  }
+  if (!sizes(1440, 900).includes('large')) bad.push('a desktop window lost Large');
+  const deskSquare = planSize(ratioByKey('1x1'), QUALITY.large, 1, { w: 1440, h: 900 }, 2, 16384).size;
+  if (deskSquare.width !== QUALITY.large) bad.push('a desktop 1:1 at Large saves ' + deskSquare.width + ', not ' + QUALITY.large);
+  if (isPhoneWindow(641, 1000) || isPhoneWindow(1000, 481)) {
+    bad.push('a window wider than 640 and taller than 480 is laid out as a phone');
   }
 
   /* THE STRIPS. Every canvas row must hold exactly the GL row that belongs

@@ -2391,7 +2391,7 @@ import { createDetailPanel } from './js/ui/detail.js';
 import { createOnboarding } from './js/ui/onboarding.js';
 import { createHints } from './js/ui/hints.js';
 import { createPresentMode } from './js/ui/present.js';
-import { createCapture, availableRatios, availableFrames, ratioByKey, QUALITY }
+import { createCapture, availableRatios, availableFrames, availableSizes, ratioByKey, QUALITY }
   from './js/core/capture.js';
 import { limbThreshold } from './js/core/label-sprite.js';
 import { PLANETS, PLANET_INFO, nextConjunction,
@@ -13297,6 +13297,7 @@ const presentMode = createPresentMode({
   capture: presentCapture,
   ratios: availableRatios,
   frameOptions: availableFrames,
+  sizeOptions: availableSizes,
   ratioByKey,
   quality: QUALITY,
   button: document.getElementById('present-open'),

@@ -37,6 +37,9 @@ export function createPresentMode(opts) {
   const frameOptions = opts.frameOptions;
   const ratioByKey = opts.ratioByKey;
   const quality = opts.quality;
+  /* Which sizes this window may save at. A phone-sized window gets Standard
+     only; the choice made in a larger window is kept, not overwritten. */
+  const sizeOptions = opts.sizeOptions || (() => RESOLUTIONS.map((r) => r.key));
   const button = opts.button || null;
   const blocked = opts.blocked || (() => false);
   const fitFrame = opts.fitFrame || null;
@@ -171,11 +174,15 @@ export function createPresentMode(opts) {
 
        BEFORE the early return below, not after — that return is taken for
        exactly one of the two cases it has to describe. */
-    const sizeApplies = p.ratio.aspect !== null && p.frames === 1;
+    const sizes = sizeOptions(view.w, view.h);
+    const shown = sizes.includes(sizeKey) ? sizeKey : sizes[0];
+    if (sizeSel.value !== shown) sizeSel.value = shown;
+    const sizeApplies = p.ratio.aspect !== null && p.frames === 1 && sizes.length > 1;
     sizeSel.disabled = !sizeApplies;
     sizeSel.title = sizeApplies ? ''
-      : (p.ratio.aspect === null ? 'Window saves your screen in its own pixels'
-                                 : 'A row uses a fixed frame size so it fits one render');
+      : p.ratio.aspect === null ? 'Window saves your screen in its own pixels'
+      : p.frames > 1 ? 'A row uses a fixed frame size so it fits one render'
+      : 'A window this small saves at Standard size';
 
     if (p.ratio.aspect === null) {
       crop.classList.remove('on');
