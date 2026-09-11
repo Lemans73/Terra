@@ -2382,6 +2382,7 @@ import { createMagnetosphereStrip, MSPHERE_SECTOR_TEKST } from './js/ui/magnetos
 import { createEnvironmentToggle, findGlobeRoot } from './js/core/globe-root.js';
 import { createQuakeIndicator } from './js/layers/quake-indicator.js';
 import { createQuakeLabels } from './js/ui/quake-labels.js';
+import { passDragsThrough, CLICK_SLOP_PX } from './js/ui/label-passthrough.js';
 import { skyFrame } from './js/compute/frames.js';
 import { createViewStates } from './js/core/view-state.js';
 import { createNavPanel } from './js/ui/nav.js';
@@ -6748,7 +6749,7 @@ globeEl.addEventListener('pointerup', (e) => {
   const moved = Math.hypot(e.clientX - downInfo.x, e.clientY - downInfo.y);
   const dt = Date.now() - downInfo.t;
   downInfo = null;
-  if (moved < 6 && dt < 400) {
+  if (moved < CLICK_SLOP_PX && dt < 400) {
     // Zelfde volgorde als bij de hover: bevingen eerst, dan de andere lagen.
     const q = pickQuakeAt(e.clientX, e.clientY);
     if (q) { showDetail(q); return; }
@@ -6765,6 +6766,11 @@ const labelSvg = document.createElementNS(SVG_NS, 'svg');
 labelSvg.id = 'label-lines';
 labelLayer.appendChild(labelSvg);
 document.body.appendChild(labelLayer);
+
+/* A drag that starts on a label reaches the canvas, and the label keeps its
+   click. See js/ui/label-passthrough.js. */
+const labelPassThrough = passDragsThrough(labelLayer,
+  () => (world.renderer() ? world.renderer().domElement : null));
 
 /* ---- De beving-labels (sessie 40) -----------------------------------------
 
@@ -12961,6 +12967,10 @@ solarImageryState = createSunState(THREE, {
   stopFlight: () => { sunFlight.actief = false;
                       sunFlight.onStep = sunFlight.onDone = null; },
 
+  /* The time island is hidden in this state, so a playback it started keeps
+     moving a moment nobody can see. The state stops it on entry. */
+  stopPlayback: stopPlay,
+
   /* DE NOAA-GEGEVENS KOMEN UIT DEZELFDE BRON als de aardweergave, en niet uit een
      eigen ophaalactie. `solarState` is de toestand die de vier SWPC-adapters
      vullen; twee lezers van één feed kunnen niet uit de pas lopen, twee feeds
@@ -13840,6 +13850,7 @@ if (IS_LOCAL) {
        vlak, en dan moet het verschil juist groot zijn. */
     solarImagery: () => solarImageryState && solarImageryState.state(),
     solarState: () => solarImageryState,
+    labelPassThrough: () => labelPassThrough.stats(),
 
     /* DE WOLKENSCHIL, om te kunnen zien WAAROM hij weg is. `visible: false` en
        `bestaat: false` geven hetzelfde beeld op het scherm en vragen een andere

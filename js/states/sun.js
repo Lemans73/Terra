@@ -713,6 +713,10 @@ export function createSunState(THREE, env) {
     camera: cameraStand,
 
     enter() {
+      /* Before anything else: a playback still running from the earth view
+         would keep moving the moment while the time island is hidden, and the
+         next Fetch would ask for wherever it had drifted to. */
+      if (env.stopPlayback) env.stopPlayback();
       attach();
       bindPanGesture(true);
       layers.eventsOff();
