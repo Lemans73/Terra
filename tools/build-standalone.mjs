@@ -630,6 +630,24 @@ for (const name of SOLAR_NAMES) {
   );
 }
 
+/* AND WHAT MAY NOT BE CUT. The time strip under the sun reads NOAA directly —
+   no proxy, no key — so it belongs in the standalone as much as the drawn sun
+   does. It sits outside the SOLAR markers on purpose, and this says so out
+   loud: move one of its lines inside them and the build stops here instead of
+   shipping a sun without its measurement. */
+/* The CALL and not the import: `createSolarTime` also appears in the import
+   line, which survives any cut and would make this check pass while the strip
+   itself was gone. */
+const SOLAR_KEEP = ['solar-lane', 'solarTime = createSolarTime(', 'xrays-1-day.json'];
+for (const name of SOLAR_KEEP) {
+  if (out.includes(name)) continue;
+  throw new Error(
+    `build failed: the sun's time strip did not survive the cut — "${name}" is gone. ` +
+    'The strip runs on NOAA alone and belongs in the standalone; only what reaches ' +
+    'the Helioviewer proxy goes between SOLAR:START and SOLAR:END.'
+  );
+}
+
 /* And the reverse: a cut that removed nothing is a cut that is not working. The
    markers could have been renamed, or the block could have been moved out from
    between them, and either way the build would report success while shipping a

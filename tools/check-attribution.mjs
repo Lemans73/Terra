@@ -113,6 +113,56 @@ function checkSolar(doc) {
     : report(true, 'every owner behind the solar frames is named');
 }
 
+/* 5. NOAA's products, COUNTED RATHER THAN REMEMBERED.
+
+   The file said "Four products are used" while the app had grown to more, and
+   nothing noticed: a sentence is not a list, and a number in prose goes stale
+   in silence. So the number is derived from the code — every SWPC product the
+   sun side asks for — and the sentence has to agree with it.
+
+   The same series in three lengths (one day, three days, seven days) is ONE
+   product; the file names differ only in how far back they reach.
+
+   The aurora and the magnetosphere read SWPC too, and they belong to sections
+   this check does not cover. They are skipped here rather than silently
+   counted — see the open point about them in ATTRIBUTION.md. */
+const SWPC_SOURCES = ['index.html', 'js/layers/sun/xray-feed.js'];
+const SWPC_SKIP = /ovation|magnetometer|solar-wind|planetary_k/i;
+const NUMBER_WORDS = ['no', 'One', 'Two', 'Three', 'Four', 'Five', 'Six',
+                      'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve'];
+
+async function checkNoaa(doc) {
+  const products = new Set();
+  for (const f of SWPC_SOURCES) {
+    const src = await readFile(join(ROOT, f), 'utf8');
+    const hits = [
+      ...src.matchAll(/https:\/\/services\.swpc\.noaa\.gov\/[A-Za-z0-9/_.-]+\.json/g),
+      // The feed builds its urls from a base and a file name, so the names stand
+      // alone there; only the sun's own modules are read this way.
+      ...(f.startsWith('js/') ? src.matchAll(/['"]([A-Za-z0-9_-]+\.json)['"]/g) : [])
+    ].map(m => m[0]);
+    for (const url of hits) {
+      if (SWPC_SKIP.test(url)) continue;
+      const base = url.split('/').pop().replace(/['"]/g, '');
+      products.add(base.replace(/-\d+-(day|hour)\.json$/, '.json'));
+    }
+  }
+  const word = NUMBER_WORDS[products.size] || String(products.size);
+  const said = /\b(no|One|Two|Three|Four|Five|Six|Seven|Eight|Nine|Ten|Eleven|Twelve) products are used\b/.exec(doc);
+  if (!doc.includes('NOAA Space Weather Prediction Center')) {
+    return report(false, 'NOAA SWPC is not named in ' + DOC);
+  }
+  if (!/\bGOES\b/.test(doc)) {
+    return report(false, 'the GOES satellites are not named in ' + DOC);
+  }
+  if (!said) return report(false, 'no product count in ' + DOC, 'expected "' + word + ' products are used"');
+  if (said[1] !== word) {
+    return report(false, DOC + ' counts ' + said[1].toLowerCase() + ' NOAA products, the code asks for ' + products.size,
+      [...products].join(', '));
+  }
+  return report(true, 'the ' + products.size + ' NOAA products in the code are the ' + word.toLowerCase() + ' the file names');
+}
+
 async function run(docPath = DOC, tilesPath = TILES) {
   const doc = await readFile(join(ROOT, docPath), 'utf8');
   const mod = await import('../' + tilesPath + '?v=' + Date.now());
@@ -121,6 +171,7 @@ async function run(docPath = DOC, tilesPath = TILES) {
   bad += checkYear(mod, doc);
   bad += checkTileSources(mod, doc);
   bad += checkSolar(doc);
+  bad += await checkNoaa(doc);
   return bad;
 }
 
@@ -151,6 +202,13 @@ async function selftestRun() {
       tiles: (s) => s },
     { name: 'the solar imagery owners missing',
       doc: (s) => s.replace(/Helioviewer/g, 'een beeldbank'),
+      tiles: (s) => s },
+    { name: 'the NOAA product count left behind',
+      doc: (s) => s.replace(/\b(One|Two|Three|Four|Five|Six|Seven|Eight|Nine|Ten) products are used/,
+                            'Four products are used'),
+      tiles: (s) => s },
+    { name: 'the GOES satellites dropped from the file',
+      doc: (s) => s.replace(/GOES/g, 'a weather satellite'),
       tiles: (s) => s }
   ];
 

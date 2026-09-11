@@ -176,10 +176,19 @@ response and shown in the application whenever they are supplied.
 [services.swpc.noaa.gov](https://services.swpc.noaa.gov/)
 
 Work of the National Oceanic and Atmospheric Administration, a US government
-agency. Public domain, no restriction on use. Four products are used: the daily
+agency. Public domain, no restriction on use. Seven products are used: the daily
 solar region summary (sunspot groups, their heliographic position, area and
-classification), the flare probabilities, the GOES X-ray flare summary and the
-10.7 cm solar flux.
+classification, a month of which is kept so the sun can be shown at an earlier
+moment), the flare probabilities, the GOES X-ray flare summary, the 10.7 cm
+solar flux, the GOES XRS X-ray flux series that the time strip under the sun
+draws (0.1–0.8 nm, one sample a minute), the seven-day GOES flare list behind
+the marks on that strip, and the edited event list, which is where the region
+NOAA assigned to each flare comes from.
+
+The flux and the flares are measurements of the primary GOES satellite, and
+which satellite that is comes from the data rather than from this file: NOAA
+assigns the primary role per product, and the strip names the satellite it is
+drawing.
 
 ### Air quality
 
