@@ -146,6 +146,41 @@ function defaultExportSize(ratio, longEdge, frames) {
   return { frameW, frameH, frames: n, width: frameW * n, height: frameH };
 }
 
+/* ---- How many pixels -----------------------------------------------------
+   The size of the file, for a format, a size and a frame count in a window.
+
+   WINDOW IS THE SCREEN, in the screen's own pixels: the size of the drawing
+   buffer, CSS size times pixel ratio. On a phone that is what a wallpaper for
+   that very phone needs, and the CSS size would be a ninth of it. Window also
+   renders the way the screen does (see renderWide), so the file holds the
+   screen's picture without the interface. `native` says so to the renderer.
+
+   A format keeps its long edge, unless the hardware cannot hold the render;
+   then the edge comes down and `capped` says so before anything is pressed. */
+export function planSize(ratio, longEdge, frames, view, pixelRatio, maxSide) {
+  return defaultPlanSize(ratio, longEdge, frames, view, pixelRatio, maxSide);
+}
+
+function defaultPlanSize(ratio, longEdge, frames, view, pixelRatio, maxSide) {
+  if (ratio.aspect === null) {
+    const pr = pixelRatio > 0 ? pixelRatio : 1;
+    const w = Math.floor(view.w * pr), h = Math.floor(view.h * pr);
+    return { size: { frameW: w, frameH: h, frames: 1, width: w, height: h },
+             longEdge: Math.max(w, h), capped: false, native: true };
+  }
+  const n = Math.max(1, Math.min(MAX_FRAMES, frames || 1));
+  let edge = n > 1 ? SET_LONG_EDGE : longEdge;
+  let size = exportSize(ratio, edge, n);
+  let capped = false;
+  if (maxSide && Math.max(size.width, size.height) > maxSide) {
+    const k = maxSide / Math.max(size.width, size.height);
+    edge = Math.max(512, Math.floor(edge * k));
+    size = exportSize(ratio, edge, n);
+    capped = true;
+  }
+  return { size, longEdge: edge, capped, native: false };
+}
+
 /* ---- Reading the render back ---------------------------------------------
    The finished picture comes back in strips rather than in one piece: a
    3840 square read at once is a 59 MB array next to the 59 MB canvas it goes
@@ -347,6 +382,20 @@ export function selftest(impl) {
   if (slots.some((s) => s.credit !== 'C')) bad.push('a frame without the credit');
   if (slots.some((s) => s.title !== 'T')) bad.push('a frame without the title');
 
+  /* WINDOW IS THE SCREEN, in the screen's own pixels, fractional ratios
+     included: the drawing buffer is the CSS size times the ratio, rounded
+     down, and that is what the file must hold. */
+  const planSize = (impl && impl.planSize) || defaultPlanSize;
+  const win = ratioByKey('win');
+  for (const [vw, vh, pr] of [[390, 844, 3], [1440, 900, 2], [411, 891, 2.625]]) {
+    const s = planSize(win, QUALITY.large, 1, { w: vw, h: vh }, pr, 16384).size;
+    const want = [Math.floor(vw * pr), Math.floor(vh * pr)];
+    if (s.width !== want[0] || s.height !== want[1]) {
+      bad.push('Window in ' + vw + 'x' + vh + ' at ' + pr + 'x saves ' + s.width + 'x' + s.height +
+               ', the screen holds ' + want.join('x'));
+    }
+  }
+
   /* THE STRIPS. Every canvas row must hold exactly the GL row that belongs
      there, and be written once. 1000 rows is not a multiple of the strip
      height, so the short strip at the top is in the test too. */
@@ -425,22 +474,9 @@ export function createCapture(opts) {
     const n = ratio.aspect === null ? 1 : Math.max(1, Math.min(MAX_FRAMES, frames || 1));
     const whole = totalAspect(ratio, n, view.w, view.h);
     const rect = frameRect(ratio.aspect === null ? null : whole, view.w, view.h);
-
-    let edge = n > 1 ? SET_LONG_EDGE : longEdge;
-    let size = ratio.aspect === null
-      ? { frameW: Math.round(view.w), frameH: Math.round(view.h), frames: 1,
-          width: Math.round(view.w), height: Math.round(view.h) }
-      : exportSize(ratio, edge, n);
-
-    let capped = false;
-    const cap = limit();
-    if (Math.max(size.width, size.height) > cap) {
-      const k = cap / Math.max(size.width, size.height);
-      edge = Math.max(512, Math.floor(edge * k));
-      size = exportSize(ratio, edge, n);
-      capped = true;
-    }
-    return { ratio, frames: n, rect, size, longEdge: edge, capped, view };
+    const s = planSize(ratio, longEdge, n, view, renderer().getPixelRatio(), limit());
+    return { ratio, frames: n, rect, size: s.size, longEdge: s.longEdge,
+             capped: s.capped, native: s.native, view };
   }
 
   /* One render, at the requested pixel size, through the same composer the
@@ -474,6 +510,10 @@ export function createCapture(opts) {
     const prevTarget = r.getRenderTarget();
     const hasRatio = typeof c.setPixelRatio === 'function';
     const W = p.size.width, H = p.size.height;
+    /* Window renders exactly as the screen does: CSS size at the screen's own
+       ratio. A format renders at its own pixel size with a ratio of one. */
+    const logical = p.native ? { w: view.w, h: view.h, ratio: prevRatio }
+                             : { w: W, h: H, ratio: 1 };
 
     const passes = c.passes.filter((pass) => pass.enabled);
     const last = passes[passes.length - 1];
@@ -492,9 +532,9 @@ export function createCapture(opts) {
       Object.defineProperty(canvas, 'height',
         { configurable: true, get: () => shadowH, set: (v) => { shadowH = v; } });
 
-      r.setDrawingBufferSize(W, H, 1);
-      if (hasRatio) c.setPixelRatio(1);
-      c.setSize(W, H);
+      r.setDrawingBufferSize(logical.w, logical.h, logical.ratio);
+      if (hasRatio) c.setPixelRatio(logical.ratio);
+      c.setSize(logical.w, logical.h);
 
       /* The camera keeps the aspect of the SCREEN. setViewOffset then cuts the
          frame out of that full picture, which is why the file matches the frame

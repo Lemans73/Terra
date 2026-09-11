@@ -160,6 +160,19 @@ async function proveItCanFail() {
     }).length > 0],
     ['strips stacked from the top instead of mirrored', () => cap.selftest({
       readbackStrips: (h, s) => cap.readbackStrips(h, s).map((x) => ({ ...x, canvasY: x.glY }))
+    }).length > 0],
+    /* Window in CSS pixels is what it used to be: 390×844 on a phone whose
+       screen holds 1170×2532. */
+    ['Window saved in CSS pixels', () => cap.selftest({
+      planSize: (ratio, edge, n, view, pr, max) => cap.planSize(ratio, edge, n, view, 1, max)
+    }).length > 0],
+    ['Window rounded up instead of down', () => cap.selftest({
+      planSize: (ratio, edge, n, view, pr, max) => {
+        const s = cap.planSize(ratio, edge, n, view, pr, max);
+        if (ratio.aspect !== null) return s;
+        const w = Math.ceil(view.w * pr), h = Math.ceil(view.h * pr);
+        return { ...s, size: { ...s.size, frameW: w, frameH: h, width: w, height: h } };
+      }
     }).length > 0]
   ];
 

@@ -174,12 +174,12 @@ export function createPresentMode(opts) {
     const sizeApplies = p.ratio.aspect !== null && p.frames === 1;
     sizeSel.disabled = !sizeApplies;
     sizeSel.title = sizeApplies ? ''
-      : (p.ratio.aspect === null ? 'Window takes the size of your window'
+      : (p.ratio.aspect === null ? 'Window saves your screen in its own pixels'
                                  : 'A row uses a fixed frame size so it fits one render');
 
     if (p.ratio.aspect === null) {
       crop.classList.remove('on');
-      pxLabel.textContent = Math.round(p.view.w) + ' × ' + Math.round(p.view.h) + ' px';
+      pxLabel.textContent = p.size.width + ' × ' + p.size.height + ' px';
       return;
     }
     crop.classList.add('on');
