@@ -28,6 +28,8 @@
         off the screen before a single texture is given back
     12  the plane fades against the sphere by the distance from the sun's
         centre, so a film cropped off centre keeps its limb
+    13  one button walks a film from looking up to playing: a playing film
+        pauses before anything else, a film with frames out fetches the rest
 
    THE FIXTURE IS REAL: getClosestImage through Terra's proxy on
    2026-09-13, for the 83 minutes around the M1.0 of 5 September, one
@@ -47,6 +49,7 @@ import {
 import { createSunFetch } from '../js/layers/sun/fetch.js';
 import { SOURCES, minimumField } from '../js/layers/sun/source.js';
 import { createSolarFilm } from '../js/ui/solar-film.js';
+import { filmNextStep } from '../js/ui/solar-time.js';
 
 /* ---- The fixture ------------------------------------------------------- */
 
@@ -107,13 +110,13 @@ function checkRaster(targetsOf) {
     return bad('raster', 'the M1.0 window asks for ' + asked.slice(0, 3).join(', ') +
       '…, not the 21 moments that were measured (' + measured.slice(0, 3).join(', ') + '…)');
   }
-  const six = filmWindowAround(Date.parse('2026-09-13T09:07:30Z'));
-  const a = targetsOf(six);
-  const b = targetsOf({ ...six, from: six.from + 60e3, to: six.to + 60e3 });
-  if (a.stepMs !== 15 * 60e3 || a.times.length !== 24) {
-    return bad('raster', 'six hours gave ' + a.times.length + ' moments ' + a.stepMs / 60e3 + ' min apart');
+  const twelve = filmWindowAround(Date.parse('2026-09-13T09:07:30Z'));
+  const a = targetsOf(twelve);
+  const b = targetsOf({ ...twelve, from: twelve.from + 60e3, to: twelve.to + 60e3 });
+  if (a.stepMs !== 30 * 60e3 || a.times.length !== 24) {
+    return bad('raster', 'twelve hours gave ' + a.times.length + ' moments ' + a.stepMs / 60e3 + ' min apart');
   }
-  if (a.times.some(t => t % a.stepMs !== 0 || t <= six.from || t > six.to)) {
+  if (a.times.some(t => t % a.stepMs !== 0 || t <= twelve.from || t > twelve.to)) {
     return bad('raster', 'a moment lies off the UTC raster or outside its window');
   }
   const shared = a.times.filter(t => b.times.includes(t)).length;
@@ -124,7 +127,7 @@ function checkRaster(targetsOf) {
     const n = targetsOf({ from: 0, to: minutes * 60e3 }).times.length;
     if (n > FILM_MAX_FRAMES) return bad('raster', minutes + ' minutes asked for ' + n + ' moments');
   }
-  ok('raster', 'the M1.0 window asks for exactly the 21 measured moments; six hours give 24 on the quarter hour, ' +
+  ok('raster', 'the M1.0 window asks for exactly the 21 measured moments; twelve hours give 24 on the half hour, ' +
     shared + ' of them shared with a window a minute later');
 }
 
@@ -140,12 +143,17 @@ function checkFlareWindow(windowOf) {
   ok('flare window', 'half an hour either side: 14:34–15:57 for the M1.0; without an end to its peak, without a peak to its begin');
 }
 
-function checkNewest(fit) {
+function checkNewest(fit, windowAround = filmWindowAround) {
   const clock = Date.parse('2026-09-13T16:13:00Z');
   const newest = Date.parse('2026-09-13T12:00:33Z');     // LASCO C2 that day: 253 min behind
-  const around = fit(filmWindowAround(clock), newest);
-  if (around.to !== newest || around.to - around.from !== 6 * 3600e3) {
-    return bad('newest', 'six hours around now run to ' + new Date(around.to).toISOString() +
+  const plain = windowAround(clock);
+  if (plain.from !== clock - 6 * 3600e3 || plain.to !== clock + 6 * 3600e3) {
+    return bad('newest', 'the window around a moment runs ' + (clock - plain.from) / 3600e3 + ' h before it and ' +
+      (plain.to - clock) / 3600e3 + ' h after, not six and six');
+  }
+  const around = fit(plain, newest);
+  if (around.to !== newest || around.to - around.from !== 12 * 3600e3) {
+    return bad('newest', 'twelve hours around now run to ' + new Date(around.to).toISOString() +
       ' while the newest picture is from 12:00:33');
   }
   if (filmTargets(around).times.some(t => t > newest)) return bad('newest', 'moments are asked for after the newest picture');
@@ -154,7 +162,8 @@ function checkNewest(fit) {
   if (kept.from !== past.from || kept.to !== past.to) return bad('newest', 'a window in the past was moved');
   const flare = fit(filmWindowForFlare({ begin: newest - 20 * 60e3, peak: newest - 10 * 60e3, end: newest + 10 * 60e3 }), newest);
   if (flare.from !== newest - 50 * 60e3 || flare.to !== newest) return bad('newest', 'a flare window was moved rather than cut');
-  ok('newest', 'around now the six hours end on the newest picture, 253 min behind the clock; a flare window is cut, a past one left alone');
+  ok('newest', 'six hours before a moment and six after; around now the twelve hours end on the newest picture, ' +
+    '253 min behind the clock; a flare window is cut, a past one left alone');
 }
 
 function checkDedupe(unique) {
@@ -553,6 +562,39 @@ function checkLimb(shader) {
     'so a film cropped off centre keeps its limb');
 }
 
+/* The panel's film button against the states a film goes through. */
+function checkNextStep(next) {
+  const frames = n => Array.from({ length: n }, (_, i) => ({ id: String(i) }));
+  const base = {
+    phase: 'idle', source: 'AIA 171', reason: null, targets: frames(24), done: 0, frames: [],
+    held: 0, missing: 0, bytes: 0, costMb: 0, textureMb: 0, everyMs: null, playing: 0, fps: 8
+  };
+  const cases = [
+    ['idle', {}, false, 'lookUp', /^Film around this moment$/],
+    ['idle on a peak', {}, true, 'lookUp', /^Film this flare$/],
+    ['looking up', { phase: 'lookup', done: 7 }, false, null, /^Looking up 7 of 24…$/],
+    ['ready', { phase: 'ready', frames: frames(24), missing: 24, costMb: 9.6 }, false, 'fetch', /^Fetch 24 frames · ≈ 10 MB$/],
+    ['fetching while it plays', { phase: 'fetching', frames: frames(24), held: 7, missing: 17, bytes: 2.7e6, playing: 1 },
+      false, 'stop', /^Stop · 7 of 24 · 2\.7 MB$/],
+    ['playing with frames out', { phase: 'loaded', frames: frames(24), held: 8, missing: 16, playing: 1 }, false, 'pause',
+      /^Pause the film$/],
+    ['paused with frames out', { phase: 'loaded', frames: frames(24), held: 8, missing: 16, costMb: 7.4 }, false, 'fetch',
+      /^Fetch 16 more · ≈ 7 MB$/],
+    ['all in, paused', { phase: 'loaded', frames: frames(24), held: 24 }, false, 'play', /^Play the film · 24 frames$/],
+    ['all in, playing backwards', { phase: 'loaded', frames: frames(24), held: 24, playing: -1 }, false, 'pause',
+      /^Pause the film$/],
+    ['an error', { phase: 'error', reason: 'Choose a source first' }, false, 'lookUp', /^Choose a source first$/]
+  ];
+  for (const [name, over, peak, action, text] of cases) {
+    const s = next({ ...base, ...over }, peak);
+    if (s.action !== action || !text.test(s.text) || s.pressable !== (action !== null)) {
+      return bad('next step', name + ': ' + s.action + ' "' + s.text + '", where ' + action + ' was due');
+    }
+  }
+  ok('next step', cases.length + ' states, each with its own step: a look-up, fetching, stopping, a pause before ' +
+    'anything else while it plays, the rest of the frames before playing, and play once all are in');
+}
+
 /* ---- The control implementations --------------------------------------- */
 
 // The raster counted from the window's own start instead of from 1970.
@@ -584,6 +626,7 @@ await checkRelease(o => filmRig(o));
 checkPlayStep(filmStep);
 await checkPlayback(o => filmRig(o));
 checkLimb(SHADER_SRC);
+checkNextStep(filmNextStep);
 
 for (const r of results) {
   console.log((r.pass ? '  ok    ' : '  FAIL  ') + r.name.padEnd(14) + r.detail);
@@ -620,7 +663,17 @@ const breaks = [
   ['a texture given back before its frame leaves the screen', () =>
     checkPlayback(o => filmRig({ ...o, hide: h => () => queueMicrotask(h) }))],
   ['the limb faded by the distance from the crop', () =>
-    checkLimb(SHADER_SRC.replace('uHasSphere > 0.5 && rs < 1.0', 'uHasSphere > 0.5 && r < 1.0'))]
+    checkLimb(SHADER_SRC.replace('uHasSphere > 0.5 && rs < 1.0', 'uHasSphere > 0.5 && r < 1.0'))],
+  ['a window of six hours around the moment', () =>
+    checkNewest(filmFitToNewest, t => filmWindowAround(t, 6 * 3600e3))],
+  ['a playing film offered more frames before a pause', () => checkNextStep((f, peak) =>
+    (f.missing && f.phase === 'loaded'
+      ? { action: 'fetch', text: 'Fetch ' + f.missing + ' more · ≈ 7 MB', title: '', pressable: true }
+      : filmNextStep(f, peak)))],
+  ['a finished film that offers nothing to press', () => checkNextStep((f, peak) =>
+    (f.phase === 'loaded' && !f.missing && !f.playing
+      ? { action: null, text: f.held + ' frames', title: '', pressable: false }
+      : filmNextStep(f, peak)))]
 ];
 
 if (process.argv.includes('--selftest')) {

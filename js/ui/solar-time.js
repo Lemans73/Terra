@@ -33,7 +33,8 @@
    (js/ui/solar-film.js); the strip draws their stretch with one tick per
    picture, the row says what fetching them costs, and a tick grows when its
    frame is in. Once frames are in, the row plays them, and the dashed mark for
-   the picture on screen moves with every frame.
+   the picture on screen moves with every frame. The panel has a second door to
+   the same film, one button under Fetch images, drawn here with the row.
 
    THE DRAWING IS chart.js, UNCHANGED — it is a byte-identical copy of the
    proof of concept. What this file supplies is a canvas with a size, a
@@ -125,6 +126,60 @@ function fmtMb(mb) {
   return (mb < 9.95 ? mb.toFixed(1) : String(Math.round(mb))) + ' MB';
 }
 
+/* The steps a film goes through, worded once for both of its buttons: the middle
+   of the row and the panel's. */
+function filmLookupStep(f) {
+  return {
+    text: f.targets.length ? 'Looking up ' + f.done + ' of ' + f.targets.length + '…' : 'Looking up…',
+    title: 'Finding which pictures ' + (f.source || 'the source') + ' has for these moments'
+  };
+}
+
+function filmFetchStep(f) {
+  const n = f.missing;
+  return {
+    text: (f.held ? 'Fetch ' + n + ' more' : 'Fetch ' + n + (n === 1 ? ' frame' : ' frames')) +
+      ' · ≈ ' + Math.max(1, Math.round(f.costMb)) + ' MB',
+    title: f.frames.length + ' pictures of ' + f.source + ' from ' + f.targets.length + ' moments' +
+      (f.everyMs != null ? ', every ' + fmtEvery(f.everyMs) : '')
+  };
+}
+
+function filmStopStep(f) {
+  return {
+    text: 'Stop · ' + f.held + ' of ' + f.frames.length + ' · ' + fmtMb(f.bytes / 1e6),
+    title: 'Stop fetching; the frames that are in stay'
+  };
+}
+
+/**
+ * The next thing a film asks for, as one button offers it: the panel's film
+ * button walks a film from its look-up to playing it. A playing film pauses
+ * before anything else, and a film with frames still out fetches the rest
+ * before it plays.
+ *
+ * @param {object} f      the film's state (js/ui/solar-film.js)
+ * @param {boolean} peak  whether the moment stands on a flare's peak
+ * @returns {{action: string|null, text: string, title: string, pressable: boolean}}
+ */
+export function filmNextStep(f, peak) {
+  const step = (action, words) => ({ action, text: words.text, title: words.title, pressable: action !== null });
+  if (f.phase === 'idle') {
+    return step('lookUp', peak
+      ? { text: 'Film this flare', title: 'Look up the frames from half an hour before this flare to half an hour after it' }
+      : { text: 'Film around this moment', title: 'Look up the frames of twelve hours around this moment, six before and six after' });
+  }
+  if (f.phase === 'lookup') return step(null, filmLookupStep(f));
+  if (f.phase === 'error') return step('lookUp', { text: f.reason || 'No film', title: 'Look the frames up again' });
+  if (f.phase === 'fetching') return step('stop', filmStopStep(f));
+  if (f.playing) return step('pause', { text: 'Pause the film', title: 'Pause on the frame on screen, and put the moment there' });
+  if (f.missing) return step('fetch', filmFetchStep(f));
+  return step('play', {
+    text: 'Play the film · ' + f.held + (f.held === 1 ? ' frame' : ' frames'),
+    title: 'Play the frames on the sun, ' + f.fps + ' a second'
+  });
+}
+
 export function createSolarTime(deps) {
   const { feed, clock, moment, isLive, Chart, fmtStamp, formatOffset } = deps;
   /* All optional. `onScreen` says what the image on screen is; `onFetch` and
@@ -149,6 +204,9 @@ export function createSolarTime(deps) {
   const btnFwd = document.getElementById('sol-fwd');
   const btnFilmX = document.getElementById('sol-film-x');
   const btnRate = document.getElementById('sol-rate');
+  // The panel's own door to the same film (index.html, under Fetch images).
+  const panelFilm = document.getElementById('solar-film');
+  const panelFilmX = document.getElementById('solar-film-x');
   const note = document.getElementById('sol-note');
   if (!root || !canvas || !Chart) return null;
 
@@ -494,36 +552,44 @@ export function createSolarTime(deps) {
     if (btnPause) btnPause.disabled = !f.playing;
     if (btnRate) btnRate.textContent = f.fps + ' fps';
     btnFilm.textContent = on ? '✕' : 'Film';
-    btnFilm.title = on ? 'Clear the film' : 'Look up the frames for a film around this moment';
+    btnFilm.title = on ? 'Clear the film' : filmNextStep(f, !!onPeak()).title;
     btnFilm.setAttribute('aria-label', on ? 'Clear the film' : 'Film');
     btnFilm.classList.toggle('on', on);
     const every = f.everyMs != null ? ', every ' + fmtEvery(f.everyMs) : '';
-    let text = '', title = '', pressable = false;
+    let words = { text: '', title: '' }, pressable = false;
     if (f.phase === 'lookup') {
-      text = f.targets.length
-        ? 'Looking up ' + f.done + ' of ' + f.targets.length + '…'
-        : 'Looking up…';
-      title = 'Finding which pictures ' + (f.source || 'the source') + ' has for these moments';
+      words = filmLookupStep(f);
     } else if (f.phase === 'ready' || (f.phase === 'loaded' && f.missing)) {
-      const n = f.missing;
-      text = (f.held ? 'Fetch ' + n + ' more' : 'Fetch ' + n + (n === 1 ? ' frame' : ' frames')) +
-        ' · ≈ ' + Math.max(1, Math.round(f.costMb)) + ' MB';
-      title = f.frames.length + ' pictures of ' + f.source + ' from ' + f.targets.length + ' moments' + every;
+      words = filmFetchStep(f);
       pressable = true;
     } else if (f.phase === 'fetching') {
-      text = 'Stop · ' + f.held + ' of ' + f.frames.length + ' · ' + fmtMb(f.bytes / 1e6);
-      title = 'Stop fetching; the frames that are in stay';
+      words = filmStopStep(f);
       pressable = true;
     } else if (f.phase === 'loaded') {
-      text = f.held + (f.held === 1 ? ' frame · ' : ' frames · ') + fmtMb(f.bytes / 1e6);
-      title = f.held + ' pictures of ' + f.source + every + ', ' + fmtMb(f.textureMb) + ' as textures';
+      words = {
+        text: f.held + (f.held === 1 ? ' frame · ' : ' frames · ') + fmtMb(f.bytes / 1e6),
+        title: f.held + ' pictures of ' + f.source + every + ', ' + fmtMb(f.textureMb) + ' as textures'
+      };
     } else if (f.phase === 'error') {
-      text = f.reason || 'No film';
-      title = f.reason || '';
+      words = { text: f.reason || 'No film', title: f.reason || '' };
     }
-    btnFilmGo.textContent = text;
-    btnFilmGo.title = title;
+    btnFilmGo.textContent = words.text;
+    btnFilmGo.title = words.title;
     btnFilmGo.disabled = !pressable;
+    refreshPanelFilm(f);
+  }
+
+  /* THE PANEL'S DOOR TO THE FILM. The same film as the row: one button that walks
+     it from looking up to playing (filmNextStep), and ✕ beside it once there is
+     a film. Drawn here with the row and from the same state, so the two doors
+     cannot disagree about where the film is. */
+  function refreshPanelFilm(f) {
+    if (!panelFilm) return;
+    const step = filmNextStep(f, !!onPeak());
+    panelFilm.textContent = step.text;
+    panelFilm.title = step.title;
+    panelFilm.disabled = !step.pressable;
+    if (panelFilmX) panelFilmX.hidden = f.phase === 'idle';
   }
 
   /* A film changed. Its stretch has to be on the strip, so the window widens
@@ -727,6 +793,17 @@ export function createSolarTime(deps) {
   btnPause?.addEventListener('click', () => { if (film) filmPause(); });
   btnFilmX?.addEventListener('click', () => { if (film) film.clear(); });
   btnRate?.addEventListener('click', () => { if (film) film.cycleFps(); });
+  panelFilm?.addEventListener('click', () => {
+    if (!film) return;
+    const peak = onPeak();
+    const { action } = filmNextStep(film.state(), !!peak);
+    if (action === 'lookUp') film.lookUp({ cursor: cursorTime(), flare: peak });
+    else if (action === 'fetch') film.fetchFrames();
+    else if (action === 'stop') film.stop();
+    else if (action === 'pause') filmPause();
+    else if (action === 'play') film.play(1);
+  });
+  panelFilmX?.addEventListener('click', () => { if (film) film.clear(); });
 
   const unsubscribe = feed.onUpdate(() => draw());
   const unsubscribeFilm = film ? film.onUpdate(onFilmUpdate) : () => {};

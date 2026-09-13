@@ -147,7 +147,7 @@ export function createSolarFilm(deps) {
 
   /**
    * Look up the frames of a film: of `flare` when the moment stands on one,
-   * otherwise of six hours around `cursor`. Resolves with the state it ended in.
+   * otherwise of twelve hours around `cursor`. Resolves with the state it ended in.
    */
   async function lookUp({ cursor, flare }) {
     const mine = ++run;

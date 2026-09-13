@@ -1649,6 +1649,14 @@
       <div class="solar-presets" id="solar-presets"></div>
       <div class="solar-slots" id="solar-slots"></div>
       <button class="solar-fetch" id="solar-fetch" type="button">Fetch images</button>
+      <!-- The same film as the row under the sun: one button that walks it from
+           looking up to playing, and ✕ once there is a film (js/ui/solar-time.js). -->
+      <div class="solar-film-row">
+        <button class="solar-fetch solar-film" id="solar-film" type="button"
+        title="Look up the frames of twelve hours around this moment, six before and six after">Film around this moment</button>
+        <button class="solar-fetch solar-film-x" id="solar-film-x" type="button"
+        title="Clear the film" aria-label="Clear the film" hidden>&#10005;</button>
+      </div>
       <div class="solar-status" id="solar-status"></div>
       <div class="elayer" id="solar-spots-toggle">
       <span class="edot" style="background:#ffb347"></span>Active regions

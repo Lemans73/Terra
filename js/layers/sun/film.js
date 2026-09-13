@@ -9,8 +9,9 @@
 
    THE STRETCH FOLLOWS WHAT IS BEING LOOKED AT. On a flare's peak it is
    that flare, from half an hour before it began to half an hour after
-   it ended; anywhere else it is six hours around the moment. Six hours
-   around a flare of thirteen minutes would be mostly quiet sun.
+   it ended; anywhere else it is twelve hours around the moment, six
+   before and six after. Twelve hours around a flare of thirteen minutes
+   would be mostly quiet sun.
 
    THE MOMENTS SIT ON A UTC RASTER, in whole minutes. Two visitors
    looking at the same stretch ask for the same moments, get the same
@@ -39,7 +40,9 @@ import { imageScaleFor } from './fetch.js';
    three seconds, enough to see a flare rise and decay. */
 export const FILM_MAX_FRAMES = 24;
 
-export const FILM_SPAN_MS = 6 * 3600e3;
+/* Twelve hours around a moment, six before and six after: with 24 frames, a frame
+   every half hour. */
+export const FILM_SPAN_MS = 12 * 3600e3;
 export const FILM_FLARE_MARGIN_MS = 30 * 60e3;
 
 /* What one frame costs to download, in MB. Measured at 640 px in session 52:
@@ -55,7 +58,7 @@ export const FILM_FRAME_PX = 640;
    screen inside it shows the whole screen unfaded. */
 export const FILM_FADE_START = 0.86;
 
-/** Six hours around a moment. */
+/** Twelve hours around a moment: six before it and six after. */
 export function filmWindowAround(t, spanMs = FILM_SPAN_MS) {
   return { kind: 'around', from: t - spanMs / 2, to: t + spanMs / 2, shiftedMs: 0, cutMs: 0 };
 }
@@ -73,7 +76,7 @@ export function filmWindowForFlare(f, marginMs = FILM_FLARE_MARGIN_MS) {
  * A window held against the newest picture the source has.
  *
  * Around a moment the window keeps its length and moves back until it ends on
- * that picture, so "now" means the latest six hours that exist. Around a flare
+ * that picture, so "now" means the latest twelve hours that exist. Around a flare
  * the end is cut instead: moving back would fill the film with the quiet before
  * the flare. A window that ends before the newest picture stays as it is.
  */

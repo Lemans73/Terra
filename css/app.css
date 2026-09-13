@@ -2898,6 +2898,23 @@
   }
   .solar-fetch:hover { background: rgba(255,179,71,.26); }
   .solar-fetch[disabled] { opacity: .5; cursor: default; }
+  /* The film's door in the panel, under the stills, in the film's own colour: two
+     buttons in one colour would read as one action said twice. */
+  .solar-film-row { display: flex; gap: 6px; }
+  .solar-film-row .solar-fetch { width: auto; }
+  .solar-film {
+    flex: 1; min-width: 0;
+    background: rgba(127,209,199,.12); color: #c9efe9; border-color: rgba(127,209,199,.4);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .solar-film:hover { background: rgba(127,209,199,.2); }
+  .solar-film-x {
+    flex: 0 0 auto; padding: 8px 11px;
+    background: transparent; color: var(--ink-dim); border-color: var(--hair);
+  }
+  .solar-film-x:hover { color: var(--ink); background: rgba(255,255,255,.06); }
+  .solar-film-row [hidden] { display: none; }
 
   .solar-note, .solar-status {
     font-size: 10.5px; line-height: 1.45; color: var(--ink-3, #8b95a4);
