@@ -171,6 +171,10 @@ export function createSunState(THREE, env) {
      falls outside the month NOAA keeps. The readout says so rather than showing
      an empty sun without a reason. */
   let regionDay = null;
+  /* The film frame on screen, when a film plays or pauses on one: which frame of
+     which film, and the crop and geometry it was rendered with. Whatever
+     describes the picture on screen reads this before any slot. */
+  let filmShown = null;
   let viewR = VIEW_R_DEFAULT;
   let attached = false;
   let originalUpdate = null;
@@ -372,11 +376,13 @@ export function createSunState(THREE, env) {
        frame's observation time, so the measured positions and the photograph
        are the same instant; with an empty view it is the chosen moment. The
        lowest loaded slot decides, because that is the layer the disc itself
-       comes from. */
+       comes from, and a film frame on screen goes before either. */
     const shown = scene.layers.find(l => l.texture && l.meta);
-    const target = shown
-      ? Date.parse(shown.meta.date.replace(' ', 'T') + 'Z')
-      : (when || (env.moment ? env.moment() : new Date())).getTime();
+    const target = filmShown
+      ? filmShown.frame.time
+      : shown
+        ? Date.parse(shown.meta.date.replace(' ', 'T') + 'Z')
+        : (when || (env.moment ? env.moment() : new Date())).getTime();
 
     /* AND WHICH DAY'S LIST. NOAA publishes a list per day and keeps a month of
        them; the day nearest the target is the one that describes this sun. The
@@ -394,7 +400,7 @@ export function createSunState(THREE, env) {
     if (b0 == null) return null;
     // Rings over an instrument frame, filled caps on the bare sun. Derived from
     // whether a slot holds a texture, so it cannot disagree with what is drawn.
-    spots.setOutline(scene.layers.some(l => !!l.texture));
+    spots.setOutline(!!filmShown || scene.layers.some(l => !!l.texture));
 
     const ref = noaaReferenceTime(regionDay);
     const drawn = spots.place(b0, 0, ref, target);
@@ -632,8 +638,7 @@ export function createSunState(THREE, env) {
       coronagraph: corona
     });
 
-    // A coronagraph's occulter would be lit from behind by the glow.
-    scene.setGlowVisible(!scene.layers.some(l => l.texture && l.coronagraph));
+    syncGlow();
     refreshSpots();
 
     return describeSlot(index);
@@ -664,7 +669,12 @@ export function createSunState(THREE, env) {
       centre: ctl ? { x: ctl.target.x / SUN_WORLD_R, y: ctl.target.y / SUN_WORLD_R } : { x: 0, y: 0 },
       half: { w: e.hw / SUN_WORLD_R, h: e.hh / SUN_WORLD_R }
     };
-    return filmCrop(view, geom, minimumField(sourceId));
+    return {
+      ...filmCrop(view, geom, minimumField(sourceId)),
+      // What describes the picture while a frame of this film is on screen.
+      rsun: geom.rsun, radiusArcsec: geom.radiusArcsec,
+      nativeField: geom.nativeField, distanceAu: geom.distanceAu
+    };
   }
 
   async function frameTexture(blob) {
@@ -683,19 +693,86 @@ export function createSunState(THREE, env) {
     return texture;
   }
 
+  /* A coronagraph's occulter would be lit from behind by the glow, so the glow
+     follows what is on screen: a film frame, or the slots a film does not hide. */
+  function syncGlow() {
+    scene.setGlowVisible(!scene.shownLooks().some(l => l.coronagraph));
+  }
+
+  /* A FRAME OF A FILM ON SCREEN, laid over the bottom slot. The still underneath
+     stays where it is, the other slots step aside for as long as the film is on,
+     and the regions follow the frame's own time. From the second frame on this
+     is a texture swap (scene.showFrame). */
+  function showFilmFrame(view) {
+    const coronagraph = !!(isCoronagraph && isCoronagraph(view.sourceId));
+    const first = !filmShown;
+    filmShown = view;
+    scene.showFrame(scene.layers[0], {
+      texture: view.texture,
+      field: view.crop.field,
+      centre: view.crop.centre,
+      luma: coronagraph,
+      mode: 'normal',
+      coronagraph
+    });
+    if (first) syncGlow();
+    refreshSpots();
+  }
+
+  function endFilmFrame() {
+    if (!filmShown) return;
+    filmShown = null;
+    scene.hideFrame(scene.layers[0]);
+    syncGlow();
+    refreshSpots();
+  }
+
+  /* The short side of the drawing buffer: what sharpness is judged against. */
+  function screenPixels() {
+    const r = world.renderer();
+    return r ? Math.min(r.domElement.height || 0, r.domElement.width || 0) || 900 : 900;
+  }
+
+  /* The film frame on screen, in the terms describeSlot() uses for a still. */
+  function describeFilmFrame() {
+    const v = filmShown, crop = v.crop;
+    const src = SOURCE_BY_ID.get(v.sourceId) || {};
+    const observed = new Date(v.frame.time);
+    return {
+      slot: 0,
+      sourceId: v.sourceId,
+      name: src.name || null,
+      what: src.what || null,
+      observed: observed.toISOString(),
+      ageMinutes: Math.round((Date.now() - observed.getTime()) / 60000),
+      field: +crop.field.toFixed(4),
+      nativeField: +crop.nativeField.toFixed(4),
+      centre: { x: +crop.centre.x.toFixed(4), y: +crop.centre.y.toFixed(4) },
+      texPx: crop.px,
+      distanceAu: +crop.distanceAu.toFixed(4),
+      radiusArcsec: +crop.radiusArcsec.toFixed(2),
+      pxPerRadius: +crop.rsun.toFixed(1),
+      coronagraph: !!isCoronagraph(v.sourceId),
+      occulter: src.occulter || null,
+      owner: src.owner || null,
+      sharpness: sharpness(crop.px, crop.field, screenPixels(), viewR, crop.rsun),
+      earthTexels: +earthInTexels(crop.px, crop.field).toFixed(2),
+      film: { index: v.index, count: v.count }
+    };
+  }
+
   /* What a slot is showing, in the terms the provenance block needs: which
      instrument, when, how old, and how sharp. `ageMinutes` is the one that
      belongs on screen rather than in a panel — AIA runs about fifty minutes
      behind, and that is the processing chain, not the instrument. */
   function describeSlot(index) {
+    // A film frame is the picture on screen, and the slots above it are hidden.
+    if (filmShown) return index === 0 ? describeFilmFrame() : null;
     const layer = scene.layers[index];
     if (!layer || !layer.meta) return null;
     const src = SOURCE_BY_ID.get(layer.sourceId) || {};
     const observed = new Date(layer.meta.date.replace(' ', 'T') + 'Z');
-    const screenPx = world.renderer()
-      ? Math.min(world.renderer().domElement.height || 0,
-                 world.renderer().domElement.width || 0) || 900
-      : 900;
+    const screenPx = screenPixels();
     return {
       slot: index,
       sourceId: layer.sourceId,
@@ -705,6 +782,7 @@ export function createSunState(THREE, env) {
       ageMinutes: Math.round((Date.now() - observed.getTime()) / 60000),
       field: +layer.field.toFixed(4),
       nativeField: +layer.geometry.nativeField.toFixed(4),
+      centre: layer.look ? { x: layer.look.centre.x, y: layer.look.centre.y } : { x: 0, y: 0 },
       texPx: layer.texPx,
       distanceAu: +layer.geometry.distanceAu.toFixed(4),
       radiusArcsec: +layer.geometry.radiusArcsec.toFixed(2),
@@ -725,7 +803,7 @@ export function createSunState(THREE, env) {
   function clearSlot(index) {
     const layer = scene.layers[index];
     if (layer) scene.clearLayer(layer);
-    scene.setGlowVisible(!scene.layers.some(l => l.texture && l.coronagraph));
+    syncGlow();
     refreshSpots();
   }
 
@@ -823,6 +901,8 @@ export function createSunState(THREE, env) {
     describeSlot,
     frameCrop,
     frameTexture,
+    showFilmFrame,
+    endFilmFrame,
     setViewR,
     viewR: () => viewR,
     spots,
@@ -848,6 +928,11 @@ export function createSunState(THREE, env) {
         return c && k ? +c.position.distanceTo(k.target).toFixed(1) : null;
       })(),
       slotDetail: scene.layers.map((l, i) => describeSlot(i)),
+      film: filmShown ? {
+        index: filmShown.index,
+        count: filmShown.count,
+        observed: new Date(filmShown.frame.time).toISOString()
+      } : null,
       queue: api ? api.stats() : null,
       viewR: currentViewR(),
       /* WAAR HET VENSTER STAAT, IN ZONSSTRALEN. De uitsnede is niet meer per se

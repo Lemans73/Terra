@@ -422,7 +422,9 @@
        mobile rule written for those holds here as well.
 
        The first column holds the flipbook: Film looks up the frames around the
-       moment, and while a film is on, its row takes the place of Fetch. The note
+       moment, and while a film is on, its row takes the place of Fetch. Once
+       frames are in, the first column plays them the way the island plays time,
+       ✕ film stands in the middle, and the speed beside the window. The note
        above the lane says why a moment was not kept, or what a film came to. -->
   <div class="solar-time" id="solar-time">
     <div class="sol-note" id="sol-note" hidden></div>
@@ -432,11 +434,19 @@
       <div class="ti-play">
         <button class="play-btn sol-film" id="sol-film" type="button"
         title="Look up the frames for a film around this moment" aria-label="Film">Film</button>
+        <button class="play-btn sol-transport sol-off" id="sol-back" type="button"
+        title="Play the film backwards" aria-label="Play the film backwards">&#9664;</button>
+        <button class="play-btn sol-transport sol-off" id="sol-pause" type="button"
+        title="Pause the film" aria-label="Pause the film" disabled>&#10073;&#10073;</button>
+        <button class="play-btn sol-transport sol-off" id="sol-fwd" type="button"
+        title="Play the film" aria-label="Play the film">&#9654;</button>
       </div>
       <div class="ti-slider sol-actions">
         <button class="play-btn sol-fetch" id="sol-fetch" type="button"
         title="Fetch the images at this moment">Fetch</button>
-        <button class="play-btn sol-film-go" id="sol-film-go" type="button" disabled></button>
+        <button class="play-btn sol-film-x sol-off" id="sol-film-x" type="button"
+        title="Clear the film" aria-label="Clear the film">&#10005; film</button>
+        <button class="play-btn sol-film-go sol-off" id="sol-film-go" type="button" disabled></button>
       </div>
       <div class="ti-now">
         <button class="ti-val" id="sol-val" type="button"
@@ -445,6 +455,8 @@
       <div class="mspt-knoppen">
         <button class="play-btn mspt-window" id="sol-window" type="button"
         title="Time window" aria-label="Time window">24h</button>
+        <button class="play-btn mspt-rate sol-off" id="sol-rate" type="button"
+        title="Film speed" aria-label="Film speed">8 fps</button>
       </div>
     </div>
   </div>
@@ -13325,7 +13337,9 @@ solarFilm = createSolarFilm({
   sourceOf: () => (solarPanel.slots()[0] || {}).sourceId || 0,
   nameOf: (id) => (SOURCE_BY_ID.get(id) || {}).name || 'source ' + id,
   cropFor: (id, meta) => solarImageryState.frameCrop(id, meta),
-  makeTexture: (blob) => solarImageryState.frameTexture(blob)
+  makeTexture: (blob) => solarImageryState.frameTexture(blob),
+  showFrame: (view) => solarImageryState.showFilmFrame(view),
+  hideFrame: () => solarImageryState.endFilmFrame()
 });
 
 /* SOLAR:END */

@@ -1,11 +1,12 @@
 /* ============================================================
-   TERRA — Sun · the film, finding its frames and fetching them
+   TERRA — Sun · the film, finding its frames, fetching and playing them
    ------------------------------------------------------------
-   The flipbook's controller, in two explicit steps. Looking up finds
+   The flipbook's controller, in three explicit steps. Looking up finds
    out which frames a film would have — cheap JSON, one lookup per
    moment — and what fetching them would cost. Fetching renders every
    frame on someone else's server and holds it as a texture, so it waits
-   for a button of its own.
+   for a button of its own. Playing lays the frames over the sun, one
+   after the other.
 
    ONE LOOKUP AT "NOW" COMES FIRST, for the newest picture the source
    has. A lookup at the window's end is a different question: inside a
@@ -27,10 +28,18 @@
    frameTexture), so a film that plays swaps a texture and never waits
    on an upload. At most 24 × 640² × 4 B = 39 MB.
 
+   PLAYING SWAPS TEXTURES AND NOTHING ELSE. The sun state lays a frame
+   over the bottom slot (showFilmFrame), and every later frame is one
+   uniform. The frames that are in play in the order they were taken,
+   each for the same time, and run round at both ends. The position
+   keeps its fraction (film.js, filmStep).
+
    STOPPING KEEPS WHAT ARRIVED; CLEARING KEEPS NOTHING, and neither does
    a new film, another source in the bottom slot, or leaving the state.
    A frame that lands after its film was cleared is disposed on arrival,
    so the textures held are always the frames of the film on the strip.
+   The frame on screen goes before its texture: a material still pointing
+   at a disposed texture would upload it again, from a closed bitmap.
 
    THE SOURCE IS THE PANEL'S BOTTOM SLOT: a film is one source, and that
    is the layer the disc comes from.
@@ -38,7 +47,8 @@
 
 import {
   filmWindowAround, filmWindowForFlare, filmFitToNewest, filmTargets,
-  filmUnique, filmEveryMs, filmCostMb, filmObservedMs, filmTextureMb
+  filmUnique, filmEveryMs, filmCostMb, filmObservedMs, filmTextureMb,
+  filmStep, FILM_FPS, FILM_FPS_DEFAULT
 } from '../layers/sun/film.js';
 
 const blank = () => ({
@@ -70,10 +80,18 @@ export function createSolarFilm(deps) {
   const sourceOf = deps.sourceOf || (() => 0);
   const nameOf = deps.nameOf || (id => 'source ' + id);
   const clock = deps.now || (() => Date.now());
-  /* The sun state's half of a frame: the crop the view asks for, and a texture
-     made from a picture (js/states/sun.js, frameCrop and frameTexture). */
+  /* The sun state's half of a frame: the crop the view asks for, a texture made
+     from a picture, and laying a frame over the bottom slot and taking it off
+     again (js/states/sun.js: frameCrop, frameTexture, showFilmFrame and
+     endFilmFrame). */
   const cropFor = deps.cropFor || null;
   const makeTexture = deps.makeTexture || null;
+  const showFrame = deps.showFrame || null;
+  const hideFrame = deps.hideFrame || null;
+  // The browser's frame loop, which a check in node replaces with its own.
+  const requestFrame = deps.requestFrame || (fn => requestAnimationFrame(fn));
+  const cancelFrame = deps.cancelFrame || (id => cancelAnimationFrame(id));
+  const frameClock = deps.frameClock || (() => performance.now());
 
   let S = blank();
   let run = 0;              // a new film or a clear: what belongs to the old one stops
@@ -88,12 +106,29 @@ export function createSolarFilm(deps) {
     for (const fn of listeners) { try { fn(); } catch (e) { console.error(e); } }
   };
 
+  let direction = 0;        // -1 backwards · 0 paused · 1 forwards
+  let fps = FILM_FPS_DEFAULT;
+  let position = 0;         // in frames that are in, with the fraction kept
+  let shownId = null;       // the image id of the frame on screen
+  let loop = null;          // the pending browser frame
+  let lastTick = 0;
+
   async function ask(sourceId, t) {
     try { return await api.closestImage(sourceId, new Date(t)); } catch { return null; }
   }
 
-  /* Every texture of the film is given back, and nothing on its way is counted. */
+  function stopLoop() {
+    direction = 0;
+    if (loop != null) { cancelFrame(loop); loop = null; }
+  }
+
+  /* Every texture of the film is given back, and nothing on its way is counted.
+     The frame on screen leaves first. */
   function release() {
+    stopLoop();
+    if (shownId != null && hideFrame) hideFrame();
+    shownId = null;
+    position = 0;
     for (const { texture } of held.values()) texture.dispose();
     held.clear();
     lost.clear();
@@ -244,6 +279,86 @@ export function createSolarFilm(deps) {
     settle();
   }
 
+  /* ---- Playing ----------------------------------------------------------- */
+
+  /* The frames that are in, in the order they were taken: what plays. */
+  const inFrames = () => S.frames.filter(f => held.has(f.id));
+
+  function show(list, i) {
+    const frame = list[i];
+    shownId = frame.id;
+    showFrame({
+      texture: held.get(frame.id).texture,
+      crop: S.crop,
+      frame: { id: frame.id, time: frame.time, date: frame.date },
+      index: i,
+      count: list.length,
+      sourceId: S.sourceId
+    });
+  }
+
+  function tick() {
+    loop = null;
+    if (!direction) return;
+    const list = inFrames();
+    if (!list.length) { stopLoop(); notify(); return; }
+    // A frame that arrived while the film played can stand before the one on
+    // screen, and the position counts in the list as it is now.
+    const at = list.findIndex(f => f.id === shownId);
+    if (at >= 0 && Math.floor(position) !== at) position = at + (position - Math.floor(position));
+    const now = frameClock();
+    position = filmStep(position, list.length, direction, fps, now - lastTick);
+    lastTick = now;
+    const i = Math.min(list.length - 1, Math.floor(position));
+    if (list[i].id !== shownId) {
+      show(list, i);
+      notify();
+    }
+    loop = requestFrame(tick);
+  }
+
+  /**
+   * Play the frames that are in, forwards (1) or backwards (-1): on from the
+   * frame on screen, or from the first frame in that direction.
+   */
+  function play(dir) {
+    if (!showFrame || (dir !== 1 && dir !== -1)) return;
+    const list = inFrames();
+    if (!list.length) return;
+    let at = list.findIndex(f => f.id === shownId);
+    if (at < 0) {
+      at = dir > 0 ? 0 : list.length - 1;
+      show(list, at);
+    }
+    // The frame it starts on plays a whole step first, in either direction.
+    position = at + (dir > 0 ? 0 : 1 - 1e-9);
+    direction = dir;
+    lastTick = frameClock();
+    if (loop == null) loop = requestFrame(tick);
+    notify();
+  }
+
+  function shownFrame() {
+    const f = shownId != null ? S.frames.find(x => x.id === shownId) : null;
+    return f ? { id: f.id, time: f.time, date: f.date } : null;
+  }
+
+  /* Pause on the frame on screen, and hand it back: whoever pauses puts the
+     moment on it. */
+  function pause() {
+    stopLoop();
+    notify();
+    return shownFrame();
+  }
+
+  function cycleFps() {
+    fps = FILM_FPS[(FILM_FPS.indexOf(fps) + 1) % FILM_FPS.length];
+    notify();
+    return fps;
+  }
+
+  /* ---- The film as a whole ----------------------------------------------- */
+
   function clear() {
     run++;
     turn++;
@@ -274,10 +389,20 @@ export function createSolarFilm(deps) {
     };
   }
 
+  function shownState() {
+    if (shownId == null) return null;
+    const list = inFrames();
+    const i = list.findIndex(f => f.id === shownId);
+    return i < 0 ? null : { id: list[i].id, time: list[i].time, index: i, count: list.length };
+  }
+
   return {
     lookUp,
     fetchFrames,
     stop,
+    play,
+    pause,
+    cycleFps,
     clear,
     sourceChanged,
     /* What the film holds, as copies: a reader cannot change it by accident, and
@@ -285,6 +410,9 @@ export function createSolarFilm(deps) {
     state: () => ({
       ...S,
       ...totals(),
+      playing: direction,
+      fps,
+      shown: shownState(),
       window: S.window ? { ...S.window } : null,
       targets: S.targets.slice(),
       crop: S.crop ? { ...S.crop, centre: { ...S.crop.centre } } : null,

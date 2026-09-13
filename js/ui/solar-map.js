@@ -43,8 +43,12 @@ export function createSolarMap(env) {
      actually on the screen. */
   function outerRadius(s) {
     const shown = (s.slotDetail || []).filter(Boolean);
-    return shown.reduce((m, d) => Math.max(m, d.field || 0), BARE_OUTER);
+    return shown.reduce((m, d) => Math.max(m, reach(d)), BARE_OUTER);
   }
+
+  /* How far from the sun's centre a fetched field reaches. A still is fetched
+     about the centre, a film frame about the view it was fetched for. */
+  const reach = d => (d.field || 0) + (d.centre ? Math.hypot(d.centre.x, d.centre.y) : 0);
 
   function occulterRadius(s) {
     const shown = (s.slotDetail || []).filter(Boolean);
@@ -100,9 +104,12 @@ export function createSolarMap(env) {
       ctx.setLineDash([]);
     }
 
-    // The outer edge of what was fetched.
+    // The outer edge of what was fetched, about where it was fetched.
+    const widest = (s.slotDetail || []).filter(Boolean)
+      .reduce((w, d) => (!w || reach(d) > reach(w) ? d : w), null);
+    const at = widest && widest.centre ? widest.centre : { x: 0, y: 0 };
     ctx.beginPath();
-    ctx.arc(c, c, outer * k, 0, Math.PI * 2);
+    ctx.arc(px(at.x), py(at.y), (widest ? widest.field : outer) * k, 0, Math.PI * 2);
     ctx.strokeStyle = INK;
     ctx.lineWidth = 1;
     ctx.stroke();

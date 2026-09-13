@@ -25,6 +25,7 @@
  *   3  coronagraphs only        → the SMALLEST occulter
  *   4  coronagraph + disc       → no occulter line at all
  *   5  mixed verdicts           → the worst one wins
+ *   6  a film frame             → which frame and its pixels, and no verdict
  *
  * THE STATES BELOW ARE HAND-BUILT AND THAT IS THE POINT. They carry the numbers
  * measured in session 49 — C2 at 2.40, C3 at 4.67 — so the check fails if the
@@ -107,6 +108,17 @@ function run(orientLines) {
                   'mixed verdicts → the worst one wins', t);
   }
 
+  // 6 — a film frame says which frame it is, and is not judged on sharpness: a
+  //     verdict would tell the viewer to fetch again in the middle of a film.
+  {
+    const frame = slot({ film: { index: 11, count: 24 }, texPx: 640,
+                         sharpness: { verdict: 'red', ratio: 4.1, wanted: 2600, supplied: 430, ceiling: 1589 } });
+    const t = text(orientLines({ spots: { drawn: 9 }, slotDetail: [frame, null, null] }));
+    bad += report(/AIA 193 · frame 12\/24 · 14:47 UTC · 640 px/.test(t) && /a film frame of 640 px/.test(t)
+                  && !/zoomed past|fetch again|sharp at this zoom|min old/.test(t),
+                  'a film frame → which frame and its pixels, and no verdict', t);
+  }
+
   return bad;
 }
 
@@ -127,7 +139,9 @@ async function selftestRun() {
       edit: (s) => s.replace("text: 'DRAWN SUN — MEASURED REGIONS'",
                              "text: 'IMAGE DATA — NOT MEASUREMENTS'") },
     { name: 'the age dropped from the provenance line',
-      edit: (s) => s.replace(" + ' · ' + ageText(d.ageMinutes)", '') }
+      edit: (s) => s.replace(" + ' · ' + ageText(d.ageMinutes)", '') },
+    { name: 'a film frame judged on sharpness',
+      edit: (s) => s.replace('const film = shown.find(d => d.film);', 'const film = null;') }
   ];
 
   let missed = 0;

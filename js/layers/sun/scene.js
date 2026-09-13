@@ -66,7 +66,11 @@ export function createSunScene(THREE) {
       opacity: 1,
       mode: 'normal',
       coronagraph: false,
-      texture: null
+      texture: null,
+      // How the layer's own picture lies: set together with its texture.
+      look: null,
+      // A film frame laid over the layer, with a texture and a look of its own.
+      frame: null
     };
 
     layer.sphereUniforms = sunUniforms(THREE, true, SUN_WORLD_R);
@@ -101,9 +105,9 @@ export function createSunScene(THREE) {
      erase the region caps drawn on top of it.
 
      ITS VISIBILITY IS DERIVED, NEVER STORED. It is on precisely when no slot
-     holds a texture. A flag of its own would be a second thing that has to say
-     the same as the first, and the two would disagree the first time a fetch
-     failed halfway — leaving either two suns or none. */
+     holds a picture or a film frame. A flag of its own would be a second thing
+     that has to say the same as the first, and the two would disagree the
+     first time a fetch failed halfway — leaving either two suns or none. */
   const bare = new THREE.Mesh(
     new THREE.SphereGeometry(1, 128, 96),
     new THREE.ShaderMaterial({
@@ -170,10 +174,26 @@ export function createSunScene(THREE) {
   earth.traverse(o => { if (o.material) o.material.depthTest = false; });
   group.add(earth);
 
-  /* ---- Handling ---------------------------------------------------------- */
+  /* ---- Handling ----------------------------------------------------------
 
-  function setLayerTexture(layer, texture, opts) {
-    layer.texture = texture;
+     WHAT A LAYER SHOWS IS WRITTEN IN ONE PLACE. A layer holds its own picture,
+     the still fetched into its slot, and can have a film frame laid over it.
+     The frame wins while it is there. The still stays underneath and comes
+     back the moment the frame goes, so nothing is restored by hand, and a
+     still that arrives while a film plays simply waits there.
+
+     WHILE ANY LAYER SHOWS A FRAME, THE OTHER LAYERS ARE HIDDEN. A film is one
+     source, and a stack under a moving picture would be a stack of pictures
+     from other moments. */
+  function applyLayer(layer, filmOn) {
+    const look = layer.frame || (filmOn ? null : layer.look);
+    const texture = layer.frame ? layer.frame.texture : layer.texture;
+    if (!look || !texture) {
+      layer.sphere.visible = layer.plane.visible = false;
+      layer.sphereUniforms.uHasMap.value = 0;
+      layer.planeUniforms.uHasMap.value = 0;
+      return;
+    }
 
     /* THE PLANE HAS TO COVER THE FIELD IT CARRIES.
 
@@ -188,39 +208,86 @@ export function createSunScene(THREE) {
        position, not from the plane's own coordinates: stretch the mesh and
        every point still reads the texel that belongs to it. The z offset per
        slot keeps three coincident planes from fighting for depth. */
-    layer.plane.scale.set(opts.field, opts.field, 1);
-    layer.plane.position.set(opts.centre.x, opts.centre.y, -0.001 * layer.index);
+    layer.plane.scale.set(look.field, look.field, 1);
+    layer.plane.position.set(look.centre.x, look.centre.y, -0.001 * layer.index);
     for (const u of [layer.sphereUniforms, layer.planeUniforms]) {
       u.uMap.value = texture;
-      u.uHasMap.value = texture ? 1 : 0;
-      u.uSunFrac.value = 1 / opts.field;
-      u.uEdge.value = opts.field;
-      u.uCenter.value.set(opts.centre.x, opts.centre.y);
-      u.uOpacity.value = opts.opacity;
-      u.uLuma.value = opts.luma ? 1 : 0;
+      u.uHasMap.value = 1;
+      u.uSunFrac.value = 1 / look.field;
+      u.uEdge.value = look.field;
+      u.uCenter.value.set(look.centre.x, look.centre.y);
+      u.uLuma.value = look.luma ? 1 : 0;
     }
     // A coronagraph has no disc to show: its occulter covers exactly the part
     // a sphere would draw. Drawing one anyway paints the occulter's flat grey
     // over the limb.
-    layer.sphere.visible = !!texture && !opts.coronagraph;
-    layer.plane.visible = !!texture;
+    layer.sphere.visible = !look.coronagraph;
+    layer.plane.visible = true;
     layer.planeUniforms.uHasSphere.value = layer.sphere.visible ? 1 : 0;
 
-    const additive = opts.mode === 'add' || opts.mode === 'lumaAdd';
+    const additive = look.mode === 'add' || look.mode === 'lumaAdd';
     for (const mesh of [layer.sphere, layer.plane]) {
       mesh.material.blending = additive ? THREE.AdditiveBlending : THREE.NormalBlending;
       mesh.material.needsUpdate = true;
     }
+  }
+
+  function applyAll() {
+    const filmOn = layers.some(l => l.frame);
+    for (const l of layers) applyLayer(l, filmOn);
     syncBare();
+  }
+
+  function setLayerTexture(layer, texture, opts) {
+    layer.texture = texture;
+    layer.look = {
+      field: opts.field,
+      centre: { x: opts.centre.x, y: opts.centre.y },
+      luma: !!opts.luma,
+      mode: opts.mode || 'normal',
+      coronagraph: !!opts.coronagraph
+    };
+    for (const u of [layer.sphereUniforms, layer.planeUniforms]) u.uOpacity.value = opts.opacity;
+    applyAll();
   }
 
   function clearLayer(layer) {
     if (layer.texture) { layer.texture.dispose(); layer.texture = null; }
-    layer.sphere.visible = layer.plane.visible = false;
-    layer.sphereUniforms.uHasMap.value = 0;
-    layer.planeUniforms.uHasMap.value = 0;
+    layer.look = null;
     layer.meta = null;
-    syncBare();
+    applyAll();
+  }
+
+  const sameLook = (p, q) =>
+    p.field === q.field && p.centre.x === q.centre.x && p.centre.y === q.centre.y &&
+    p.luma === q.luma && p.mode === q.mode && p.coronagraph === q.coronagraph;
+
+  /* A FILM FRAME OVER A LAYER. `frame` carries a texture and the look it was
+     rendered with. Every frame of a film shares one crop, so from the second
+     frame on a swap is the texture uniform and nothing else: no upload, and no
+     material that has to be looked at again. */
+  function showFrame(layer, frame) {
+    const before = layer.frame;
+    layer.frame = frame;
+    if (before && sameLook(before, frame)) {
+      layer.sphereUniforms.uMap.value = frame.texture;
+      layer.planeUniforms.uMap.value = frame.texture;
+      return;
+    }
+    applyAll();
+  }
+
+  function hideFrame(layer) {
+    if (!layer.frame) return;
+    layer.frame = null;
+    applyAll();
+  }
+
+  /* What each layer puts on screen: its frame, its own picture, or nothing when
+     it is empty or a film hides it. */
+  function shownLooks() {
+    const filmOn = layers.some(l => l.frame);
+    return layers.map(l => l.frame || (!filmOn && l.texture ? l.look : null)).filter(Boolean);
   }
 
   function setGlowVisible(on) { glow.visible = on; }
@@ -228,7 +295,7 @@ export function createSunScene(THREE) {
   /* The single place that decides whether the bare sun shows. Called after every
      change to the slots, so there is one rule and no flag to keep in step. */
   function syncBare() {
-    bare.visible = !layers.some(l => !!l.texture);
+    bare.visible = !layers.some(l => !!l.texture || !!l.frame);
     return bare.visible;
   }
 
@@ -247,6 +314,7 @@ export function createSunScene(THREE) {
         index: l.index,
         sourceId: l.sourceId,
         hasTexture: !!l.texture,
+        frame: !!l.frame,
         sphereVisible: l.sphere.visible,
         planeVisible: l.plane.visible,
         field: l.sphereUniforms.uEdge.value,
@@ -260,6 +328,7 @@ export function createSunScene(THREE) {
 
   return {
     group, layers, earth, bare,
-    setLayerTexture, clearLayer, setGlowVisible, setVisible, syncBare, state
+    setLayerTexture, clearLayer, showFrame, hideFrame, shownLooks,
+    setGlowVisible, setVisible, syncBare, state
   };
 }

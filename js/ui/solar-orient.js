@@ -87,17 +87,30 @@ export function orientLines(s) {
 
   out.push({ cls: 'so-kicker', text: 'IMAGE DATA — NOT MEASUREMENTS' });
   for (const d of shown) {
-    out.push({ text: d.name + ' · ' + utcStamp(d.observed) + ' · ' + ageText(d.ageMinutes) });
+    /* A film frame says which frame it is and how many pixels it has. Its age
+       would change with every frame, and says less than when it was taken. */
+    out.push({ text: d.film
+      ? d.name + ' · frame ' + (d.film.index + 1) + '/' + d.film.count + ' · ' +
+        utcStamp(d.observed) + ' · ' + d.texPx + ' px'
+      : d.name + ' · ' + utcStamp(d.observed) + ' · ' + ageText(d.ageMinutes) });
   }
 
   // A frame from before NOAA's month has no circles, and that needs saying here
   // too: an empty disc otherwise reads as a sun without active regions.
   if (s.regionDay === null) out.push({ text: NO_REGION_LIST });
 
-  const worst = shown.reduce((a, d) =>
-    (d.sharpness && VERDICT_RANK[d.sharpness.verdict] > VERDICT_RANK[a]) ? d.sharpness.verdict : a,
-    'green');
-  out.push({ cls: 'so-sharp so-' + worst, text: VERDICT_TEXT[worst], dot: true });
+  /* A FILM FRAME IS NOT JUDGED ON SHARPNESS. It is rendered for playing, at 640
+     pixels at most, and a verdict on it would tell the viewer to fetch again in
+     the middle of a film. The line says what is on screen instead. */
+  const film = shown.find(d => d.film);
+  if (film) {
+    out.push({ cls: 'so-sharp so-film', text: 'a film frame of ' + film.texPx + ' px', dot: true });
+  } else {
+    const worst = shown.reduce((a, d) =>
+      (d.sharpness && VERDICT_RANK[d.sharpness.verdict] > VERDICT_RANK[a]) ? d.sharpness.verdict : a,
+      'green');
+    out.push({ cls: 'so-sharp so-' + worst, text: VERDICT_TEXT[worst], dot: true });
+  }
 
   /* The earth in texels, from the sharpest slot rather than an average: it
      answers "can this source see something that size", and one source that can

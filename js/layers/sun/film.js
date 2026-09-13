@@ -170,3 +170,27 @@ export function filmCrop(view, geom, minField, maxPx = FILM_FRAME_PX) {
 
 /* What frames weigh as textures, in MB: four bytes a texel, no mipmaps. */
 export const filmTextureMb = (count, px) => count * px * px * 4 / 1e6;
+
+/* The speeds a film plays at, in frames per second, and the one it starts at.
+   Every frame plays for the same time, however far apart the pictures were
+   taken. */
+export const FILM_FPS = [4, 8, 16];
+export const FILM_FPS_DEFAULT = 8;
+
+/* The longest a single browser frame may count for, in seconds. After a switch
+   of tabs the first frame can arrive seconds late, and a film that jumped that
+   far ahead would read as a skip. */
+const FILM_DT_MAX_S = 0.1;
+
+/**
+ * Where a playing film stands after one browser frame. `position` counts frames
+ * and keeps its fraction: at 60 Hz and 8 fps a step is 0.13 of a frame, and a
+ * position read back as a whole number would never move. It runs round at both
+ * ends.
+ */
+export function filmStep(position, count, direction, fps, dtMs) {
+  if (!(count > 0)) return 0;
+  const dt = Math.min(FILM_DT_MAX_S, Math.max(0, dtMs) / 1000);
+  const next = position + direction * fps * dt;
+  return ((next % count) + count) % count;
+}

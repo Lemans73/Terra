@@ -32,7 +32,8 @@
    THE FLIPBOOK SHARES THE STRIP. Film looks up the frames around the moment
    (js/ui/solar-film.js); the strip draws their stretch with one tick per
    picture, the row says what fetching them costs, and a tick grows when its
-   frame is in.
+   frame is in. Once frames are in, the row plays them, and the dashed mark for
+   the picture on screen moves with every frame.
 
    THE DRAWING IS chart.js, UNCHANGED — it is a byte-identical copy of the
    proof of concept. What this file supplies is a canvas with a size, a
@@ -143,6 +144,11 @@ export function createSolarTime(deps) {
   const btnFetch = document.getElementById('sol-fetch');
   const btnFilm = document.getElementById('sol-film');
   const btnFilmGo = document.getElementById('sol-film-go');
+  const btnBack = document.getElementById('sol-back');
+  const btnPause = document.getElementById('sol-pause');
+  const btnFwd = document.getElementById('sol-fwd');
+  const btnFilmX = document.getElementById('sol-film-x');
+  const btnRate = document.getElementById('sol-rate');
   const note = document.getElementById('sol-note');
   if (!root || !canvas || !Chart) return null;
 
@@ -467,13 +473,26 @@ export function createSolarTime(deps) {
   /* THE FILM'S HALF OF THE ROW. Film becomes ✕ while a film is on, and the
      middle of the row carries the film: where the lookup is, what fetching the
      frames would cost, how far a fetch is (pressed then, it stops, and what
-     arrived stays), and what the film holds. Which of the two middles shows is
-     the stylesheet's, keyed on data-film. */
+     arrived stays), and what the film holds. Once a frame is in, the first
+     column plays the film the way the island plays time, ✕ film moves to the
+     middle, and the speed stands beside the window. */
   function refreshFilmRow() {
     if (!film || !btnFilm || !btnFilmGo) return;
     const f = film.state();
     root.dataset.film = f.phase;
     const on = f.phase !== 'idle';
+    /* Which buttons stand is decided here and shown by one class: .play-btn sets
+       display, so the hidden attribute would lose. */
+    const playable = f.held > 0 && (f.phase === 'fetching' || f.phase === 'loaded');
+    const off = (b, isOff) => { if (b) b.classList.toggle('sol-off', isOff); };
+    off(btnFetch, on);
+    off(btnFilm, playable);
+    for (const b of [btnBack, btnPause, btnFwd, btnFilmX, btnRate]) off(b, !playable);
+    off(btnFilmGo, !on || (playable && f.phase === 'loaded' && !f.missing));
+    if (btnBack) btnBack.classList.toggle('active', f.playing === -1);
+    if (btnFwd) btnFwd.classList.toggle('active', f.playing === 1);
+    if (btnPause) btnPause.disabled = !f.playing;
+    if (btnRate) btnRate.textContent = f.fps + ' fps';
     btnFilm.textContent = on ? '✕' : 'Film';
     btnFilm.title = on ? 'Clear the film' : 'Look up the frames for a film around this moment';
     btnFilm.setAttribute('aria-label', on ? 'Clear the film' : 'Film');
@@ -689,6 +708,26 @@ export function createSolarTime(deps) {
     else if (phase === 'ready' || phase === 'loaded') film.fetchFrames();
   });
 
+  /* THE FILM'S TRANSPORT, the island's way: ◀ and ▶ play in their direction and
+     pause when pressed again, ❚❚ pauses. The moment follows the film only when
+     it pauses. Set eight times a second it would run the app's whole time
+     funnel eight times a second; the mark for the picture on screen moves with
+     every frame instead. */
+  function filmPause() {
+    const frame = film.pause();
+    if (frame) setMoment(frame.time, true);
+  }
+  function filmPlay(dir) {
+    if (!film) return;
+    if (film.state().playing === dir) filmPause();
+    else film.play(dir);
+  }
+  btnBack?.addEventListener('click', () => filmPlay(-1));
+  btnFwd?.addEventListener('click', () => filmPlay(1));
+  btnPause?.addEventListener('click', () => { if (film) filmPause(); });
+  btnFilmX?.addEventListener('click', () => { if (film) film.clear(); });
+  btnRate?.addEventListener('click', () => { if (film) film.cycleFps(); });
+
   const unsubscribe = feed.onUpdate(() => draw());
   const unsubscribeFilm = film ? film.onUpdate(onFilmUpdate) : () => {};
   const resize = new ResizeObserver(() => draw(true));
@@ -785,6 +824,9 @@ export function createSolarTime(deps) {
         fetchedTicks: S.filmFetchedTicks || 0,
         row: btnFilmGo ? btnFilmGo.textContent : null,
         rowPressable: btnFilmGo ? !btnFilmGo.disabled : null,
+        transport: btnFwd ? !btnFwd.classList.contains('sol-off') : null,
+        playing: film.state().playing,
+        rate: btnRate ? btnRate.textContent : null,
         button: btnFilm ? btnFilm.textContent : null,
         note: note && !note.hidden ? note.textContent : null
       } : null,

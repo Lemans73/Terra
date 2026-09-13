@@ -1,13 +1,13 @@
 /* ============================================================
-   check-flipbook-frames.mjs — which frames a film is made of, and
-   what holding them costs
+   check-flipbook-frames.mjs — which frames a film is made of, what
+   holding them costs, and how they play
    ------------------------------------------------------------
    js/layers/sun/film.js decides, before any picture is fetched, the
    stretch a film covers, the moments it asks Helioviewer for, which
    answers are different pictures, and the crop every frame is rendered
-   with. js/ui/solar-film.js looks the frames up, fetches them, and
-   holds them as textures. Each of those can be quietly wrong and still
-   produce a film that plays.
+   with. js/ui/solar-film.js looks the frames up, fetches them, holds
+   them as textures and plays them. Each of those can be quietly wrong
+   and still produce a film that plays.
 
      1  the moments sit on a UTC raster: windows a minute apart share them
      2  a flare's window runs from half an hour before to half an hour after
@@ -21,6 +21,13 @@
      9  clearing, a new film and another source give every texture back;
         a stop keeps what arrived, and a frame that lands after a clear
         goes straight back
+    10  a playing film moves at its speed on the browser's own frame time,
+        runs round at both ends, and a late browser frame cannot skip it
+    11  playing shows the frames that are in, in order and with one crop;
+        a pause hands back the frame on screen; clearing takes that frame
+        off the screen before a single texture is given back
+    12  the plane fades against the sphere by the distance from the sun's
+        centre, so a film cropped off centre keeps its limb
 
    THE FIXTURE IS REAL: getClosestImage through Terra's proxy on
    2026-09-13, for the 83 minutes around the M1.0 of 5 September, one
@@ -34,8 +41,8 @@
 import { readFileSync } from 'node:fs';
 import {
   filmWindowAround, filmWindowForFlare, filmFitToNewest, filmTargets,
-  filmUnique, filmEveryMs, filmCostMb, filmCrop, filmTextureMb,
-  FILM_MAX_FRAMES, FILM_FRAME_PX, FILM_FADE_START
+  filmUnique, filmEveryMs, filmCostMb, filmCrop, filmTextureMb, filmStep,
+  FILM_MAX_FRAMES, FILM_FRAME_PX, FILM_FADE_START, FILM_FPS_DEFAULT
 } from '../js/layers/sun/film.js';
 import { createSunFetch } from '../js/layers/sun/fetch.js';
 import { SOURCES, minimumField } from '../js/layers/sun/source.js';
@@ -82,6 +89,8 @@ const C2_GEOM = { nativeField: 6.404823038543459, rsun: 80.64235294117648, radiu
 const RESTING = { centre: { x: 0, y: 0 }, half: { w: 2.0591, h: 1.65 } };
 const REGION = { centre: { x: 0.42, y: 0.31 }, half: { w: 0.5, h: 0.4 } };
 
+const SHADER_SRC = readFileSync(new URL('../js/layers/sun/shader.js', import.meta.url), 'utf8');
+
 /* ---- The checks -------------------------------------------------------- */
 
 const results = [];
@@ -89,6 +98,7 @@ const ok = (name, detail) => results.push({ name, pass: true, detail });
 const bad = (name, detail) => results.push({ name, pass: false, detail });
 const hhmm = t => new Date(t).toISOString().slice(11, 16);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+const HZ60 = 1000 / 60;
 
 function checkRaster(targetsOf) {
   const asked = targetsOf(filmWindowForFlare(M10)).times.map(hhmm);
@@ -224,8 +234,7 @@ function checkCrop(crop) {
     return bad('crop', 'deep inside the occulter of LASCO C2 the crop is ' + corona.field.toFixed(2) +
       ' radii, not ' + minimumField(C2_ID));
   }
-  const shader = readFileSync(new URL('../js/layers/sun/shader.js', import.meta.url), 'utf8');
-  const fade = shader.match(/smoothstep\(uEdge \* ([\d.]+), uEdge \* [\d.]+, r\)/);
+  const fade = SHADER_SRC.match(/smoothstep\(uEdge \* ([\d.]+), uEdge \* [\d.]+, r\)/);
   if (!fade || +fade[1] !== FILM_FADE_START) {
     return bad('crop', 'the shader starts its fade at ' + (fade ? fade[1] : 'no match') + ' of the field; film.js counts on ' +
       FILM_FADE_START);
@@ -234,16 +243,52 @@ function checkCrop(crop) {
     close.imageScale + ' arcsec a pixel, corners inside the fade; LASCO C2 never inside ' + minimumField(C2_ID) + ' radii');
 }
 
-/* ---- A film against a fake Helioviewer ------------------------------------
-   The fixture's AIA 171 answers, frames of 380 KB, and textures that count
-   themselves. Gated, every frame and every decode waits until the check lets
-   it through, so a stop or a clear lands exactly between two steps instead of
-   wherever a timer puts it. */
+/* At 60 Hz, which is the frame time a browser really has: a step is a fraction
+   of a frame, and a position that loses that fraction never moves. */
+function checkPlayStep(step) {
+  let p = 0, moves = 0;
+  for (let k = 0; k < 180; k++) {
+    const before = Math.floor(p);
+    p = step(p, 24, 1, 8, HZ60);
+    if (Math.floor(p) !== before) moves++;
+  }
+  if (moves < 23 || moves > 24) {
+    return bad('play step', 'three seconds at 8 fps and 60 Hz moved ' + moves + ' frames instead of 24');
+  }
+  if (!(p < 0.01 || p > 23.99)) {
+    return bad('play step', 'after 24 steps through 24 frames the film stands at ' + p.toFixed(3) + ', not back at the start');
+  }
+  const back = step(0.05, 24, -1, 8, HZ60);
+  if (Math.floor(back) !== 23) {
+    return bad('play step', 'backwards past the first frame lands on ' + Math.floor(back) + ' and not on the last');
+  }
+  let q = 0, fast = 0;
+  for (let k = 0; k < 60; k++) {
+    const before = Math.floor(q);
+    q = step(q, 24, 1, 16, HZ60);
+    if (Math.floor(q) !== before) fast++;
+  }
+  if (fast < 15 || fast > 16) return bad('play step', 'one second at 16 fps moved ' + fast + ' frames instead of 16');
+  const late = step(0, 24, 1, 16, 5000);
+  if (late > 1.6 + 1e-9) {
+    return bad('play step', 'a browser frame five seconds late moved the film ' + late.toFixed(1) + ' frames');
+  }
+  ok('play step', 'at 60 Hz, 8 fps moves ' + moves + ' frames in three seconds and ends back at the start, 16 fps moves ' +
+    fast + ' in one; backwards runs round to the last frame; a browser frame five seconds late counts for a tenth of a second');
+}
 
-function filmRig({ gated = false, texture = t => t, api: wrap = a => a } = {}) {
+/* ---- A film against a fake Helioviewer ------------------------------------
+   The fixture's AIA 171 answers, frames of 380 KB, textures that count
+   themselves, a screen that writes down what was put on it, and a browser
+   frame loop that runs when the check says so. Gated, every frame and every
+   decode waits until the check lets it through, so a stop or a clear lands
+   exactly between two steps instead of wherever a timer puts it. */
+
+function filmRig({ gated = false, texture = t => t, api: wrap = a => a, hide = h => h } = {}) {
   const rig = {
     source: AIA_ID, live: 0, made: 0, crops: 0, requests: [], blobs: [], decodes: [],
-    asking: 0, mostAsking: 0, flying: 0, mostFlying: 0
+    asking: 0, mostAsking: 0, flying: 0, mostFlying: 0,
+    events: [], shows: [], pending: null, clock: 0
   };
   const wait = list => (gated ? new Promise(r => list.push(r)) : sleep(2));
   const byMoment = new Map(AIA_171.map(([asked, id, obs]) => [at(asked), { id, date: DAY + ' ' + obs }]));
@@ -277,9 +322,28 @@ function filmRig({ gated = false, texture = t => t, api: wrap = a => a } = {}) {
       await wait(rig.decodes);
       rig.live++;
       rig.made++;
-      return texture({ disposed: false, dispose() { if (!this.disposed) { this.disposed = true; rig.live--; } } });
-    }
+      return texture({
+        disposed: false,
+        dispose() { if (!this.disposed) { this.disposed = true; rig.live--; rig.events.push('dispose'); } }
+      });
+    },
+    showFrame: view => {
+      rig.shows.push({ id: view.frame.id, index: view.index, count: view.count,
+                       disposed: view.texture.disposed, crop: view.crop });
+      rig.events.push('show');
+    },
+    hideFrame: hide(() => { rig.events.push('hide'); }),
+    requestFrame: fn => { rig.pending = fn; return 1; },
+    cancelFrame: () => { rig.pending = null; },
+    frameClock: () => rig.clock
   });
+  /* One browser frame, `dtMs` after the one before. */
+  rig.runFrame = dtMs => {
+    rig.clock += dtMs;
+    const fn = rig.pending;
+    rig.pending = null;
+    if (fn) fn();
+  };
   return rig;
 }
 
@@ -390,6 +454,105 @@ async function checkRelease(rigOf) {
     'that were on their way, and the next fetch asked for the other 15; three decoded after a clear went straight back');
 }
 
+/* The frame taken off the screen before any texture is given back, read from
+   the order in which the rig heard about them. */
+function hiddenFirst(events) {
+  const hideAt = events.indexOf('hide'), disposeAt = events.indexOf('dispose');
+  return hideAt >= 0 && disposeAt >= 0 && hideAt < disposeAt;
+}
+
+async function checkPlayback(rigOf) {
+  let rig = rigOf();
+  await rig.film.lookUp({ flare: M10 });
+  await rig.film.fetchFrames();
+  const film = rig.film;
+
+  film.play(1);
+  if (rig.shows.length !== 1 || rig.shows[0].index !== 0) {
+    return bad('playback', 'play put ' + rig.shows.length + ' frames on screen, not the first one');
+  }
+  for (let k = 0; k < 180; k++) rig.runFrame(HZ60);
+  const played = rig.shows.length - 1;
+  if (played < 23 || played > 24) {
+    return bad('playback', 'three seconds at ' + FILM_FPS_DEFAULT + ' fps showed ' + played + ' frames instead of 24');
+  }
+  if (!rig.shows.every((s, i) => i === 0 || s.index === (rig.shows[i - 1].index + 1) % 21)) {
+    return bad('playback', 'the frames did not play in the order they were taken, round at the end');
+  }
+  if (rig.shows.some(s => s.disposed || s.crop !== rig.shows[0].crop || s.count !== 21)) {
+    return bad('playback', 'a frame came on screen with a disposed texture, another crop, or a count other than 21');
+  }
+
+  const onScreen = rig.shows[rig.shows.length - 1];
+  const paused = film.pause();
+  const shownAtPause = rig.shows.length;
+  for (let k = 0; k < 60; k++) rig.runFrame(HZ60);
+  if (!paused || paused.id !== onScreen.id || rig.shows.length !== shownAtPause || rig.pending) {
+    return bad('playback', 'the pause handed back ' + (paused ? paused.id : 'nothing') + ' for ' + onScreen.id +
+      ', and ' + (rig.shows.length - shownAtPause) + ' frames came after it');
+  }
+
+  film.play(-1);
+  for (let k = 0; k < 8; k++) rig.runFrame(HZ60);
+  const back = rig.shows[rig.shows.length - 1];
+  if (rig.shows.length !== shownAtPause + 1 || back.index !== (onScreen.index + 20) % 21) {
+    return bad('playback', 'backwards from frame ' + onScreen.index + ' came ' + back.index + ' instead of ' +
+      ((onScreen.index + 20) % 21));
+  }
+
+  const speeds = [film.cycleFps(), film.cycleFps(), film.cycleFps()].join(', ');
+  if (speeds !== '16, 4, 8') return bad('playback', 'the speed runs 8, ' + speeds + ' instead of 8, 16, 4, 8');
+
+  rig.events.length = 0;
+  film.clear();
+  if (!hiddenFirst(rig.events) || rig.pending) {
+    return bad('playback', 'clearing a playing film went ' + rig.events.slice(0, 3).join(', ') +
+      '…: a texture was given back while its frame was on screen');
+  }
+
+  rig = rigOf();
+  await rig.film.lookUp({ flare: M10 });
+  await rig.film.fetchFrames();
+  rig.film.play(1);
+  rig.events.length = 0;
+  await rig.film.lookUp({ flare: M10 });
+  if (!hiddenFirst(rig.events)) {
+    return bad('playback', 'a new film over a playing one went ' + rig.events.slice(0, 3).join(', ') + '…');
+  }
+
+  // A film with six frames in plays those six, and nothing that is not in.
+  rig = rigOf({ gated: true });
+  await rig.film.lookUp({ flare: M10 });
+  const partial = rig.film.fetchFrames();
+  await letThrough(rig, 'blobs');
+  await letThrough(rig, 'decodes');
+  rig.film.stop();
+  await drain(rig, partial);
+  rig.film.play(1);
+  for (let k = 0; k < 120; k++) rig.runFrame(HZ60);
+  const ids = new Set(rig.shows.map(s => s.id));
+  if (ids.size !== 6 || rig.shows.some(s => s.count !== 6)) {
+    return bad('playback', 'a film with 6 frames in showed ' + ids.size + ' different frames');
+  }
+
+  ok('playback', 'play shows the first frame and ' + played + ' more in three seconds at 8 fps, in order and with one crop; ' +
+    'the pause hands back the frame on screen and nothing follows; backwards goes to the frame before; the speed runs ' +
+    '8, 16, 4, 8; six frames in play only those six; a clear or a new film takes the frame off screen before any ' +
+    'texture goes');
+}
+
+function checkLimb(shader) {
+  const m = shader.match(/uHasSphere\s*>\s*0\.5\s*&&\s*(\w+)\s*<\s*1\.0/);
+  if (!m) return bad('limb', 'the plane no longer fades against the sphere where it did');
+  const def = shader.match(new RegExp('float\\s+' + m[1] + '\\s*=\\s*([^;]+);'));
+  if (!def || def[1].replace(/\s+/g, '') !== 'length(obs)') {
+    return bad('limb', 'the plane fades against the sphere by ' + m[1] + ' = ' + (def ? def[1].trim() : '?') +
+      ', which is not the distance from the sun\'s centre');
+  }
+  ok('limb', 'the plane fades against the sphere by ' + m[1] + ' = length(obs), the distance from the sun\'s centre, ' +
+    'so a film cropped off centre keeps its limb');
+}
+
 /* ---- The control implementations --------------------------------------- */
 
 // The raster counted from the window's own start instead of from 1970.
@@ -418,6 +581,9 @@ await checkLanes(createSunFetch);
 checkCrop(filmCrop);
 await checkFetch(() => filmRig());
 await checkRelease(o => filmRig(o));
+checkPlayStep(filmStep);
+await checkPlayback(o => filmRig(o));
+checkLimb(SHADER_SRC);
 
 for (const r of results) {
   console.log((r.pass ? '  ok    ' : '  FAIL  ') + r.name.padEnd(14) + r.detail);
@@ -444,7 +610,17 @@ const breaks = [
       return { ...a, filmFrame: p => a.filmFrame(k++ % 2 ? p : { ...p, imageScale: (+p.imageScale * 1.001).toFixed(6) }) };
     }
   }))],
-  ['textures that are never given back', () => checkRelease(o => filmRig({ ...o, texture: t => ({ ...t, dispose() {} }) }))]
+  ['textures that are never given back', () => checkRelease(o => filmRig({ ...o, texture: t => ({ ...t, dispose() {} }) }))],
+  ['a position rounded to a whole frame every step', () =>
+    checkPlayStep((p, n, d, f, dt) => Math.round(filmStep(p, n, d, f, dt)))],
+  ['a late browser frame counted in full', () => checkPlayStep((p, n, d, f, dt) => {
+    const x = p + d * f * dt / 1000;
+    return ((x % n) + n) % n;
+  })],
+  ['a texture given back before its frame leaves the screen', () =>
+    checkPlayback(o => filmRig({ ...o, hide: h => () => queueMicrotask(h) }))],
+  ['the limb faded by the distance from the crop', () =>
+    checkLimb(SHADER_SRC.replace('uHasSphere > 0.5 && rs < 1.0', 'uHasSphere > 0.5 && r < 1.0'))]
 ];
 
 if (process.argv.includes('--selftest')) {
@@ -453,7 +629,7 @@ if (process.argv.includes('--selftest')) {
     const before = results.length;
     await runIt();
     const caught = results.length > before && results.slice(before).every(r => !r.pass);
-    console.log((caught ? '  ok    ' : '  FAIL  ') + ('break: ' + name).padEnd(52) + (caught ? 'caught' : 'SLIPPED THROUGH'));
+    console.log((caught ? '  ok    ' : '  FAIL  ') + ('break: ' + name).padEnd(62) + (caught ? 'caught' : 'SLIPPED THROUGH'));
     if (!caught) failed++;
     results.length = before;
   }

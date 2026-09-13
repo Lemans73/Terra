@@ -2711,6 +2711,8 @@
   .solar-orient .so-green { color: #7ec98f; }
   .solar-orient .so-amber { color: #ffb347; }
   .solar-orient .so-red   { color: #ff8a7a; font-weight: 600; }
+  /* Not a verdict: what is on screen is a frame of a film. */
+  .solar-orient .so-film  { color: var(--solar-film); }
 
   /* Op een smal scherm staat de masthead dichter op de scene en is er geen
      kolom om in te wonen. Hij gaat dan weg: op 375px is dit vijf regels over
@@ -2793,7 +2795,10 @@
   body.solar-on .time-island { display: none; }
   body.solar-bare #sol-fetch,
   body.solar-bare #sol-film,
-  body.solar-bare #sol-film-go { display: none; }
+  body.solar-bare #sol-film-go,
+  body.solar-bare .sol-transport,
+  body.solar-bare #sol-film-x,
+  body.solar-bare #sol-rate { display: none; }
 
   /* The lane. Same box as the magnetosphere strip, and for the same reasons:
      the size lives here and the buffer in JS, the ring is an inset shadow so it
@@ -2814,14 +2819,25 @@
   body.solar-on .solar-time { max-width: none; }
   .sol-actions { justify-content: flex-start; }
   .sol-fetch, .sol-film-go { font-variant-numeric: tabular-nums; }
-  /* WHILE A FILM IS ON, ITS ROW TAKES THE MIDDLE: the lookup, what the frames
-     would cost, how far the fetch is, what the film holds, or why there is no
-     film. Fetch comes back when the film is cleared. Switched on the strip's own
-     data-film, because .play-btn sets display and the hidden attribute loses to
-     that. */
-  #solar-time:not([data-film]) #sol-film-go,
-  #solar-time[data-film="idle"] #sol-film-go,
-  #solar-time[data-film]:not([data-film="idle"]) #sol-fetch { display: none; }
+  /* THE SUN'S ROW HAS NO SLIDER TO PROTECT. The island fixes its moment column
+     at 190 px so that a growing label cannot move the slider under a dragging
+     pointer. Here the middle holds buttons, and with the film's transport and
+     speed beside it a fixed column left ✕ film twenty pixels, broken over two
+     lines (measured on a strip of 430 px between the panels). So the moment
+     gives way instead, and cuts off with an ellipsis. Phones keep their own
+     row, with the moment above it. */
+  @media (min-width: 641px) {
+    .solar-time .ti-row { grid-template-columns: auto auto minmax(0, 1fr) auto; }
+    .solar-time .ti-val { min-width: 0; }
+  }
+  .solar-time .ti-row .play-btn { white-space: nowrap; }
+  /* WHICH BUTTONS OF THE ROW STAND is decided in js/ui/solar-time.js and shown
+     by one class. Without a film: Film and Fetch. While a film is looked up or
+     fetched: ✕ and the film's own button in the middle. Once a frame is in: the
+     transport in the first column, ✕ film in the middle, and the speed beside
+     the window. A class, because .play-btn sets display and the hidden
+     attribute loses to that. */
+  #solar-time .play-btn.sol-off { display: none; }
   /* Why a moment was not kept. It shows for a few seconds, above the lane. */
   .sol-note {
     align-self: flex-start;

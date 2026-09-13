@@ -101,9 +101,12 @@ void main() {
 
     // The complementary fade. Inside the disc the sphere contributes
     // smoothstep(0, uFade, mu); this is one minus that, so the two always
-    // sum to exactly 1 and an additive stack cannot double-count.
-    if (uHasSphere > 0.5 && r < 1.0) {
-      float mu = sqrt(max(0.0, 1.0 - r * r));
+    // sum to exactly 1 and an additive stack cannot double-count. The disc is
+    // the sun's, so this radius counts from the sun's centre and not from the
+    // crop's: a film zoomed in on a region is cropped off centre.
+    float rs = length(obs);
+    if (uHasSphere > 0.5 && rs < 1.0) {
+      float mu = sqrt(max(0.0, 1.0 - rs * rs));
       a *= 1.0 - smoothstep(0.0, uFade, mu);
     }
   }
