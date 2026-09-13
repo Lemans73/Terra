@@ -261,3 +261,134 @@ export function joinFlareRegions(flares, xra, tolMs = FLARE_MATCH_MS) {
 
 /** The letter of a class, for choosing its colour. */
 export const flareLetter = cls => (cls && /^[ABCMX]/.test(cls) ? cls[0] : null);
+
+/* ---- The magnet ---------------------------------------------------------
+
+   A pointer that slows down near a flare's peak is aiming at it, and the
+   moment clicks onto that peak exactly. A pointer that sweeps past is not
+   aiming at anything, and the lane lets it through.
+
+   PULLING ONLY WHILE AIMING IS WHAT MAKES A MAGNET POSSIBLE HERE. Measured on
+   NOAA's week to 2026-09-13, 41 peaks: with a reach of 16 px, a magnet that
+   pulls during every drag covers 94 % of the lane on a phone at three days and
+   98 % at seven, which leaves nowhere to drag freely. Capping the reach at a
+   share of the gap to the neighbouring peak shrinks it to 0.3 px, exactly where
+   a finger needs it. Aiming is intent, and intent does not care how densely
+   the peaks sit. */
+
+/* Slower than this is aiming, in CSS pixels per second along the lane. A
+   starting value for testing by hand: aiming runs at tens of pixels a second,
+   a sweep at hundreds. */
+export const XRAY_AIM_PX_PER_S = 180;
+
+/* The speed is read over at least this much of the pointer's past, so the
+   jitter of one frame does not decide it. */
+export const XRAY_AIM_WINDOW_MS = 100;
+
+/* How far a peak reaches a fingertip, in CSS pixels. Every other pointer gets
+   the click threshold (CLICK_SLOP_PX), the line the labels and the globe draw. */
+export const XRAY_MAGNET_TOUCH_PX = 16;
+
+/* A moment this close to a peak stands on that flare. The feed is on whole
+   minutes, so a minute is the resolution of the question. */
+export const XRAY_ON_PEAK_MS = 60000;
+
+const XRAY_AIM_HISTORY_MS = 1000;
+// Two peaks this close in distance are equally near, and the stronger wins.
+const XRAY_TIE_PX = 0.5;
+
+/**
+ * How fast a pointer moves along the lane, in CSS px per second: from the first
+ * sample at least `windowMs` before `now`, or the oldest there is, to the
+ * newest. Horizontal only, because the axis is time. A pointer that has rested
+ * reads as slow, since the rest counts as time; a single sample reads as fast,
+ * because nothing says it is aiming yet.
+ *
+ * @param {{x: number, t: number}[]} samples  oldest first, `t` in ms
+ * @param {number} [now]  when the question is asked; the newest sample by default
+ */
+export function xrayPointerSpeed(samples, now, windowMs = XRAY_AIM_WINDOW_MS) {
+  const n = samples.length;
+  if (n < 2) return Infinity;
+  const last = samples[n - 1];
+  const t = now != null ? Math.max(now, last.t) : last.t;
+  let ref = samples[0];
+  for (let i = n - 2; i >= 0; i--) {
+    ref = samples[i];
+    if (t - ref.t >= windowMs) break;
+  }
+  const dt = (t - ref.t) / 1000;
+  return dt > 0 ? Math.abs(last.x - ref.x) / dt : Infinity;
+}
+
+/**
+ * The peak nearest `x` within `reach`, or null. At equal distance the stronger
+ * flare wins: a C beside a B means the C.
+ *
+ * @param {{x: number, flare: object}[]} peaks  in the lane's own pixels
+ */
+export function xrayNearestPeak(x, reach, peaks) {
+  let best = null, bestD = Infinity, bestFlux = -Infinity;
+  for (const p of peaks) {
+    const d = Math.abs(p.x - x);
+    if (d > reach) continue;
+    const flux = p.flare.peakFlux ?? xrayFluxOf(p.flare.cls) ?? 0;
+    if (d < bestD - XRAY_TIE_PX || (Math.abs(d - bestD) <= XRAY_TIE_PX && flux > bestFlux)) {
+      best = p; bestD = d; bestFlux = flux;
+    }
+  }
+  return best;
+}
+
+/**
+ * The peak a pointer is pulled to, or null. A held peak keeps the pointer for
+ * as long as it stays within reach, at any speed; a new peak only catches a
+ * pointer that is aiming.
+ */
+export function xrayMagnetPull({ x, speed, reach, heldPeak = null, peaks, aimSpeed = XRAY_AIM_PX_PER_S }) {
+  if (heldPeak != null) {
+    const held = peaks.find(p => p.flare.peak === heldPeak);
+    if (held && Math.abs(held.x - x) <= reach) return held;
+  }
+  return speed < aimSpeed ? xrayNearestPeak(x, reach, peaks) : null;
+}
+
+/**
+ * One pointer sample of a drag on the lane, and where the moment goes. The
+ * drag state belongs to the caller for the length of one press: pass null with
+ * the first sample, and what came back with every next one.
+ *
+ * @param {{samples: object[], heldPeak: number|null}|null} drag
+ * @param {{x: number, t: number}} sample  lane pixels, event time in ms
+ * @param {{reach: number, peaks: object[], timeAtX: Function, aimSpeed?: number}} lane
+ * @returns {{samples: object[], heldPeak: number|null, speed: number, time: number}}
+ */
+export function xrayDragStep(drag, sample, lane) {
+  const prior = drag ? drag.samples : [];
+  // Recent history, and always the sample before this one: a pointer that
+  // rested a long while and then moves a little is still moving slowly.
+  const samples = prior.filter(s => sample.t - s.t <= XRAY_AIM_HISTORY_MS);
+  if (!samples.length && prior.length) samples.push(prior[prior.length - 1]);
+  samples.push(sample);
+  const speed = xrayPointerSpeed(samples, sample.t);
+  const pull = xrayMagnetPull({
+    x: sample.x, speed, reach: lane.reach, heldPeak: drag ? drag.heldPeak : null,
+    peaks: lane.peaks, aimSpeed: lane.aimSpeed
+  });
+  return {
+    samples, speed,
+    heldPeak: pull ? pull.flare.peak : null,
+    time: pull ? pull.flare.peak : lane.timeAtX(sample.x)
+  };
+}
+
+/** The flare whose peak the moment stands on, within `tolMs`, or null. */
+export function xrayFlareAtMoment(flares, t, tolMs = XRAY_ON_PEAK_MS) {
+  let best = null, bestD = Infinity;
+  for (const f of flares) {
+    if (f.peak == null) continue;
+    const d = Math.abs(f.peak - t);
+    if (d <= tolMs && d < bestD) { best = f; bestD = d; }
+  }
+  return best;
+}

@@ -5,7 +5,7 @@
    pixels and marks the flares NOAA found in it. Everything that can be
    quietly wrong in that lives in js/layers/sun/lane.js: which class a
    flux is, where a gap is a gap, which sample survives a pixel column,
-   and which region a flare belongs to.
+   which region a flare belongs to, and where the magnet puts a moment.
 
    THE FIXTURES ARE REAL ROWS, taken from NOAA SWPC on 2026-09-11:
    the 34 flares of that week with their own classes, the minutes around
@@ -13,13 +13,19 @@
    eclipse of the 11th — an hour in which GOES-18 stood in the earth's
    shadow and reported zero.
 
+   THE MAGNET IS DRIVEN AT REAL FRAME RATES, 60 and 120 samples a second.
+   A pointer loop tested only with large steps is not tested: the steps a
+   screen produces are small, and small steps are where speed and rounding
+   go wrong.
+
    `--selftest` breaks each check on purpose and demands that it fails.
    A check that passes on a broken input is not a check.
    ============================================================ */
 
 import {
   xrayClassOf, xrayFluxOf, parseXrayRows, xrayWithGaps, xrayEnvelope,
-  XRAY_GAP_MS, parseFlareRows, parseXraEvents, joinFlareRegions
+  XRAY_GAP_MS, parseFlareRows, parseXraEvents, joinFlareRegions,
+  xrayPointerSpeed, xrayDragStep, xrayNearestPeak, xrayFlareAtMoment, XRAY_MAGNET_TOUCH_PX
 } from '../js/layers/sun/lane.js';
 
 /* ---- The fixtures ------------------------------------------------------ */
@@ -219,6 +225,136 @@ function checkRegions(join) {
   ok('regions', "the flare takes its own satellite's region; without a peak it takes none");
 }
 
+/* ---- The magnet -------------------------------------------------------- */
+
+/* A lane of one hour on 600 px behind the 52 px gutter, and three flares: a C
+   and a B far apart, and a weaker B twelve pixels beside the C for the tie.
+   The peaks sit on whole pixels, so "on the peak" is an exact comparison. */
+const LANE = { from: 0, to: 3600e3, pad: 52, width: 600 };
+const laneX = t => LANE.pad + (t - LANE.from) / (LANE.to - LANE.from) * LANE.width;
+const laneT = x => LANE.from + (x - LANE.pad) / LANE.width * (LANE.to - LANE.from);
+const FLARE_C = { peak: laneT(202), cls: 'C4.2', peakFlux: 4.2e-6 };
+const FLARE_B = { peak: laneT(502), cls: 'B6.0', peakFlux: 6.0e-7 };
+const FLARE_WEAK = { peak: laneT(214), cls: 'B2.0', peakFlux: 2.0e-7 };
+const peaksOf = list => list.map(f => ({ x: laneX(f.peak), flare: f }));
+const MOUSE_REACH = 6;   // the click threshold, CLICK_SLOP_PX
+
+/* Pointer positions from `a` to `b` at a steady speed, one per frame. */
+function ramp(a, b, pxPerS, hz) {
+  const step = (pxPerS / hz) * Math.sign(b - a);
+  const out = [];
+  for (let x = a; step > 0 ? x <= b + 1e-9 : x >= b - 1e-9; x += step) out.push(x);
+  return out;
+}
+
+/* A drag replayed through a step function, one sample per frame. */
+function gesture(step, xs, { hz, reach, peaks, aimSpeed }) {
+  let drag = null;
+  const times = xs.map((x, i) => {
+    drag = step(drag, { x, t: i * 1000 / hz }, { reach, peaks, timeAtX: laneT, aimSpeed });
+    return drag.time;
+  });
+  return { drag, times, end: (xs.length - 1) * 1000 / hz };
+}
+
+function checkSpeed() {
+  for (const hz of [60, 120]) {
+    for (const v of [60, 600]) {
+      const samples = [];
+      for (let i = 0; i <= hz; i++) samples.push({ x: 100 + v * i / hz, t: i * 1000 / hz });
+      const read = xrayPointerSpeed(samples, samples[samples.length - 1].t);
+      if (Math.abs(read - v) > v * 0.05) return bad('pointer speed', v + ' px/s at ' + hz + ' Hz read as ' + read.toFixed(1));
+    }
+  }
+  const rest = xrayPointerSpeed([{ x: 100, t: 0 }, { x: 110, t: 16.7 }, { x: 110, t: 400 }], 400);
+  if (!(rest < 30)) return bad('pointer speed', 'a pointer resting for 380 ms reads as ' + rest.toFixed(1) + ' px/s');
+  ok('pointer speed', '60 and 600 px/s read within 5 % at 60 and 120 Hz; a resting pointer reads as slow');
+}
+
+function checkAim(step) {
+  const peaks = peaksOf([FLARE_C, FLARE_B]);
+  const xs = ramp(240, 205, 40, 60);
+  const { drag, end } = gesture(step, xs, { hz: 60, reach: MOUSE_REACH, peaks });
+  if (drag.time !== FLARE_C.peak) {
+    return bad('magnet aim', 'aiming at 40 px/s ended ' + ((drag.time - FLARE_C.peak) / 60000).toFixed(2) + ' min from the peak');
+  }
+  const release = step(drag, { x: xs[xs.length - 1], t: end + 250 }, { reach: MOUSE_REACH, peaks, timeAtX: laneT });
+  if (release.time !== FLARE_C.peak) return bad('magnet aim', 'letting go moved the moment off the peak');
+  ok('magnet aim', 'a drag slowing onto a C4.2 lands on its peak to the millisecond, and stays on release');
+}
+
+function checkSweep(step) {
+  const peaks = peaksOf([FLARE_C, FLARE_B]);
+  for (const hz of [60, 120]) {
+    const xs = ramp(160, 244, 1200, hz);
+    const { times } = gesture(step, xs, { hz, reach: MOUSE_REACH, peaks });
+    const caught = times.filter(t => t === FLARE_C.peak).length;
+    if (caught) return bad('magnet sweep', 'a sweep at 1200 px/s (' + hz + ' Hz) clicked onto the peak ' + caught + ' times');
+  }
+  ok('magnet sweep', 'a sweep at 1200 px/s runs past the peak, at 60 and at 120 Hz');
+}
+
+function checkReach(pick, touchReach) {
+  const peaks = peaksOf([FLARE_C, FLARE_B]);
+  const finger = pick(190, touchReach, peaks);
+  const mouse = pick(190, MOUSE_REACH, peaks);
+  if (!finger || finger.flare !== FLARE_C) return bad('magnet reach', 'a finger 12 px beside a peak did not choose it');
+  if (mouse) return bad('magnet reach', 'a mouse 12 px beside a peak chose it, past the click threshold');
+  ok('magnet reach', 'at 12 px beside a peak a finger chooses it and a mouse does not');
+}
+
+function checkFree(step) {
+  const peaks = peaksOf([FLARE_C, FLARE_B]);
+  const xs = ramp(340, 360, 40, 60);
+  const { times } = gesture(step, xs, { hz: 60, reach: XRAY_MAGNET_TOUCH_PX, peaks });
+  const pulled = times.filter((t, i) => t !== laneT(xs[i])).length;
+  if (pulled) return bad('magnet free', pulled + ' samples of a slow drag far from every peak were pulled away');
+  ok('magnet free', 'a slow drag 138 px from the nearest peak follows the pointer exactly');
+}
+
+/* Caught slowly with a finger's reach, then a quick move that stays within it,
+   then one that leaves it. */
+function checkHold(step) {
+  const peaks = peaksOf([FLARE_C, FLARE_B]);
+  const lane = { reach: XRAY_MAGNET_TOUCH_PX, peaks, timeAtX: laneT };
+  const xs = ramp(230, 205, 40, 60);
+  const { drag: caught, end } = gesture(step, xs, { hz: 60, reach: lane.reach, peaks });
+  if (caught.time !== FLARE_C.peak) return bad('magnet hold', 'the slow approach did not catch the peak');
+  const quick = step(caught, { x: 187, t: end + 1000 / 60 }, lane);
+  if (!(quick.speed > 180)) return bad('magnet hold', 'the quick move was not quick: ' + quick.speed.toFixed(0) + ' px/s');
+  if (quick.time !== FLARE_C.peak) return bad('magnet hold', 'a quick move inside the reach let go of the peak');
+  const away = step(quick, { x: 240, t: end + 2000 / 60 }, lane);
+  if (away.time === FLARE_C.peak) return bad('magnet hold', 'leaving the reach did not let go');
+  ok('magnet hold', 'a caught peak holds inside its reach at ' + Math.round(quick.speed) + ' px/s, and lets go outside it');
+}
+
+function checkTie(pick) {
+  const got = pick(208, XRAY_MAGNET_TOUCH_PX, peaksOf([FLARE_C, FLARE_WEAK]));
+  if (!got || got.flare !== FLARE_C) {
+    return bad('magnet tie', 'midway between a C4.2 and a B2.0 the magnet chose ' + (got ? got.flare.cls : 'nothing'));
+  }
+  ok('magnet tie', 'midway between a C4.2 and a B2.0 the stronger flare wins');
+}
+
+function checkOnPeak(find) {
+  const flares = [FLARE_C, FLARE_B];
+  if (find(flares, FLARE_C.peak + 30e3) !== FLARE_C) return bad('on peak', 'half a minute after a peak is not on it');
+  if (find(flares, FLARE_C.peak + 90e3) !== null) return bad('on peak', 'a minute and a half after a peak still stands on it');
+  ok('on peak', 'within a minute of a peak the moment stands on that flare, and past it on none');
+}
+
+// Controls for the magnet: each one has to FAIL the check it is handed to.
+const withLane = change => (drag, sample, lane) => xrayDragStep(drag, sample, { ...lane, ...change });
+const forgetsHold = (drag, sample, lane) => xrayDragStep(drag && { ...drag, heldPeak: null }, sample, lane);
+const tieToLast = (x, reach, peaks) => {
+  let best = null, bestD = Infinity;
+  for (const p of peaks) {
+    const d = Math.abs(p.x - x);
+    if (d <= reach && d <= bestD) { best = p; bestD = d; }
+  }
+  return best;
+};
+
 /* ---- Running ----------------------------------------------------------- */
 
 const selftest = process.argv.includes('--selftest');
@@ -231,28 +367,44 @@ checkZero(parseXrayRows);
 checkEdges();
 checkWidth();
 checkRegions(joinFlareRegions);
+checkSpeed();
+checkAim(xrayDragStep);
+checkSweep(xrayDragStep);
+checkReach(xrayNearestPeak, XRAY_MAGNET_TOUCH_PX);
+checkFree(xrayDragStep);
+checkHold(xrayDragStep);
+checkTie(xrayNearestPeak);
+checkOnPeak(xrayFlareAtMoment);
 
 for (const r of results) {
   console.log((r.pass ? '  ok    ' : '  FAIL  ') + r.name.padEnd(18) + r.detail);
 }
 let failed = results.filter(r => !r.pass).length;
 
+const breaks = [
+  ['class by rounding', () => checkClasses(roundedClass)],
+  ['peak by stride', () => checkPeak(stridePoints)],
+  ['gap without markers', () => checkGap(p => p)],
+  ['zero as a value', () => checkZero(json => ({
+    points: json.map(r => ({ time: Date.parse(r.time_tag), v: +r.flux, flag: r.electron_contaminaton === true }))
+  }))],
+  ['region from the wrong satellite', () => checkRegions(joinByFirst)],
+  ['a magnet without reach', () => checkAim(withLane({ reach: 0 }))],
+  ['a magnet without the speed gate', () => checkSweep(withLane({ aimSpeed: Infinity }))],
+  ['a finger with the mouse reach', () => checkReach(xrayNearestPeak, MOUSE_REACH)],
+  ['a magnet that reaches everywhere', () => checkFree(withLane({ reach: Infinity }))],
+  ['a magnet that forgets its hold', () => checkHold(forgetsHold)],
+  ['a tie that goes to the last peak', () => checkTie(tieToLast)],
+  ['on a peak at any distance', () => checkOnPeak((flares, t) => xrayFlareAtMoment(flares, t, Infinity))]
+];
+
 if (selftest) {
   console.log('\n  --selftest: every check below has to FAIL');
-  const breaks = [
-    ['class by rounding', () => checkClasses(roundedClass)],
-    ['peak by stride', () => checkPeak(stridePoints)],
-    ['gap without markers', () => checkGap(p => p)],
-    ['zero as a value', () => checkZero(json => ({
-      points: json.map(r => ({ time: Date.parse(r.time_tag), v: +r.flux, flag: r.electron_contaminaton === true }))
-    }))],
-    ['region from the wrong satellite', () => checkRegions(joinByFirst)]
-  ];
   for (const [name, run] of breaks) {
     const before = results.length;
     run();
-    const caught = results.slice(before).every(r => !r.pass);
-    console.log((caught ? '  ok    ' : '  FAIL  ') + ('break: ' + name).padEnd(34) +
+    const caught = results.length > before && results.slice(before).every(r => !r.pass);
+    console.log((caught ? '  ok    ' : '  FAIL  ') + ('break: ' + name).padEnd(40) +
       (caught ? 'caught' : 'SLIPPED THROUGH'));
     if (!caught) failed++;
     results.length = before;
@@ -263,4 +415,4 @@ if (failed) {
   console.log('\n' + failed + ' failed');
   process.exit(1);
 }
-console.log('\nall green (' + results.length + ' checks' + (selftest ? ' plus 5 breaks' : '') + ')');
+console.log('\nall green (' + results.length + ' checks' + (selftest ? ' plus ' + breaks.length + ' breaks' : '') + ')');

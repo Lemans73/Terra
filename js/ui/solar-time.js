@@ -25,12 +25,19 @@
    to four megabytes and seconds of someone else's rendering, so fetching
    stays behind a button.
 
+   THE PEAKS ARE MAGNETIC, TO A POINTER THAT AIMS. Slow down near a flare's
+   peak and the moment clicks onto it exactly; sweep past and the lane lets
+   the pointer through (js/layers/sun/lane.js, the magnet).
+
    THE DRAWING IS chart.js, UNCHANGED — it is a byte-identical copy of the
    proof of concept. What this file supplies is a canvas with a size, a
    palette, a window, and the pointer.
    ============================================================ */
 
-import { xrayEnvelope, xrayWithGaps, xraySampleAt, xrayClassOf, flareLetter } from '../layers/sun/lane.js';
+import {
+  xrayEnvelope, xrayWithGaps, xraySampleAt, xrayClassOf, flareLetter,
+  xrayDragStep, xrayNearestPeak, xrayFlareAtMoment, XRAY_MAGNET_TOUCH_PX
+} from '../layers/sun/lane.js';
 import { CLICK_SLOP_PX } from './label-passthrough.js';
 
 /* The three windows, the same three the magnetosphere strip offers, and the
@@ -196,6 +203,14 @@ export function createSolarTime(deps) {
     return moment().getTime();
   }
 
+  /* The flare whose peak the moment stands on, if any. Derived, never stored:
+     the magnet, a click on a flare, a label on the sun and the flare card all
+     set the moment, and every one of them is then shown the same way. */
+  function onPeak() {
+    const t = cursorTime();
+    return t == null ? null : xrayFlareAtMoment(S.flares || [], t);
+  }
+
   function spec() {
     const { from, to } = range();
     S.from = from; S.to = to;
@@ -312,6 +327,23 @@ export function createSolarTime(deps) {
     ctx.restore();
   }
 
+  /* The flare the moment stands on gets a ring around its band at the peak, in
+     the colour of its class: what the magnet caught, or what a click chose. The
+     band's height is chart.js's own, so the ring sits on the band it names. */
+  function drawHeldRing(result) {
+    const f = onPeak();
+    if (!f || !result || !result.layout || !result.layout[0]) return;
+    const { top, bot } = result.layout[0];
+    const bandH = Math.min(8, (bot - top) * 0.22);
+    ctx.save();
+    ctx.strokeStyle = palette[flareLetter(f.cls)] || palette.A;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(result.xOf(f.peak), bot - bandH / 2, bandH / 2 + 3.5, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   /* Redraws are cheap next to the scene but not free, and a pointer produces
      them faster than a screen shows them: at most one every 50 ms, with the
      last request always honoured. */
@@ -327,6 +359,7 @@ export function createSolarTime(deps) {
     measure();
     ctx.clearRect(0, 0, S.w, S.h);
     const result = Chart.draw(ctx, spec());
+    drawHeldRing(result);
     drawHoverBox(result);
     refreshRow();
     // Which flares the window holds is decided here, so whoever draws them on
@@ -343,13 +376,19 @@ export function createSolarTime(deps) {
     if (btnMoment) {
       const p = t != null ? xraySampleAt(feed.points(), t) : null;
       const cls = p && p.v > 0 ? xrayClassOf(p.v) : null;
+      const held = onPeak();
       let text;
-      if (live || newest == null) text = 'now';
-      else {
+      if (held) {
+        // On a peak the flare is the moment: SWPC's class, then when it peaked.
+        const stamp = fmtStamp(new Date(held.peak), { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+        text = (held.cls || 'flare') + ' peak · ' + stamp;
+      } else if (live || newest == null) {
+        text = cls ? 'now · ' + cls : 'now';
+      } else {
         const stamp = fmtStamp(new Date(t), { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-        text = (formatOffset(t - newest) || 'now') + ' · ' + stamp;
+        text = (formatOffset(t - newest) || 'now') + ' · ' + stamp + (cls ? ' · ' + cls : '');
       }
-      btnMoment.textContent = cls ? text + ' · ' + cls : text;
+      btnMoment.textContent = text;
       btnMoment.classList.toggle('shifted', !live);
     }
     /* Whether the button shows is the stylesheet's business (body.solar-bare):
@@ -394,13 +433,45 @@ export function createSolarTime(deps) {
   }
 
   /* CLICK OR DRAG, decided by how far the pointer travelled — the same number
-     as the labels and the globe use (CLICK_SLOP_PX). A drag scrubs and snaps to
-     nothing; a click on a flare means that flare, anywhere else that moment.
-     Nothing is written on the press itself, so a click is one write, not two. */
+     as the labels and the globe use (CLICK_SLOP_PX). Nothing is written on the
+     press itself, so a click is one write, not two.
+
+     THE MAGNET DECIDES WHERE A DRAG PUTS THE MOMENT (lane.js, xrayDragStep).
+     Aiming at a peak lands on it exactly, and letting go is one more sample, so
+     a pointer that came to rest on a peak stays there. A click within reach of
+     a peak means that flare, and so does a click on its band. The reach is a
+     fingertip for touch and the click threshold for every other pointer. */
   let press = null;
+  let drag = null;              // the magnet's state, for the length of one press
+
+  const localX = ev => ev.clientX - canvas.getBoundingClientRect().left;
+  const reachFor = ev => (ev.pointerType === 'touch' ? XRAY_MAGNET_TOUCH_PX : CLICK_SLOP_PX);
+
+  /* The peaks inside the window, in the lane's own pixels. A peak before the
+     window's start belongs to a flare whose band merely reaches into it, and a
+     magnet there would pull the moment off the strip. */
+  function peaksInPixels() {
+    if (!S.flares || !S.plotW) return [];
+    const xOf = Chart.xMapper(S.from, S.to, Chart.PAD, S.plotW);
+    return S.flares
+      .filter(f => f.peak != null && f.peak >= S.from && f.peak <= S.to)
+      .map(f => ({ x: xOf(f.peak), flare: f }));
+  }
+
+  function magnetStep(ev) {
+    drag = xrayDragStep(drag, { x: localX(ev), t: ev.timeStamp }, {
+      reach: reachFor(ev),
+      peaks: peaksInPixels(),
+      timeAtX: x => Chart.timeAtX(x, S.from, S.to, Chart.PAD, S.plotW)
+    });
+    return drag.time;
+  }
+
   function onDown(ev) {
     if (ev.button !== 0 && ev.pointerType === 'mouse') return;
     press = { id: ev.pointerId, x: ev.clientX, y: ev.clientY };
+    drag = null;
+    magnetStep(ev);
     dragging = false;
     canvas.setPointerCapture(ev.pointerId);
     hoverX = null;
@@ -411,12 +482,12 @@ export function createSolarTime(deps) {
       if (!dragging && Math.hypot(ev.clientX - press.x, ev.clientY - press.y) >= CLICK_SLOP_PX) {
         dragging = true;
       }
-      if (dragging) setMoment(timeAt(ev));
+      const t = magnetStep(ev);
+      if (dragging) setMoment(t);
       return;
     }
     if (ev.pointerType !== 'mouse') return;
-    const r = canvas.getBoundingClientRect();
-    hoverX = ev.clientX - r.left;
+    hoverX = localX(ev);
     draw();
   }
   function onUp(ev) {
@@ -425,13 +496,21 @@ export function createSolarTime(deps) {
     press = null;
     dragging = false;
     try { canvas.releasePointerCapture(ev.pointerId); } catch {}
-    if (wasDrag) { setMoment(timeAt(ev), true); return; }
-    const f = flareAt(ev.clientX - canvas.getBoundingClientRect().left);
+    if (wasDrag) {
+      const t = magnetStep(ev);
+      drag = null;
+      setMoment(t, true);
+      return;
+    }
+    drag = null;
+    const x = localX(ev);
+    const near = xrayNearestPeak(x, reachFor(ev), peaksInPixels());
+    const f = near ? near.flare : flareAt(x);
     if (f) selectFlare(f);
     else setMoment(timeAt(ev), true);
   }
   function onCancel(ev) {
-    if (press && ev.pointerId === press.id) { press = null; dragging = false; }
+    if (press && ev.pointerId === press.id) { press = null; dragging = false; drag = null; }
   }
   function onLeave() { if (!press && hoverX !== null) { hoverX = null; draw(); } }
 
@@ -493,6 +572,7 @@ export function createSolarTime(deps) {
       entered = false;
       dragging = false;
       press = null;
+      drag = null;
       hoverX = null;
       feed.stop();
       if (note) note.hidden = true;
@@ -514,6 +594,10 @@ export function createSolarTime(deps) {
       from: S.from ? new Date(S.from).toISOString() : null,
       to: S.to ? new Date(S.to).toISOString() : null,
       cursor: entered && cursorTime() != null ? new Date(cursorTime()).toISOString() : null,
+      onPeak: (() => {
+        const f = entered ? onPeak() : null;
+        return f ? { cls: f.cls, peak: new Date(f.peak).toISOString() } : null;
+      })(),
       live: isLive(),
       canvas: [S.w, S.h, S.dpr],
       plotW: S.plotW,
