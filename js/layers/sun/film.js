@@ -8,10 +8,15 @@
    every frame is rendered with.
 
    THE STRETCH FOLLOWS WHAT IS BEING LOOKED AT. On a flare's peak it is
-   that flare, from half an hour before it began to half an hour after
-   it ended; anywhere else it is twelve hours around the moment, six
-   before and six after. Twelve hours around a flare of thirteen minutes
-   would be mostly quiet sun.
+   that flare, from an hour before it began to an hour after it ended;
+   anywhere else it is twelve hours around the moment, six before and six
+   after, or six hours when the visitor asks for the shorter film. Twelve
+   hours around a flare of thirteen minutes would be mostly quiet sun.
+
+   THE FRAMES AROUND A MOMENT ARE A QUARTER OF AN HOUR APART, whatever
+   the stretch, so a longer stretch makes a longer film rather than a
+   coarser one: twelve hours are 48 frames, six seconds at 8 fps. A
+   flare is short, and its frames lie as close as 48 frames allow.
 
    THE MOMENTS SIT ON A UTC RASTER, in whole minutes. Two visitors
    looking at the same stretch ask for the same moments, get the same
@@ -36,21 +41,27 @@
 import { textureSize } from './source.js';
 import { imageScaleFor } from './fetch.js';
 
-/* At most this many moments per film. Plan 52 settled on 24 frames at 8 fps:
-   three seconds, enough to see a flare rise and decay. */
-export const FILM_MAX_FRAMES = 24;
+/* At most this many moments per film: twelve hours at a quarter of an hour, six
+   seconds at 8 fps. */
+export const FILM_MAX_FRAMES = 48;
 
-/* Twelve hours around a moment, six before and six after: with 24 frames, a frame
-   every half hour. */
-export const FILM_SPAN_MS = 12 * 3600e3;
-export const FILM_FLARE_MARGIN_MS = 30 * 60e3;
+/* The stretches around a moment a visitor can choose, the first by default:
+   twelve hours (six before and six after) or six. */
+export const FILM_SPANS_MS = [12 * 3600e3, 6 * 3600e3];
+export const FILM_SPAN_MS = FILM_SPANS_MS[0];
+
+/* How far apart the frames around a moment are. */
+export const FILM_AROUND_STEP_MS = 15 * 60e3;
+
+/* How far a flare's film reaches before its begin and after its end. */
+export const FILM_FLARE_MARGIN_MS = 60 * 60e3;
 
 /* What one frame costs to download, in MB. Measured at 640 px in session 52:
    AIA 171 386 KB, LASCO C3 311 KB. It is an estimate, and the row says so. */
 export const FILM_MB_PER_FRAME = 0.4;
 
 /* A frame is at most this many pixels square, which keeps a whole film at
-   24 × 640² × 4 B = 39 MB of texture. */
+   48 × 640² × 4 B = 79 MB of texture. */
 export const FILM_FRAME_PX = 640;
 
 /* Where the plane's round fade begins, as a fraction of the field: the
@@ -58,14 +69,14 @@ export const FILM_FRAME_PX = 640;
    screen inside it shows the whole screen unfaded. */
 export const FILM_FADE_START = 0.86;
 
-/** Twelve hours around a moment: six before it and six after. */
+/** A stretch around a moment, half of it before and half after: twelve hours by default. */
 export function filmWindowAround(t, spanMs = FILM_SPAN_MS) {
   return { kind: 'around', from: t - spanMs / 2, to: t + spanMs / 2, shiftedMs: 0, cutMs: 0 };
 }
 
 /**
- * A flare with half an hour on either side. A flare without an end yet runs to
- * its peak, and one without either to its begin.
+ * A flare with an hour on either side. A flare without an end yet runs to its
+ * peak, and one without either to its begin.
  */
 export function filmWindowForFlare(f, marginMs = FILM_FLARE_MARGIN_MS) {
   const last = f.end != null ? f.end : (f.peak != null ? f.peak : f.begin);
@@ -76,7 +87,7 @@ export function filmWindowForFlare(f, marginMs = FILM_FLARE_MARGIN_MS) {
  * A window held against the newest picture the source has.
  *
  * Around a moment the window keeps its length and moves back until it ends on
- * that picture, so "now" means the latest twelve hours that exist. Around a flare
+ * that picture, so "now" means the latest hours that exist. Around a flare
  * the end is cut instead: moving back would fill the film with the quiet before
  * the flare. A window that ends before the newest picture stays as it is.
  */
@@ -87,14 +98,19 @@ export function filmFitToNewest(win, newest) {
   return { ...win, from: win.from - over, to: newest, shiftedMs: over };
 }
 
+/* The closest a film's moments may lie: a quarter of an hour around a moment, a
+   minute around a flare. */
+export const filmMinStepMs = win => (win.kind === 'flare' ? 60e3 : FILM_AROUND_STEP_MS);
+
 /**
- * The moments to ask for: at most `max`, a whole number of minutes apart, on the
- * multiples of that step since 1970, and inside (from, to].
+ * The moments to ask for: at most `max`, a whole number of minutes apart and never
+ * closer than `minStepMs`, on the multiples of that step since 1970, and inside
+ * (from, to].
  */
-export function filmTargets(win, max = FILM_MAX_FRAMES) {
+export function filmTargets(win, max = FILM_MAX_FRAMES, minStepMs = filmMinStepMs(win)) {
   const span = win.to - win.from;
   if (!(span > 0)) return { stepMs: 0, times: [] };
-  const stepMs = Math.max(1, Math.ceil(span / max / 60000)) * 60000;
+  const stepMs = Math.max(Math.ceil(minStepMs / 60000), Math.ceil(span / max / 60000)) * 60000;
   const times = [];
   for (let t = Math.floor(win.from / stepMs) * stepMs + stepMs; t <= win.to; t += stepMs) {
     times.push(t);

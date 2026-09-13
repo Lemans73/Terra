@@ -26,7 +26,7 @@
 
    A FRAME IS UPLOADED THE MOMENT IT ARRIVES (the sun state's
    frameTexture), so a film that plays swaps a texture and never waits
-   on an upload. At most 24 × 640² × 4 B = 39 MB.
+   on an upload. At most 48 × 640² × 4 B = 79 MB.
 
    PLAYING SWAPS TEXTURES AND NOTHING ELSE. The sun state lays a frame
    over the bottom slot (showFilmFrame), and every later frame is one
@@ -48,7 +48,7 @@
 import {
   filmWindowAround, filmWindowForFlare, filmFitToNewest, filmTargets,
   filmUnique, filmEveryMs, filmCostMb, filmObservedMs, filmTextureMb,
-  filmStep, FILM_FPS, FILM_FPS_DEFAULT
+  filmStep, FILM_FPS, FILM_FPS_DEFAULT, FILM_SPANS_MS
 } from '../layers/sun/film.js';
 
 const blank = () => ({
@@ -106,6 +106,7 @@ export function createSolarFilm(deps) {
     for (const fn of listeners) { try { fn(); } catch (e) { console.error(e); } }
   };
 
+  let spanMs = FILM_SPANS_MS[0];   // the stretch the next film around a moment covers
   let direction = 0;        // -1 backwards · 0 paused · 1 forwards
   let fps = FILM_FPS_DEFAULT;
   let position = 0;         // in frames that are in, with the fraction kept
@@ -147,7 +148,8 @@ export function createSolarFilm(deps) {
 
   /**
    * Look up the frames of a film: of `flare` when the moment stands on one,
-   * otherwise of twelve hours around `cursor`. Resolves with the state it ended in.
+   * otherwise of the chosen stretch around `cursor`. Resolves with the state it
+   * ended in.
    */
   async function lookUp({ cursor, flare }) {
     const mine = ++run;
@@ -161,7 +163,7 @@ export function createSolarFilm(deps) {
     }
     const started = performance.now();
     const source = nameOf(sourceId);
-    let win = flare ? filmWindowForFlare(flare) : filmWindowAround(cursor);
+    let win = flare ? filmWindowForFlare(flare) : filmWindowAround(cursor, spanMs);
     S = { ...blank(), phase: 'lookup', sourceId, source, window: win };
     notify();
 
@@ -357,6 +359,14 @@ export function createSolarFilm(deps) {
     return fps;
   }
 
+  /* The stretch the next film around a moment covers. A film already looked up
+     keeps its own. */
+  function cycleSpan() {
+    spanMs = FILM_SPANS_MS[(FILM_SPANS_MS.indexOf(spanMs) + 1) % FILM_SPANS_MS.length];
+    notify();
+    return spanMs;
+  }
+
   /* ---- The film as a whole ----------------------------------------------- */
 
   function clear() {
@@ -371,6 +381,7 @@ export function createSolarFilm(deps) {
   /* The bottom slot got another source, and a film is of one source. */
   function sourceChanged() {
     if (S.phase !== 'idle' && sourceOf() !== S.sourceId) clear();
+    else notify();       // the next film names its source before it is looked up
   }
 
   /* What the film holds, and what fetching the rest would cost: the estimate per
@@ -403,6 +414,7 @@ export function createSolarFilm(deps) {
     play,
     pause,
     cycleFps,
+    cycleSpan,
     clear,
     sourceChanged,
     /* What the film holds, as copies: a reader cannot change it by accident, and
@@ -412,6 +424,9 @@ export function createSolarFilm(deps) {
       ...totals(),
       playing: direction,
       fps,
+      spanMs,
+      // The source the next film would be of: the bottom slot as it stands now.
+      nextSource: sourceOf() ? nameOf(sourceOf()) : null,
       shown: shownState(),
       window: S.window ? { ...S.window } : null,
       targets: S.targets.slice(),

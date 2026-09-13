@@ -9,8 +9,9 @@
    them as textures and plays them. Each of those can be quietly wrong
    and still produce a film that plays.
 
-     1  the moments sit on a UTC raster: windows a minute apart share them
-     2  a flare's window runs from half an hour before to half an hour after
+     1  the moments sit on a UTC raster, a quarter of an hour apart around a
+        moment whatever its stretch: windows a minute apart share them
+     2  a flare's window runs from an hour before to an hour after
      3  a window never runs past the newest picture the source has
      4  the answers are deduplicated on image id, in the order taken
      5  a lookup that failed is counted, not guessed
@@ -34,7 +35,11 @@
    THE FIXTURE IS REAL: getClosestImage through Terra's proxy on
    2026-09-13, for the 83 minutes around the M1.0 of 5 September, one
    lookup every 4 minutes. AIA 171 answered with 21 pictures, LASCO C2
-   with 8. The geometries are deriveGeometry's on the same day.
+   with 8. That was a film with half an hour on either side and at most
+   24 frames, so the raster check asks with those two numbers to meet the
+   measured moments. The fake Helioviewer below answers every moment with
+   the picture nearest to it, the way getClosestImage does. The geometries
+   are deriveGeometry's on the same day.
 
    `--selftest` breaks each check on purpose and demands that it fails.
    A check that passes on a broken input is not a check.
@@ -104,17 +109,25 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const HZ60 = 1000 / 60;
 
 function checkRaster(targetsOf) {
-  const asked = targetsOf(filmWindowForFlare(M10)).times.map(hhmm);
+  // The film the fixture was measured for: half an hour on either side, at most 24 frames.
+  const asked = targetsOf(filmWindowForFlare(M10, 30 * 60e3), 24).times.map(hhmm);
   const measured = LASCO_C2.map(r => r[0]);
   if (asked.join() !== measured.join()) {
-    return bad('raster', 'the M1.0 window asks for ' + asked.slice(0, 3).join(', ') +
+    return bad('raster', 'the measured M1.0 window asks for ' + asked.slice(0, 3).join(', ') +
       '…, not the 21 moments that were measured (' + measured.slice(0, 3).join(', ') + '…)');
   }
-  const twelve = filmWindowAround(Date.parse('2026-09-13T09:07:30Z'));
+  const moment = Date.parse('2026-09-13T09:07:30Z');
+  const twelve = filmWindowAround(moment);
   const a = targetsOf(twelve);
+  const s = targetsOf(filmWindowAround(moment, 6 * 3600e3));
   const b = targetsOf({ ...twelve, from: twelve.from + 60e3, to: twelve.to + 60e3 });
-  if (a.stepMs !== 30 * 60e3 || a.times.length !== 24) {
-    return bad('raster', 'twelve hours gave ' + a.times.length + ' moments ' + a.stepMs / 60e3 + ' min apart');
+  if (a.stepMs !== 15 * 60e3 || a.times.length !== 48) {
+    return bad('raster', 'twelve hours gave ' + a.times.length + ' moments ' + a.stepMs / 60e3 +
+      ' min apart, not 48 a quarter of an hour apart');
+  }
+  if (s.stepMs !== 15 * 60e3 || s.times.length !== 24) {
+    return bad('raster', 'six hours gave ' + s.times.length + ' moments ' + s.stepMs / 60e3 +
+      ' min apart, not 24 a quarter of an hour apart');
   }
   if (a.times.some(t => t % a.stepMs !== 0 || t <= twelve.from || t > twelve.to)) {
     return bad('raster', 'a moment lies off the UTC raster or outside its window');
@@ -123,24 +136,31 @@ function checkRaster(targetsOf) {
   if (shared < a.times.length - 1) {
     return bad('raster', 'two windows a minute apart share ' + shared + ' of ' + a.times.length + ' moments');
   }
+  const flare = targetsOf(filmWindowForFlare(M10));
+  if (flare.stepMs !== 3 * 60e3 || flare.times.length !== 48) {
+    return bad('raster', 'the M1.0 with an hour either side gave ' + flare.times.length + ' moments ' +
+      flare.stepMs / 60e3 + ' min apart, not 48 three minutes apart');
+  }
   for (let minutes = 1; minutes <= 48 * 60; minutes += 7) {
-    const n = targetsOf({ from: 0, to: minutes * 60e3 }).times.length;
+    const n = targetsOf({ kind: 'flare', from: 0, to: minutes * 60e3 }).times.length;
     if (n > FILM_MAX_FRAMES) return bad('raster', minutes + ' minutes asked for ' + n + ' moments');
   }
-  ok('raster', 'the M1.0 window asks for exactly the 21 measured moments; twelve hours give 24 on the half hour, ' +
-    shared + ' of them shared with a window a minute later');
+  ok('raster', 'the measured M1.0 window asks for exactly the 21 measured moments; twelve hours give 48 and six ' +
+    'hours 24, both on the quarter hour, ' + shared + ' of 48 shared with a window a minute later; the M1.0 with ' +
+    'an hour either side gives 48 moments three minutes apart');
 }
 
 function checkFlareWindow(windowOf) {
   const whole = windowOf(M10);
-  if (whole.from !== at('14:34') || whole.to !== at('15:57')) {
-    return bad('flare window', 'the M1.0 runs ' + hhmm(whole.from) + '–' + hhmm(whole.to) + ' instead of 14:34–15:57');
+  if (whole.from !== at('14:04') || whole.to !== at('16:27')) {
+    return bad('flare window', 'the M1.0 runs ' + hhmm(whole.from) + '–' + hhmm(whole.to) + ' instead of 14:04–16:27');
   }
   const open = windowOf({ ...M10, end: null });
   const bare = windowOf({ ...M10, end: null, peak: null });
-  if (open.to !== at('15:48')) return bad('flare window', 'a flare without an end does not run to its peak');
-  if (bare.to !== at('15:34')) return bad('flare window', 'a flare without a peak does not run to its begin');
-  ok('flare window', 'half an hour either side: 14:34–15:57 for the M1.0; without an end to its peak, without a peak to its begin');
+  if (open.to !== at('16:18')) return bad('flare window', 'a flare without an end does not run to an hour past its peak');
+  if (bare.to !== at('16:04')) return bad('flare window', 'a flare without a peak does not run to an hour past its begin');
+  ok('flare window', 'an hour either side: 14:04–16:27 for the M1.0; without an end an hour past its peak, without a ' +
+    'peak an hour past its begin');
 }
 
 function checkNewest(fit, windowAround = filmWindowAround) {
@@ -161,7 +181,7 @@ function checkNewest(fit, windowAround = filmWindowAround) {
   const kept = fit(past, newest);
   if (kept.from !== past.from || kept.to !== past.to) return bad('newest', 'a window in the past was moved');
   const flare = fit(filmWindowForFlare({ begin: newest - 20 * 60e3, peak: newest - 10 * 60e3, end: newest + 10 * 60e3 }), newest);
-  if (flare.from !== newest - 50 * 60e3 || flare.to !== newest) return bad('newest', 'a flare window was moved rather than cut');
+  if (flare.from !== newest - 80 * 60e3 || flare.to !== newest) return bad('newest', 'a flare window was moved rather than cut');
   ok('newest', 'six hours before a moment and six after; around now the twelve hours end on the newest picture, ' +
     '253 min behind the clock; a flare window is cut, a past one left alone');
 }
@@ -300,7 +320,7 @@ function filmRig({ gated = false, texture = t => t, api: wrap = a => a, hide = h
     events: [], shows: [], pending: null, clock: 0
   };
   const wait = list => (gated ? new Promise(r => list.push(r)) : sleep(2));
-  const byMoment = new Map(AIA_171.map(([asked, id, obs]) => [at(asked), { id, date: DAY + ' ' + obs }]));
+  const pictures = AIA_171.map(([, id, obs]) => ({ id, date: DAY + ' ' + obs, time: at(obs.slice(0, 5)) + +obs.slice(6) * 1e3 }));
   const api = wrap({
     lookupWidth: 3,
     frameWidth: 3,
@@ -309,8 +329,11 @@ function filmRig({ gated = false, texture = t => t, api: wrap = a => a, hide = h
       rig.mostAsking = Math.max(rig.mostAsking, rig.asking);
       await sleep(2);
       rig.asking--;
+      // The newest picture for "now"; for any other moment the picture nearest to it.
       const t = date.getTime();
-      return byMoment.get(t) || (t >= at('16:30') ? { id: '191748001', date: DAY + ' 16:29:57' } : null);
+      if (t >= at('16:30')) return { id: '191748001', date: DAY + ' 16:29:57' };
+      const near = pictures.reduce((best, p) => (Math.abs(p.time - t) < Math.abs(best.time - t) ? p : best));
+      return { id: near.id, date: near.date };
     },
     async filmFrame(params) {
       rig.requests.push(params);
@@ -400,8 +423,8 @@ async function checkFetch(rigOf) {
       (s.pass ? s.pass.got : 'no') + ' fetched');
   }
   const budget = filmTextureMb(FILM_MAX_FRAMES, FILM_FRAME_PX);
-  if (Math.abs(budget - 39.3) > 0.05) {
-    return bad('fetch', FILM_MAX_FRAMES + ' frames of ' + FILM_FRAME_PX + ' px come to ' + budget.toFixed(1) + ' MB of texture, not 39.3');
+  if (Math.abs(budget - 78.6) > 0.05) {
+    return bad('fetch', FILM_MAX_FRAMES + ' frames of ' + FILM_FRAME_PX + ' px come to ' + budget.toFixed(1) + ' MB of texture, not 78.6');
   }
   ok('fetch', 'lookups and frames three at a time; 21 frames asked once each with one crop (' + [...crops][0] +
     '), 21 textures held, ' + (s.bytes / 1e6).toFixed(1) + ' MB fetched, ' + s.textureMb.toFixed(1) + ' MB as textures');
@@ -567,11 +590,13 @@ function checkNextStep(next) {
   const frames = n => Array.from({ length: n }, (_, i) => ({ id: String(i) }));
   const base = {
     phase: 'idle', source: 'AIA 171', reason: null, targets: frames(24), done: 0, frames: [],
-    held: 0, missing: 0, bytes: 0, costMb: 0, textureMb: 0, everyMs: null, playing: 0, fps: 8
+    held: 0, missing: 0, bytes: 0, costMb: 0, textureMb: 0, everyMs: null, playing: 0, fps: 8,
+    spanMs: 12 * 3600e3, nextSource: 'AIA 171'
   };
   const cases = [
-    ['idle', {}, false, 'lookUp', /^Film around this moment$/],
-    ['idle on a peak', {}, true, 'lookUp', /^Film this flare$/],
+    ['idle', {}, false, 'lookUp', /^Film around this moment \(AIA 171\)$/],
+    ['idle on a peak', {}, true, 'lookUp', /^Film this flare \(AIA 171\)$/],
+    ['idle without a source', { nextSource: null }, false, 'lookUp', /^Film around this moment$/],
     ['looking up', { phase: 'lookup', done: 7 }, false, null, /^Looking up 7 of 24…$/],
     ['ready', { phase: 'ready', frames: frames(24), missing: 24, costMb: 9.6 }, false, 'fetch', /^Fetch 24 frames · ≈ 10 MB$/],
     ['fetching while it plays', { phase: 'fetching', frames: frames(24), held: 7, missing: 17, bytes: 2.7e6, playing: 1 },
@@ -666,6 +691,14 @@ const breaks = [
     checkLimb(SHADER_SRC.replace('uHasSphere > 0.5 && rs < 1.0', 'uHasSphere > 0.5 && r < 1.0'))],
   ['a window of six hours around the moment', () =>
     checkNewest(filmFitToNewest, t => filmWindowAround(t, 6 * 3600e3))],
+  ['a flare window with half an hour either side', () =>
+    checkFlareWindow(f => filmWindowForFlare(f, 30 * 60e3))],
+  ['frames around a moment half an hour apart', () =>
+    checkRaster((win, max, minStep) => filmTargets(win, 24, minStep))],
+  ['a film button that does not name its layer', () => checkNextStep((f, peak) => {
+    const s = filmNextStep(f, peak);
+    return f.phase === 'idle' ? { ...s, text: s.text.replace(/ \([^)]*\)$/, '') } : s;
+  })],
   ['a playing film offered more frames before a pause', () => checkNextStep((f, peak) =>
     (f.missing && f.phase === 'loaded'
       ? { action: 'fetch', text: 'Fetch ' + f.missing + ' more · ≈ 7 MB', title: '', pressable: true }

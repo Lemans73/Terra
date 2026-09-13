@@ -165,9 +165,16 @@ function filmStopStep(f) {
 export function filmNextStep(f, peak) {
   const step = (action, words) => ({ action, text: words.text, title: words.title, pressable: action !== null });
   if (f.phase === 'idle') {
+    // Only the bottom layer makes a film, so the button names it.
+    const of = f.nextSource ? ' (' + f.nextSource + ')' : '';
+    const layer = f.nextSource ? 'the bottom layer, ' + f.nextSource : 'the bottom layer';
+    const hours = Math.round((f.spanMs || 0) / 3600e3);
     return step('lookUp', peak
-      ? { text: 'Film this flare', title: 'Look up the frames from half an hour before this flare to half an hour after it' }
-      : { text: 'Film around this moment', title: 'Look up the frames of twelve hours around this moment, six before and six after' });
+      ? { text: 'Film this flare' + of,
+          title: 'A film of ' + layer + ', from an hour before this flare to an hour after it' }
+      : { text: 'Film around this moment' + of,
+          title: 'A film of ' + layer + ', ' + hours + ' hours around this moment: ' + hours / 2 +
+            ' before and ' + hours / 2 + ' after' });
   }
   if (f.phase === 'lookup') return step(null, filmLookupStep(f));
   if (f.phase === 'error') return step('lookUp', { text: f.reason || 'No film', title: 'Look the frames up again' });
@@ -206,6 +213,7 @@ export function createSolarTime(deps) {
   const btnRate = document.getElementById('sol-rate');
   // The panel's own door to the same film (index.html, under Fetch images).
   const panelFilm = document.getElementById('solar-film');
+  const panelSpan = document.getElementById('solar-film-span');
   const panelFilmX = document.getElementById('solar-film-x');
   const note = document.getElementById('sol-note');
   if (!root || !canvas || !Chart) return null;
@@ -585,10 +593,17 @@ export function createSolarTime(deps) {
      cannot disagree about where the film is. */
   function refreshPanelFilm(f) {
     if (!panelFilm) return;
-    const step = filmNextStep(f, !!onPeak());
+    const peak = !!onPeak();
+    const step = filmNextStep(f, peak);
     panelFilm.textContent = step.text;
     panelFilm.title = step.title;
     panelFilm.disabled = !step.pressable;
+    /* Beside it the stretch of a film around the moment, until there is a film;
+       then ✕. On a flare's peak the flare sets the stretch. */
+    if (panelSpan) {
+      panelSpan.hidden = f.phase !== 'idle' || peak;
+      panelSpan.textContent = Math.round(f.spanMs / 3600e3) + ' h';
+    }
     if (panelFilmX) panelFilmX.hidden = f.phase === 'idle';
   }
 
@@ -804,6 +819,7 @@ export function createSolarTime(deps) {
     else if (action === 'play') film.play(1);
   });
   panelFilmX?.addEventListener('click', () => { if (film) film.clear(); });
+  panelSpan?.addEventListener('click', () => { if (film) film.cycleSpan(); });
 
   const unsubscribe = feed.onUpdate(() => draw());
   const unsubscribeFilm = film ? film.onUpdate(onFilmUpdate) : () => {};

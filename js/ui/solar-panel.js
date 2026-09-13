@@ -199,14 +199,22 @@ export function createSolarPanel(env) {
       status('Could not fetch: ' + (e && e.message ? e.message : 'unknown error'), true);
     } finally {
       busy = false;
-      if (btn) { btn.disabled = false; btn.textContent = 'Fetch images'; }
+      if (btn) { btn.disabled = false; btn.textContent = fetchLabel(); }
     }
+  }
+
+  /* The button counts what it fetches: one layer is one image. A film is always
+     of the bottom layer, and a plural here would read as the whole stack. */
+  function fetchLabel() {
+    return slots.filter(s => s.sourceId).length > 1 ? 'Fetch images' : 'Fetch image';
   }
 
   function refresh() {
     refreshOptions();
     refreshPresets();
     refreshProvenance();
+    const btn = $('solar-fetch');
+    if (btn && !busy) btn.textContent = fetchLabel();
   }
 
   function bindSpotsToggle() {

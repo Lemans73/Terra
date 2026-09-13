@@ -2902,18 +2902,20 @@
      buttons in one colour would read as one action said twice. */
   .solar-film-row { display: flex; gap: 6px; }
   .solar-film-row .solar-fetch { width: auto; }
+  /* The label wraps rather than cutting off: the layer it names is the point. */
   .solar-film {
     flex: 1; min-width: 0;
     background: rgba(127,209,199,.12); color: #c9efe9; border-color: rgba(127,209,199,.4);
     font-variant-numeric: tabular-nums;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    line-height: 1.3;
   }
   .solar-film:hover { background: rgba(127,209,199,.2); }
-  .solar-film-x {
+  .solar-film-side {
     flex: 0 0 auto; padding: 8px 11px;
     background: transparent; color: var(--ink-dim); border-color: var(--hair);
+    font-variant-numeric: tabular-nums;
   }
-  .solar-film-x:hover { color: var(--ink); background: rgba(255,255,255,.06); }
+  .solar-film-side:hover { color: var(--ink); background: rgba(255,255,255,.06); }
   .solar-film-row [hidden] { display: none; }
 
   .solar-note, .solar-status {
