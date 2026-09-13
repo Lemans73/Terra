@@ -2815,13 +2815,13 @@
   .sol-actions { justify-content: flex-start; }
   .sol-fetch, .sol-film-go { font-variant-numeric: tabular-nums; }
   /* WHILE A FILM IS ON, ITS ROW TAKES THE MIDDLE: the lookup, what the frames
-     would cost, or why there are none. Fetch comes back when the film is
-     cleared. Switched on the strip's own data-film, because .play-btn sets
-     display and the hidden attribute loses to that. */
-  #solar-time:not([data-film="lookup"]):not([data-film="ready"]):not([data-film="error"]) #sol-film-go,
-  #solar-time[data-film="lookup"] #sol-fetch,
-  #solar-time[data-film="ready"] #sol-fetch,
-  #solar-time[data-film="error"] #sol-fetch { display: none; }
+     would cost, how far the fetch is, what the film holds, or why there is no
+     film. Fetch comes back when the film is cleared. Switched on the strip's own
+     data-film, because .play-btn sets display and the hidden attribute loses to
+     that. */
+  #solar-time:not([data-film]) #sol-film-go,
+  #solar-time[data-film="idle"] #sol-film-go,
+  #solar-time[data-film]:not([data-film="idle"]) #sol-fetch { display: none; }
   /* Why a moment was not kept. It shows for a few seconds, above the lane. */
   .sol-note {
     align-self: flex-start;

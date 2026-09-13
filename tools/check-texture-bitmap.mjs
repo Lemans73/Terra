@@ -10,7 +10,7 @@
      1  the decoder asks for imageOrientation 'flipY'
      2  where that option throws, the fallback turns a canvas over
      3  createImageBitmap is called in the decoder and nowhere else
-     4  every file that decodes for a texture sets flipY = false
+     4  every texture made from a decoded bitmap sets flipY = false, per file
 
    WHY IT IS WORTH A CHECK. Measured on the sun state in session 53: a
    frame decoded without the turn correlates 0.957 with its source upside
@@ -124,15 +124,27 @@ async function checkOnlyDecoder(read) {
   ok('one decoder', 'createImageBitmap is called in ' + DECODER + ' and nowhere else');
 }
 
+/* Counted per file: the sun state makes a texture for a slot and one for a film
+   frame, and a single flipY = false would pass for both while the other flips.
+   The unit is the texture made, not the decode: the tile loader decodes in two
+   places, from its cache and from the network, and makes its texture in one. */
 async function checkCallers(read) {
   const wrong = [];
+  let made = 0;
   for (const rel of CALLERS) {
     const code = stripComments(await read(rel));
+    const textures = (code.match(/\bnew\s+THREE\.(?:Canvas)?Texture\s*\(/g) || []).length;
+    const unflipped = (code.match(/\.flipY\s*=\s*false\b/g) || []).length;
+    made += textures;
     if (!/\bdecodeTextureBitmap\s*\(/.test(code)) wrong.push(rel + ' does not decode through decodeTextureBitmap');
-    if (!/\.flipY\s*=\s*false\b/.test(code)) wrong.push(rel + ' never sets flipY = false');
+    if (!textures) wrong.push(rel + ' makes no texture');
+    else if (unflipped < textures) {
+      wrong.push(rel + ' makes ' + textures + ' textures and sets flipY = false ' + unflipped + ' times');
+    }
   }
   if (wrong.length) return bad('callers', wrong.join('; '));
-  ok('callers', CALLERS.length + ' callers decode through the decoder and set flipY = false');
+  ok('callers', CALLERS.length + ' callers decode through the decoder, and each of their ' + made +
+    ' textures sets flipY = false');
 }
 
 /* ---- The control implementations --------------------------------------- */

@@ -2399,6 +2399,7 @@ import {
 import { decodeTextureBitmap } from './js/core/texture-bitmap.js';
 import { createSolarPanel } from './js/ui/solar-panel.js';
 import { createSolarFilm } from './js/ui/solar-film.js';
+import { filmCrop } from './js/layers/sun/film.js';
 /* SOLAR:END */
 // De magnetosfeer (sessie 29). De fysica komt uit de klassieke scripts
 // hierboven (globalThis.TerraCore) en niet uit een import: zie
@@ -13214,7 +13215,7 @@ solarImageryState = createSunState(THREE, {
   imagery: {
     createSunFetch, imageScaleFor,
     SOURCE_BY_ID, isCoronagraph, deriveGeometry, textureSize, sharpness,
-    earthInTexels, minimumField, fieldFor, decodeTextureBitmap
+    earthInTexels, minimumField, fieldFor, decodeTextureBitmap, filmCrop
   },
   /* SOLAR:END */
 
@@ -13304,6 +13305,8 @@ solarPanel = createSolarPanel({
   clearSlot: (i) => { solarImageryState.clearSlot(i); if (solarTime) solarTime.refresh(); },
   setViewR: (r) => solarImageryState.setViewR(r),
   setSpotsVisible: (on) => solarImageryState.setSpotsVisible(on),
+  // A film is of one source, so another source in the bottom slot ends it.
+  onSourceChange: () => { if (solarFilm) solarFilm.sourceChanged(); },
   setOpacity: (i, v) => {
     const laag = solarImageryState.scene.layers[i];
     if (!laag) return;
@@ -13313,13 +13316,16 @@ solarPanel = createSolarPanel({
 });
 solarPanel.mount();
 
-/* The film's controller (js/ui/solar-film.js). It asks the same queue as the
+/* The film's controller (js/ui/solar-film.js). It asks the same fetch as the
    panel, for the source in the panel's bottom slot: the layer the disc comes
-   from. */
+   from. The sun state makes its frames, because it knows the view and the
+   renderer: the crop from what is on screen, a texture from each picture. */
 solarFilm = createSolarFilm({
   api: solarImageryState.api,
   sourceOf: () => (solarPanel.slots()[0] || {}).sourceId || 0,
-  nameOf: (id) => (SOURCE_BY_ID.get(id) || {}).name || 'source ' + id
+  nameOf: (id) => (SOURCE_BY_ID.get(id) || {}).name || 'source ' + id,
+  cropFor: (id, meta) => solarImageryState.frameCrop(id, meta),
+  makeTexture: (blob) => solarImageryState.frameTexture(blob)
 });
 
 /* SOLAR:END */

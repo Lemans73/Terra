@@ -1,32 +1,45 @@
 /* ============================================================
-   check-flipbook-frames.mjs — which frames a film is made of
+   check-flipbook-frames.mjs — which frames a film is made of, and
+   what holding them costs
    ------------------------------------------------------------
    js/layers/sun/film.js decides, before any picture is fetched, the
-   stretch a film covers, the moments it asks Helioviewer for, and which
-   answers are different pictures. Each of those can be quietly wrong and
-   still produce a film that plays.
+   stretch a film covers, the moments it asks Helioviewer for, which
+   answers are different pictures, and the crop every frame is rendered
+   with. js/ui/solar-film.js looks the frames up, fetches them, and
+   holds them as textures. Each of those can be quietly wrong and still
+   produce a film that plays.
 
      1  the moments sit on a UTC raster: windows a minute apart share them
      2  a flare's window runs from half an hour before to half an hour after
      3  a window never runs past the newest picture the source has
      4  the answers are deduplicated on image id, in the order taken
      5  a lookup that failed is counted, not guessed
-     6  lookups run three abreast, and renders one at a time (fetch.js)
+     6  lookups and film frames run three abreast, stills one at a time
+     7  the crop is the frame on screen, with its corners inside the fade
+     8  a film asks three at a time, every frame once and with one crop,
+        and holds one texture per frame
+     9  clearing, a new film and another source give every texture back;
+        a stop keeps what arrived, and a frame that lands after a clear
+        goes straight back
 
    THE FIXTURE IS REAL: getClosestImage through Terra's proxy on
    2026-09-13, for the 83 minutes around the M1.0 of 5 September, one
    lookup every 4 minutes. AIA 171 answered with 21 pictures, LASCO C2
-   with 8.
+   with 8. The geometries are deriveGeometry's on the same day.
 
    `--selftest` breaks each check on purpose and demands that it fails.
    A check that passes on a broken input is not a check.
    ============================================================ */
 
+import { readFileSync } from 'node:fs';
 import {
   filmWindowAround, filmWindowForFlare, filmFitToNewest, filmTargets,
-  filmUnique, filmEveryMs, filmCostMb, FILM_MAX_FRAMES
+  filmUnique, filmEveryMs, filmCostMb, filmCrop, filmTextureMb,
+  FILM_MAX_FRAMES, FILM_FRAME_PX, FILM_FADE_START
 } from '../js/layers/sun/film.js';
 import { createSunFetch } from '../js/layers/sun/fetch.js';
+import { SOURCES, minimumField } from '../js/layers/sun/source.js';
+import { createSolarFilm } from '../js/ui/solar-film.js';
 
 /* ---- The fixture ------------------------------------------------------- */
 
@@ -57,12 +70,25 @@ const answersOf = rows => rows.map(([, id, obs]) => ({ id, date: DAY + ' ' + obs
 // The M1.0 itself, as SWPC lists it.
 const M10 = { begin: at('15:04'), peak: at('15:18'), end: at('15:27') };
 
+/* deriveGeometry for both sources, from getClosestImage at 10:48 UTC on
+   2026-09-13. */
+const AIA_ID = SOURCES.find(s => s.name === 'AIA 171').id;
+const C2_ID = SOURCES.find(s => s.name === 'LASCO C2').id;
+const AIA_GEOM = { nativeField: 1.288276844307512, rsun: 1589.3323, radiusArcsec: 959.6448419414534 };
+const C2_GEOM = { nativeField: 6.404823038543459, rsun: 80.64235294117648, radiusArcsec: 959.644 };
+
+/* The view at rest on a window of 1.248 : 1 (VIEW_R 1.65), and one zoomed in on
+   a region north-west of the centre. In solar radii. */
+const RESTING = { centre: { x: 0, y: 0 }, half: { w: 2.0591, h: 1.65 } };
+const REGION = { centre: { x: 0.42, y: 0.31 }, half: { w: 0.5, h: 0.4 } };
+
 /* ---- The checks -------------------------------------------------------- */
 
 const results = [];
 const ok = (name, detail) => results.push({ name, pass: true, detail });
 const bad = (name, detail) => results.push({ name, pass: false, detail });
 const hhmm = t => new Date(t).toISOString().slice(11, 16);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 function checkRaster(targetsOf) {
   const asked = targetsOf(filmWindowForFlare(M10)).times.map(hhmm);
@@ -143,27 +169,225 @@ function checkFailed(unique) {
   ok('failed', 'two lookups without an answer count as two failures, and nothing stands in for them');
 }
 
-/* Nine lookups and four renders at once, against a server that takes 20 ms per
-   answer and writes down how many of each kind it is serving at the same time. */
+/* Nine lookups, four stills and seven film frames at once, against a server
+   that takes 20 ms per answer and writes down how many of each kind it is
+   serving at the same time. */
 async function checkLanes(make) {
-  const active = { lookup: 0, render: 0 };
-  const most = { lookup: 0, render: 0 };
+  const active = { lookup: 0, still: 0, frame: 0 };
+  const most = { lookup: 0, still: 0, frame: 0 };
   const server = async target => {
-    const kind = /endpoint=takeScreenshot/.test(target) ? 'render' : 'lookup';
+    const kind = !/endpoint=takeScreenshot/.test(target) ? 'lookup' : /width=640\b/.test(target) ? 'frame' : 'still';
     active[kind]++;
     most[kind] = Math.max(most[kind], active[kind]);
-    await new Promise(r => setTimeout(r, 20));
+    await sleep(20);
     active[kind]--;
     return { ok: true, status: 200, json: async () => ({ id: '1', date: DAY + ' 15:00:00' }), blob: async () => ({ size: 1 }) };
   };
   const api = make({ fetch: server, gapMs: 1 });
+  const shot = px => ({ sourceId: 4, date: DAY + ' 15:00:00', imageScale: '11.9', x0: '0', y0: '0', px });
   const lookups = Array.from({ length: 9 }, (_, i) => api.closestImage(4, new Date(at('15:00') + i * 60e3)));
-  const renders = Array.from({ length: 4 }, () => api.screenshot({ sourceId: 4, date: DAY + ' 15:00:00', imageScale: '11.9', x0: '0', y0: '0', px: 64 }));
-  await Promise.all([...lookups, ...renders]);
+  const stills = Array.from({ length: 4 }, () => api.screenshot(shot(2048)));
+  const frames = Array.from({ length: 7 }, () => api.filmFrame(shot(640)));
+  await Promise.all([...lookups, ...stills, ...frames]);
   if (most.lookup !== 3) return bad('lanes', 'lookups ran ' + most.lookup + ' at a time instead of 3');
-  if (most.render !== 1) return bad('lanes', 'renders ran ' + most.render + ' at a time instead of 1');
-  if (api.stats().done !== 13) return bad('lanes', 'the counter says ' + api.stats().done + ' requests where 13 were made');
-  ok('lanes', 'nine lookups run three abreast while four renders take their turn one at a time, and all 13 are counted');
+  if (most.frame !== 3) return bad('lanes', 'film frames rendered ' + most.frame + ' at a time instead of 3');
+  if (most.still !== 1) return bad('lanes', 'stills rendered ' + most.still + ' at a time instead of 1');
+  if (api.stats().done !== 20) return bad('lanes', 'the counter says ' + api.stats().done + ' requests where 20 were made');
+  ok('lanes', 'nine lookups and seven film frames run three abreast while four stills take their turn one at a time, and all 20 are counted');
+}
+
+function checkCrop(crop) {
+  const resting = crop(RESTING, AIA_GEOM, minimumField(AIA_ID));
+  if (resting.field !== AIA_GEOM.nativeField || resting.centre.x !== 0 || resting.centre.y !== 0 ||
+      resting.px !== FILM_FRAME_PX) {
+    return bad('crop', 'the view at rest gets ' + resting.field.toFixed(3) + ' radii about (' + resting.centre.x +
+      ', ' + resting.centre.y + ') at ' + resting.px + ' px, not all of AIA 171 at ' + FILM_FRAME_PX);
+  }
+  const close = crop(REGION, AIA_GEOM, minimumField(AIA_ID));
+  if (close.centre.x !== REGION.centre.x || close.centre.y !== REGION.centre.y) {
+    return bad('crop', 'zoomed in on a region, the crop stands at (' + close.centre.x + ', ' + close.centre.y +
+      ') and not on the view');
+  }
+  const corner = Math.hypot(REGION.half.w, REGION.half.h);
+  if (corner > FILM_FADE_START * close.field + 1e-9) {
+    return bad('crop', 'the corners of the screen lie ' + corner.toFixed(3) + ' radii out, and the fade begins at ' +
+      (FILM_FADE_START * close.field).toFixed(3));
+  }
+  if (close.px > FILM_FRAME_PX ||
+      close.imageScale !== (2 * close.field * AIA_GEOM.radiusArcsec / close.px).toFixed(6) ||
+      close.x0 !== (REGION.centre.x * AIA_GEOM.radiusArcsec).toFixed(2) ||
+      close.y0 !== (REGION.centre.y * AIA_GEOM.radiusArcsec).toFixed(2)) {
+    return bad('crop', 'the request does not follow from the crop: ' + [close.imageScale, close.x0, close.y0, close.px].join(' '));
+  }
+  const corona = crop({ centre: { x: 0.1, y: 0 }, half: { w: 0.3, h: 0.25 } }, C2_GEOM, minimumField(C2_ID));
+  if (corona.field !== minimumField(C2_ID)) {
+    return bad('crop', 'deep inside the occulter of LASCO C2 the crop is ' + corona.field.toFixed(2) +
+      ' radii, not ' + minimumField(C2_ID));
+  }
+  const shader = readFileSync(new URL('../js/layers/sun/shader.js', import.meta.url), 'utf8');
+  const fade = shader.match(/smoothstep\(uEdge \* ([\d.]+), uEdge \* [\d.]+, r\)/);
+  if (!fade || +fade[1] !== FILM_FADE_START) {
+    return bad('crop', 'the shader starts its fade at ' + (fade ? fade[1] : 'no match') + ' of the field; film.js counts on ' +
+      FILM_FADE_START);
+  }
+  ok('crop', 'at rest all of AIA 171 at 640 px; on a region ' + close.field.toFixed(3) + ' radii about the view at ' +
+    close.imageScale + ' arcsec a pixel, corners inside the fade; LASCO C2 never inside ' + minimumField(C2_ID) + ' radii');
+}
+
+/* ---- A film against a fake Helioviewer ------------------------------------
+   The fixture's AIA 171 answers, frames of 380 KB, and textures that count
+   themselves. Gated, every frame and every decode waits until the check lets
+   it through, so a stop or a clear lands exactly between two steps instead of
+   wherever a timer puts it. */
+
+function filmRig({ gated = false, texture = t => t, api: wrap = a => a } = {}) {
+  const rig = {
+    source: AIA_ID, live: 0, made: 0, crops: 0, requests: [], blobs: [], decodes: [],
+    asking: 0, mostAsking: 0, flying: 0, mostFlying: 0
+  };
+  const wait = list => (gated ? new Promise(r => list.push(r)) : sleep(2));
+  const byMoment = new Map(AIA_171.map(([asked, id, obs]) => [at(asked), { id, date: DAY + ' ' + obs }]));
+  const api = wrap({
+    lookupWidth: 3,
+    frameWidth: 3,
+    async closestImage(sourceId, date) {
+      rig.asking++;
+      rig.mostAsking = Math.max(rig.mostAsking, rig.asking);
+      await sleep(2);
+      rig.asking--;
+      const t = date.getTime();
+      return byMoment.get(t) || (t >= at('16:30') ? { id: '191748001', date: DAY + ' 16:29:57' } : null);
+    },
+    async filmFrame(params) {
+      rig.requests.push(params);
+      rig.flying++;
+      rig.mostFlying = Math.max(rig.mostFlying, rig.flying);
+      await wait(rig.blobs);
+      rig.flying--;
+      return { size: 380000 };
+    }
+  });
+  rig.film = createSolarFilm({
+    api,
+    sourceOf: () => rig.source,
+    nameOf: () => 'AIA 171',
+    now: () => at('16:30'),
+    cropFor: () => { rig.crops++; return filmCrop(REGION, AIA_GEOM, minimumField(AIA_ID)); },
+    makeTexture: async () => {
+      await wait(rig.decodes);
+      rig.live++;
+      rig.made++;
+      return texture({ disposed: false, dispose() { if (!this.disposed) { this.disposed = true; rig.live--; } } });
+    }
+  });
+  return rig;
+}
+
+/* Everything waiting in one gate goes through, and whatever that sets moving runs. */
+async function letThrough(rig, gate) {
+  for (const r of rig[gate].splice(0)) r();
+  await sleep(0);
+}
+
+/* Both gates open until `promise` settles, or until it plainly never will. */
+async function drain(rig, promise) {
+  let settled = false;
+  promise.then(() => { settled = true; }, () => { settled = true; });
+  for (let i = 0; !settled && i < 500; i++) {
+    await letThrough(rig, 'blobs');
+    await letThrough(rig, 'decodes');
+  }
+}
+
+async function checkFetch(rigOf) {
+  const rig = rigOf();
+  await rig.film.lookUp({ flare: M10 });
+  const found = rig.film.state();
+  if (found.phase !== 'ready' || found.frames.length !== 21) {
+    return bad('fetch', 'the lookup ended ' + found.phase + ' with ' + found.frames.length + ' frames, not ready with 21');
+  }
+  if (rig.mostAsking !== 3) return bad('fetch', 'the lookups ran ' + rig.mostAsking + ' at a time instead of 3');
+  await rig.film.fetchFrames();
+  const s = rig.film.state();
+  const crops = new Set(rig.requests.map(p => [p.imageScale, p.x0, p.y0, p.px].join(' ')));
+  const dates = new Set(rig.requests.map(p => p.date));
+  if (rig.mostFlying !== 3) return bad('fetch', 'the frames were fetched ' + rig.mostFlying + ' at a time instead of 3');
+  if (rig.requests.length !== 21 || dates.size !== 21) {
+    return bad('fetch', rig.requests.length + ' requests for ' + dates.size + ' different frames, where 21 frames need 21');
+  }
+  if (crops.size !== 1 || rig.crops !== 1) {
+    return bad('fetch', 'the frames were asked with ' + crops.size + ' different crops, taken ' + rig.crops + ' times');
+  }
+  if (rig.requests.some(p => p.px > FILM_FRAME_PX)) return bad('fetch', 'a frame was asked larger than ' + FILM_FRAME_PX + ' px');
+  if (s.phase !== 'loaded' || s.held !== 21 || rig.live !== 21 || s.frames.some(f => !f.fetched)) {
+    return bad('fetch', 'after the fetch ' + s.held + ' frames are held and ' + rig.live + ' textures live, in phase ' + s.phase);
+  }
+  if (s.bytes !== 21 * 380000 || s.missing !== 0 || !s.pass || s.pass.got !== 21) {
+    return bad('fetch', 'the film counts ' + s.bytes + ' bytes, ' + s.missing + ' missing and ' +
+      (s.pass ? s.pass.got : 'no') + ' fetched');
+  }
+  const budget = filmTextureMb(FILM_MAX_FRAMES, FILM_FRAME_PX);
+  if (Math.abs(budget - 39.3) > 0.05) {
+    return bad('fetch', FILM_MAX_FRAMES + ' frames of ' + FILM_FRAME_PX + ' px come to ' + budget.toFixed(1) + ' MB of texture, not 39.3');
+  }
+  ok('fetch', 'lookups and frames three at a time; 21 frames asked once each with one crop (' + [...crops][0] +
+    '), 21 textures held, ' + (s.bytes / 1e6).toFixed(1) + ' MB fetched, ' + s.textureMb.toFixed(1) + ' MB as textures');
+}
+
+async function checkRelease(rigOf) {
+  let rig = rigOf();
+  await rig.film.lookUp({ flare: M10 });
+  await rig.film.fetchFrames();
+  const before = rig.live;
+  rig.film.clear();
+  if (before !== 21 || rig.live !== 0) return bad('release', 'clearing a film of ' + before + ' textures left ' + rig.live);
+
+  rig = rigOf();
+  await rig.film.lookUp({ flare: M10 });
+  await rig.film.fetchFrames();
+  await rig.film.lookUp({ flare: M10 });
+  if (rig.live !== 0) return bad('release', 'a new film kept ' + rig.live + ' textures of the one before');
+
+  rig = rigOf();
+  await rig.film.lookUp({ flare: M10 });
+  await rig.film.fetchFrames();
+  rig.source = C2_ID;
+  rig.film.sourceChanged();
+  if (rig.live !== 0 || rig.film.state().phase !== 'idle') {
+    return bad('release', 'another source in the bottom slot kept ' + rig.live + ' textures');
+  }
+
+  // A stop after three frames: the three on their way still land, nothing after them is asked.
+  rig = rigOf({ gated: true });
+  await rig.film.lookUp({ flare: M10 });
+  const stopped = rig.film.fetchFrames();
+  await letThrough(rig, 'blobs');
+  await letThrough(rig, 'decodes');
+  rig.film.stop();
+  await drain(rig, stopped);
+  const kept = rig.film.state();
+  if (kept.held !== 6 || kept.phase !== 'loaded' || rig.live !== 6 || rig.requests.length !== 6) {
+    return bad('release', 'a stop after three frames left ' + kept.held + ' held, ' + rig.live + ' live and ' +
+      rig.requests.length + ' asked, in phase ' + kept.phase);
+  }
+  await drain(rig, rig.film.fetchFrames());
+  if (rig.requests.length !== 21 || rig.live !== 21) {
+    return bad('release', 'fetching after the stop asked ' + (rig.requests.length - 6) + ' more and holds ' + rig.live);
+  }
+
+  // A clear while three pictures are being decoded: they arrive, and go straight back.
+  rig = rigOf({ gated: true });
+  await rig.film.lookUp({ flare: M10 });
+  const cleared = rig.film.fetchFrames();
+  await letThrough(rig, 'blobs');
+  rig.film.clear();
+  await drain(rig, cleared);
+  if (rig.made !== 3 || rig.live !== 0) {
+    return bad('release', rig.made + ' pictures were decoded after the clear, and ' + rig.live + ' textures stayed');
+  }
+
+  ok('release', 'clear, a new film and another source give back all 21 textures; a stop after three kept the six ' +
+    'that were on their way, and the next fetch asked for the other 15; three decoded after a clear went straight back');
 }
 
 /* ---- The control implementations --------------------------------------- */
@@ -191,6 +415,9 @@ checkNewest(filmFitToNewest);
 checkDedupe(filmUnique);
 checkFailed(filmUnique);
 await checkLanes(createSunFetch);
+checkCrop(filmCrop);
+await checkFetch(() => filmRig());
+await checkRelease(o => filmRig(o));
 
 for (const r of results) {
   console.log((r.pass ? '  ok    ' : '  FAIL  ') + r.name.padEnd(14) + r.detail);
@@ -203,8 +430,21 @@ const breaks = [
   ['a window left past the newest picture', () => checkNewest(win => win)],
   ['every answer its own frame', () => checkDedupe(everyAnswer)],
   ['failures dropped before counting', () => checkFailed(failuresDropped)],
-  ['lookups on the render queue', () => checkLanes(o => createSunFetch({ ...o, lookupWidth: 1 }))],
-  ['a lookup lane without a limit', () => checkLanes(o => createSunFetch({ ...o, lookupWidth: 99 }))]
+  ['a lookup lane one wide', () => checkLanes(o => createSunFetch({ ...o, lookupWidth: 1 }))],
+  ['a lookup lane without a limit', () => checkLanes(o => createSunFetch({ ...o, lookupWidth: 99 }))],
+  ['a frame lane one wide', () => checkLanes(o => createSunFetch({ ...o, frameWidth: 1 }))],
+  ['a frame lane without a limit', () => checkLanes(o => createSunFetch({ ...o, frameWidth: 99 }))],
+  ['a crop about the sun, whatever the view', () => checkCrop((v, g, m) => filmCrop({ ...v, centre: { x: 0, y: 0 } }, g, m))],
+  ['a crop without room for the fade', () => checkCrop((v, g, m) =>
+    filmCrop({ ...v, half: { w: Math.max(v.half.w, v.half.h) * FILM_FADE_START, h: 0 } }, g, m))],
+  ['lookups asked one at a time', () => checkFetch(() => filmRig({ api: a => ({ ...a, lookupWidth: 1 }) }))],
+  ['every other frame asked with its own crop', () => checkFetch(() => filmRig({
+    api: a => {
+      let k = 0;
+      return { ...a, filmFrame: p => a.filmFrame(k++ % 2 ? p : { ...p, imageScale: (+p.imageScale * 1.001).toFixed(6) }) };
+    }
+  }))],
+  ['textures that are never given back', () => checkRelease(o => filmRig({ ...o, texture: t => ({ ...t, dispose() {} }) }))]
 ];
 
 if (process.argv.includes('--selftest')) {
@@ -213,7 +453,7 @@ if (process.argv.includes('--selftest')) {
     const before = results.length;
     await runIt();
     const caught = results.length > before && results.slice(before).every(r => !r.pass);
-    console.log((caught ? '  ok    ' : '  FAIL  ') + ('break: ' + name).padEnd(46) + (caught ? 'caught' : 'SLIPPED THROUGH'));
+    console.log((caught ? '  ok    ' : '  FAIL  ') + ('break: ' + name).padEnd(52) + (caught ? 'caught' : 'SLIPPED THROUGH'));
     if (!caught) failed++;
     results.length = before;
   }

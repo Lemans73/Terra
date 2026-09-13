@@ -31,7 +31,7 @@ import { ageText } from './solar-orient.js';
 const $ = id => document.getElementById(id);
 
 export function createSolarPanel(env) {
-  const { state, onStatus } = env;
+  const { state, onStatus, onSourceChange } = env;
   const slots = [
     { sourceId: 10, opacity: 1 },
     { sourceId: 0, opacity: 1 },
@@ -84,6 +84,7 @@ export function createSolarPanel(env) {
         slot.sourceId = +sel.value;
         activePreset = null;
         refresh();
+        if (onSourceChange) onSourceChange();
       });
 
       const op = document.createElement('input');
@@ -146,6 +147,7 @@ export function createSolarPanel(env) {
     env.setViewR(p.viewR);
     buildSlots();
     refresh();
+    if (onSourceChange) onSourceChange();
     fetchAll();
   }
 

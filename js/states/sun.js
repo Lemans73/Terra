@@ -148,7 +148,7 @@ export function createSunState(THREE, env) {
     createSunFetch = null, imageScaleFor = null,
     SOURCE_BY_ID = null, isCoronagraph = null, deriveGeometry = null,
     textureSize = null, sharpness = null, earthInTexels = null,
-    minimumField = null, fieldFor = null, decodeTextureBitmap = null
+    minimumField = null, fieldFor = null, decodeTextureBitmap = null, filmCrop = null
   } = env.imagery || {};
 
   /* THE BARE SUN SAYS SO ON THE BODY, and it says it by looking at what arrived
@@ -639,6 +639,50 @@ export function createSunState(THREE, env) {
     return describeSlot(index);
   }
 
+  /* ----------------------------------------------------------------------
+     A FILM'S FRAMES. js/ui/solar-film.js asks, and this state answers,
+     because it knows the view and the renderer.
+
+     THE CROP IS THE FRAME ON SCREEN: where the controls look and how far
+     the extents reach, both in solar radii, through film.js's filmCrop.
+     The geometry comes from one getClosestImage answer of the film, so
+     every frame is rendered with the same numbers.
+
+     A FRAME'S TEXTURE IS MADE LIKE A SLOT'S — the same decoder, no flip, no
+     mipmaps — and uploaded at once, so a film that plays swaps a uniform
+     and never waits on an upload. The bitmap is closed after the upload:
+     the pixels are on the GPU by then, and a copy in memory would double
+     what every frame costs. Without a renderer it stays open, or the
+     texture could never be uploaded at all.
+  ---------------------------------------------------------------------- */
+  function frameCrop(sourceId, meta) {
+    if (!filmCrop) throw new Error('sun state: no imagery half, no film');
+    const geom = deriveGeometry(meta, isCoronagraph(sourceId));
+    const ctl = world.controls();
+    const e = extents();
+    const view = {
+      centre: ctl ? { x: ctl.target.x / SUN_WORLD_R, y: ctl.target.y / SUN_WORLD_R } : { x: 0, y: 0 },
+      half: { w: e.hw / SUN_WORLD_R, h: e.hh / SUN_WORLD_R }
+    };
+    return filmCrop(view, geom, minimumField(sourceId));
+  }
+
+  async function frameTexture(blob) {
+    const bitmap = await decodeTextureBitmap(blob);
+    const texture = new THREE.Texture(bitmap);
+    texture.flipY = false;
+    texture.generateMipmaps = false;
+    texture.minFilter = THREE.LinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    texture.needsUpdate = true;
+    const renderer = world.renderer();
+    if (renderer) {
+      renderer.initTexture(texture);
+      bitmap.close();
+    }
+    return texture;
+  }
+
   /* What a slot is showing, in the terms the provenance block needs: which
      instrument, when, how old, and how sharp. `ageMinutes` is the one that
      belongs on screen rather than in a panel — AIA runs about fifty minutes
@@ -777,6 +821,8 @@ export function createSunState(THREE, env) {
     loadSlot,
     clearSlot,
     describeSlot,
+    frameCrop,
+    frameTexture,
     setViewR,
     viewR: () => viewR,
     spots,

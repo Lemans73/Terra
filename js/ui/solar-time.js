@@ -31,7 +31,8 @@
 
    THE FLIPBOOK SHARES THE STRIP. Film looks up the frames around the moment
    (js/ui/solar-film.js); the strip draws their stretch with one tick per
-   picture, and the row says what fetching them would cost.
+   picture, the row says what fetching them costs, and a tick grows when its
+   frame is in.
 
    THE DRAWING IS chart.js, UNCHANGED — it is a byte-identical copy of the
    proof of concept. What this file supplies is a canvas with a size, a
@@ -118,6 +119,11 @@ function fmtEvery(ms) {
   return (ms / 3600e3).toFixed(1) + ' h';
 }
 
+/* Megabytes the way a reader counts them: a decimal below ten, whole ones above. */
+function fmtMb(mb) {
+  return (mb < 9.95 ? mb.toFixed(1) : String(Math.round(mb))) + ' MB';
+}
+
 export function createSolarTime(deps) {
   const { feed, clock, moment, isLive, Chart, fmtStamp, formatOffset } = deps;
   /* All optional. `onScreen` says what the image on screen is; `onFetch` and
@@ -159,6 +165,7 @@ export function createSolarTime(deps) {
   let dragging = false;
   let noteTimer = null;
   let filmPhase = 'idle';        // the phase the film was in at its last update
+  let filmPassNoted = null;      // the fetch whose outcome the note has told
   const S = { w: 0, h: 0, dpr: 0, from: 0, to: 0, plotW: 0, lastDraw: 0, pending: null };
 
   const currentWindow = () => SOLAR_WINDOWS[windowIndex];
@@ -344,10 +351,13 @@ export function createSolarTime(deps) {
 
   /* THE FILM'S STRETCH AND ITS PICTURES, over the lane: a soft band from the
      window's start to its end, a line along its top, and one tick per unique
-     picture at the top edge, where the observation time puts it. Drawn under
-     the ring and the hover box. */
+     picture at the top edge, where the observation time puts it. A tick grows
+     when its frame is in, so the strip fills while the fetch runs, and fades
+     when its frame did not come through. Drawn under the ring and the hover
+     box. */
   function drawFilm(result) {
     S.filmTicks = 0;
+    S.filmFetchedTicks = 0;
     if (!film || !result || !result.layout || !result.layout[0]) return;
     const f = film.state();
     if (f.phase === 'idle' || !f.window) return;
@@ -363,17 +373,18 @@ export function createSolarTime(deps) {
       ctx.globalAlpha = 0.8;
       ctx.fillRect(x0, top, x1 - x0, 1.5);
     }
-    ctx.globalAlpha = 1;
     ctx.strokeStyle = palette.film;
     ctx.lineWidth = 1;
     for (const frame of f.frames) {
       const x = result.xOf(frame.time);
       if (x < left || x > right) continue;
+      ctx.globalAlpha = frame.lost ? 0.35 : 1;
       ctx.beginPath();
       ctx.moveTo(Math.round(x) + 0.5, top);
-      ctx.lineTo(Math.round(x) + 0.5, top + 7);
+      ctx.lineTo(Math.round(x) + 0.5, top + (frame.fetched ? 13 : 7));
       ctx.stroke();
       S.filmTicks++;
+      if (frame.fetched) S.filmFetchedTicks++;
     }
     ctx.restore();
   }
@@ -454,10 +465,10 @@ export function createSolarTime(deps) {
   }
 
   /* THE FILM'S HALF OF THE ROW. Film becomes ✕ while a film is on, and the
-     middle of the row says where the lookup is, what the frames would cost, or
-     why there are none. Which of the two middles shows is the stylesheet's,
-     keyed on data-film. Fetching the frames is the next step of the flipbook, so
-     the cost stands on a button that does not press yet. */
+     middle of the row carries the film: where the lookup is, what fetching the
+     frames would cost, how far a fetch is (pressed then, it stops, and what
+     arrived stays), and what the film holds. Which of the two middles shows is
+     the stylesheet's, keyed on data-film. */
   function refreshFilmRow() {
     if (!film || !btnFilm || !btnFilmGo) return;
     const f = film.state();
@@ -467,36 +478,63 @@ export function createSolarTime(deps) {
     btnFilm.title = on ? 'Clear the film' : 'Look up the frames for a film around this moment';
     btnFilm.setAttribute('aria-label', on ? 'Clear the film' : 'Film');
     btnFilm.classList.toggle('on', on);
-    btnFilmGo.disabled = true;
+    const every = f.everyMs != null ? ', every ' + fmtEvery(f.everyMs) : '';
+    let text = '', title = '', pressable = false;
     if (f.phase === 'lookup') {
-      btnFilmGo.textContent = f.targets.length
+      text = f.targets.length
         ? 'Looking up ' + f.done + ' of ' + f.targets.length + '…'
         : 'Looking up…';
-      btnFilmGo.title = 'Finding which pictures ' + (f.source || 'the source') + ' has for these moments';
-    } else if (f.phase === 'ready') {
-      const n = f.frames.length;
-      btnFilmGo.textContent = 'Fetch ' + n + (n === 1 ? ' frame' : ' frames') +
+      title = 'Finding which pictures ' + (f.source || 'the source') + ' has for these moments';
+    } else if (f.phase === 'ready' || (f.phase === 'loaded' && f.missing)) {
+      const n = f.missing;
+      text = (f.held ? 'Fetch ' + n + ' more' : 'Fetch ' + n + (n === 1 ? ' frame' : ' frames')) +
         ' · ≈ ' + Math.max(1, Math.round(f.costMb)) + ' MB';
-      btnFilmGo.title = n + ' pictures of ' + f.source + ' from ' + f.targets.length + ' moments' +
-        (f.everyMs != null ? ', every ' + fmtEvery(f.everyMs) : '');
+      title = f.frames.length + ' pictures of ' + f.source + ' from ' + f.targets.length + ' moments' + every;
+      pressable = true;
+    } else if (f.phase === 'fetching') {
+      text = 'Stop · ' + f.held + ' of ' + f.frames.length + ' · ' + fmtMb(f.bytes / 1e6);
+      title = 'Stop fetching; the frames that are in stay';
+      pressable = true;
+    } else if (f.phase === 'loaded') {
+      text = f.held + (f.held === 1 ? ' frame · ' : ' frames · ') + fmtMb(f.bytes / 1e6);
+      title = f.held + ' pictures of ' + f.source + every + ', ' + fmtMb(f.textureMb) + ' as textures';
     } else if (f.phase === 'error') {
-      btnFilmGo.textContent = f.reason || 'No film';
-      btnFilmGo.title = f.reason || '';
+      text = f.reason || 'No film';
+      title = f.reason || '';
     }
+    btnFilmGo.textContent = text;
+    btnFilmGo.title = title;
+    btnFilmGo.disabled = !pressable;
   }
 
   /* A film changed. Its stretch has to be on the strip, so the window widens
      when it starts to the left of it — never narrows. When the lookup is done,
-     one line says what came of it, and whether the film had to end early. */
+     and when a fetch has ended, one line says what came of it. */
   function onFilmUpdate() {
     const f = film.state();
     if (entered && f.window && f.window.from < range().from) {
       const i = windowFor(f.window.from);
       if (i > windowIndex) setWindow(i);
     }
-    if (entered && f.phase === 'ready' && filmPhase !== 'ready') showNote(filmNote(f));
+    if (entered && f.phase === 'ready' && filmPhase === 'lookup') showNote(filmNote(f));
+    if (entered && f.pass && f.pass.turn !== filmPassNoted) {
+      filmPassNoted = f.pass.turn;
+      showNote(fetchNote(f));
+    }
     filmPhase = f.phase;
     draw();
+  }
+
+  /* What a fetch came to: what the film holds now, and what this fetch took. */
+  function fetchNote(f) {
+    const p = f.pass;
+    let text = p.stopped
+      ? 'Stopped: ' + f.held + ' of ' + f.frames.length + ' frames stay.'
+      : f.held + (f.held === 1 ? ' frame of ' : ' frames of ') + f.source + ' in memory, ' +
+        fmtMb(f.textureMb) + ' as textures.';
+    text += ' Fetched ' + fmtMb(p.bytes / 1e6) + ' in ' + (p.ms / 1000).toFixed(1) + ' s.';
+    if (p.failed) text += ' ' + p.failed + (p.failed === 1 ? ' frame' : ' frames') + ' did not come through.';
+    return text;
   }
 
   function filmNote(f) {
@@ -642,6 +680,14 @@ export function createSolarTime(deps) {
     if (film.state().phase !== 'idle') { film.clear(); return; }
     film.lookUp({ cursor: cursorTime(), flare: onPeak() });
   });
+  /* The middle of the film's row fetches the frames that are not in yet, and
+     stops a fetch that runs. */
+  btnFilmGo?.addEventListener('click', () => {
+    if (!film) return;
+    const { phase } = film.state();
+    if (phase === 'fetching') film.stop();
+    else if (phase === 'ready' || phase === 'loaded') film.fetchFrames();
+  });
 
   const unsubscribe = feed.onUpdate(() => draw());
   const unsubscribeFilm = film ? film.onUpdate(onFilmUpdate) : () => {};
@@ -736,7 +782,9 @@ export function createSolarTime(deps) {
       film: film ? {
         phase: film.state().phase,
         ticks: S.filmTicks || 0,
+        fetchedTicks: S.filmFetchedTicks || 0,
         row: btnFilmGo ? btnFilmGo.textContent : null,
+        rowPressable: btnFilmGo ? !btnFilmGo.disabled : null,
         button: btnFilm ? btnFilm.textContent : null,
         note: note && !note.hidden ? note.textContent : null
       } : null,

@@ -2,9 +2,10 @@
    TERRA — Sun · which frames a film is made of
    ------------------------------------------------------------
    The flipbook shows one source over a stretch of time, frame by
-   frame. Before a single picture is fetched, three things are decided
+   frame. Before a single picture is fetched, four things are decided
    here, pure and testable in node: the stretch, the moments asked for,
-   and which of the answers are really different pictures.
+   which of the answers are really different pictures, and the crop
+   every frame is rendered with.
 
    THE STRETCH FOLLOWS WHAT IS BEING LOOKED AT. On a flare's peak it is
    that flare, from half an hour before it began to half an hour after
@@ -22,10 +23,17 @@
    minutes around the M1.0 of 5 September, one lookup every 4 minutes:
    21 pictures of AIA 171, and 8 of LASCO C2.
 
+   ONE CROP SERVES THE WHOLE FILM: the frame on screen when its first
+   frame is fetched. Every frame is rendered with the same imageScale,
+   x0 and y0, so each lies exactly over the one before.
+
    PREFIXED NAMES, because tools/build-standalone.mjs pours modules into
    one script, and a bare `targets` or `unique` is exactly the kind of
    name another module has too.
    ============================================================ */
+
+import { textureSize } from './source.js';
+import { imageScaleFor } from './fetch.js';
 
 /* At most this many moments per film. Plan 52 settled on 24 frames at 8 fps:
    three seconds, enough to see a flare rise and decay. */
@@ -37,6 +45,15 @@ export const FILM_FLARE_MARGIN_MS = 30 * 60e3;
 /* What one frame costs to download, in MB. Measured at 640 px in session 52:
    AIA 171 386 KB, LASCO C3 311 KB. It is an estimate, and the row says so. */
 export const FILM_MB_PER_FRAME = 0.4;
+
+/* A frame is at most this many pixels square, which keeps a whole film at
+   24 × 640² × 4 B = 39 MB of texture. */
+export const FILM_FRAME_PX = 640;
+
+/* Where the plane's round fade begins, as a fraction of the field: the
+   `uEdge * 0.86` in js/layers/sun/shader.js. A crop that puts the corners of the
+   screen inside it shows the whole screen unfaded. */
+export const FILM_FADE_START = 0.86;
 
 /** Six hours around a moment. */
 export function filmWindowAround(t, spanMs = FILM_SPAN_MS) {
@@ -119,3 +136,37 @@ export function filmEveryMs(frames) {
 }
 
 export const filmCostMb = (count, mbPerFrame = FILM_MB_PER_FRAME) => count * mbPerFrame;
+
+/**
+ * The crop every frame of a film is rendered with.
+ *
+ * The frame on screen, square, with its corners inside the fade. A frame that
+ * reaches as far as the instrument does gets the instrument's whole field about
+ * the sun instead, the way a still is fetched on a first look: past that there
+ * is nothing to render. Never inside `minField`, which for a coronagraph is the
+ * occulter with room to spare.
+ *
+ * @param {object} view  centre {x, y} and half-extents {w, h}, in solar radii
+ * @param {object} geom  nativeField, rsun and radiusArcsec, from deriveGeometry
+ * @param {number} minField  minimumField(sourceId)
+ * @returns {{field, centre, px, imageScale, x0, y0}}  the last three as the
+ *   request carries them, so every frame asks with the same strings
+ */
+export function filmCrop(view, geom, minField, maxPx = FILM_FRAME_PX) {
+  let field = Math.max(Math.hypot(view.half.w, view.half.h) / FILM_FADE_START, minField);
+  let centre = { x: view.centre.x, y: view.centre.y };
+  if (field >= geom.nativeField) {
+    field = geom.nativeField;
+    centre = { x: 0, y: 0 };
+  }
+  const px = textureSize(field, geom.rsun, maxPx);
+  return {
+    field, centre, px,
+    imageScale: imageScaleFor(field, px, geom.radiusArcsec).toFixed(6),
+    x0: (centre.x * geom.radiusArcsec).toFixed(2),
+    y0: (centre.y * geom.radiusArcsec).toFixed(2)
+  };
+}
+
+/* What frames weigh as textures, in MB: four bytes a texel, no mipmaps. */
+export const filmTextureMb = (count, px) => count * px * px * 4 / 1e6;
