@@ -148,7 +148,7 @@ export function createSunState(THREE, env) {
     createSunFetch = null, imageScaleFor = null,
     SOURCE_BY_ID = null, isCoronagraph = null, deriveGeometry = null,
     textureSize = null, sharpness = null, earthInTexels = null,
-    minimumField = null, fieldFor = null
+    minimumField = null, fieldFor = null, decodeTextureBitmap = null
   } = env.imagery || {};
 
   /* THE BARE SUN SAYS SO ON THE BODY, and it says it by looking at what arrived
@@ -604,8 +604,11 @@ export function createSunState(THREE, env) {
       px
     });
 
-    const bitmap = await createImageBitmap(blob);
+    /* Turned over while it is decoded, for a texture that does not flip: WebGL
+       ignores `flipY` on an ImageBitmap. See js/core/texture-bitmap.js. */
+    const bitmap = await decodeTextureBitmap(blob);
     const texture = new THREE.Texture(bitmap);
+    texture.flipY = false;
     texture.needsUpdate = true;
     texture.generateMipmaps = false;
     texture.minFilter = THREE.LinearFilter;
@@ -626,8 +629,7 @@ export function createSunState(THREE, env) {
       opacity: opts.opacity == null ? 1 : opts.opacity,
       luma: opts.mode === 'luma' || opts.mode === 'lumaAdd' || corona,
       mode: opts.mode || 'normal',
-      coronagraph: corona,
-      flipY: false
+      coronagraph: corona
     });
 
     // A coronagraph's occulter would be lit from behind by the glow.

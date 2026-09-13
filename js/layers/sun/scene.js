@@ -198,7 +198,6 @@ export function createSunScene(THREE) {
       u.uCenter.value.set(opts.centre.x, opts.centre.y);
       u.uOpacity.value = opts.opacity;
       u.uLuma.value = opts.luma ? 1 : 0;
-      u.uFlipY.value = opts.flipY ? 1 : 0;
     }
     // A coronagraph has no disc to show: its occulter covers exactly the part
     // a sphere would draw. Drawing one anyway paints the occulter's flat grey

@@ -26,13 +26,15 @@
      2  three IGNORES texture.flipY ON AN ImageBitmap. The
         orientation has to be right at DECODE time, otherwise
         every tile is upside down inside its own frame and the
-        north pole lands in the tropics.
+        north pole lands in the tropics. One decoder does that for
+        every image texture: js/core/texture-bitmap.js.
      3  TEXTURE MEMORY IS COUNTED IN BYTES, NOT IN TILES. A
         512-pixel tile with mipmaps is about 1.4 MB on the GPU.
         Seven hundred of those is a gigabyte.
    ============================================================ */
 
 import { TILE_SOURCES, TILE_MB, tileUrl } from './sources.js';
+import { decodeTextureBitmap } from '../../core/texture-bitmap.js';
 
 export function createTileLoader(THREE, opts = {}) {
   const haal = opts.fetch || ((...a) => fetch(...a));
@@ -99,25 +101,6 @@ export function createTileLoader(THREE, opts = {}) {
     if (b.fails.length >= NET.breakerFails && b.openTot <= t) {
       b.openTot = t + NET.breakerCooldown;
       b.fails.length = 0;
-    }
-  }
-
-  /* ---- decoderen ---------------------------------------------------------- */
-
-  async function decodeTegel(blob) {
-    try {
-      return await createImageBitmap(blob, { imageOrientation: 'flipY' });
-    } catch {
-      /* Oudere browsers kennen imageOrientation niet. Dan zelf omkeren, want een
-         tegel die ondersteboven staat is erger dan een tegel die traag komt. */
-      const bmp = await createImageBitmap(blob);
-      const c = document.createElement('canvas');
-      c.width = bmp.width; c.height = bmp.height;
-      const g = c.getContext('2d');
-      g.translate(0, bmp.height); g.scale(1, -1);
-      g.drawImage(bmp, 0, 0);
-      bmp.close();
-      return createImageBitmap(c);
     }
   }
 
@@ -230,7 +213,7 @@ export function createTileLoader(THREE, opts = {}) {
       if (bewaard) {
         stats.cacheHits++; stats.cacheBytes += bewaard.size;
         bucket.tokens = Math.min(NET.burst, bucket.tokens + 1);
-        bitmap = await decodeTegel(bewaard);
+        bitmap = await decodeTextureBitmap(bewaard);
       } else {
         stats.sent++;
         const res = await haal(url, { signal: e.controller.signal, mode: 'cors', credentials: 'omit' });
@@ -249,7 +232,7 @@ export function createTileLoader(THREE, opts = {}) {
         const blob = await res.blob();
         stats.bytes += blob.size;                 // echte bytes, geen schatting
         if (schijf) schijf.put(url, blob);        // bewust niet afwachten
-        bitmap = await decodeTegel(blob);
+        bitmap = await decodeTextureBitmap(blob);
       }
 
       // Ondertussen weggekeken? Dan is dit beeld niets meer waard.

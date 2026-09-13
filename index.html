@@ -2391,6 +2391,7 @@ import {
   SOURCE_BY_ID, isCoronagraph, deriveGeometry, textureSize, sharpness, earthInTexels,
   minimumField, fieldFor
 } from './js/layers/sun/source.js';
+import { decodeTextureBitmap } from './js/core/texture-bitmap.js';
 import { createSolarPanel } from './js/ui/solar-panel.js';
 /* SOLAR:END */
 // De magnetosfeer (sessie 29). De fysica komt uit de klassieke scripts
@@ -13200,7 +13201,7 @@ solarImageryState = createSunState(THREE, {
   imagery: {
     createSunFetch, imageScaleFor,
     SOURCE_BY_ID, isCoronagraph, deriveGeometry, textureSize, sharpness,
-    earthInTexels, minimumField, fieldFor
+    earthInTexels, minimumField, fieldFor, decodeTextureBitmap
   },
   /* SOLAR:END */
 

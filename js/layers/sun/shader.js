@@ -65,7 +65,6 @@ uniform float uWorldR;     // one solar radius, in world units
 uniform float uIsSphere;
 uniform float uHasSphere;  // does this layer have a sphere as well?
 uniform float uHasMap;
-uniform float uFlipY;
 
 varying vec3 vNormalView;
 varying vec3 vWorld;
@@ -82,7 +81,6 @@ void main() {
   float r = length(d);
 
   vec2 p = d * uSunFrac * 0.5;
-  if (uFlipY > 0.5) p.y = -p.y;
   vec2 uv = vec2(0.5) + p;
   if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) discard;
 
@@ -138,7 +136,6 @@ export function sunUniforms(THREE, isSphere, worldR) {
     uWorldR:    { value: worldR },
     uIsSphere:  { value: isSphere ? 1 : 0 },
     uHasSphere: { value: 1 },
-    uHasMap:    { value: 0 },
-    uFlipY:     { value: 0 }
+    uHasMap:    { value: 0 }
   };
 }
