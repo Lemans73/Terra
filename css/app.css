@@ -145,6 +145,7 @@
     --solar-class: rgba(160,180,210,0.42);
     --solar-onscreen: #ffb347;
     --solar-flag: #d4564f;
+    --solar-film: #7fd1c7;
     /* The flare classes, weakest to strongest: a quiet grey for A and B, then
        blue, orange and red. None of them is the dashed amber of the image on
        screen, which is a different kind of mark. The flare card takes its colour
@@ -2790,7 +2791,9 @@
      standalone has it as well. Only its Fetch button belongs to the imagery
      half, and without that half there is nothing to fetch. */
   body.solar-on .time-island { display: none; }
-  body.solar-bare #sol-fetch { display: none; }
+  body.solar-bare #sol-fetch,
+  body.solar-bare #sol-film,
+  body.solar-bare #sol-film-go { display: none; }
 
   /* The lane. Same box as the magnetosphere strip, and for the same reasons:
      the size lives here and the buffer in JS, the ring is an inset shadow so it
@@ -2810,7 +2813,15 @@
   /* A week on 560 px is 18 minutes a pixel. Between the panels it has room. */
   body.solar-on .solar-time { max-width: none; }
   .sol-actions { justify-content: flex-start; }
-  .sol-fetch { font-variant-numeric: tabular-nums; }
+  .sol-fetch, .sol-film-go { font-variant-numeric: tabular-nums; }
+  /* WHILE A FILM IS ON, ITS ROW TAKES THE MIDDLE: the lookup, what the frames
+     would cost, or why there are none. Fetch comes back when the film is
+     cleared. Switched on the strip's own data-film, because .play-btn sets
+     display and the hidden attribute loses to that. */
+  #solar-time:not([data-film="lookup"]):not([data-film="ready"]):not([data-film="error"]) #sol-film-go,
+  #solar-time[data-film="lookup"] #sol-fetch,
+  #solar-time[data-film="ready"] #sol-fetch,
+  #solar-time[data-film="error"] #sol-fetch { display: none; }
   /* Why a moment was not kept. It shows for a few seconds, above the lane. */
   .sol-note {
     align-self: flex-start;

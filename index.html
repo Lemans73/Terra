@@ -421,17 +421,22 @@
        (css/app.css). It reuses the island's row classes, so every grid and
        mobile rule written for those holds here as well.
 
-       The first column is empty for now; the flipbook's playback buttons go
-       there. The note above the lane says why a moment was not kept. -->
+       The first column holds the flipbook: Film looks up the frames around the
+       moment, and while a film is on, its row takes the place of Fetch. The note
+       above the lane says why a moment was not kept, or what a film came to. -->
   <div class="solar-time" id="solar-time">
     <div class="sol-note" id="sol-note" hidden></div>
     <canvas class="solar-lane" id="solar-lane"
       aria-label="GOES X-ray flux over time; drag to choose a moment"></canvas>
     <div class="ti-row">
-      <div class="ti-play"></div>
+      <div class="ti-play">
+        <button class="play-btn sol-film" id="sol-film" type="button"
+        title="Look up the frames for a film around this moment" aria-label="Film">Film</button>
+      </div>
       <div class="ti-slider sol-actions">
         <button class="play-btn sol-fetch" id="sol-fetch" type="button"
         title="Fetch the images at this moment">Fetch</button>
+        <button class="play-btn sol-film-go" id="sol-film-go" type="button" disabled></button>
       </div>
       <div class="ti-now">
         <button class="ti-val" id="sol-val" type="button"
@@ -2393,6 +2398,7 @@ import {
 } from './js/layers/sun/source.js';
 import { decodeTextureBitmap } from './js/core/texture-bitmap.js';
 import { createSolarPanel } from './js/ui/solar-panel.js';
+import { createSolarFilm } from './js/ui/solar-film.js';
 /* SOLAR:END */
 // De magnetosfeer (sessie 29). De fysica komt uit de klassieke scripts
 // hierboven (globalThis.TerraCore) en niet uit een import: zie
@@ -8610,7 +8616,7 @@ let msphereState = null, msphereBoundary = null, msphereTransport = null;
 // langere naam: dit is de STATE, dat zijn de MEETWAARDEN. `solarPanel` blijft
 // null wanneer de instrumenthelft is weggeknipt; niemand leest hem dan.
 let solarImageryState = null, solarPanel = null, solarOrient = null, solarMap = null;
-let solarFeed = null, solarTime = null;
+let solarFeed = null, solarTime = null, solarFilm = null;
 let msphereGrid = null, msphereStrip = null, msphereLines = null, msphereScale = null;
 let msphereWind = null, msphereDipole = null, msphereCraft = null;
 let disks = null, lagrange = null, orbits = null, environment = null;
@@ -9302,6 +9308,12 @@ function flareView(f) {
     actions.push({ label: 'Fetch this moment', icon: ICON_MOMENT,
       title: 'Fetch the images at the peak of this flare, with the sources chosen in the panel.',
       run: () => { sceneClock.zet(new Date(f.peak)); if (solarTime) solarTime.refresh(); solarPanel.fetchAll(); } });
+  }
+  // The film of this flare: half an hour on either side, for the same source.
+  if (solarFilm && f.peak != null) {
+    actions.push({ label: 'Film this flare', icon: ICON_FILM,
+      title: 'Look up the frames from half an hour before this flare to half an hour after it, for the source in the bottom slot.',
+      run: () => { sceneClock.zet(new Date(f.peak)); if (solarTime) solarTime.refresh(); solarFilm.lookUp({ flare: f }); } });
   }
   return {
     kind: 'flare',
@@ -11538,6 +11550,7 @@ function eventTijd(t) {
    omdat je de bol wilt zien, en op een telefoon ligt daar een sheet overheen. */
 const ICON_PLEK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><path d="M12 1v3M12 20v3M1 12h3M20 12h3"/></svg>';
 const ICON_MOMENT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/></svg>';
+const ICON_FILM = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 5v14M17 5v14M3 9.5h4M3 14.5h4M17 9.5h4M17 14.5h4"/></svg>';
 // De antipode: een bol met een koorde er dwars doorheen en een punt aan elk uiteinde.
 // Bewust GEEN pijl — die zou een richting suggereren, en er gaat niets van de ene
 // kant naar de andere.
@@ -13300,6 +13313,15 @@ solarPanel = createSolarPanel({
 });
 solarPanel.mount();
 
+/* The film's controller (js/ui/solar-film.js). It asks the same queue as the
+   panel, for the source in the panel's bottom slot: the layer the disc comes
+   from. */
+solarFilm = createSolarFilm({
+  api: solarImageryState.api,
+  sourceOf: () => (solarPanel.slots()[0] || {}).sourceId || 0,
+  nameOf: (id) => (SOURCE_BY_ID.get(id) || {}).name || 'source ' + id
+});
+
 /* SOLAR:END */
 
 /* THE TIME STRIP UNDER THE SUN (js/ui/solar-time.js).
@@ -13329,6 +13351,7 @@ try {
       return null;
     },
     onFetch: solarPanel ? () => solarPanel.fetchAll() : null,
+    film: solarFilm,
     onFlare: showFlare,
     onDrawn: solarMomentChanged
   });
@@ -14163,6 +14186,7 @@ if (IS_LOCAL) {
     solarState: () => solarImageryState,
     labelPassThrough: () => labelPassThrough.stats(),
     solarTime: () => (solarTime ? solarTime.state() : null),
+    solarFilm: () => (solarFilm ? solarFilm.state() : null),
 
     /* DE WOLKENSCHIL, om te kunnen zien WAAROM hij weg is. `visible: false` en
        `bestaat: false` geven hetzelfde beeld op het scherm en vragen een andere

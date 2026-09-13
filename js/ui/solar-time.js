@@ -29,6 +29,10 @@
    peak and the moment clicks onto it exactly; sweep past and the lane lets
    the pointer through (js/layers/sun/lane.js, the magnet).
 
+   THE FLIPBOOK SHARES THE STRIP. Film looks up the frames around the moment
+   (js/ui/solar-film.js); the strip draws their stretch with one tick per
+   picture, and the row says what fetching them would cost.
+
    THE DRAWING IS chart.js, UNCHANGED — it is a byte-identical copy of the
    proof of concept. What this file supplies is a canvas with a size, a
    palette, a window, and the pointer.
@@ -73,7 +77,7 @@ const SOLAR_SCALE = { lo: -8, hi: -3, tick: 1, log: true };
 const SOLAR_PALETTE = {
   ink: '--ink', inkDim: '--ink-dim', inkFaint: '--ink-faint', hair: '--hair',
   measured: '--solar-measured', classLine: '--solar-class', onScreen: '--solar-onscreen',
-  flag: '--solar-flag',
+  flag: '--solar-flag', film: '--solar-film',
   A: '--solar-flare-b', B: '--solar-flare-b', C: '--solar-flare-c',
   M: '--solar-flare-m', X: '--solar-flare-x'
 };
@@ -107,12 +111,20 @@ function fmtUtc(t) {
   return new Date(t).toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
 }
 
+/* How far apart a film's frames are, in the unit a reader counts in. */
+function fmtEvery(ms) {
+  if (ms < 90e3) return Math.round(ms / 1000) + ' s';
+  if (ms < 90 * 60e3) return Math.round(ms / 60e3) + ' min';
+  return (ms / 3600e3).toFixed(1) + ' h';
+}
+
 export function createSolarTime(deps) {
   const { feed, clock, moment, isLive, Chart, fmtStamp, formatOffset } = deps;
-  /* Both optional. `onScreen` says what the image on screen is; `onFetch` is
-     absent in the standalone, where there is nothing to fetch. */
+  /* All optional. `onScreen` says what the image on screen is; `onFetch` and
+     `film` are absent in the standalone, where there is nothing to fetch. */
   const onScreen = deps.onScreen || (() => null);
   const onFetch = deps.onFetch || null;
+  const film = deps.film || null;
   // Opens the flare's card; the strip has already put the moment on its peak.
   const onFlare = deps.onFlare || null;
   // Told after every redraw, for the flare labels on the sun.
@@ -123,6 +135,8 @@ export function createSolarTime(deps) {
   const btnWindow = document.getElementById('sol-window');
   const btnMoment = document.getElementById('sol-val');
   const btnFetch = document.getElementById('sol-fetch');
+  const btnFilm = document.getElementById('sol-film');
+  const btnFilmGo = document.getElementById('sol-film-go');
   const note = document.getElementById('sol-note');
   if (!root || !canvas || !Chart) return null;
 
@@ -144,6 +158,7 @@ export function createSolarTime(deps) {
   let hoverX = null;
   let dragging = false;
   let noteTimer = null;
+  let filmPhase = 'idle';        // the phase the film was in at its last update
   const S = { w: 0, h: 0, dpr: 0, from: 0, to: 0, plotW: 0, lastDraw: 0, pending: null };
 
   const currentWindow = () => SOLAR_WINDOWS[windowIndex];
@@ -327,6 +342,42 @@ export function createSolarTime(deps) {
     ctx.restore();
   }
 
+  /* THE FILM'S STRETCH AND ITS PICTURES, over the lane: a soft band from the
+     window's start to its end, a line along its top, and one tick per unique
+     picture at the top edge, where the observation time puts it. Drawn under
+     the ring and the hover box. */
+  function drawFilm(result) {
+    S.filmTicks = 0;
+    if (!film || !result || !result.layout || !result.layout[0]) return;
+    const f = film.state();
+    if (f.phase === 'idle' || !f.window) return;
+    const { top, bot } = result.layout[0];
+    const left = Chart.PAD, right = Chart.PAD + S.plotW;
+    const x0 = Math.max(left, result.xOf(f.window.from));
+    const x1 = Math.min(right, result.xOf(f.window.to));
+    ctx.save();
+    ctx.fillStyle = palette.film;
+    if (x1 > x0) {
+      ctx.globalAlpha = 0.12;
+      ctx.fillRect(x0, top, x1 - x0, bot - top);
+      ctx.globalAlpha = 0.8;
+      ctx.fillRect(x0, top, x1 - x0, 1.5);
+    }
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = palette.film;
+    ctx.lineWidth = 1;
+    for (const frame of f.frames) {
+      const x = result.xOf(frame.time);
+      if (x < left || x > right) continue;
+      ctx.beginPath();
+      ctx.moveTo(Math.round(x) + 0.5, top);
+      ctx.lineTo(Math.round(x) + 0.5, top + 7);
+      ctx.stroke();
+      S.filmTicks++;
+    }
+    ctx.restore();
+  }
+
   /* The flare the moment stands on gets a ring around its band at the peak, in
      the colour of its class: what the magnet caught, or what a click chose. The
      band's height is chart.js's own, so the ring sits on the band it names. */
@@ -359,6 +410,7 @@ export function createSolarTime(deps) {
     measure();
     ctx.clearRect(0, 0, S.w, S.h);
     const result = Chart.draw(ctx, spec());
+    drawFilm(result);
     drawHeldRing(result);
     drawHoverBox(result);
     refreshRow();
@@ -398,6 +450,66 @@ export function createSolarTime(deps) {
         : fmtStamp(new Date(t), { hour: '2-digit', minute: '2-digit' });
       btnFetch.textContent = 'Fetch · ' + stamp;
     }
+    refreshFilmRow();
+  }
+
+  /* THE FILM'S HALF OF THE ROW. Film becomes ✕ while a film is on, and the
+     middle of the row says where the lookup is, what the frames would cost, or
+     why there are none. Which of the two middles shows is the stylesheet's,
+     keyed on data-film. Fetching the frames is the next step of the flipbook, so
+     the cost stands on a button that does not press yet. */
+  function refreshFilmRow() {
+    if (!film || !btnFilm || !btnFilmGo) return;
+    const f = film.state();
+    root.dataset.film = f.phase;
+    const on = f.phase !== 'idle';
+    btnFilm.textContent = on ? '✕' : 'Film';
+    btnFilm.title = on ? 'Clear the film' : 'Look up the frames for a film around this moment';
+    btnFilm.setAttribute('aria-label', on ? 'Clear the film' : 'Film');
+    btnFilm.classList.toggle('on', on);
+    btnFilmGo.disabled = true;
+    if (f.phase === 'lookup') {
+      btnFilmGo.textContent = f.targets.length
+        ? 'Looking up ' + f.done + ' of ' + f.targets.length + '…'
+        : 'Looking up…';
+      btnFilmGo.title = 'Finding which pictures ' + (f.source || 'the source') + ' has for these moments';
+    } else if (f.phase === 'ready') {
+      const n = f.frames.length;
+      btnFilmGo.textContent = 'Fetch ' + n + (n === 1 ? ' frame' : ' frames') +
+        ' · ≈ ' + Math.max(1, Math.round(f.costMb)) + ' MB';
+      btnFilmGo.title = n + ' pictures of ' + f.source + ' from ' + f.targets.length + ' moments' +
+        (f.everyMs != null ? ', every ' + fmtEvery(f.everyMs) : '');
+    } else if (f.phase === 'error') {
+      btnFilmGo.textContent = f.reason || 'No film';
+      btnFilmGo.title = f.reason || '';
+    }
+  }
+
+  /* A film changed. Its stretch has to be on the strip, so the window widens
+     when it starts to the left of it — never narrows. When the lookup is done,
+     one line says what came of it, and whether the film had to end early. */
+  function onFilmUpdate() {
+    const f = film.state();
+    if (entered && f.window && f.window.from < range().from) {
+      const i = windowFor(f.window.from);
+      if (i > windowIndex) setWindow(i);
+    }
+    if (entered && f.phase === 'ready' && filmPhase !== 'ready') showNote(filmNote(f));
+    filmPhase = f.phase;
+    draw();
+  }
+
+  function filmNote(f) {
+    const n = f.frames.length;
+    let text = n + (n === 1 ? ' picture of ' : ' pictures of ') + f.source + ' from ' +
+      f.targets.length + ' moments' + (f.everyMs != null ? ', every ' + fmtEvery(f.everyMs) : '') + '.';
+    if (f.window.shiftedMs > f.stepMs) {
+      text += ' The newest picture is from ' + fmtUtc(f.newest) + ', so the film ends there.';
+    } else if (f.window.cutMs > f.stepMs) {
+      text += ' Pictures run to ' + fmtUtc(f.newest) + ', so the film stops there.';
+    }
+    if (f.failed) text += ' ' + f.failed + (f.failed === 1 ? ' lookup' : ' lookups') + ' did not answer.';
+    return text;
   }
 
   /* ---- The pointer ----------------------------------------------------- */
@@ -523,8 +635,16 @@ export function createSolarTime(deps) {
   btnWindow?.addEventListener('click', () => setWindow((windowIndex + 1) % SOLAR_WINDOWS.length));
   btnMoment?.addEventListener('click', () => { clock.zetNu(); draw(true); });
   btnFetch?.addEventListener('click', () => { if (onFetch) onFetch(); });
+  /* Film looks up the stretch of what the moment stands on: the flare when it
+     stands on a peak, six hours around it otherwise. Pressed again, it clears. */
+  btnFilm?.addEventListener('click', () => {
+    if (!film) return;
+    if (film.state().phase !== 'idle') { film.clear(); return; }
+    film.lookUp({ cursor: cursorTime(), flare: onPeak() });
+  });
 
   const unsubscribe = feed.onUpdate(() => draw());
+  const unsubscribeFilm = film ? film.onUpdate(onFilmUpdate) : () => {};
   const resize = new ResizeObserver(() => draw(true));
   resize.observe(canvas);
 
@@ -575,6 +695,9 @@ export function createSolarTime(deps) {
       drag = null;
       hoverX = null;
       feed.stop();
+      // A film belongs to this visit of the state; the next one starts without.
+      if (film) film.clear();
+      filmPhase = 'idle';
       if (note) note.hidden = true;
       if (saved) { clock.herstel(saved); saved = null; }
     },
@@ -610,11 +733,19 @@ export function createSolarTime(deps) {
       labelled: S.labelled || 0,
       moment: btnMoment ? btnMoment.textContent : null,
       fetch: btnFetch && onFetch ? btnFetch.textContent : null,
+      film: film ? {
+        phase: film.state().phase,
+        ticks: S.filmTicks || 0,
+        row: btnFilmGo ? btnFilmGo.textContent : null,
+        button: btnFilm ? btnFilm.textContent : null,
+        note: note && !note.hidden ? note.textContent : null
+      } : null,
       feed: feed.state()
     }),
 
     dispose() {
       unsubscribe();
+      unsubscribeFilm();
       resize.disconnect();
     }
   };

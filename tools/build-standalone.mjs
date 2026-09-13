@@ -614,9 +614,11 @@ if (/sketch/i.test(out)) {
                        the file can reach for a server it does not have.
      PRESETS           the instrument presets table, source.js only.
      createSolarPanel  the panel factory.
+     createSolarFilm   the film's controller, which looks frames up through
+                       the proxy.
      solar-only/-slots/-presets  the markup and styling that drive it. */
 const SOLAR_NAMES = [
-  '/api/helioviewer', 'PRESETS', 'createSolarPanel',
+  '/api/helioviewer', 'PRESETS', 'createSolarPanel', 'createSolarFilm',
   'solar-only', 'solar-slots', 'solar-presets'
 ];
 for (const name of SOLAR_NAMES) {

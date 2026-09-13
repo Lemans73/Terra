@@ -13,10 +13,12 @@
    it, and a tainted canvas cannot be exported — which would take the
    whole wallpaper maker away from this state.
 
-   ONE QUEUE, and everything goes through it, images included. At 130 ms
-   apart it is not politeness so much as arithmetic: a stack of three
-   layers plus their metadata is eight requests, and fired as a burst
-   those are eight renders queued on someone else's server.
+   A QUEUE FOR RENDERS, AND A LANE FOR LOOKUPS. A takeScreenshot is a render
+   on someone else's server, so renders wait their turn, 130 ms after the
+   one before: fired as a burst, three layers would be three renders queued
+   over there. A getClosestImage renders nothing, so lookups run three
+   abreast in a lane of their own, each slot resting the same 130 ms before
+   it takes the next (LOOKUP_WIDTH).
 
    ASK FOR THE OBSERVATION TIME, NEVER THE CLOCK. `getClosestImage` is
    cheap and returns the real observation timestamp; `takeScreenshot` is
@@ -33,9 +35,15 @@ const ENDPOINT = '/api/helioviewer';
 const GAP_MS = 130;
 const RETRY_STATUS = new Set([429, 503]);
 
+/* How many lookups may run at once. Measured on 2026-09-13: the 20 lookups of
+   one flare's film took 8.8 s one at a time, over the 8 s that plan 53 set as
+   the limit for a step that only prepares a film. */
+const LOOKUP_WIDTH = 3;
+
 export function createSunFetch(opts = {}) {
   const base = opts.endpoint || ENDPOINT;
   const gap = opts.gapMs == null ? GAP_MS : opts.gapMs;
+  const width = opts.lookupWidth == null ? LOOKUP_WIDTH : opts.lookupWidth;
   const doFetch = opts.fetch || ((...a) => fetch(...a));
 
   let chain = Promise.resolve();
@@ -53,6 +61,32 @@ export function createSunFetch(opts = {}) {
     });
     chain = run.then(() => new Promise(r => setTimeout(r, gap)), () => new Promise(r => setTimeout(r, gap)));
     return run;
+  }
+
+  /* The lookup lane: up to `width` tasks at once, in the order they came. A slot
+     that finishes rests `gap` before it takes the next task, the same pause the
+     queue keeps, so the lane is wider and not faster per slot. */
+  const waiting = [];
+  let lookupsRunning = 0;
+
+  function pump() {
+    while (lookupsRunning < width && waiting.length) waiting.shift()();
+  }
+
+  function enqueueLookup(task) {
+    return new Promise((resolve, reject) => {
+      waiting.push(async () => {
+        lookupsRunning++;
+        inFlight++;
+        try { resolve(await task()); } catch (e) { reject(e); }
+        finally {
+          inFlight--;
+          done++;
+          setTimeout(() => { lookupsRunning--; pump(); }, gap);
+        }
+      });
+      pump();
+    });
   }
 
   function url(endpoint, params) {
@@ -73,9 +107,9 @@ export function createSunFetch(opts = {}) {
   /* One retry, and only for the two statuses that mean "later": a 400 from our
      own proxy is a request that will never become valid, and repeating it just
      doubles the wrong. */
-  async function request(endpoint, params, as) {
+  async function request(endpoint, params, as, lane = enqueue) {
     const target = url(endpoint, params);
-    return enqueue(async () => {
+    return lane(async () => {
       try {
         return await once(target, as);
       } catch (e) {
@@ -87,12 +121,12 @@ export function createSunFetch(opts = {}) {
   }
 
   /** Metadata for the image nearest a moment. Cheap, and the source of every
-      derived quantity. */
+      derived quantity. Runs in the lookup lane. */
   function closestImage(sourceId, date) {
     return request('getClosestImage', {
       date: toInstant(date instanceof Date ? date.toISOString() : date),
       sourceId: String(sourceId)
-    });
+    }, 'json', enqueueLookup);
   }
 
   /**
@@ -129,7 +163,7 @@ export function createSunFetch(opts = {}) {
 
   return {
     closestImage, screenshot, jp2Header, dataSources,
-    stats: () => ({ inFlight, done })
+    stats: () => ({ inFlight, done, lookupsWaiting: waiting.length })
   };
 }
 
