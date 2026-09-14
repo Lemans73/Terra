@@ -881,6 +881,13 @@ export function createSunState(THREE, env) {
       bindPanGesture(false);
       bindDrag(false);
       releaseProjection();
+      /* THE STILLS LEAVE WITH THE STATE: up to three pictures of 2048 px are 50 MB
+         of GPU memory that nobody sees from the Earth. The strip has cleared the
+         film by now, so no frame lies over a slot that goes. A visitor who comes
+         back finds the drawn sun with the sources still chosen in the panel, and
+         Fetch image brings the pictures back. */
+      for (const layer of scene.layers) if (layer.texture) scene.clearLayer(layer);
+      syncGlow();
       scene.setVisible(false);
       layers.environmentRestore();
       layers.eventsRestore();

@@ -1,17 +1,19 @@
 /* ============================================================
-   check-cache-policy.mjs — what a visitor's browser may keep
+   check-cache-policy.mjs — what a visitor's device may keep
    ------------------------------------------------------------
    Terra keeps satellite tiles in a cache of its own, with a budget,
    and nothing else on the visitor's device. The browser's HTTP cache
    has no budget Terra can set, so what lands in it is decided by
    headers and fetch options, and any of those can drift back without
-   anything on screen changing.
+   anything on screen changing. The same goes for GPU memory the app
+   holds on to after the visitor has moved on.
 
      1  the edge function tells the browser no-store for a solar image,
         and gives the edge its window in Vercel-CDN-Cache-Control
      2  the edge function refuses a bad request with no-store
      3  the local server hands the browser the policy's header, and
         writes neither an s-maxage nor an edge window of its own
+     4  leaving the sun state clears the slots that hold a picture
 
    Tiles are held to the same rule in tools/check-tile-loader.mjs
    (test 12), where the fake tile server is.
@@ -23,11 +25,13 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { stripComments } from './check-comment-only.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const EDGE = 'api/helioviewer.js';
 const POLICY = 'api/_helioviewer-policy.mjs';
 const LOCAL = 'serve.mjs';
+const SUN = 'js/states/sun.js';
 const selftest = process.argv.includes('--selftest');
 
 const SCREENSHOT = '/api/helioviewer?endpoint=takeScreenshot&date=2026-09-12T12:00:00Z' +
@@ -98,6 +102,26 @@ async function checkLocal(read) {
   ok('local server', "the browser gets the policy's header, and no edge window");
 }
 
+/* The sun state needs three.js and a renderer to run, so its exit() is read: the
+   one in the state's definition, from its name to its closing brace, without
+   comments. */
+async function checkSunExit(read) {
+  const src = stripComments(await read(SUN));
+  const definition = src.indexOf('const definition = {');
+  const at = definition < 0 ? -1 : src.indexOf('exit() {', definition);
+  if (at < 0) return bad('sun exit', 'exit() not found in the definition in ' + SUN);
+  let depth = 0, end = -1;
+  for (let i = src.indexOf('{', at); i < src.length; i++) {
+    if (src[i] === '{') depth++;
+    else if (src[i] === '}' && --depth === 0) { end = i; break; }
+  }
+  const body = src.slice(at, end + 1);
+  if (!/\bscene\.layers\b/.test(body) || !/\bclear(?:Layer|Slot)\s*\(/.test(body)) {
+    return bad('sun exit', 'exit() leaves the slots holding their pictures');
+  }
+  ok('sun exit', 'leaving the sun state clears every slot that holds a picture');
+}
+
 /* ---- Breaks ------------------------------------------------------------- */
 
 /* One file edited in place and put back, whatever happens. An edit that finds
@@ -115,6 +139,7 @@ async function withEdit(rel, from, to, run) {
 await checkEdgeImage();
 await checkEdgeRefusal();
 await checkLocal(fromDisk);
+await checkSunExit(fromDisk);
 
 for (const r of results) {
   console.log((r.pass ? '  ok    ' : '  FAIL  ') + r.name.padEnd(14) + r.detail);
@@ -132,7 +157,10 @@ if (selftest) {
       () => withEdit(EDGE, ", 'Cache-Control': 'no-store' }", ' }', checkEdgeRefusal)],
     ['an s-maxage in the local server',
       () => withEdit(LOCAL, "      'Cache-Control': plan.cacheControl\n", "      'Cache-Control': 'public, s-maxage=86400'\n",
-        () => checkLocal(fromDisk))]
+        () => checkLocal(fromDisk))],
+    ['the stills kept when the sun state is left',
+      () => withEdit(SUN, '      for (const layer of scene.layers) if (layer.texture) scene.clearLayer(layer);\n', '',
+        () => checkSunExit(fromDisk))]
   ];
   for (const [name, run] of breaks) {
     const before = results.length;
@@ -143,7 +171,7 @@ if (selftest) {
     } catch (e) {
       console.log('  FAIL  break: ' + name + ' could not be applied: ' + e.message);
     }
-    console.log((caught ? '  ok    ' : '  FAIL  ') + ('break: ' + name).padEnd(46) +
+    console.log((caught ? '  ok    ' : '  FAIL  ') + ('break: ' + name).padEnd(50) +
       (caught ? 'caught' : 'SLIPPED THROUGH'));
     if (!caught) failed++;
     results.length = before;
@@ -154,4 +182,4 @@ if (failed) {
   console.log('\n' + failed + ' failed');
   process.exit(1);
 }
-console.log('\nall green (' + results.length + ' checks' + (selftest ? ' plus 4 breaks' : '') + ')');
+console.log('\nall green (' + results.length + ' checks' + (selftest ? ' plus 5 breaks' : '') + ')');
