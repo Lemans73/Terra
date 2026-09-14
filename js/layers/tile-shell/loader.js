@@ -37,8 +37,8 @@ import { TILE_SOURCES, TILE_MB, tileUrl } from './sources.js';
 import { decodeTextureBitmap } from '../../core/texture-bitmap.js';
 
 export function createTileLoader(THREE, opts = {}) {
-  const haal = opts.fetch || ((...a) => fetch(...a));
-  const schijf = opts.cache || null;
+  const fetchTile = opts.fetch || ((...a) => fetch(...a));
+  const disk = opts.cache || null;
   const getSource = opts.getSource;
   const getGrid = opts.getGrid;
   if (!getSource || !getGrid) throw new Error('createTileLoader: getSource en getGrid zijn verplicht');
@@ -206,17 +206,22 @@ export function createTileLoader(THREE, opts = {}) {
       const url = tileUrl(src, e.level, e.x, e.y, { vintage: opts.vintage && opts.vintage() });
       let bitmap;
 
-      /* Eerst de schijf. Een treffer kost geen netwerk, dus het tempo-token gaat
-         terug in de emmer — anders remmen we onszelf af voor een verzoek dat
-         nooit de deur uit ging. */
-      const bewaard = schijf ? await schijf.get(url) : null;
-      if (bewaard) {
-        stats.cacheHits++; stats.cacheBytes += bewaard.size;
+      /* The disk first. A hit costs no network, so its rate token goes back into
+         the bucket: we would otherwise slow ourselves down for a request that
+         never went out. */
+      const stored = disk ? await disk.get(url) : null;
+      if (stored) {
+        stats.cacheHits++; stats.cacheBytes += stored.size;
         bucket.tokens = Math.min(NET.burst, bucket.tokens + 1);
-        bitmap = await decodeTextureBitmap(bewaard);
+        bitmap = await decodeTextureBitmap(stored);
       } else {
         stats.sent++;
-        const res = await haal(url, { signal: e.controller.signal, mode: 'cors', credentials: 'omit' });
+        /* ONE COPY OF A TILE. EOX sends max-age=604800, so a tile fetched as it
+           comes also stays a week in the browser's HTTP cache: a second copy that
+           the disk cache's budget does not count. While the disk cache works, the
+           browser keeps nothing; without it, the browser's cache is the only copy. */
+        const cacheMode = disk && disk.isAvailable() ? 'no-store' : 'default';
+        const res = await fetchTile(url, { signal: e.controller.signal, mode: 'cors', credentials: 'omit', cache: cacheMode });
         const type = res.headers.get('content-type') || '';
 
         // Val 1 uit de kop: geweigerd met status 200 en een webpagina.
@@ -230,8 +235,8 @@ export function createTileLoader(THREE, opts = {}) {
           opnieuwOfVolgende(e, res.headers.get('retry-after')); return;
         }
         const blob = await res.blob();
-        stats.bytes += blob.size;                 // echte bytes, geen schatting
-        if (schijf) schijf.put(url, blob);        // bewust niet afwachten
+        stats.bytes += blob.size;                 // real bytes, not an estimate
+        if (disk) disk.put(url, blob);            // not awaited, on purpose
         bitmap = await decodeTextureBitmap(blob);
       }
 

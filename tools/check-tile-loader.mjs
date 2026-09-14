@@ -57,7 +57,7 @@ const wacht = (ms) => new Promise((r) => setTimeout(r, ms));
 function nepServer(antwoord) {
   const log = [];
   const haal = async (url, init) => {
-    log.push({ url, t: Date.now() });
+    log.push({ url, init, t: Date.now() });
     const a = await antwoord(url, log.length);
     if (a.throwName) { const e = new Error(a.throwName); e.name = a.throwName; throw e; }
     return {
@@ -255,12 +255,32 @@ async function draaiToetsen(createTileLoader, stil) {
           '1 verzoek totaal, 1 cachetreffer', `${log.length} verzoeken, ${l2.stats().cacheHits} treffers`);
 }
 
+  /* ---- 12. one copy of a tile ------------------------------------------------- */
+  {
+    /* EOX sends max-age=604800, so a tile fetched as it comes stays a week in the
+       browser's HTTP cache too, beside the disk cache's copy and outside its budget.
+       A disk cache that works means no-store; one that does not, or none at all,
+       leaves the browser's cache as the only copy. */
+    const diskOf = (works) => ({ get: async () => null, put: async () => {}, isAvailable: () => works });
+    const modes = [];
+    for (const disk of [diskOf(true), diskOf(false), null]) {
+      const { haal, log } = nepServer(async () => beeld);
+      const l = createTileLoader(THREE, { ...basis, fetch: haal, cache: disk });
+      const k = l.request('eox-cloudless', 9, 2, 2, 0);
+      l.setWanted([k]); l.pump(); await wacht(60);
+      modes.push(log.length ? String(log[0].init && log[0].init.cache) : 'no request');
+    }
+    toets('a working disk cache asks for no-store; a failing one or none leaves the browser cache',
+          modes[0] === 'no-store' && modes[1] !== 'no-store' && modes[2] !== 'no-store' && !modes.includes('no request'),
+          'no-store · not no-store · not no-store', modes.join(' · '));
+}
+
   return fout;
 }
 
 if (!selftest) {
   const fout = await draaiToetsen(await laadLoader(), false);
-  console.log(fout ? `\n${fout} toets(en) rood.` : '\nAlles groen (11 toetsen).');
+  console.log(fout ? `\n${fout} toets(en) rood.` : '\nAlles groen (12 toetsen).');
   process.exit(fout ? 1 : 0);
 } else {
   /* ELKE BREUK MOET ZIJN TOETS LATEN UITSLAAN. Een suite die groen blijft nadat
@@ -282,7 +302,13 @@ if (!selftest) {
     ['het textuurbudget genegeerd',
      (s) => s.replace('    if (texMemory <= NET.textureBudget) return;', '    return;')],
     ['de gelijktijdigheidsgrens weggehaald',
-     (s) => s.replace('      if (inFlight >= NET.maxConcurrent) break;', '')]
+     (s) => s.replace('      if (inFlight >= NET.maxConcurrent) break;', '')],
+    ['the browser keeps a second copy of every tile',
+     (s) => s.replace("disk && disk.isAvailable() ? 'no-store' : 'default'", "'default'")],
+    ['no-store without a disk cache',
+     (s) => s.replace("disk && disk.isAvailable() ? 'no-store' : 'default'", "'no-store'")],
+    ['no-store while the disk cache does not work',
+     (s) => s.replace("disk && disk.isAvailable() ? 'no-store' : 'default'", "disk ? 'no-store' : 'default'")]
   ];
   const pad = join(ROOT, LOADER);
   const origineel = await readFile(pad, 'utf8');
