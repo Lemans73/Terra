@@ -37,6 +37,25 @@ const ENDPOINT = '/api/helioviewer';
 const GAP_MS = 130;
 const RETRY_STATUS = new Set([429, 503]);
 
+/* How long a retry waits: what Helioviewer asked for in Retry-After, between one
+   and ten seconds, and one second when it did not say. */
+const RETRY_MIN_MS = 1000;
+const RETRY_MAX_MS = 10000;
+
+export function retryWaitMs(retryAfter) {
+  const seconds = Number(String(retryAfter == null ? '' : retryAfter).trim());
+  if (!(seconds > 0)) return RETRY_MIN_MS;
+  return Math.min(RETRY_MAX_MS, Math.max(RETRY_MIN_MS, seconds * 1000));
+}
+
+/** What the visitor is told when a request to Helioviewer did not come through. */
+export function troubleText(err) {
+  const status = err && err.status;
+  if (status === 429) return 'Helioviewer is busy · try again in a minute';
+  if (status === 503) return 'Helioviewer is unavailable for a moment';
+  return 'Could not reach Helioviewer';
+}
+
 /* How many lookups may run at once. Measured on 2026-09-13: the 20 lookups of
    one flare's film took 8.8 s one at a time, over the 8 s that plan 53 set as
    the limit for a step that only prepares a film. */
@@ -78,7 +97,14 @@ export function createSunFetch(opts = {}) {
   function createLane(width) {
     const waiting = [];
     let running = 0;
+    let pausedUntil = 0;
+    let wake = null;
     const pump = () => {
+      const rest = pausedUntil - Date.now();
+      if (rest > 0) {
+        if (!wake) wake = setTimeout(() => { wake = null; pump(); }, rest);
+        return;
+      }
       while (running < width && waiting.length) waiting.shift()();
     };
     const lane = task => new Promise((resolve, reject) => {
@@ -95,6 +121,9 @@ export function createSunFetch(opts = {}) {
       pump();
     });
     lane.waiting = () => waiting.length;
+    /* Helioviewer said "too many": nothing new leaves this lane before the wait is
+       over, so the other slots do not keep asking into the limit. */
+    lane.pause = ms => { pausedUntil = Math.max(pausedUntil, Date.now() + ms); };
     return lane;
   }
 
@@ -111,6 +140,7 @@ export function createSunFetch(opts = {}) {
     if (!res.ok) {
       const err = new Error('helioviewer ' + res.status);
       err.status = res.status;
+      err.retryAfter = res.headers && res.headers.get ? res.headers.get('retry-after') : null;
       throw err;
     }
     return as === 'blob' ? res.blob() : res.json();
@@ -118,7 +148,8 @@ export function createSunFetch(opts = {}) {
 
   /* One retry, and only for the two statuses that mean "later": a 400 from our
      own proxy is a request that will never become valid, and repeating it just
-     doubles the wrong. */
+     doubles the wrong. The retry waits as long as Helioviewer asked, and a 429
+     holds the whole lane for that long. */
   async function request(endpoint, params, as, lane = enqueue) {
     const target = url(endpoint, params);
     return lane(async () => {
@@ -126,7 +157,9 @@ export function createSunFetch(opts = {}) {
         return await once(target, as);
       } catch (e) {
         if (!RETRY_STATUS.has(e.status)) throw e;
-        await new Promise(r => setTimeout(r, 900));
+        const wait = retryWaitMs(e.retryAfter);
+        if (e.status === 429 && lane.pause) lane.pause(wait);
+        await new Promise(r => setTimeout(r, wait));
         return once(target, as);
       }
     });

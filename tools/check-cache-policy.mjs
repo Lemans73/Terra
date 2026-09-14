@@ -154,7 +154,7 @@ if (selftest) {
     ['the browser allowed to keep an image',
       () => withEdit(EDGE, "'Cache-Control': plan.cacheControl,", "'Cache-Control': 'public, max-age=86400',", checkEdgeImage)],
     ['a refusal without no-store',
-      () => withEdit(EDGE, ", 'Cache-Control': 'no-store' }", ' }', checkEdgeRefusal)],
+      () => withEdit(EDGE, "    'Cache-Control': BROWSER_CACHE,\n", '', checkEdgeRefusal)],
     ['an s-maxage in the local server',
       () => withEdit(LOCAL, "      'Cache-Control': plan.cacheControl\n", "      'Cache-Control': 'public, s-maxage=86400'\n",
         () => checkLocal(fromDisk))],

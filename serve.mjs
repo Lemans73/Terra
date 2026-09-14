@@ -14,7 +14,7 @@ import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
 import { Readable } from 'node:stream';
-import { planRequest } from './api/_helioviewer-policy.mjs';
+import { planRequest, upstreamFailure } from './api/_helioviewer-policy.mjs';
 
 const ROOT = process.cwd();
 const PORT = Number(process.env.PORT) || 8771;
@@ -121,10 +121,14 @@ async function helioviewerHandler(req, res) {
   try {
     const upstream = await fetch(plan.url);
     if (!upstream.ok) {
-      res.writeHead(502, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({
-        status: 'error', data: 'upstream error ' + upstream.status
-      }));
+      // The edge function's answer: a 429 or 503 as it is, with its wait; the rest a 502.
+      const failure = upstreamFailure(upstream.status, upstream.headers.get('retry-after'));
+      res.writeHead(failure.status, {
+        'Content-Type': 'application/json',
+        'Cache-Control': plan.cacheControl,
+        ...(failure.retryAfter ? { 'Retry-After': failure.retryAfter } : {})
+      });
+      return res.end(JSON.stringify({ status: 'error', data: failure.error }));
     }
     res.writeHead(200, {
       'Content-Type': upstream.headers.get('content-type') || 'application/octet-stream',

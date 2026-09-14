@@ -50,12 +50,14 @@ import {
   filmUnique, filmEveryMs, filmCostMb, filmObservedMs, filmTextureMb,
   filmStep, FILM_FPS, FILM_FPS_DEFAULT, FILM_SPANS_MS
 } from '../layers/sun/film.js';
+import { troubleText } from '../layers/sun/fetch.js';
 
 const blank = () => ({
   phase: 'idle',            // idle · lookup · ready · fetching · loaded · error
   sourceId: 0, source: null,
   window: null, stepMs: 0, targets: [],
   done: 0, failed: 0, frames: [],
+  trouble: null,            // why lookups did not answer, in words
   newest: null, everyMs: null,
   reason: null, lookupMs: null,
   crop: null,               // fixed by the film's first fetch
@@ -88,6 +90,9 @@ export function createSolarFilm(deps) {
   const makeTexture = deps.makeTexture || null;
   const showFrame = deps.showFrame || null;
   const hideFrame = deps.hideFrame || null;
+  /* Told why, when a lookup or a fetch ends with pictures missing, and told null
+     when a new film starts: the sun state's line at the top. */
+  const onTrouble = deps.onTrouble || null;
   // The browser's frame loop, which a check in node replaces with its own.
   const requestFrame = deps.requestFrame || (fn => requestAnimationFrame(fn));
   const cancelFrame = deps.cancelFrame || (id => cancelAnimationFrame(id));
@@ -114,8 +119,15 @@ export function createSolarFilm(deps) {
   let loop = null;          // the pending browser frame
   let lastTick = 0;
 
-  async function ask(sourceId, t) {
-    try { return await api.closestImage(sourceId, new Date(t)); } catch { return null; }
+  /* A lookup, or null when it did not answer. The first failure is kept in
+     `failures`, so the film can say why. */
+  async function ask(sourceId, t, failures) {
+    try {
+      return await api.closestImage(sourceId, new Date(t));
+    } catch (err) {
+      if (failures && !failures.first) failures.first = err;
+      return null;
+    }
   }
 
   function stopLoop() {
@@ -155,6 +167,9 @@ export function createSolarFilm(deps) {
     const mine = ++run;
     turn++;
     release();
+    // A new film has nothing to tell yet, whatever the last one ran into.
+    if (onTrouble) onTrouble(null);
+    const failures = { first: null };
     const sourceId = sourceOf();
     if (!api || !sourceId) {
       S = { ...blank(), phase: 'error', reason: 'Choose a source first' };
@@ -167,7 +182,7 @@ export function createSolarFilm(deps) {
     S = { ...blank(), phase: 'lookup', sourceId, source, window: win };
     notify();
 
-    const newestAnswer = await ask(sourceId, clock());
+    const newestAnswer = await ask(sourceId, clock(), failures);
     if (mine !== run) return S;
     const newest = newestAnswer && newestAnswer.date ? filmObservedMs(newestAnswer.date) : null;
     win = filmFitToNewest(win, newest);
@@ -183,7 +198,7 @@ export function createSolarFilm(deps) {
 
     const answers = new Array(times.length);
     await filmInTurn(times, api.lookupWidth, () => mine === run, async (t, i) => {
-      const answer = await ask(sourceId, t);
+      const answer = await ask(sourceId, t, failures);
       if (mine !== run) return;
       answers[i] = answer;
       const partial = filmUnique(answers.filter(a => a !== undefined));
@@ -196,15 +211,18 @@ export function createSolarFilm(deps) {
     reference = found.frames.length
       ? answers.find(a => a && String(a.id) === found.frames[0].id)
       : null;
+    const trouble = found.failed && failures.first ? troubleText(failures.first) : null;
     S = {
       ...S,
       phase: found.frames.length ? 'ready' : 'error',
       frames: found.frames,
       failed: found.failed,
+      trouble,
       everyMs: filmEveryMs(found.frames),
-      reason: found.frames.length ? null : 'No pictures found',
+      reason: found.frames.length ? null : (trouble || 'No pictures found'),
       lookupMs: Math.round(performance.now() - started)
     };
+    if (trouble && onTrouble) onTrouble(trouble);
     notify();
     return S;
   }
@@ -224,7 +242,7 @@ export function createSolarFilm(deps) {
     if (!S.crop) S = { ...S, crop: cropFor(sourceId, reference) };
     const crop = S.crop;
     const started = performance.now();
-    let got = 0, missed = 0, bytes = 0;
+    let got = 0, missed = 0, bytes = 0, firstFailure = null;
     fetching = true;
     settle();
 
@@ -237,7 +255,12 @@ export function createSolarFilm(deps) {
           sourceId, date: frame.date,
           imageScale: crop.imageScale, x0: crop.x0, y0: crop.y0, px: crop.px
         });
-        if (mine === run) texture = await makeTexture(blob);
+      } catch (err) {
+        // Counted below, as a frame that did not come through; the first one says why.
+        if (!firstFailure) firstFailure = err;
+      }
+      try {
+        if (blob && mine === run) texture = await makeTexture(blob);
       } catch { /* counted below, as a frame that did not come through */ }
       // Cleared or replaced while it was on its way: nothing of it may stay.
       if (mine !== run) {
@@ -261,13 +284,15 @@ export function createSolarFilm(deps) {
     /* A fetch that was stopped still reports once its last frames landed, unless
        a newer fetch has taken over by then. */
     if (!fetching && !(S.pass && S.pass.turn > myTurn)) {
+      const trouble = missed && firstFailure ? troubleText(firstFailure) : null;
       S = {
         ...S,
         pass: {
-          turn: myTurn, asked: wanted.length, got, failed: missed, bytes,
+          turn: myTurn, asked: wanted.length, got, failed: missed, bytes, trouble,
           stopped: myTurn !== turn, ms: Math.round(performance.now() - started)
         }
       };
+      if (trouble && onTrouble) onTrouble(trouble);
     }
     settle();
     return S;

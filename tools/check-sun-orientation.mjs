@@ -119,6 +119,18 @@ function run(orientLines) {
                   'a film frame → which frame and its pixels, and no verdict', t);
   }
 
+  // 7 — a fetch that did not come through says why, under the drawn sun and under
+  //     image data alike, and nothing is said when nothing went wrong.
+  {
+    const trouble = 'Helioviewer is busy · try again in a minute';
+    const drawn = orientLines({ spots: { drawn: 9 }, slotDetail: [null, null, null], notice: trouble });
+    const shown = orientLines({ spots: { drawn: 9 }, slotDetail: [slot({}), null, null], notice: trouble });
+    const quiet = text(orientLines({ spots: { drawn: 9 }, slotDetail: [slot({}), null, null] }));
+    const warns = rows => rows.filter(r => r.cls === 'so-warn' && r.text === trouble).length;
+    bad += report(warns(drawn) === 1 && warns(shown) === 1 && !/Helioviewer/.test(quiet),
+                  'a failed fetch → one amber line with the reason, and none without', text(shown));
+  }
+
   return bad;
 }
 
@@ -141,7 +153,9 @@ async function selftestRun() {
     { name: 'the age dropped from the provenance line',
       edit: (s) => s.replace(" + ' · ' + ageText(d.ageMinutes)", '') },
     { name: 'a film frame judged on sharpness',
-      edit: (s) => s.replace('const film = shown.find(d => d.film);', 'const film = null;') }
+      edit: (s) => s.replace('const film = shown.find(d => d.film);', 'const film = null;') },
+    { name: 'a failed fetch left unsaid',
+      edit: (s) => s.replace("s.notice ? [{ cls: 'so-warn', text: s.notice }] : []", '[]') }
   ];
 
   let missed = 0;

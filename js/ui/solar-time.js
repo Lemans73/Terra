@@ -633,7 +633,10 @@ export function createSolarTime(deps) {
       : f.held + (f.held === 1 ? ' frame of ' : ' frames of ') + f.source + ' in memory, ' +
         fmtMb(f.textureMb) + ' as textures.';
     text += ' Fetched ' + fmtMb(p.bytes / 1e6) + ' in ' + (p.ms / 1000).toFixed(1) + ' s.';
-    if (p.failed) text += ' ' + p.failed + (p.failed === 1 ? ' frame' : ' frames') + ' did not come through.';
+    if (p.failed) {
+      text += ' ' + p.failed + (p.failed === 1 ? ' frame' : ' frames') + ' did not come through' +
+        (p.trouble ? ': ' + p.trouble : '') + '.';
+    }
     return text;
   }
 
@@ -646,7 +649,10 @@ export function createSolarTime(deps) {
     } else if (f.window.cutMs > f.stepMs) {
       text += ' Pictures run to ' + fmtUtc(f.newest) + ', so the film stops there.';
     }
-    if (f.failed) text += ' ' + f.failed + (f.failed === 1 ? ' lookup' : ' lookups') + ' did not answer.';
+    if (f.failed) {
+      text += ' ' + f.failed + (f.failed === 1 ? ' lookup' : ' lookups') + ' did not answer' +
+        (f.trouble ? ': ' + f.trouble : '') + '.';
+    }
     return text;
   }
 

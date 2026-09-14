@@ -148,7 +148,8 @@ export function createSunState(THREE, env) {
     createSunFetch = null, imageScaleFor = null,
     SOURCE_BY_ID = null, isCoronagraph = null, deriveGeometry = null,
     textureSize = null, sharpness = null, earthInTexels = null,
-    minimumField = null, fieldFor = null, decodeTextureBitmap = null, filmCrop = null
+    minimumField = null, fieldFor = null, decodeTextureBitmap = null, filmCrop = null,
+    troubleText = null
   } = env.imagery || {};
 
   /* THE BARE SUN SAYS SO ON THE BODY, and it says it by looking at what arrived
@@ -175,6 +176,10 @@ export function createSunState(THREE, env) {
      which film, and the crop and geometry it was rendered with. Whatever
      describes the picture on screen reads this before any slot. */
   let filmShown = null;
+  /* What the line at the top says when Helioviewer did not answer. A still or a
+     film sets it; a still that comes through, a new film and leaving the state
+     clear it. */
+  let notice = null;
   let viewR = VIEW_R_DEFAULT;
   let attached = false;
   let originalUpdate = null;
@@ -553,7 +558,7 @@ export function createSunState(THREE, env) {
      minus sign; it is mentioned here because it is the kind of thing that
      produces a perfectly good image of the wrong half.
   ---------------------------------------------------------------------- */
-  async function loadSlot(index, sourceId, when, opts = {}) {
+  async function fetchSlot(index, sourceId, when, opts = {}) {
     if (!api) throw new Error('sun state: no imagery half, nothing to fetch');
     const layer = scene.layers[index];
     if (!layer) throw new Error('no slot ' + index);
@@ -642,6 +647,20 @@ export function createSunState(THREE, env) {
     refreshSpots();
 
     return describeSlot(index);
+  }
+
+  /* A still, and what its fetch leaves to say: nothing once it comes through, and
+     why when Helioviewer did not answer. A slot that does not exist is a mistake
+     in the code, not news for the visitor, so that says nothing. */
+  async function loadSlot(index, sourceId, when, opts = {}) {
+    try {
+      const described = await fetchSlot(index, sourceId, when, opts);
+      notice = null;
+      return described;
+    } catch (err) {
+      if (troubleText && err && (err.status || err instanceof TypeError)) notice = troubleText(err);
+      throw err;
+    }
   }
 
   /* ----------------------------------------------------------------------
@@ -888,6 +907,7 @@ export function createSunState(THREE, env) {
          Fetch image brings the pictures back. */
       for (const layer of scene.layers) if (layer.texture) scene.clearLayer(layer);
       syncGlow();
+      notice = null;
       scene.setVisible(false);
       layers.environmentRestore();
       layers.eventsRestore();
@@ -910,6 +930,8 @@ export function createSunState(THREE, env) {
     frameTexture,
     showFilmFrame,
     endFilmFrame,
+    // The film's half of the line at the top: why frames were missing, or null.
+    showNotice: (text) => { notice = text || null; },
     setViewR,
     viewR: () => viewR,
     spots,
@@ -935,6 +957,7 @@ export function createSunState(THREE, env) {
         return c && k ? +c.position.distanceTo(k.target).toFixed(1) : null;
       })(),
       slotDetail: scene.layers.map((l, i) => describeSlot(i)),
+      notice,
       film: filmShown ? {
         index: filmShown.index,
         count: filmShown.count,

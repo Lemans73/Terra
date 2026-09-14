@@ -158,3 +158,27 @@ export function planRequest(endpoint, get, keys) {
     edgeCacheControl: EDGE_CACHE[endpoint]
   };
 }
+
+/* ---- When Helioviewer says no ---------------------------------------------
+   A 429 (too many requests) and a 503 (unavailable for a moment) say that the
+   same request works later, so they reach the browser as they are, with the
+   wait Helioviewer asked for, and the client retries once on exactly those
+   two. Anything else becomes a 502: what went wrong between Terra and
+   Helioviewer is nothing a visitor fixes by asking again. A Retry-After is
+   passed on only as whole seconds, up to an hour; a date or a garbled value is
+   dropped. */
+const RETRY_LATER = new Set([429, 503]);
+
+/**
+ * The answer to give when Helioviewer answered with an error.
+ *
+ * @param {number} status  Helioviewer's status
+ * @param {string|null} retryAfter  its Retry-After header
+ * @returns {{status: number, retryAfter: string|null, error: string}}
+ */
+export function upstreamFailure(status, retryAfter) {
+  const later = RETRY_LATER.has(status);
+  const seconds = String(retryAfter == null ? '' : retryAfter).trim();
+  const wait = later && /^\d{1,4}$/.test(seconds) && +seconds <= 3600 ? String(+seconds) : null;
+  return { status: later ? status : 502, retryAfter: wait, error: 'upstream error ' + status };
+}

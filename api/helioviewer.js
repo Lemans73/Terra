@@ -15,13 +15,17 @@
 // There is no API key here, and nothing secret passes through: the same data is
 // public at api.helioviewer.org. What the allowlist protects is bandwidth.
 
-import { planRequest } from './_helioviewer-policy.mjs';
+import { planRequest, upstreamFailure, BROWSER_CACHE } from './_helioviewer-policy.mjs';
 
 export const config = { runtime: 'edge' };
 
-const json = (status, body) => new Response(JSON.stringify(body), {
+const json = (status, body, retryAfter) => new Response(JSON.stringify(body), {
   status,
-  headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
+  headers: {
+    'Content-Type': 'application/json',
+    'Cache-Control': BROWSER_CACHE,
+    ...(retryAfter ? { 'Retry-After': retryAfter } : {})
+  }
 });
 
 export default async function handler(request) {
@@ -45,7 +49,9 @@ export default async function handler(request) {
   }
 
   if (!upstream.ok) {
-    return json(502, { status: 'error', data: 'upstream error ' + upstream.status });
+    // A 429 or 503 passes as it is, with Helioviewer's wait; anything else is a 502.
+    const failure = upstreamFailure(upstream.status, upstream.headers.get('retry-after'));
+    return json(failure.status, { status: 'error', data: failure.error }, failure.retryAfter);
   }
 
   // Cache only what came back whole and correct, and only at the edge.

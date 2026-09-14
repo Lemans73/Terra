@@ -2414,7 +2414,7 @@ import { noaaReferenceTime } from './js/layers/sun/frame.js';
    DE IMPORTS STAAN HIER EN NIET IN js/states/sun.js, en dat is de hele truc: de
    build loopt de statische importgraaf af, dus een module die de state zelf
    importeert komt hoe dan ook mee. Hier geknipt betekent nooit bezocht. */
-import { createSunFetch, imageScaleFor } from './js/layers/sun/fetch.js';
+import { createSunFetch, imageScaleFor, troubleText } from './js/layers/sun/fetch.js';
 import {
   SOURCE_BY_ID, isCoronagraph, deriveGeometry, textureSize, sharpness, earthInTexels,
   minimumField, fieldFor
@@ -13238,7 +13238,7 @@ solarImageryState = createSunState(THREE, {
   imagery: {
     createSunFetch, imageScaleFor,
     SOURCE_BY_ID, isCoronagraph, deriveGeometry, textureSize, sharpness,
-    earthInTexels, minimumField, fieldFor, decodeTextureBitmap, filmCrop
+    earthInTexels, minimumField, fieldFor, decodeTextureBitmap, filmCrop, troubleText
   },
   /* SOLAR:END */
 
@@ -13350,7 +13350,8 @@ solarFilm = createSolarFilm({
   cropFor: (id, meta) => solarImageryState.frameCrop(id, meta),
   makeTexture: (blob) => solarImageryState.frameTexture(blob),
   showFrame: (view) => solarImageryState.showFilmFrame(view),
-  hideFrame: () => solarImageryState.endFilmFrame()
+  hideFrame: () => solarImageryState.endFilmFrame(),
+  onTrouble: (text) => solarImageryState.showNotice(text)
 });
 
 /* SOLAR:END */

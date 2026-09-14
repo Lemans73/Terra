@@ -2710,6 +2710,7 @@
      verzonnen, en dat is een andere soort zin. */
   .solar-orient .so-green { color: #7ec98f; }
   .solar-orient .so-amber { color: #ffb347; }
+  .solar-orient .so-warn  { color: #ffb347; }
   .solar-orient .so-red   { color: #ff8a7a; font-weight: 600; }
   /* Not a verdict: what is on screen is a frame of a film. */
   .solar-orient .so-film  { color: var(--solar-film); }

@@ -68,6 +68,10 @@ export function ageText(minutes) {
 /* THE RULE LIVES HERE SO IT CAN BE CHECKED WITHOUT A BROWSER, the same reason
    fieldFor() sits in source.js. It takes the state object and returns rows;
    everything below it is DOM. */
+/* WHEN A FETCH DID NOT COME THROUGH, a line says why, under what is on screen:
+   whatever is there is not what the visitor asked for. */
+const noticeRows = s => (s.notice ? [{ cls: 'so-warn', text: s.notice }] : []);
+
 export function orientLines(s) {
   if (!s) return null;
   const shown = (s.slotDetail || []).filter(Boolean);
@@ -82,6 +86,7 @@ export function orientLines(s) {
     const drawn = s.spots && s.spots.drawn;
     if (drawn) out.push({ text: drawn + (drawn === 1 ? ' active region' : ' active regions') + ' · NOAA SWPC' });
     else if (s.regionDay === null) out.push({ text: NO_REGION_LIST });
+    out.push(...noticeRows(s));
     return out;
   }
 
@@ -144,6 +149,7 @@ export function orientLines(s) {
     const occ = Math.min(...occs);
     out.push({ text: 'Blank within ' + occ.toFixed(1) + ' R☉ — the occulter, not a gap' });
   }
+  out.push(...noticeRows(s));
   return out;
 
 }
