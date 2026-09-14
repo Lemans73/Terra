@@ -48,14 +48,16 @@ export default async function handler(request) {
     return json(502, { status: 'error', data: 'upstream error ' + upstream.status });
   }
 
-  // Cache only what came back whole and correct. Helioviewer sends no cache
-  // headers of its own, so this is the only thing standing between a busy day
-  // and re-rendering the same image for every visitor.
+  // Cache only what came back whole and correct, and only at the edge.
+  // Helioviewer sends no cache headers of its own, so the edge window is the
+  // only thing standing between a busy day and re-rendering the same image for
+  // every visitor. The browser is told to keep nothing (_helioviewer-policy.mjs).
   return new Response(upstream.body, {
     status: 200,
     headers: {
       'Content-Type': upstream.headers.get('content-type') || 'application/octet-stream',
-      'Cache-Control': plan.cacheControl
+      'Cache-Control': plan.cacheControl,
+      'Vercel-CDN-Cache-Control': plan.edgeCacheControl
     }
   });
 }

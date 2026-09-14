@@ -22,7 +22,8 @@
  *   4  a missing required parameter is refused
  *   5  a malformed value is refused, per type
  *   6  width and height above the ceiling are refused
- *   7  every built URL points at the fixed upstream, and carries a cache window
+ *   7  every built URL points at the fixed upstream, with an edge window and
+ *      nothing for the browser to keep
  */
 
 import { readFile, writeFile, unlink } from 'node:fs/promises';
@@ -155,8 +156,9 @@ async function run(mod, label) {
     check(6, wrong.length === 0, wrong.join('; '));
   }
 
-  // 7 — every accepted request points at the fixed upstream and carries a cache
-  // window, because Helioviewer sends none of its own.
+  // 7 — every accepted request points at the fixed upstream and carries an edge
+  // window, because Helioviewer sends none of its own, while the browser is
+  // told to keep nothing.
   {
     const wrong = [];
     for (const [endpoint, base] of Object.entries(VALID)) {
@@ -165,8 +167,11 @@ async function run(mod, label) {
       if (!plan.url.startsWith(UPSTREAM + endpoint + '/?')) {
         wrong.push(endpoint + ' -> ' + plan.url.slice(0, 60));
       }
-      if (!/^public, s-maxage=\d+/.test(plan.cacheControl || '')) {
-        wrong.push(endpoint + ' has no cache window');
+      if (plan.cacheControl !== 'no-store') {
+        wrong.push(endpoint + ' lets the browser keep it: ' + plan.cacheControl);
+      }
+      if (!/^max-age=\d+, stale-while-revalidate=\d+$/.test(plan.edgeCacheControl || '')) {
+        wrong.push(endpoint + ' has no edge window');
       }
     }
     check(7, wrong.length === 0, wrong.length ? wrong.join('; ') : '');
@@ -187,7 +192,7 @@ const DESCRIPTIONS = {
   4: 'a missing required parameter is refused',
   5: 'a malformed value is refused',
   6: 'the size ceiling holds',
-  7: 'fixed upstream, and a cache window on every plan'
+  7: 'fixed upstream, an edge window, and nothing kept by the browser'
 };
 
 /* ---- The checks on the checks --------------------------------------------
@@ -229,9 +234,14 @@ const BREAKS = [
                          "const UPSTREAM = 'https://example.invalid/v2/';")
   },
   {
-    n: 7, what: 'drop a cache window',
-    edit: s => s.replace(/^\s*takeScreenshot:\s+'public, s-maxage=86400.*$/m,
+    n: 7, what: 'drop an edge window',
+    edit: s => s.replace(/^\s*takeScreenshot:\s+'max-age=86400.*$/m,
                          '  takeScreenshot:  undefined,')
+  },
+  {
+    n: 7, what: 'let the browser keep the images',
+    edit: s => s.replace("export const BROWSER_CACHE = 'no-store';",
+                         "export const BROWSER_CACHE = 'public, max-age=86400';")
   }
 ];
 

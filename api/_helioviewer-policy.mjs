@@ -54,6 +54,14 @@ const layerStack = v =>
    Helioviewer sends no cache headers at all — no Cache-Control, no ETag, no
    Expires — so whatever the edge holds is what we put here.
 
+   THE EDGE KEEPS AN ANSWER, THE BROWSER DOES NOT. A window below goes out as
+   `Vercel-CDN-Cache-Control`, which only Vercel's cache reads and Vercel never
+   hands on. The browser is told `no-store`: a visitor's device keeps no solar
+   image, and the app holds what it shows in GPU memory for as long as it shows
+   it. Do not move these windows back into `Cache-Control` as `s-maxage`: Vercel
+   strips that directive, and the browser is left with a bare `public` it may
+   store but cannot reuse.
+
    `takeScreenshot` gets a full day because the client asks for the OBSERVATION
    time it got back from getClosestImage, never the visitor's wall clock. That
    turns 3600 possible keys per hour into one per image: AIA publishes every 36
@@ -63,12 +71,15 @@ const layerStack = v =>
    `getClosestImage` is the moving part: asking about "now" gives a different
    answer every 36 seconds, so a minute is as far as it can be trusted. It is
    also small and fast, which is exactly why it is the one that may miss. */
-const CACHE = {
-  getClosestImage: 'public, s-maxage=60, stale-while-revalidate=300',
-  takeScreenshot:  'public, s-maxage=86400, stale-while-revalidate=604800',
-  getJP2Header:    'public, s-maxage=86400, stale-while-revalidate=604800',
-  getDataSources:  'public, s-maxage=3600, stale-while-revalidate=86400'
+const EDGE_CACHE = {
+  getClosestImage: 'max-age=60, stale-while-revalidate=300',
+  takeScreenshot:  'max-age=86400, stale-while-revalidate=604800',
+  getJP2Header:    'max-age=86400, stale-while-revalidate=604800',
+  getDataSources:  'max-age=3600, stale-while-revalidate=86400'
 };
+
+// What the browser is told about an answer from Helioviewer.
+export const BROWSER_CACHE = 'no-store';
 
 /* ---- The endpoints we use, and nothing else ------------------------------
    `required` must all be present; `optional` may be. A parameter in neither
@@ -113,7 +124,7 @@ export const ALLOWED_ENDPOINTS = Object.keys(ENDPOINTS);
  * @param {string|null} endpoint  the `endpoint` query parameter
  * @param {(k: string) => string|null} get  reads one query parameter
  * @param {Iterable<string>} keys  every query parameter present
- * @returns {{ok: true, url: string, cacheControl: string}
+ * @returns {{ok: true, url: string, cacheControl: string, edgeCacheControl: string}
  *          | {ok: false, status: number, error: string}}
  */
 export function planRequest(endpoint, get, keys) {
@@ -143,6 +154,7 @@ export function planRequest(endpoint, get, keys) {
   return {
     ok: true,
     url: UPSTREAM + endpoint + '/?' + out.toString(),
-    cacheControl: CACHE[endpoint]
+    cacheControl: BROWSER_CACHE,
+    edgeCacheControl: EDGE_CACHE[endpoint]
   };
 }

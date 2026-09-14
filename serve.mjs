@@ -128,9 +128,9 @@ async function helioviewerHandler(req, res) {
     }
     res.writeHead(200, {
       'Content-Type': upstream.headers.get('content-type') || 'application/octet-stream',
-      // The same header the edge function sets. It does nothing here — there is
-      // no cache in front of this server — but a value that differs between the
-      // two would be a difference you only discover in production.
+      // What the browser gets in production too: no-store. The edge window
+      // (Vercel-CDN-Cache-Control) stays out, because Vercel never passes it on
+      // and there is no edge in front of this server.
       'Cache-Control': plan.cacheControl
     });
     // Streamed rather than buffered, for the same reason as in production: a
