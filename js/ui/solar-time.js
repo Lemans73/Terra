@@ -198,6 +198,9 @@ export function createSolarTime(deps) {
   const onFlare = deps.onFlare || null;
   // Told after every redraw, for the flare labels on the sun.
   const onDrawn = deps.onDrawn || null;
+  /* Asked to clear the view when the panel's film button is pressed: on a phone
+     the panel covers the sun, and a film is there to be watched. */
+  const makeRoom = deps.makeRoom || null;
 
   const root = document.getElementById('solar-time');
   const canvas = document.getElementById('solar-lane');
@@ -823,6 +826,7 @@ export function createSolarTime(deps) {
     else if (action === 'stop') film.stop();
     else if (action === 'pause') filmPause();
     else if (action === 'play') film.play(1);
+    if (makeRoom) makeRoom();
   });
   panelFilmX?.addEventListener('click', () => { if (film) film.clear(); });
   panelSpan?.addEventListener('click', () => { if (film) film.cycleSpan(); });

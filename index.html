@@ -9327,17 +9327,19 @@ function flareView(f) {
   const when = t => (t == null ? { absent: true, text: 'not reported' } : eventTijd(t));
   const actions = [];
   /* Only with the imagery half, and only with a peak to fetch at. The moment is
-     set again here because the card can outlive a drag on the strip. */
+     set again here because the card can outlive a drag on the strip. On a phone
+     both actions make room (clearView): the card and the panel close, and the sun
+     and the strip with its film buttons are left to look at. */
   if (solarPanel && f.peak != null) {
     actions.push({ label: 'Fetch this moment', icon: ICON_MOMENT,
       title: 'Fetch the images at the peak of this flare, with the sources chosen in the panel.',
-      run: () => { sceneClock.zet(new Date(f.peak)); if (solarTime) solarTime.refresh(); solarPanel.fetchAll(); } });
+      run: () => { sceneClock.zet(new Date(f.peak)); if (solarTime) solarTime.refresh(); solarPanel.fetchAll(); clearView(); } });
   }
-  // The film of this flare: half an hour on either side, for the same source.
+  // The film of this flare: an hour on either side, for the same source.
   if (solarFilm && f.peak != null) {
     actions.push({ label: 'Film this flare', icon: ICON_FILM,
-      title: 'Look up the frames from half an hour before this flare to half an hour after it, for the source in the bottom slot.',
-      run: () => { sceneClock.zet(new Date(f.peak)); if (solarTime) solarTime.refresh(); solarFilm.lookUp({ flare: f }); } });
+      title: 'Look up the frames from an hour before this flare to an hour after it, for the source in the bottom slot.',
+      run: () => { sceneClock.zet(new Date(f.peak)); if (solarTime) solarTime.refresh(); solarFilm.lookUp({ flare: f }); clearView(); } });
   }
   return {
     kind: 'flare',
@@ -13385,7 +13387,9 @@ try {
     onFetch: solarPanel ? () => solarPanel.fetchAll() : null,
     film: solarFilm,
     onFlare: showFlare,
-    onDrawn: solarMomentChanged
+    onDrawn: solarMomentChanged,
+    // The panel's film button makes room on a phone, like the card's film action.
+    makeRoom: () => clearView()
   });
 } catch (e) {
   console.error('Terra: the solar time strip could not be set up.', e);
