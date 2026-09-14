@@ -12,6 +12,13 @@
    thing in this state that is measured rather than imaged, and it is what
    makes a moment worth choosing — the flares are where the curve goes up.
 
+   THE SLIDER WALKS THE WEEK, THE LANE CHOOSES IN WHAT IT SHOWS. Under the lane
+   a slider spans the measured week, and the lane shows a window of a day,
+   three days or the week on it. The window follows the slider within a tenth
+   of its width from either edge, the way the magnetosphere's does, and comes
+   along when a moment lands off it from anywhere else. A drag in the lane
+   never moves it (js/layers/sun/lane.js, xrayLaneWindow).
+
    TWO TIMES, BECAUSE THERE ARE TWO.
      the playhead   the chosen moment, which is Terra's global moment
      a dashed mark  when the image on screen was taken
@@ -43,13 +50,14 @@
 
 import {
   xrayEnvelope, xrayWithGaps, xraySampleAt, xrayClassOf, flareLetter,
-  xrayDragStep, xrayNearestPeak, xrayFlareAtMoment, XRAY_MAGNET_TOUCH_PX
+  xrayDragStep, xrayNearestPeak, xrayFlareAtMoment, XRAY_MAGNET_TOUCH_PX,
+  xrayLaneWindow, xraySliderValue, xrayTimeAtSlider, XRAY_WEEK_MS
 } from '../layers/sun/lane.js';
 import { CLICK_SLOP_PX } from './label-passthrough.js';
 
 /* The three windows, the same three the magnetosphere strip offers, and the
-   first is the default: one habit for both strips. Each ends at the newest
-   sample, so the strip never scrolls; wider means further back. */
+   first is the default: one habit for both strips. Each is a stretch of the
+   measured week, wherever the slider under the lane puts it. */
 export const SOLAR_WINDOWS = [
   { id: '24h', label: '24h', ms: 24 * 3600e3 },
   { id: '3d',  label: '3d',  ms: 3 * 24 * 3600e3 },
@@ -223,6 +231,7 @@ export function createSolarTime(deps) {
   const panelSpan = document.getElementById('solar-film-span');
   const panelFilmX = document.getElementById('solar-film-x');
   const note = document.getElementById('sol-note');
+  const slider = document.getElementById('sol-slider');
   if (!root || !canvas || !Chart) return null;
 
   const ctx = canvas.getContext('2d');
@@ -245,38 +254,42 @@ export function createSolarTime(deps) {
   let noteTimer = null;
   let filmPhase = 'idle';        // the phase the film was in at its last update
   let filmPassNoted = null;      // the fetch whose outcome the note has told
+  let filmKept = null;           // the film whose stretch the window was brought to
   const S = { w: 0, h: 0, dpr: 0, from: 0, to: 0, plotW: 0, lastDraw: 0, pending: null };
 
   const currentWindow = () => SOLAR_WINDOWS[windowIndex];
 
   /* ---- The window ------------------------------------------------------ */
 
+  /* The window's right edge on the week, or null while it stands on the newest
+     sample: then it keeps standing there as new samples come in. */
+  let laneTo = null;
+
   function range() {
     const newest = feed.newest();
-    const to = newest != null ? newest : Date.now();
+    const end = newest != null ? newest : Date.now();
+    const to = laneTo != null ? Math.min(laneTo, end) : end;
     return { from: to - currentWindow().ms, to, newest };
   }
 
-  /* The smallest window that still shows `t`, so a moment chosen elsewhere lands
-     on the strip rather than off its left edge. */
-  function windowFor(t) {
-    const newest = feed.newest() != null ? feed.newest() : Date.now();
-    const age = newest - t;
-    const i = SOLAR_WINDOWS.findIndex(w => w.ms >= age * 1.05);
-    return i < 0 ? SOLAR_WINDOWS.length - 1 : i;
+  /* Moves the window by the rule in lane.js, and asks the feed for a file that
+     reaches as far back as the window now does: the week only once the window
+     goes past three days. */
+  function placeWindow(opts) {
+    const newest = feed.newest();
+    if (newest == null) return;
+    const { from, to } = xrayLaneWindow({ to: laneTo, width: currentWindow().ms, newest, ...opts });
+    laneTo = to >= newest ? null : to;
+    feed.cover(newest - from);
   }
 
+  /* A narrower window can leave the moment off it. The window then moves to the
+     moment, not the moment to the window: draw() brings the window to every
+     moment that stands off it. */
   function setWindow(i) {
     windowIndex = i;
     feed.cover(currentWindow().ms);
     if (btnWindow) btnWindow.textContent = currentWindow().label;
-    /* A narrower window can leave the moment off its left edge. The moment moves
-       onto the strip rather than off the screen: a playhead nobody can see is a
-       moment nobody chose. */
-    if (!isLive()) {
-      const { from } = range();
-      if (moment().getTime() < from) clock.zet(new Date(from));
-    }
     draw(true);
   }
 
@@ -497,6 +510,11 @@ export function createSolarTime(deps) {
     }
     if (S.pending) { clearTimeout(S.pending); S.pending = null; }
     S.lastDraw = performance.now();
+    /* A moment set from outside the lane (a flare card, a label, now, a narrower
+       window) may stand off the window, and the window comes to it. A moment
+       inside it stays where it is: the lane clamps a drag to its own edge, and a
+       window that followed that edge would crawl away. */
+    placeWindow({ cursor: cursorTime() });
     measure();
     ctx.clearRect(0, 0, S.w, S.h);
     const result = Chart.draw(ctx, spec());
@@ -504,9 +522,32 @@ export function createSolarTime(deps) {
     drawHeldRing(result);
     drawHoverBox(result);
     refreshRow();
+    refreshSlider();
     // Which flares the window holds is decided here, so whoever draws them on
     // the sun hears it from the same place rather than working it out again.
     if (onDrawn) onDrawn();
+  }
+
+  /* ---- The week under the lane ---------------------------------------- */
+
+  /* The slider shows where the moment stands on the week, and a lighter stretch
+     of its track shows the window: without it, "24h chosen, and the slider goes
+     back seven days" reads as a fault. While a moment the slider set is still on
+     its way to the clock, the slider keeps its own value. */
+  function refreshSlider() {
+    if (!slider) return;
+    const newest = feed.newest();
+    slider.disabled = newest == null;
+    if (newest == null) { slider.style.background = ''; return; }
+    if (!setPending) slider.value = String(xraySliderValue(cursorTime(), newest));
+    const { from, to } = range();
+    const start = newest - XRAY_WEEK_MS;
+    const a = Math.max(0, Math.min(100, 100 * (from - start) / XRAY_WEEK_MS));
+    const z = Math.max(0, Math.min(100, 100 * (to - start) / XRAY_WEEK_MS));
+    // A window of the whole week leaves nothing to mark.
+    slider.style.background = z - a > 99.5 ? '' :
+      'linear-gradient(to right, var(--hair) 0 ' + a + '%, var(--ink-faint) ' + a + '% ' + z + '%, ' +
+      'var(--hair) ' + z + '% 100%) center / 100% 3px no-repeat';
   }
 
   /* ---- The row --------------------------------------------------------- */
@@ -624,15 +665,25 @@ export function createSolarTime(deps) {
     if (panelFilmX) panelFilmX.hidden = f.phase === 'idle';
   }
 
-  /* A film changed. Its stretch has to be on the strip, so the window widens
-     when it starts to the left of it — never narrows. When the lookup is done,
-     and when a fetch has ended, one line says what came of it. */
+  /* A film changed. A new film's stretch has to be on the strip: the window
+     moves to it, and widens only for a film wider than itself. Once for each
+     film, so the slider can still take the window elsewhere. When the lookup is
+     done, and when a fetch has ended, one line says what came of it. */
   function onFilmUpdate() {
     const f = film.state();
-    if (entered && f.window && f.window.from < range().from) {
-      const i = windowFor(f.window.from);
-      if (i > windowIndex) setWindow(i);
+    const key = f.window ? f.window.from + '/' + f.window.to : null;
+    if (entered && key && key !== filmKept) {
+      filmKept = key;
+      const span = f.window.to - f.window.from;
+      const wider = SOLAR_WINDOWS.findIndex(w => w.ms >= span);
+      if (span > currentWindow().ms && wider > windowIndex) {
+        windowIndex = wider;
+        feed.cover(currentWindow().ms);
+        if (btnWindow) btnWindow.textContent = currentWindow().label;
+      }
+      placeWindow({ keep: f.window });
     }
+    if (!key) filmKept = null;
     if (entered && f.phase === 'ready' && filmPhase === 'lookup') showNote(filmNote(f));
     if (entered && f.pass && f.pass.turn !== filmPassNoted) {
       filmPassNoted = f.pass.turn;
@@ -793,6 +844,14 @@ export function createSolarTime(deps) {
   canvas.addEventListener('pointercancel', onCancel);
   canvas.addEventListener('pointerleave', onLeave);
 
+  /* The slider is the one control that pushes the window along while it moves. */
+  slider?.addEventListener('input', () => {
+    const newest = feed.newest();
+    if (newest == null) return;
+    const t = xrayTimeAtSlider(+slider.value, newest);
+    placeWindow({ cursor: t, follow: true });
+    setMoment(t);
+  });
   btnWindow?.addEventListener('click', () => setWindow((windowIndex + 1) % SOLAR_WINDOWS.length));
   btnMoment?.addEventListener('click', () => { clock.zetNu(); draw(true); });
   btnFetch?.addEventListener('click', () => { if (onFetch) onFetch(); });
@@ -863,11 +922,10 @@ export function createSolarTime(deps) {
   /* ---- Entering and leaving ------------------------------------------- */
 
   return {
-    /* THE MOMENT ON THE WAY IN (Terry, session 52). A moment inside the
-       measured week stays, and the window widens until it shows it: the sun
-       then opens on the day you were looking at. A moment outside it has no
-       flux to stand on, so the strip starts at now and says why. Live stays
-       live. */
+    /* THE MOMENT ON THE WAY IN. A moment inside the measured week stays, and
+       the window goes to it at the width it had: the sun then opens on the day
+       you were looking at. A moment outside it has no flux to stand on, so the
+       strip starts at now and says why. Live stays live. */
     enter() {
       if (entered) return;
       entered = true;
@@ -876,14 +934,13 @@ export function createSolarTime(deps) {
       if (!isLive()) {
         const t = moment().getTime();
         const age = Date.now() - t;
-        const week = SOLAR_WINDOWS[SOLAR_WINDOWS.length - 1].ms;
-        if (age >= 0 && age <= week - SOLAR_NOW_SLACK_MS) {
-          windowIndex = windowFor(t);
-        } else {
+        if (age < 0 || age > XRAY_WEEK_MS - SOLAR_NOW_SLACK_MS) {
           clock.zetNu();
           showNote('Your moment, ' + fmtUtc(t) + ', lies outside the measured week — the sun shows now.');
         }
       }
+      laneTo = null;
+      filmKept = null;
       if (btnWindow) btnWindow.textContent = currentWindow().label;
       feed.cover(currentWindow().ms);
       draw(true);
@@ -935,6 +992,7 @@ export function createSolarTime(deps) {
       labelled: S.labelled || 0,
       moment: btnMoment ? btnMoment.textContent : null,
       fetch: btnFetch && onFetch ? btnFetch.textContent : null,
+      slider: slider ? { value: +slider.value, disabled: slider.disabled, band: slider.style.background || null } : null,
       film: film ? {
         phase: film.state().phase,
         ticks: S.filmTicks || 0,

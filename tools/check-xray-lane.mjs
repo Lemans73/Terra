@@ -18,6 +18,12 @@
    screen produces are small, and small steps are where speed and rounding
    go wrong.
 
+   THE WINDOW ON THE WEEK is held to the rule it takes from the magnetosphere:
+   it stays while the moment is well inside, follows the slider within a tenth
+   and never jumps, does not crawl under a drag the lane clamps to its edge,
+   keeps a film's stretch, and stays on the week. Who may make it follow is
+   read from the strip, because the rule cannot say that itself.
+
    `--selftest` breaks each check on purpose and demands that it fails.
    A check that passes on a broken input is not a check.
    ============================================================ */
@@ -25,8 +31,13 @@
 import {
   xrayClassOf, xrayFluxOf, parseXrayRows, xrayWithGaps, xrayEnvelope,
   XRAY_GAP_MS, parseFlareRows, parseXraEvents, joinFlareRegions,
-  xrayPointerSpeed, xrayDragStep, xrayNearestPeak, xrayFlareAtMoment, XRAY_MAGNET_TOUCH_PX
+  xrayPointerSpeed, xrayDragStep, xrayNearestPeak, xrayFlareAtMoment, XRAY_MAGNET_TOUCH_PX,
+  xrayLaneWindow, xraySliderValue, xrayTimeAtSlider, XRAY_WINDOW_MARGIN, XRAY_WEEK_MIN, XRAY_WEEK_MS
 } from '../js/layers/sun/lane.js';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { stripComments } from './check-comment-only.mjs';
 
 /* ---- The fixtures ------------------------------------------------------ */
 
@@ -355,6 +366,153 @@ const tieToLast = (x, reach, peaks) => {
   return best;
 };
 
+/* ---- The window on the week --------------------------------------------- */
+
+const NEWEST = Date.parse('2026-09-14T12:00:00Z');
+const HOUR = 3600e3, DAY = 24 * HOUR;
+
+function checkWindowStays(win) {
+  const cases = [
+    ['the slider, mid-window at now', { to: null, cursor: NEWEST - 12 * HOUR, follow: true }],
+    ['the slider, four hours from the edge', { to: NEWEST - 2 * DAY, cursor: NEWEST - 2 * DAY - 20 * HOUR, follow: true }],
+    ['the lane, an hour from the edge', { to: NEWEST - 2 * DAY, cursor: NEWEST - 2 * DAY - 23 * HOUR, follow: false }]
+  ];
+  for (const [what, c] of cases) {
+    const w = win({ ...c, width: DAY, newest: NEWEST });
+    const was = c.to == null ? NEWEST : c.to;
+    if (w.to !== was) return bad('window stays', what + ' moved the window ' + ((w.to - was) / HOUR).toFixed(2) + ' h');
+  }
+  ok('window stays', 'a moment well inside, or set in the lane, leaves the window where it is');
+}
+
+/* The slider walked back a minute at a time, from now to four days back. */
+function checkWindowFollows(win) {
+  const width = DAY, room = width * XRAY_WINDOW_MARGIN;
+  let to = null, jump = 0, closest = Infinity;
+  for (let t = NEWEST; t >= NEWEST - 4 * DAY; t -= 60000) {
+    const w = win({ to, width, newest: NEWEST, cursor: t, follow: true });
+    jump = Math.max(jump, Math.abs(w.to - (to == null ? NEWEST : to)));
+    if (w.to < NEWEST) closest = Math.min(closest, t - w.from, w.to - t);
+    to = w.to;
+  }
+  const moved = NEWEST - to;
+  if (jump > 60000) return bad('window follows', 'one minute of slider moved the window ' + (jump / 60000).toFixed(0) + ' min');
+  if (closest < room) {
+    return bad('window follows', 'the moment came within ' + (closest / 60000).toFixed(0) + ' min of an edge; the margin is ' + (room / 60000) + ' min');
+  }
+  if (moved < 3 * DAY) return bad('window follows', 'four days of slider moved the window ' + (moved / HOUR).toFixed(1) + ' h');
+  ok('window follows', 'four days back a minute at a time: at most a minute a step, and ' + (room / HOUR).toFixed(1) + ' h of room kept');
+}
+
+/* A drag held past the lane's left edge: the lane clamps each sample to the
+   edge, so every one of them is the window's first minute. */
+function checkWindowDrag(win) {
+  const start = NEWEST - 2 * DAY;
+  let to = start;
+  for (let i = 0; i < 20; i++) to = win({ to, width: DAY, newest: NEWEST, cursor: to - DAY }).to;
+  if (to !== start) return bad('window drag', 'twenty samples on the edge moved the window ' + ((start - to) / HOUR).toFixed(1) + ' h');
+  ok('window drag', 'twenty samples clamped to the left edge leave the window where it was');
+}
+
+function checkWindowWeek(win) {
+  const back = win({ to: NEWEST - 5 * DAY, width: DAY, newest: NEWEST, cursor: NEWEST - 10 * DAY });
+  const ahead = win({ to: NEWEST - 5 * DAY, width: DAY, newest: NEWEST, cursor: NEWEST + HOUR });
+  const week = win({ to: NEWEST - DAY, width: 7 * DAY, newest: NEWEST, cursor: NEWEST - 3 * DAY });
+  const wrong = [];
+  if (back.from !== NEWEST - XRAY_WEEK_MS) wrong.push('ten days back starts the window ' + ((NEWEST - back.from) / DAY).toFixed(2) + ' days back');
+  if (ahead.to !== NEWEST) wrong.push('an hour past the newest sample ends the window ' + ((ahead.to - NEWEST) / HOUR).toFixed(2) + ' h past it');
+  if (week.from !== NEWEST - XRAY_WEEK_MS || week.to !== NEWEST) wrong.push('a window of a week is not the whole week');
+  if (wrong.length) return bad('window week', wrong.join('; '));
+  ok('window week', 'never before a week back, never past the newest sample, and 7d is the whole week');
+}
+
+function checkWindowKeep(win) {
+  const t = NEWEST - 3 * DAY;
+  const film = { from: t - 6 * HOUR, to: t + 6 * HOUR };
+  // The window as the slider left it: the moment a tenth from its left edge.
+  const w = win({ to: t + 0.9 * DAY, width: DAY, newest: NEWEST, keep: film });
+  if (w.from > film.from || w.to < film.to) {
+    return bad('window film', 'a film of 12 h around the moment starts ' + ((w.from - film.from) / HOUR).toFixed(1) + ' h before the window');
+  }
+  ok('window film', 'a film of twelve hours around the moment is brought onto the window');
+}
+
+function checkSlider(valueOf, timeAt) {
+  const wrong = [];
+  const t = NEWEST - (3 * DAY + 4 * HOUR + 17 * 60000);
+  if (valueOf(NEWEST, NEWEST) !== XRAY_WEEK_MIN) wrong.push('now is ' + valueOf(NEWEST, NEWEST) + ', not the right end');
+  if (valueOf(NEWEST - XRAY_WEEK_MS, NEWEST) !== 0) wrong.push('a week back is ' + valueOf(NEWEST - XRAY_WEEK_MS, NEWEST) + ', not the left end');
+  if (timeAt(XRAY_WEEK_MIN, NEWEST) !== NEWEST || timeAt(0, NEWEST) !== NEWEST - XRAY_WEEK_MS) wrong.push('the ends are not now and a week back');
+  if (timeAt(valueOf(t, NEWEST), NEWEST) !== t) wrong.push('3 days 4 h 17 min back does not survive the slider');
+  if (valueOf(NEWEST + HOUR, NEWEST) !== XRAY_WEEK_MIN || valueOf(NEWEST - 8 * DAY, NEWEST) !== 0) wrong.push('a moment off the week is not held at its end');
+  if (wrong.length) return bad('slider', wrong.join('; '));
+  ok('slider', 'the right end is now and the left end a week back, and a minute survives the way there and back');
+}
+
+/* ---- The strip, read ----------------------------------------------------- */
+
+/* The rule cannot say who calls it. That only the slider makes the window
+   follow, and that the lane never moves it, is read from the strip. */
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const STRIP = 'js/ui/solar-time.js';
+const stripSource = () => readFileSync(join(ROOT, STRIP), 'utf8');
+
+/* The text from head to its closing brace, or null. */
+function blockOf(src, head) {
+  const at = src.indexOf(head);
+  if (at < 0) return null;
+  let depth = 0;
+  for (let i = src.indexOf('{', at); i < src.length; i++) {
+    if (src[i] === '{') depth++;
+    else if (src[i] === '}' && --depth === 0) return src.slice(at, i + 1);
+  }
+  return null;
+}
+
+function checkStripFollow(src) {
+  const code = stripComments(src);
+  const wrong = [];
+  const slider = blockOf(code, "slider?.addEventListener('input'");
+  if (!slider || !slider.includes('follow: true')) wrong.push('the slider does not make the window follow');
+  const follows = code.split('follow: true').length - 1;
+  if (follows !== 1) wrong.push('follow: true is written ' + follows + ' times, and only the slider may');
+  for (const name of ['onDown', 'onMove', 'onUp']) {
+    const fn = blockOf(code, 'function ' + name + '(');
+    if (!fn) wrong.push(name + ' not found');
+    else if (/placeWindow\(|xrayLaneWindow\(/.test(fn)) wrong.push(name + ' moves the window');
+  }
+  const draw = blockOf(code, 'function draw(');
+  if (!draw || !/placeWindow\(\{\s*cursor:\s*cursorTime\(\)\s*\}\)/.test(draw)) {
+    wrong.push('a redraw does not bring the window to a moment off it');
+  }
+  if (wrong.length) return bad('strip follows', wrong.join('; '));
+  ok('strip follows', 'only the slider makes the window follow, the lane never moves it, and a redraw brings it to a moment off it');
+}
+
+/* One replacement in the strip; one that finds nothing throws. */
+function stripWith(from, to) {
+  const src = stripSource();
+  if (!src.includes(from)) throw new Error('"' + from.trim() + '" is not in ' + STRIP);
+  return src.replace(from, to);
+}
+
+// Controls for the window: each one has to FAIL the check it is handed to.
+const jumpAtEdge = o => {
+  const end = o.to == null ? o.newest : o.to;
+  const to = o.cursor < end - o.width ? end - o.width * 0.9 : end;
+  return { from: to - o.width, to };
+};
+const unclamped = o => {
+  let end = o.to == null ? o.newest : o.to;
+  const room = o.width * XRAY_WINDOW_MARGIN;
+  if (o.cursor != null && (o.follow || o.cursor < end - o.width || o.cursor > end)) {
+    if (o.cursor > end - room) end = o.cursor + room;
+    else if (o.cursor < end - o.width + room) end = o.cursor + o.width - room;
+  }
+  return { from: end - o.width, to: end };
+};
+const countedFromNow = (t, newest) => Math.max(0, Math.min(XRAY_WEEK_MIN, Math.round((newest - t) / 60000)));
+
 /* ---- Running ----------------------------------------------------------- */
 
 const selftest = process.argv.includes('--selftest');
@@ -375,6 +533,13 @@ checkFree(xrayDragStep);
 checkHold(xrayDragStep);
 checkTie(xrayNearestPeak);
 checkOnPeak(xrayFlareAtMoment);
+checkWindowStays(xrayLaneWindow);
+checkWindowFollows(xrayLaneWindow);
+checkWindowDrag(xrayLaneWindow);
+checkWindowWeek(xrayLaneWindow);
+checkWindowKeep(xrayLaneWindow);
+checkSlider(xraySliderValue, xrayTimeAtSlider);
+checkStripFollow(stripSource());
 
 for (const r of results) {
   console.log((r.pass ? '  ok    ' : '  FAIL  ') + r.name.padEnd(18) + r.detail);
@@ -395,16 +560,32 @@ const breaks = [
   ['a magnet that reaches everywhere', () => checkFree(withLane({ reach: Infinity }))],
   ['a magnet that forgets its hold', () => checkHold(forgetsHold)],
   ['a tie that goes to the last peak', () => checkTie(tieToLast)],
-  ['on a peak at any distance', () => checkOnPeak((flares, t) => xrayFlareAtMoment(flares, t, Infinity))]
+  ['on a peak at any distance', () => checkOnPeak((flares, t) => xrayFlareAtMoment(flares, t, Infinity))],
+  ['a lane moment that moves the window', () => checkWindowStays(o => xrayLaneWindow({ ...o, follow: true }))],
+  ['a window that jumps at the edge', () => checkWindowFollows(jumpAtEdge)],
+  ['a window without room at the edge', () => checkWindowFollows(o => xrayLaneWindow({ ...o, margin: 0 }))],
+  ['a window that crawls under a drag', () => checkWindowDrag(o => xrayLaneWindow({ ...o, follow: true }))],
+  ['a window off the week', () => checkWindowWeek(unclamped)],
+  ['a film left off the window', () => checkWindowKeep(o => xrayLaneWindow({ ...o, keep: null }))],
+  ['a slider counted from now', () => checkSlider(countedFromNow, xrayTimeAtSlider)],
+  ['a lane drag that moves the window', () => checkStripFollow(stripWith(
+    '      if (dragging) setMoment(t);', '      if (dragging) { placeWindow({ cursor: t, follow: true }); setMoment(t); }'))],
+  ['a redraw that follows within the margin', () => checkStripFollow(stripWith(
+    'placeWindow({ cursor: cursorTime() });', 'placeWindow({ cursor: cursorTime(), follow: true });'))]
 ];
 
 if (selftest) {
   console.log('\n  --selftest: every check below has to FAIL');
   for (const [name, run] of breaks) {
     const before = results.length;
-    run();
-    const caught = results.length > before && results.slice(before).every(r => !r.pass);
-    console.log((caught ? '  ok    ' : '  FAIL  ') + ('break: ' + name).padEnd(40) +
+    let caught = false;
+    try {
+      run();
+      caught = results.length > before && results.slice(before).every(r => !r.pass);
+    } catch (e) {
+      console.log('  FAIL  break: ' + name + ' could not be applied: ' + e.message);
+    }
+    console.log((caught ? '  ok    ' : '  FAIL  ') + ('break: ' + name).padEnd(52) +
       (caught ? 'caught' : 'SLIPPED THROUGH'));
     if (!caught) failed++;
     results.length = before;

@@ -392,3 +392,70 @@ export function xrayFlareAtMoment(flares, t, tolMs = XRAY_ON_PEAK_MS) {
   }
   return best;
 }
+
+/* ---- The window on the week ---------------------------------------------
+
+   The strip shows a window of a day, three days or a week on the measured
+   week, and a slider under the lane walks the week. The window follows the
+   moment by the magnetosphere's rule (js/ui/magnetosphere-strip.js):
+
+   - while the slider moves, the moment pushes the window along as soon as it
+     comes within a tenth of the window from an edge, and not a pixel sooner,
+     so the window scrolls and never jumps;
+   - a moment that lands off the window from anywhere else (a flare card, now,
+     a narrower window) brings the window with it, with the same room;
+   - a moment inside the window leaves it where it is. The lane clamps a drag
+     past its edge to that edge, and a window that followed the edge would crawl
+     away a step at a time: 7.4 hours over five steps, in the magnetosphere.
+
+   And it stays on the week: never past the newest sample, never before a week
+   back from it. */
+
+/* How close to an edge the slider may bring the moment before the window moves,
+   as a share of the window. */
+export const XRAY_WINDOW_MARGIN = 0.1;
+
+/* The slider's reach, which is the reach of NOAA's longest file. */
+export const XRAY_WEEK_MIN = 7 * 24 * 60;
+export const XRAY_WEEK_MS = XRAY_WEEK_MIN * 60000;
+
+/**
+ * Where the window stands.
+ *
+ * @param {object} o
+ * @param {number|null} o.to        its right edge as it stood, or null for the newest sample
+ * @param {number} o.width          in ms
+ * @param {number} o.newest         the newest sample, in ms
+ * @param {number|null} [o.cursor]  the moment, in ms
+ * @param {boolean} [o.follow]      true for the slider: the moment pushes the window within the
+ *                                  margin. Otherwise only a moment off the window moves it.
+ * @param {{from: number, to: number}|null} [o.keep]  a stretch that has to be on it: a film's
+ * @returns {{from: number, to: number}}
+ */
+export function xrayLaneWindow({ to, width, newest, cursor = null, follow = false, keep = null,
+                                 margin = XRAY_WINDOW_MARGIN }) {
+  let end = to == null ? newest : to;
+  if (cursor != null && (follow || cursor < end - width || cursor > end)) {
+    const room = width * margin;
+    if (cursor > end - room) end = cursor + room;
+    else if (cursor < end - width + room) end = cursor + width - room;
+  }
+  if (keep) {
+    if (keep.to > end) end = keep.to;
+    if (keep.from < end - width) end = keep.from + width;
+  }
+  // The newest sample first and the week after it, so a window of a week stands on the whole week.
+  end = Math.min(end, newest);
+  end = Math.max(end, newest - XRAY_WEEK_MS + width);
+  return { from: end - width, to: end };
+}
+
+/** The slider's value for a moment: whole minutes since a week before the newest sample. */
+export function xraySliderValue(t, newest) {
+  return Math.max(0, Math.min(XRAY_WEEK_MIN, XRAY_WEEK_MIN - Math.round((newest - t) / 60000)));
+}
+
+/** The moment at a value of the slider. */
+export function xrayTimeAtSlider(value, newest) {
+  return newest - (XRAY_WEEK_MIN - Math.max(0, Math.min(XRAY_WEEK_MIN, Math.round(value)))) * 60000;
+}

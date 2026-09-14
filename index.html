@@ -425,11 +425,17 @@
        moment, and while a film is on, its row takes the place of Fetch. Once
        frames are in, the first column plays them the way the island plays time,
        ✕ film stands in the middle, and the speed beside the window. The note
-       above the lane says why a moment was not kept, or what a film came to. -->
+       above the lane says why a moment was not kept, or what a film came to.
+       Under the lane a slider walks the measured week, and the lane shows a
+       window on it. -->
   <div class="solar-time" id="solar-time">
     <div class="sol-note" id="sol-note" hidden></div>
     <canvas class="solar-lane" id="solar-lane"
       aria-label="GOES X-ray flux over time; drag to choose a moment"></canvas>
+    <div class="sol-week">
+      <input type="range" class="range" id="sol-slider" min="0" max="10080" step="1" value="10080"
+      title="Walk through the measured week" aria-label="The measured week; move it to go back in time">
+    </div>
     <div class="ti-row">
       <div class="ti-play">
         <button class="play-btn sol-film" id="sol-film" type="button"

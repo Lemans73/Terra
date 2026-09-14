@@ -141,6 +141,7 @@
        warm tone of the sun state's own labels. */
     --sols-h: 110px;
     --sols-gap: 8px;
+    --sols-week-h: 24px;             /* the slider under the sun's lane */
     --solar-measured: var(--msphere-measured);
     --solar-class: rgba(160,180,210,0.42);
     --solar-onscreen: #ffb347;
@@ -2774,7 +2775,7 @@
   @media (max-width: 640px) {
     .solar-map {
       top: auto;
-      bottom: calc(var(--panel-lift) + var(--sols-gap) + var(--sols-h) + 8px);
+      bottom: calc(var(--panel-lift) + var(--sols-gap) + var(--sols-h) + var(--sols-gap) + var(--sols-week-h) + 8px);
       left: 10px; right: auto;
       width: 76px; height: 76px;
     }
@@ -2823,6 +2824,25 @@
   }
   /* A week on 560 px is 18 minutes a pixel. Between the panels it has room. */
   body.solar-on .solar-time { max-width: none; }
+  /* THE WEEK UNDER THE LANE. The slider walks the measured week and the lane
+     shows a window on it; the lighter stretch of the track is that window,
+     painted from js/ui/solar-time.js. The input takes the row's full height so
+     a finger finds it, and its track is a 3 px line through the middle. */
+  .sol-week {
+    height: var(--sols-week-h);
+    box-sizing: border-box;
+    display: flex; align-items: center;
+    padding: 0 12px;
+    background: rgba(11,16,24,0.72);
+    backdrop-filter: blur(14px);
+    border: 1px solid var(--hair);
+    border-radius: 12px;
+  }
+  .sol-week .range {
+    height: 100%;
+    margin: 0;
+    background: linear-gradient(var(--hair), var(--hair)) center / 100% 3px no-repeat;
+  }
   .sol-actions { justify-content: flex-start; }
   .sol-fetch, .sol-film-go { font-variant-numeric: tabular-nums; }
   /* THE SUN'S ROW HAS NO SLIDER TO PROTECT. The island fixes its moment column
@@ -3173,7 +3193,7 @@
       bottom: calc(100% + 6px + var(--msps-gap) + var(--msps-h));
     }
     body.solar-on .ti-now {
-      bottom: calc(100% + 6px + var(--sols-gap) + var(--sols-h));
+      bottom: calc(100% + 6px + var(--sols-gap) + var(--sols-h) + var(--sols-gap) + var(--sols-week-h));
     }
     /* Volle breedte, en GEEN transform die opgeheven moet worden — zie de noot bij
        .time-island. `--dock-lift` en niet `--panel-lift`: het eiland stopt boven de
