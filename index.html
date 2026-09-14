@@ -13332,6 +13332,8 @@ solarPanel = createSolarPanel({
   setSpotsVisible: (on) => solarImageryState.setSpotsVisible(on),
   // A film is of one source, so another source in the bottom slot ends it.
   onSourceChange: () => { if (solarFilm) solarFilm.sourceChanged(); },
+  // How far a fetch of stills is shows in the strip's row, where a phone sees it.
+  onProgress: () => { if (solarTime) solarTime.refresh(); },
   setOpacity: (i, v) => {
     const laag = solarImageryState.scene.layers[i];
     if (!laag) return;
@@ -13385,6 +13387,7 @@ try {
       return null;
     },
     onFetch: solarPanel ? () => solarPanel.fetchAll() : null,
+    fetchProgress: solarPanel ? () => solarPanel.progress() : null,
     film: solarFilm,
     onFlare: showFlare,
     onDrawn: solarMomentChanged,

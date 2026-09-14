@@ -201,12 +201,16 @@ export function createSolarTime(deps) {
   /* Asked to clear the view when the panel's film button is pressed: on a phone
      the panel covers the sun, and a film is there to be watched. */
   const makeRoom = deps.makeRoom || null;
+  /* How far a fetch of stills is, from the panel: busy, done, total, name and
+     text. Absent in the standalone, like onFetch. */
+  const fetchProgress = deps.fetchProgress || null;
 
   const root = document.getElementById('solar-time');
   const canvas = document.getElementById('solar-lane');
   const btnWindow = document.getElementById('sol-window');
   const btnMoment = document.getElementById('sol-val');
   const btnFetch = document.getElementById('sol-fetch');
+  const fetchTitle = btnFetch ? btnFetch.title : '';
   const btnFilm = document.getElementById('sol-film');
   const btnFilmGo = document.getElementById('sol-film-go');
   const btnBack = document.getElementById('sol-back');
@@ -532,9 +536,19 @@ export function createSolarTime(deps) {
     /* Whether the button shows is the stylesheet's business (body.solar-bare):
        `hidden` loses to a class that sets display, and .play-btn does. */
     if (btnFetch && onFetch) {
-      const stamp = live ? 'now'
-        : fmtStamp(new Date(t), { hour: '2-digit', minute: '2-digit' });
-      btnFetch.textContent = 'Fetch · ' + stamp;
+      /* While stills are on their way the button says how far, as the film's
+         lookup does, and cannot be pressed a second time. */
+      const p = fetchProgress ? fetchProgress() : null;
+      if (p && p.busy) {
+        btnFetch.textContent = p.text;
+        btnFetch.title = 'On its way: ' + p.name;
+      } else {
+        const stamp = live ? 'now'
+          : fmtStamp(new Date(t), { hour: '2-digit', minute: '2-digit' });
+        btnFetch.textContent = 'Fetch · ' + stamp;
+        btnFetch.title = fetchTitle;
+      }
+      btnFetch.disabled = !!(p && p.busy);
     }
     refreshFilmRow();
   }

@@ -31,7 +31,7 @@ import { ageText } from './solar-orient.js';
 const $ = id => document.getElementById(id);
 
 export function createSolarPanel(env) {
-  const { state, onStatus, onSourceChange } = env;
+  const { state, onStatus, onSourceChange, onProgress } = env;
   const slots = [
     { sourceId: 10, opacity: 1 },
     { sourceId: 0, opacity: 1 },
@@ -40,6 +40,9 @@ export function createSolarPanel(env) {
   let activePreset = 'quiet';
   let busy = false;
   let built = false;
+  /* How far a fetch of stills is. The row under the sun shows it too: on a phone
+     the panel is mostly closed, and a button that says nothing looks broken. */
+  let step = { done: 0, total: 0, name: null };
 
   /* Which sources a slot may still offer, given what the other slots hold. The
      rule is symmetric — a coronagraph excludes disc instruments exactly as much
@@ -184,14 +187,20 @@ export function createSolarPanel(env) {
     const btn = $('solar-fetch');
     if (btn) { btn.disabled = true; btn.textContent = 'Fetching…'; }
     let done = 0;
+    const report = () => {
+      step = { done, total: wanted.length, name: sourceName(wanted[done].id) };
+      status(progressText(step));
+      if (onProgress) onProgress();
+    };
     try {
+      report();
       for (let k = 0; k < slots.length; k++) {
         if (!slots[k].sourceId) { env.clearSlot(k); continue; }
       }
       for (const w of wanted) {
-        status('Fetching ' + (done + 1) + ' of ' + wanted.length + '…');
         await env.loadSlot(w.i, w.id, { opacity: slots[w.i].opacity });
         done++;
+        if (done < wanted.length) report();
       }
       status('');
       refreshProvenance();
@@ -200,7 +209,18 @@ export function createSolarPanel(env) {
     } finally {
       busy = false;
       if (btn) { btn.disabled = false; btn.textContent = fetchLabel(); }
+      if (onProgress) onProgress();
     }
+  }
+
+  /* It counts what is in, the way the film counts its lookups, and the panel and
+     the row say it in the same words. */
+  function progressText(p) {
+    return 'Fetching ' + p.done + ' of ' + p.total + '…';
+  }
+
+  function sourceName(id) {
+    return (SOURCES.find(s => s.id === id) || {}).name || 'source ' + id;
   }
 
   /* The button counts what it fetches: one layer is one image. A film is always
@@ -245,5 +265,9 @@ export function createSolarPanel(env) {
   }
 
   return { mount, refresh, refreshProvenance, applyPreset, fetchAll,
+           /* Whether stills are on their way, how many are in, and the words for it. */
+           progress: () => (busy
+             ? { busy: true, ...step, text: progressText(step) }
+             : { busy: false, done: 0, total: 0, name: null, text: null }),
            slots: () => slots.map(s => ({ ...s })) };
 }
