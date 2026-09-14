@@ -26,6 +26,19 @@
  *   4  coronagraph + disc       → no occulter line at all
  *   5  mixed verdicts           → the worst one wins
  *   6  a film frame             → which frame and its pixels, and no verdict
+ *   7  a failed fetch           → one amber line with the reason
+ *
+ * AND THE STYLESHEET HAS TO LET IT BE READ, in the sun state and nowhere else.
+ * These go wrong just as quietly:
+ *
+ *   8  hidden hides it          → a class that sets display beats the hidden
+ *                                 attribute, and the sun's line stays up over
+ *                                 the earth, space and the magnetosphere
+ *   9  it spans the screen      → left: 50% with translateX(-50%) gives a fixed
+ *                                 block half the screen at most, whatever its
+ *                                 max-width: 188 px on a phone 375 px wide
+ *  10  one line per row         → a row that may wrap jumps between one line
+ *                                 and two while a film counts its frames
  *
  * THE STATES BELOW ARE HAND-BUILT AND THAT IS THE POINT. They carry the numbers
  * measured in session 49 — C2 at 2.40, C3 at 4.67 — so the check fails if the
@@ -42,6 +55,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const MODULE = 'js/ui/solar-orient.js';
+const STYLES = 'css/app.css';
 
 const selftest = process.argv.includes('--selftest');
 
@@ -134,10 +148,102 @@ function run(orientLines) {
   return bad;
 }
 
+/* ---- The stylesheet ------------------------------------------------------ */
+
+/* Every plain rule in a stylesheet: its selectors, whether an at-rule holds it,
+   and its declarations. Comments go first, so a selector named in a note is not
+   taken for a rule. */
+function cssRules(css) {
+  const src = css.replace(/\/\*[\s\S]*?\*\//g, '');
+  const rules = [];
+  const open = [];
+  let from = 0;
+  for (let i = 0; i < src.length; i++) {
+    if (src[i] === '{') {
+      const head = src.slice(from, i);
+      open.push({ head: head.slice(head.lastIndexOf(';') + 1).trim(), body: i + 1 });
+      from = i + 1;
+    } else if (src[i] === '}') {
+      const block = open.pop();
+      if (block && !block.head.startsWith('@')) {
+        const decls = {};
+        for (const part of src.slice(block.body, i).split(';')) {
+          const colon = part.indexOf(':');
+          if (colon > 0) decls[part.slice(0, colon).trim().toLowerCase()] = part.slice(colon + 1).trim();
+        }
+        rules.push({
+          selectors: block.head.split(',').map(s => s.trim().replace(/\s+/g, ' ')),
+          inAtRule: open.some(b => b.head.startsWith('@')),
+          decls
+        });
+      }
+      from = i + 1;
+    }
+  }
+  return rules;
+}
+
+/* The element a selector styles is named by its last compound. */
+const subject = sel => sel.split(/\s*[\s>+~]\s*/).pop();
+const stylesBlock = sel => /[.#]solar-orient(?![\w-])/.test(subject(sel));
+
+function runStyles(css) {
+  const rules = cssRules(css);
+  let bad = 0;
+
+  // 8 — the hidden attribute has to win over the class that lays the block out.
+  {
+    const hide = rules.find(r => !r.inAtRule && r.selectors.some(s => /^[.#]solar-orient\[hidden\]$/.test(s)));
+    bad += report(!!hide && /^none\b/.test(hide.decls.display || ''),
+                  'hidden hides the block → .solar-orient[hidden] sets display: none',
+                  hide ? 'display: ' + (hide.decls.display || 'not set') : 'no such rule');
+  }
+
+  // 9 — two insets give the block its width and auto margins centre it. With
+  //     left: 50% and translateX(-50%) it gets half the screen at most.
+  {
+    const own = rules.filter(r => r.selectors.some(stylesBlock));
+    const base = own.find(r => !r.inAtRule && r.selectors.includes('.solar-orient') && r.decls.position === 'fixed');
+    const set = v => v !== undefined && v !== 'auto';
+    const wrong = [];
+    if (!base) wrong.push('no fixed .solar-orient rule');
+    else {
+      if (!set(base.decls.left) || !set(base.decls.right)) wrong.push('left and right are not both set');
+      if (base.decls['margin-inline'] !== 'auto' &&
+          !(base.decls['margin-left'] === 'auto' && base.decls['margin-right'] === 'auto')) {
+        wrong.push('its margins do not centre it');
+      }
+    }
+    for (const r of own) {
+      const d = r.decls, name = r.selectors.join(', ');
+      if (d.left === '50%' || d.right === '50%') wrong.push(name + ' sets an inset of 50%');
+      if (/-50%/.test((d.transform || '') + ' ' + (d.translate || ''))) wrong.push(name + ' translates by -50%');
+      if (r.inAtRule && (d.left === 'auto' || d.right === 'auto')) wrong.push(name + ' drops an inset');
+    }
+    bad += report(!wrong.length, 'the block spans between two insets and centres itself, with no left: 50%',
+                  wrong.join('; '));
+  }
+
+  // 10 — a row stays on one line; a row that may wrap is what jumped.
+  {
+    const nowrap = rules.some(r => !r.inAtRule && r.decls['white-space'] === 'nowrap' &&
+                                   r.selectors.some(s => /^[.#]solar-orient ?> ?(\*|div)$/.test(s)));
+    const undo = rules.filter(r => r.decls['white-space'] && r.decls['white-space'] !== 'nowrap' &&
+                                   r.selectors.some(s => /solar-orient/.test(s) && /\.so-/.test(subject(s))));
+    bad += report(nowrap && !undo.length, 'every row stays on one line → white-space: nowrap, and no row class undoes it',
+                  !nowrap ? 'no rule gives the rows nowrap' : undo.map(r => r.selectors.join(', ')).join('; '));
+  }
+
+  return bad;
+}
+
 /* THE CHECK ON THE CHECK. Every break below MUST show. The breaks go on a COPY
-   of the module, so an interrupted selftest leaves nothing damaged behind. */
+   of the module, so an interrupted selftest leaves nothing damaged behind; the
+   stylesheet is broken in memory only. A break whose anchor is gone counts as
+   unseen, so it cannot pass by breaking nothing. */
 async function selftestRun() {
   const src = await readFile(join(ROOT, MODULE), 'utf8');
+  const css = await readFile(join(ROOT, STYLES), 'utf8');
   const tmp = 'js/ui/__orient-selftest.js';
 
   const breaks = [
@@ -158,9 +264,25 @@ async function selftestRun() {
       edit: (s) => s.replace("s.notice ? [{ cls: 'so-warn', text: s.notice }] : []", '[]') }
   ];
 
+  const styleBreaks = [
+    { name: 'no rule that hides the block',
+      edit: (s) => s.replace('  .solar-orient[hidden] { display: none; }\n', '') },
+    { name: 'the block centred with left: 50% and translateX(-50%)',
+      edit: (s) => s.replace('top: 22px; left: 12px; right: 12px;', 'top: 22px; left: 50%; transform: translateX(-50%);') },
+    { name: 'the right inset dropped',
+      edit: (s) => s.replace('top: 22px; left: 12px; right: 12px;', 'top: 22px; left: 12px;') },
+    { name: 'rows that may wrap',
+      edit: (s) => s.replace('  .solar-orient > div {\n    white-space: nowrap;', '  .solar-orient > div {\n    white-space: normal;') },
+    { name: 'a row class that wraps again',
+      edit: (s) => s.replace('.solar-orient .so-row { color: var(--ink-3, #8b95a4); }',
+                             '.solar-orient .so-row { color: var(--ink-3, #8b95a4); white-space: normal; }') }
+  ];
+
   let missed = 0;
   for (const b of breaks) {
-    await writeFile(join(ROOT, tmp), b.edit(src));
+    const edited = b.edit(src);
+    if (edited === src) { console.log('  FAIL  break has no anchor: ' + b.name + '\n'); missed++; continue; }
+    await writeFile(join(ROOT, tmp), edited);
     let bad = 0;
     try {
       const mod = await import('../' + tmp + '?v=' + Date.now());
@@ -168,6 +290,12 @@ async function selftestRun() {
     } catch { bad = 1; }
     finally { await unlink(join(ROOT, tmp)).catch(() => {}); }
     if (bad) console.log('  ok    break seen: ' + b.name + '\n');
+    else { console.log('  FAIL  break NOT seen: ' + b.name + '\n'); missed++; }
+  }
+  for (const b of styleBreaks) {
+    const edited = b.edit(css);
+    if (edited === css) { console.log('  FAIL  break has no anchor: ' + b.name + '\n'); missed++; continue; }
+    if (runStyles(edited)) console.log('  ok    break seen: ' + b.name + '\n');
     else { console.log('  FAIL  break NOT seen: ' + b.name + '\n'); missed++; }
   }
   return missed;
@@ -180,5 +308,6 @@ if (selftest) {
   process.exit(missed ? 1 : 0);
 } else {
   const { orientLines } = await import('../' + MODULE);
-  process.exit(run(orientLines) ? 1 : 0);
+  const css = await readFile(join(ROOT, STYLES), 'utf8');
+  process.exit((run(orientLines) + runStyles(css)) ? 1 : 0);
 }

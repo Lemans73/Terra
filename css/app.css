@@ -2665,30 +2665,41 @@
   body.solar-on #sunspots-note { display: none; }
 
 
-  /* ---- WAT JE BEKIJKT, IN BEELD (Terry, sessie 50) ----
+  /* ---- WHAT YOU ARE LOOKING AT, ON SCREEN ----
 
-     BOVEN HET BEELD EN NIET IN DE LINKERKOLOM. Daar stond hij eerst, en het
-     lagenpaneel loopt in deze state tot ongeveer 140px van de bovenrand: de
-     eerste twee regels waren zichtbaar en de scherpte-stip verdween er precies
-     achter. Gemeten, niet vermoed.
+     ABOVE THE PICTURE, NOT IN THE LEFT COLUMN, where the layers panel covers
+     it. The slot above the picture is free in this state (`#mode-switch` goes
+     under body.solar-on), and that is where a caption for the picture belongs.
 
-     De gleuf waar de bolweergave staat is hier vrij — `#mode-switch` gaat uit
-     onder body.solar-on — en dit is bovendien de plek waar hij hoort: recht
-     boven het beeld dat hij beschrijft, als een onderschrift dat bovenaan staat.
+     TWO INSETS AND AUTO MARGINS CENTRE IT, NOT left: 50% WITH translateX(-50%).
+     A fixed block placed that way gets half the screen at most for its width,
+     whatever its max-width says: 188 px on a phone 375 px wide, where the rows
+     break in two. The max-width keeps it clear of the brand on the left, which
+     ends near 210 px, and of the icon buttons on the right.
 
-     `pointer-events: none` op het geheel. Er valt niets te bedienen, en zonder
-     dit ligt er een onzichtbare rechthoek over de scene waar je niet doorheen
-     kunt slepen. */
+     EVERY ROW ON ONE LINE. A row that may wrap jumps between one line and two
+     while a film counts its frames. Tabular figures keep a changing number
+     from shifting its row; the ellipsis is for a screen too narrow to hold it.
+
+     `pointer-events: none` on the whole: nothing here can be operated, and
+     without it an invisible rectangle over the scene would block dragging. */
   .solar-orient {
     position: fixed;
-    top: 22px; left: 50%; transform: translateX(-50%);
+    top: 22px; left: 12px; right: 12px;
+    margin-inline: auto;
+    max-width: min(640px, 100vw - 460px);
     z-index: var(--z-panel);
     pointer-events: none;
-    max-width: min(420px, 46vw);
     display: flex; flex-direction: column; align-items: center; gap: 3px;
     text-align: center;
     font-size: 11px; line-height: 1.45;
+    font-variant-numeric: tabular-nums;
     color: var(--ink-3, #8b95a4);
+  }
+  .solar-orient[hidden] { display: none; }
+  .solar-orient > div {
+    white-space: nowrap;
+    max-width: 100%; overflow: hidden; text-overflow: ellipsis;
   }
   /* De kwalificerende regel bovenaan, in de vorm die Terra elders voor een
      kicker gebruikt: klein, gespatieerd, en niet de kleur van de rest. */
@@ -2715,21 +2726,15 @@
   /* Not a verdict: what is on screen is a frame of a film. */
   .solar-orient .so-film  { color: var(--solar-film); }
 
-  /* Op een smal scherm staat de masthead dichter op de scene en is er geen
-     kolom om in te wonen. Hij gaat dan weg: op 375px is dit vijf regels over
-     precies het beeld dat je kwam bekijken. De uitlezing rechts draagt de
-     meting, en het paneel draagt de herkomst. */
-  /* ON A PHONE IT STAYS, UNDER THE MASTHEAD (Terry, session 52).
-
-     It used to go away here, on the argument that every square centimetre is
-     the picture. But this line is what says the disc is a photograph, how old
-     it is, and whether the zoom has passed what the source holds — and a phone
-     is exactly where nobody can open a panel to ask. It moves down instead of
-     away: the masthead row ends around 55 px, so it starts below that. */
+  /* ON A PHONE IT STAYS, UNDER THE MASTHEAD. This line says the disc is a
+     photograph, how old it is, and whether the zoom has passed what the source
+     holds, and a phone is where nobody opens a panel to ask. The masthead row
+     ends around 55 px, so it starts below that, and it takes the full width
+     between the insets: there is no brand beside it to keep clear of. */
   @media (max-width: 640px) {
     .solar-orient {
       top: 58px;
-      max-width: calc(100vw - 24px);
+      max-width: none;
       font-size: 10.5px;
     }
     .solar-orient .so-kicker { font-size: 9px; }
